@@ -5,6 +5,7 @@ namespace FipsReporting.Models
         public List<CmsProduct> AssignedProducts { get; set; } = new List<CmsProduct>();
         public ReportingPeriod CurrentPeriod { get; set; } = new ReportingPeriod();
         public List<ReportingPeriod> ReportingPeriods { get; set; } = new List<ReportingPeriod>();
+        public List<FipsReporting.Data.PerformanceSubmission> SubmittedReturns { get; set; } = new List<FipsReporting.Data.PerformanceSubmission>();
         public int DueReportsCount { get; set; }
         public int OverdueReportsCount { get; set; }
         public int MilestonesCount { get; set; }
@@ -108,11 +109,13 @@ namespace FipsReporting.Models
         public string Month { get; set; } = "";
         public string FullMonthName { get; set; } = "";
         public string FipsId { get; set; } = "";
-        public CmsProduct Product { get; set; } = new CmsProduct();
+        public ProductViewModel Product { get; set; } = new ProductViewModel();
         public string UserEmail { get; set; } = "";
         public string ReportingPeriod { get; set; } = "";
         public FipsReporting.Data.PerformanceMetric Metric { get; set; } = new FipsReporting.Data.PerformanceMetric();
         public FipsReporting.Data.PerformanceMetricData? ExistingData { get; set; }
+        public List<PerformanceMetricFormItem> Metrics { get; set; } = new List<PerformanceMetricFormItem>();
+        public DateTime DueDate { get; set; }
     }
 
     public class ServiceSummaryViewModel

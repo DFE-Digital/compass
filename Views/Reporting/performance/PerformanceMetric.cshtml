@@ -42,46 +42,71 @@
 
 @section BeforeContent {
 
-        <div class="dfe-masthead dfe-masthead--with-links">
+    <div class="dfe-masthead dfe-masthead--with-links">
         <div class="govuk-width-container">
             <div class="govuk-grid-row">
                 <div class="govuk-grid-column-full">
-                     <span class="govuk-caption-l govuk-!-margin-top-6">@Model.FullMonthName</span>
-                <h1 class="govuk-heading-l">@Model.Product.Title</h1>
-                    <table class="govuk-table govuk-!-margin-bottom-0">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">@ViewBag.Month @ViewBag.Year performance report</span>
+                    <h1 class="govuk-heading-xl govuk-!-margin-bottom-5">@Model.Product.Title</h1>
+                     <table class="govuk-table">
                         <thead class="govuk-table__head">
                             <tr class="govuk-table__row">
                                 <th class="govuk-table__header govuk-!-width-one-quarter">FIPS ID</th>
-                                <th class="govuk-table__header govuk-!-width-one-quarter">Submission</th>
-                                <th class="govuk-table__header govuk-!-width-one-quarter">Progress</th>
-                                <th class="govuk-table__header govuk-!-width-one-quarter">Due</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Phase</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Product completion status</th>
                             </tr>
                         </thead>
                         <tbody class="govuk-table__body">
                             <tr class="govuk-table__row">
-                                <td class="govuk-table__cell">                                
-                                   <a href="https://find-products-services-dev.education.gov.uk/product/@Model.FipsId" class="govuk-link" target="_blank">
-                                       @Model.FipsId
-                                       <span class="govuk-visually-hidden"> (opens in new window)</span>
-                                   </a>
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-visually-hidden">FIPS ID: </span>
+                                    <span title="@(Model.Product.FipsId)">
+                                        @if (!string.IsNullOrWhiteSpace(Model.Product.FipsId))
+                                        {
+                                           <a href="https://find-products-services-dev.education.gov.uk/product/@Model.Product.FipsId" class="govuk-link">@Model.Product.FipsId</a>
+                                        }
+                                    </span>
                                 </td>
                                 <td class="govuk-table__cell">
-                                                               
+                                    @{
+                                        var phaseIndex = Model.Product.CategoryTypes?.FindIndex(ct => ct == "Phase");
+                                        var phaseValue = phaseIndex.HasValue && phaseIndex.Value >= 0 && Model.Product.CategoryValues?.Count > phaseIndex.Value 
+                                            ? Model.Product.CategoryValues[phaseIndex.Value] 
+                                            : null;
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(phaseValue))
+                                    {
+                                        <span class="govuk-tag govuk-tag--@(phaseValue.ToLower() == "live" ? "green" : phaseValue.ToLower() == "beta" ? "yellow" : phaseValue.ToLower() == "alpha" ? "red" : "grey")">@phaseValue</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-body">Not specified</span>
+                                    }
                                 </td>
                                 <td class="govuk-table__cell">
-                               
-                                   
+                                    @{
+                                        var completedMetrics = Model.Metrics.Count(m => !string.IsNullOrWhiteSpace(m.Value) || m.IsNullReturn);
+                                        var totalMetrics = Model.Metrics.Count;
+                                        var completionPercentage = totalMetrics > 0 ? (completedMetrics * 100) / totalMetrics : 0;
+                                    }
+                                    <span class="govuk-body">@completedMetrics of @totalMetrics</span>
+                                    @if (completionPercentage == 100)
+                                    {
+                                        <span class="govuk-tag govuk-tag--green govuk-!-margin-left-2">Complete</span>
+                                    }
+                                    else if (completionPercentage > 0)
+                                    {
+                                        <span class="govuk-tag govuk-tag--yellow govuk-!-margin-left-2">In progress</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--red govuk-!-margin-left-2">Not started</span>
+                                    }
                                 </td>
-                                <td class="govuk-table__cell">
-                                   
-                                </td>
-
-
-                             
                             </tr>
                         </tbody>
                     </table>
-                </div>
+                                   </div>
             </div>
         </div>
     </div>
@@ -94,8 +119,9 @@
                 <nav class="dfe-vertical-nav">
                     <ul class="dfe-vertical-nav__section">
                         <li class="dfe-vertical-nav__section-item">
-                            <a href="@Url.Action("Performance", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">
-                                ← Back to metrics
+                          
+                            <a href="@Url.Action("PerformanceByProduct", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" class="govuk-back-link govuk-!-margin-top-0">
+                            Back to metrics
                             </a>
                         </li>
                     </ul>
@@ -143,7 +169,7 @@
 
             
 
-                <form method="post" action="@Url.Action("SavePerformanceMetricData", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId, metricId = Model.Metric.Id })">
+                <form method="post" action="/reporting/@Model.Year/@Model.Month.ToLower()/performance/@Model.FipsId/save">
                     <input type="hidden" name="year" value="@Model.Year" />
                     <input type="hidden" name="month" value="@Model.Month.ToLower()" />
                     <input type="hidden" name="fipsId" value="@Model.FipsId" />
@@ -151,45 +177,41 @@
 
                     <div class="govuk-form-group">
                         <fieldset class="govuk-fieldset">
-                            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
-                            <span class="govuk-caption-l">@Model.Metric.UniqueId</span>
-                                <h1 class="govuk-fieldset__heading govuk-heading-l">
+                            <legend class="govuk-fieldset__legend">
+                            <span class="govuk-caption-m">@Model.Metric.UniqueId</span>
+                                <h1 class="govuk-heading-l">
                                     @Model.Metric.Name                                
                                 </h1>
                             </legend>
 
                                   <p class="govuk-body">@Model.Metric.Description</p>
 
- @if (Model.Metric.LegalRegulatory || !string.IsNullOrEmpty(Model.Metric.Notice)){
-                                  <details class="govuk-details" data-module="govuk-details">
+                            @if (Model.Metric.LegalRegulatory)
+                            {
+                                <details class="govuk-details" data-module="govuk-details">
                                     <summary class="govuk-details__summary">
-                                      <span class="govuk-details__summary-text">
-                                        About this metric
-                                      </span>
+                                        <span class="govuk-details__summary-text">
+                                            About this metric
+                                        </span>
                                     </summary>
                                     <div class="govuk-details__text">
                                         @if (Model.Metric.LegalRegulatory)
-                {
-                   <p class="govuk-body">This metric is required for legal or regulatory compliance purposes.</p> 
-                }
+                                        {
+                                            <p class="govuk-body">This metric is required for legal or regulatory compliance purposes.</p> 
+                                        }
 
-                @if (!string.IsNullOrEmpty(Model.Metric.Notice))
-                {
-                  
-                        <p class="govuk-body">@Model.Metric.Notice</p>
-             
-                }
-
+                                        @if (!string.IsNullOrEmpty(Model.Metric.Notice))
+                                        {
+                                            <p class="govuk-body">@Model.Metric.Notice</p>
+                                        }
                                     </div>
-                                  </details>
- }
+                                </details>
+                            }
 
                                         
-                            @if (Model.Metric.Measure == "number" || Model.Metric.Measure == "decimal")
+                            @if (Model.Metric.Measure == "number")
                             {
                                 var validationInfo = ParseValidationCriteria(Model.Metric.ValidationCriteria);
-                                var inputType = Model.Metric.Measure == "number" ? "number" : "text";
-                                var stepAttr = Model.Metric.Measure == "decimal" ? "step=\"0.01\"" : "";
                                 var hasError = TempData["FieldError"]?.ToString() == "value";
                                 var formValue = TempData["FormValue"]?.ToString() ?? Model.ExistingData?.Value;
                                 var errorClass = hasError ? "govuk-form-group--error" : "";
@@ -207,7 +229,6 @@
                                 <div class="govuk-form-group @errorClass">
                                     <label class="govuk-label" for="Value">
                                         Value
-                                       
                                     </label>
                                     @if (hasError)
                                     {
@@ -224,11 +245,97 @@
                                     <input class="govuk-input govuk-input--width-10 @inputErrorClass" 
                                            id="Value" 
                                            name="Value" 
-                                           type="@inputType" 
+                                           type="number" 
+                                           step="1"
                                            value="@formValue"
-                                           @stepAttr
-                                           @validationInfo.MinMaxAttrs
                                            aria-describedby="@ariaDescribedBy" />
+                                </div>
+                            }
+                            else if (Model.Metric.Measure == "decimal")
+                            {
+                                var validationInfo = ParseValidationCriteria(Model.Metric.ValidationCriteria);
+                                var hasError = TempData["FieldError"]?.ToString() == "value";
+                                var formValue = TempData["FormValue"]?.ToString() ?? Model.ExistingData?.Value;
+                                var errorClass = hasError ? "govuk-form-group--error" : "";
+                                var inputErrorClass = hasError ? "govuk-input--error" : "";
+                                var ariaDescribedBy = "";
+                                if (!string.IsNullOrEmpty(validationInfo.Hint))
+                                {
+                                    ariaDescribedBy += "Value-hint";
+                                }
+                                if (hasError)
+                                {
+                                    ariaDescribedBy += (string.IsNullOrEmpty(ariaDescribedBy) ? "" : " ") + "Value-error";
+                                }
+                                
+                                <div class="govuk-form-group @errorClass">
+                                    <label class="govuk-label" for="Value">
+                                        Value
+                                    </label>
+                                    @if (hasError)
+                                    {
+                                        <p id="Value-error" class="govuk-error-message">
+                                            <span class="govuk-visually-hidden">Error:</span> @TempData["ErrorMessage"]
+                                        </p>
+                                    }
+                                    @if (!string.IsNullOrEmpty(validationInfo.Hint))
+                                    {
+                                        <div id="Value-hint" class="govuk-hint">
+                                            @validationInfo.Hint
+                                        </div>
+                                    }
+                                    <input class="govuk-input govuk-input--width-10 @inputErrorClass" 
+                                           id="Value" 
+                                           name="Value" 
+                                           type="number" 
+                                           step="0.01"
+                                           value="@formValue"
+                                           aria-describedby="@ariaDescribedBy" />
+                                </div>
+                            }
+                            else if (Model.Metric.Measure == "percentage")
+                            {
+                                var validationInfo = ParseValidationCriteria(Model.Metric.ValidationCriteria);
+                                var hasError = TempData["FieldError"]?.ToString() == "value";
+                                var formValue = TempData["FormValue"]?.ToString() ?? Model.ExistingData?.Value;
+                                var errorClass = hasError ? "govuk-form-group--error" : "";
+                                var inputErrorClass = hasError ? "govuk-input--error" : "";
+                                var ariaDescribedBy = "";
+                                if (!string.IsNullOrEmpty(validationInfo.Hint))
+                                {
+                                    ariaDescribedBy += "Value-hint";
+                                }
+                                if (hasError)
+                                {
+                                    ariaDescribedBy += (string.IsNullOrEmpty(ariaDescribedBy) ? "" : " ") + "Value-error";
+                                }
+                                
+                                <div class="govuk-form-group @errorClass">
+                                    <label class="govuk-label" for="Value">
+                                        Value
+                                    </label>
+                                    @if (hasError)
+                                    {
+                                        <p id="Value-error" class="govuk-error-message">
+                                            <span class="govuk-visually-hidden">Error:</span> @TempData["ErrorMessage"]
+                                        </p>
+                                    }
+                                    @if (!string.IsNullOrEmpty(validationInfo.Hint))
+                                    {
+                                        <div id="Value-hint" class="govuk-hint">
+                                            @validationInfo.Hint
+                                        </div>
+                                    }
+                                    <div class="govuk-input__wrapper">
+                                        <input class="govuk-input govuk-input--width-5 @inputErrorClass" 
+                                               id="Value" 
+                                               name="Value" 
+                                               type="number" 
+                                               step="0.01"
+                                               value="@formValue"
+                                               aria-describedby="@ariaDescribedBy" />
+                                        <div class="govuk-input__suffix" aria-hidden="true">%</div>
+                                    </div>
                                 </div>
                             }
                             else if (Model.Metric.Measure == "boolean")
@@ -260,7 +367,7 @@
                                     </div>
                                 </div>
                             }
-                            else if (Model.Metric.Measure == "single_option")
+                            else if (Model.Metric.Measure == "options_list")
                             {
                                 var hasError = TempData["FieldError"]?.ToString() == "value";
                                 var formValue = TempData["FormValue"]?.ToString() ?? Model.ExistingData?.Value;
@@ -323,6 +430,26 @@
                                     </div>
                                 </div>
                             }
+                            else if (Model.Metric.Measure == "text")
+                            {
+                                var hasError = TempData["FieldError"]?.ToString() == "value";
+                                var formValue = TempData["FormValue"]?.ToString() ?? Model.ExistingData?.Value;
+                                var errorClass = hasError ? "govuk-form-group--error" : "";
+                                var textareaErrorClass = hasError ? "govuk-textarea--error" : "";
+                                
+                                <div class="govuk-form-group @errorClass">
+                                    <label class="govuk-label" for="Value">
+                                        Value
+                                    </label>
+                                    @if (hasError)
+                                    {
+                                        <p id="Value-error" class="govuk-error-message">
+                                            <span class="govuk-visually-hidden">Error:</span> @TempData["ErrorMessage"]
+                                        </p>
+                                    }
+                                    <textarea class="govuk-textarea @textareaErrorClass" id="Value" name="Value" rows="3" aria-describedby="@(hasError ? "Value-error" : "")">@formValue</textarea>
+                                </div>
+                            }
                             else
                             {
                                 <div class="govuk-form-group">
@@ -333,7 +460,7 @@
                                 </div>
                             }
 
-                            @if (Model.Metric.CanReportNullReturn)
+                            @if (!Model.Metric.Mandatory)
                             {
                                 <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
                                     <div class="govuk-checkboxes__item">
@@ -351,7 +478,7 @@
                         <button type="submit" class="govuk-button" data-module="govuk-button">
                             Save and continue
                         </button>
-                        <a href="@Url.Action("Performance", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" class="govuk-button govuk-button--secondary">
+                        <a href="@Url.Action("PerformanceByProduct", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" class="govuk-button govuk-button--secondary">
                             Cancel
                         </a>
                     </div>

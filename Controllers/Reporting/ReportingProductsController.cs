@@ -23,11 +23,19 @@ namespace FipsReporting.Controllers.Reporting
         {
             try
             {
-                // Force use of andy.jones@education.gov.uk for development
-                var userEmail = "andy.jones@education.gov.uk";
+                // Get user's email from claims
+                var userEmail = GetUserEmail();
                 
-                // Log the user email being used
-                Console.WriteLine($"ReportingProductsController: Using user email: {userEmail}");
+                // For development, use a hardcoded email if no user is authenticated
+                if (string.IsNullOrEmpty(userEmail))
+                {
+                    userEmail = "andy.jones@education.gov.uk";
+                    Console.WriteLine($"ReportingProductsController: No authenticated user found, using development email: {userEmail}");
+                }
+                else
+                {
+                    Console.WriteLine($"ReportingProductsController: Using authenticated user email: {userEmail}");
+                }
                 
                 // Use CMS API to get products assigned to user via product-contacts
                 var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);

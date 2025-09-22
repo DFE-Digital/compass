@@ -292,10 +292,11 @@ namespace FipsReporting.Services
                     baseUrl += "/";
                 }
                 
-                // Query product_contacts filtered by user email (case-insensitive) and "reporting" role, then populate the related product data
-                var url = $"{baseUrl}product-contacts?filters[users_permissions_user][email][$eqi]={Uri.EscapeDataString(userEmail)}&filters[role][$eq]={Uri.EscapeDataString("reporting")}&populate[0]=users_permissions_user&populate[1]=product&populate[2]=product.category_values&populate[3]=product.category_values.category_type&populate[4]=product.product_contacts&populate[5]=product.product_contacts.users_permissions_user";
+                // Query product_contacts filtered by user email (case-insensitive), then populate the related product data
+                var url = $"{baseUrl}product-contacts?filters[users_permissions_user][email][$eqi]={Uri.EscapeDataString(userEmail)}&populate[0]=users_permissions_user&populate[1]=product&populate[2]=product.category_values&populate[3]=product.category_values.category_type&populate[4]=product.product_contacts&populate[5]=product.product_contacts.users_permissions_user";
 
-                _logger.LogInformation("Fetching products with 'reporting' role for user {UserEmail} from CMS API", userEmail);
+                _logger.LogInformation("Fetching products for user {UserEmail} from CMS API", userEmail);
+                _logger.LogInformation("API URL: {Url}", url);
 
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 var apiKey = _configuration["CmsApi:ReadApiKey"];
@@ -308,11 +309,24 @@ namespace FipsReporting.Services
                 response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("CMS API Response for user {UserEmail}: {Response}", userEmail, content);
+                
                 var result = JsonConvert.DeserializeObject<CmsApiResponse<CmsProductContact>>(content);
 
                 if (result == null)
                 {
                     throw new InvalidOperationException("Failed to deserialize CMS API response");
+                }
+
+                _logger.LogInformation("Raw API response contains {Count} product contacts", result.Data.Count);
+                
+                // Log details about each product contact found
+                foreach (var contact in result.Data)
+                {
+                    _logger.LogInformation("Product Contact - User: {UserEmail}, Role: {Role}, Product: {ProductTitle}", 
+                        contact.User?.Email ?? "null", 
+                        contact.Role ?? "null", 
+                        contact.Product?.Title ?? "null");
                 }
 
                 // Extract unique products from the product contacts
@@ -323,12 +337,52 @@ namespace FipsReporting.Services
                     .Select(g => g.First())
                     .ToList();
 
-                _logger.LogInformation("Successfully fetched {Count} products with 'reporting' role for user {UserEmail} from CMS", products.Count, userEmail);
+                _logger.LogInformation("Successfully fetched {Count} products for user {UserEmail} from CMS", products.Count, userEmail);
+                _logger.LogInformation("Found {ContactCount} product contacts for user {UserEmail}", result.Data.Count, userEmail);
+                
+                // If no products found, try a different approach - get all product contacts and filter in memory
+                if (products.Count == 0)
+                {
+                    _logger.LogWarning("No products found with email filter, trying alternative approach for user {UserEmail}", userEmail);
+                    
+                    var fallbackUrl = $"{baseUrl}product-contacts?populate[0]=users_permissions_user&populate[1]=product&populate[2]=product.category_values&populate[3]=product.category_values.category_type";
+                    var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        fallbackRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                    }
+                    
+                    var fallbackResponse = await _httpClient.SendAsync(fallbackRequest);
+                    fallbackResponse.EnsureSuccessStatusCode();
+                    
+                    var fallbackContent = await fallbackResponse.Content.ReadAsStringAsync();
+                    var fallbackResult = JsonConvert.DeserializeObject<CmsApiResponse<CmsProductContact>>(fallbackContent);
+                    
+                    if (fallbackResult != null)
+                    {
+                        _logger.LogInformation("Fallback query returned {Count} total product contacts", fallbackResult.Data.Count);
+                        
+                        // Filter by email in memory (case-insensitive)
+                        var filteredContacts = fallbackResult.Data.Where(pc => 
+                            pc.User?.Email != null && 
+                            string.Equals(pc.User.Email, userEmail, StringComparison.OrdinalIgnoreCase)).ToList();
+                        
+                        _logger.LogInformation("Found {Count} contacts matching user email {UserEmail} in fallback query", filteredContacts.Count, userEmail);
+                        
+                        products = filteredContacts
+                            .Where(pc => pc.Product != null)
+                            .Select(pc => pc.Product!)
+                            .GroupBy(p => p.Id)
+                            .Select(g => g.First())
+                            .ToList();
+                    }
+                }
+                
                 return products;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching products with 'reporting' role for user {UserEmail} from CMS API", userEmail);
+                _logger.LogError(ex, "Error fetching products for user {UserEmail} from CMS API", userEmail);
                 throw;
             }
         }

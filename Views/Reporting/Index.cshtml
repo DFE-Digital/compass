@@ -20,8 +20,7 @@
     </div>
 }
 
-<div class="govuk-width-container">
-    <div class="govuk-main-wrapper">
+
         <div class="govuk-grid-row">
             <!-- Vertical Navigation -->
             <div class="govuk-grid-column-one-quarter">
@@ -56,37 +55,28 @@
                 <!-- Your Tasks Table -->
                 <div class="govuk-grid-row">
                     <div class="govuk-grid-column-full">
-                        <h2 class="govuk-heading-l">Your tasks</h2>
+                        <h2 class="govuk-heading-l">Your reporting tasks</h2>
                         
-                        @if (Model.ReportingPeriods.Any())
+                        @if (Model.ReportingPeriods.Any() && Model.ReportingPeriods.Where(p => p.Status != "Submitted").Any())
                         {
                             <div class="govuk-table-container">
                                 <table class="govuk-table">
                                     <thead class="govuk-table__head">
                                         <tr class="govuk-table__row">
-                                            <th scope="col" class="govuk-table__header">Task</th>
-                                            <th scope="col" class="govuk-table__header">Due date</th>
-                                            <th scope="col" class="govuk-table__header">Status</th>
+                                            <th scope="col" class="govuk-table__header govuk-!-width-one-third">Task</th>
+                                            <th scope="col" class="govuk-table__header">Due by</th>
+                                            <th scope="col" class="govuk-table__header govuk-!-width-one-third">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody class="govuk-table__body">
-                                        @foreach (var period in Model.ReportingPeriods.OrderBy(p => p.DueDate))
+                                        @foreach (var period in Model.ReportingPeriods.Where(p => p.Status != "Submitted").OrderBy(p => p.DueDate))
                                         {
                                             <tr class="govuk-table__row">
                                                 <td class="govuk-table__cell">
-                                                    @if (period.Status != "Submitted")
-                                                    {
-                                                        <a href="/reporting/@period.DueDate.Year/@period.Month.Split(' ')[0].ToLower()/performance" class="govuk-link">
-                                                            <strong>@period.Month</strong>
-                                                        </a>
-                                                        <div class="govuk-body-s">@period.Period</div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <strong>@period.Month</strong>
-                                                        <div class="govuk-body-s">@period.Period</div>
-                                                        <div class="govuk-body-s">Completed</div>
-                                                    }
+                                                    <a href="/reporting/@period.DueDate.Year/@period.Month.Split(' ')[0].ToLower()" class="govuk-link">
+                                                       @period.Month
+                                                    </a>
+                                                    <div class="govuk-body-s govuk-!-margin-bottom-0 govuk-!-padding-top-0">@period.Period</div>
                                                 </td>
                                                 <td class="govuk-table__cell">
                                                     @period.DueDate.ToString("dd MMM yyyy")
@@ -124,6 +114,76 @@
                     </div>
                 </div>
 
+                <!-- Submitted Returns Section -->
+                <div class="govuk-grid-row govuk-!-margin-top-6">
+                    <div class="govuk-grid-column-full">
+                        <h2 class="govuk-heading-l">Recent submitted returns</h2>
+                        
+                        @if (Model.SubmittedReturns.Any())
+                        {
+                            <div class="govuk-table-container">
+                                <table class="govuk-table">
+                                    <thead class="govuk-table__head">
+                                        <tr class="govuk-table__row">
+                                            <th scope="col" class="govuk-table__header govuk-!-width-one-third">Period</th>
+                                            <th scope="col" class="govuk-table__header">Due by</th>
+                                            <th scope="col" class="govuk-table__header govuk-!-width-one-third">Submitted</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="govuk-table__body">
+                                        @foreach (var submission in Model.SubmittedReturns.Take(3))
+                                        {
+                                            var parts = submission.ReportingPeriod.Split('-');
+                                            var year = parts[0];
+                                            var monthNameLower = parts[1];
+                                            var monthName = char.ToUpper(monthNameLower[0]) + monthNameLower.Substring(1);
+                                            
+                                            // Calculate the period display (e.g., "1 to 31 August")
+                                            var monthDate = DateTime.ParseExact($"{monthName} {year}", "MMMM yyyy", null);
+                                            var lastDayOfMonth = DateTime.DaysInMonth(int.Parse(year), monthDate.Month);
+                                            var periodDisplay = $"1 to {lastDayOfMonth} {monthName}";
+                                            var fullMonthName = $"{monthName} {year}";
+                                            
+                                            // Calculate due date (7th of following month)
+                                            var dueDate = monthDate.AddMonths(1).AddDays(6);
+                                            <tr class="govuk-table__row">
+                                                <td class="govuk-table__cell">
+                                                    <a href="/reporting/@year/@monthName.ToLower()" class="govuk-link">
+                                                        @fullMonthName
+                                                    </a>
+                                                    <div class="govuk-body-s govuk-!-margin-bottom-0">@periodDisplay</div>
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    @dueDate.ToString("dd MMM yyyy")
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    @submission.SubmittedAt.ToString("dd MMM yyyy 'at' HH:mm")
+                                                    <div class="govuk-body-s govuk-!-margin-bottom-0">@submission.SubmittedBy</div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            @if (Model.SubmittedReturns.Count > 3)
+                            {
+                                <div class="govuk-!-margin-top-4">
+                                    <a href="@Url.Action("SubmittedReturns", "Reporting")" class="govuk-link">
+                                        View all submitted returns (@Model.SubmittedReturns.Count total)
+                                    </a>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="govuk-inset-text">
+                                <p class="govuk-body">No returns have been submitted yet.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
                 <!-- Milestone Updates Section -->
                 <div class="govuk-grid-row govuk-!-margin-top-6">
                     <div class="govuk-grid-column-full">
@@ -139,5 +199,3 @@
                 </div>
             </div>
         </div>
-    </div>
-</div>

@@ -21,8 +21,14 @@ namespace FipsReporting.Controllers.Reporting
         {
             try
             {
-                // Force use of andy.jones@education.gov.uk for development
-                var userEmail = "andy.jones@education.gov.uk";
+                // Get user's email from claims
+                var userEmail = GetUserEmail();
+                
+                // For development, use a hardcoded email if no user is authenticated
+                if (string.IsNullOrEmpty(userEmail))
+                {
+                    userEmail = "andy.jones@education.gov.uk";
+                }
                 
                 // Get products assigned to current user to get the product name
                 var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
@@ -34,7 +40,7 @@ namespace FipsReporting.Controllers.Reporting
                 ViewBag.ProductName = product?.Title ?? "Unknown Product";
                 
                 // Use the ProductMilestones view for individual product milestones
-                return View("~/Views/Reporting/Milestones/ProductMilestones.cshtml", milestones);
+                return View("~/Views/Reporting/milestones/ProductMilestones.cshtml", milestones);
             }
             catch (Exception ex)
             {
@@ -45,7 +51,7 @@ namespace FipsReporting.Controllers.Reporting
         public IActionResult Create(string productId)
         {
             ViewBag.ProductId = productId;
-            return View("~/Views/ReportingMilestones/Create.cshtml", new Milestone { ProductId = productId });
+            return View("~/Views/Reporting/milestones/Create.cshtml", new Milestone { ProductId = productId });
         }
 
         [HttpPost]
@@ -61,7 +67,7 @@ namespace FipsReporting.Controllers.Reporting
                     return RedirectToAction(nameof(Index), new { productId = milestone.ProductId });
                 }
                 ViewBag.ProductId = milestone.ProductId;
-                return View("~/Views/ReportingMilestones/Create.cshtml", milestone);
+                return View("~/Views/Reporting/milestones/Create.cshtml", milestone);
             }
             catch (Exception ex)
             {

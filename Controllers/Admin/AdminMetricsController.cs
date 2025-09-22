@@ -50,6 +50,30 @@ namespace FipsReporting.Controllers.Admin
             }
         }
 
+        public async Task<IActionResult> Details(int id)
+        {
+            try
+            {
+                ViewData["ActiveNav"] = "admin";
+                ViewData["ActiveNavItem"] = "metric-details";
+
+                var metric = await _context.PerformanceMetrics.FindAsync(id);
+                if (metric == null)
+                {
+                    TempData["Error"] = "Performance metric not found.";
+                    return RedirectToAction("Index");
+                }
+
+                return View("~/Views/Admin/Metrics/Details.cshtml", metric);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading metric details");
+                TempData["Error"] = "Error loading metric details. Please try again.";
+                return RedirectToAction("Index");
+            }
+        }
+
         public async Task<IActionResult> Create()
         {
             try

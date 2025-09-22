@@ -232,6 +232,24 @@ app.MapControllerRoute(
     pattern: "admin/performance-metrics/{action=Index}/{id?}",
     defaults: new { controller = "AdminPerformanceMetrics" });
 
+// Main navigation routes
+app.MapControllerRoute(
+    name: "overview",
+    pattern: "overview/{action=Index}/{id?}",
+    defaults: new { controller = "Overview" });
+
+// Performance reporting routes - handled by controller route attributes
+app.MapControllerRoute(
+    name: "reporting-service",
+    pattern: "reporting/{year:int}/{month}/service/{fipsId}",
+    defaults: new { controller = "Reporting", action = "Service" });
+
+app.MapControllerRoute(
+    name: "reporting-month",
+    pattern: "reporting/{year:int}/{month}",
+    defaults: new { controller = "Reporting", action = "Month" });
+
+// Other reporting routes - more specific patterns
 app.MapControllerRoute(
     name: "reporting-products",
     pattern: "reporting/products/{action=Index}/{id?}",
@@ -246,37 +264,6 @@ app.MapControllerRoute(
     name: "reporting-metrics",
     pattern: "reporting/metrics/{action=Index}/{id?}",
     defaults: new { controller = "ReportingMetrics" });
-
-// Main navigation routes
-app.MapControllerRoute(
-    name: "overview",
-    pattern: "overview/{action=Index}/{id?}",
-    defaults: new { controller = "Overview" });
-
-app.MapControllerRoute(
-    name: "reporting-performance-metric",
-    pattern: "reporting/{year:int}/{month}/service/{fipsId}/performance/{uniqueId}",
-    defaults: new { controller = "Reporting", action = "PerformanceMetric" });
-
-app.MapControllerRoute(
-    name: "reporting-performance",
-    pattern: "reporting/{year:int}/{month}/service/{fipsId}/performance",
-    defaults: new { controller = "Reporting", action = "Performance" });
-
-app.MapControllerRoute(
-    name: "reporting-service",
-    pattern: "reporting/{year:int}/{month}/service/{fipsId}",
-    defaults: new { controller = "Reporting", action = "Service" });
-
-app.MapControllerRoute(
-    name: "reporting-month",
-    pattern: "reporting/{year:int}/{month}",
-    defaults: new { controller = "Reporting", action = "Month" });
-
-app.MapControllerRoute(
-    name: "reporting-main",
-    pattern: "reporting/{action=Index}/{id?}",
-    defaults: new { controller = "Reporting" });
 
 app.MapControllerRoute(
     name: "analysis",

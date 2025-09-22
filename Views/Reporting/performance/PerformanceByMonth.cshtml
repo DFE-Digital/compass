@@ -1,0 +1,278 @@
+@model IEnumerable<FipsReporting.Models.ProductPerformanceViewModel>
+
+@{
+    ViewData["Title"] = $"Performance Reporting - {ViewBag.Month} {ViewBag.Year}";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "performance";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+                <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl">Performance reporting - @ViewBag.Month @ViewBag.Year</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Complete your monthly performance returns for governance reporting.</p>
+                    
+                    <table class="govuk-table govuk-!-margin-top-6">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Period</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Submission status</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Completion status</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Due by</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-body">@ViewBag.Month @ViewBag.Year</span>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @if (ViewBag.IsSubmitted == true)
+                                    {
+                                        <span class="govuk-tag govuk-tag--green">Submitted</span>
+                                        @if (ViewBag.SubmissionDate != null)
+                                        {
+                                            <br>
+                                            <span class="govuk-body-s">@(((DateTime)ViewBag.SubmissionDate).ToString("d MMM yyyy 'at' HH:mm"))</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--grey">Not submitted</span>
+                                    }
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @{
+                                        var totalProducts = Model.Count();
+                                        var completedProducts = Model.Count(p => p.ProgressStatus == "Completed");
+                                        var inProgressProducts = Model.Count(p => p.ProgressStatus == "In progress");
+                                        var notStartedProducts = Model.Count(p => p.ProgressStatus == "Not started");
+                                    }
+                                    @if (completedProducts == totalProducts && totalProducts > 0)
+                                    {
+                                        <span class="govuk-tag govuk-tag--green">All complete</span>
+                                    }
+                                    else if (inProgressProducts > 0 || completedProducts > 0)
+                                    {
+                                        <span class="govuk-tag govuk-tag--yellow">In progress</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--red">Not started</span>
+                                    }
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @if (ViewBag.DueDate != null)
+                                    {
+                                        @(((DateTime)ViewBag.DueDate).ToString("d MMM yyyy"))
+                                    }
+                                    else
+                                    {
+                                        @DateTime.Now.AddDays(7).ToString("d MMM yyyy")
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+        <div class="govuk-grid-row">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Reporting")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "products" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Products", "Reporting")">
+                                Your products
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "performance" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Performance", "Reporting")">
+                                Performance reporting
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "milestones" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Milestones", "Reporting")">
+                                Milestones
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                @{
+                    var totalProducts = Model.Count();
+                    var completedProducts = Model.Count(p => p.ProgressStatus == "Completed");
+                    var allProductsCompleted = totalProducts > 0 && completedProducts == totalProducts;
+                }
+                
+                @if (TempData["SuccessMessage"] != null && ViewBag.IsSubmitted != true)
+                {
+                    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                Success
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                @TempData["SuccessMessage"]
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" tabindex="-1" data-module="govuk-error-summary">
+                        <h2 class="govuk-error-summary__title" id="error-summary-title">
+                            There is a problem
+                        </h2>
+                        <div class="govuk-error-summary__body">
+                            <ul class="govuk-list govuk-error-summary__list">
+                                <li>
+                                    <a href="#submit-form">@TempData["ErrorMessage"]</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                }
+                
+                @if (ViewBag.IsSubmitted == true)
+                {
+                    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                Return submitted
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                Your performance return has been submitted
+                            </p>
+                            <p class="govuk-body">Your performance return for @ViewBag.Month @ViewBag.Year has been successfully submitted.</p>
+                            @if (ViewBag.SubmissionDate != null)
+                            {
+                                <p class="govuk-body">Submitted on @(((DateTime)ViewBag.SubmissionDate).ToString("d MMM yyyy 'at' HH:mm")) by @ViewBag.SubmittedBy</p>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (allProductsCompleted)
+                {
+                    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                Success
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                You can complete this return
+                            </p>
+                            <p class="govuk-body">All products have been completed. You can now submit your performance return for @ViewBag.Month @ViewBag.Year.</p>
+                            <form method="post" action="/reporting/@ViewBag.Year/@ViewBag.Month.ToLower()/performance/submit">
+                                @Html.AntiForgeryToken()
+                                <div class="govuk-button-group">
+                                    <button class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">
+                                        Submit return
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
+                
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-two-thirds">
+                        <h2 class="govuk-heading-l">Products</h2>
+                        <p class="govuk-body">Select a service to complete its performance return for @ViewBag.Month @ViewBag.Year.</p>
+                    </div>
+                </div>
+
+                @if (Model.Any())
+                {
+                    <div class="govuk-table-container">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Service</th>
+                                    <th scope="col" class="govuk-table__header">Status</th>
+                                    <th scope="col" class="govuk-table__header">Metrics completed</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var product in Model)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <a href="/reporting/@ViewBag.Year/@ViewBag.Month.ToLower()/performance/@product.FipsId" class="govuk-link">
+                                                @product.Title
+                                            </a>
+                                            @if (!string.IsNullOrEmpty(product.FipsId))
+                                            {
+                                                <br>
+                                                <span class="govuk-body-s">@product.FipsId</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetStatusTagClass(product.ReportingStatus)">
+                                                @product.ReportingStatus
+                                            </span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <div class="govuk-grid-row">
+                                                <div class="govuk-grid-column-two-thirds">
+                                                    <div class="govuk-progress-bar">
+                                                        <div class="govuk-progress-bar__bar" style="width: @product.ProgressPercentage%"></div>
+                                                    </div>
+                                                </div>
+                                                <div class="govuk-grid-column-one-third">
+                                                    <span class="govuk-body-s">@product.CompletedMetrics of @product.TotalMetrics</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">You are not currently assigned to any services for reporting.</p>
+                        <p class="govuk-body">Contact your administrator to be assigned to services.</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+@functions {
+    string GetStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "govuk-tag--green",
+            "In progress" => "govuk-tag--blue",
+            "Not started" => "govuk-tag--grey",
+            "Overdue" => "govuk-tag--red",
+            _ => "govuk-tag--grey"
+        };
+    }
+}

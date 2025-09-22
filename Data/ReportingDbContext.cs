@@ -20,6 +20,7 @@ namespace FipsReporting.Data
         public DbSet<UserPermission> UserPermissions { get; set; }
         public DbSet<PerformanceMetric> PerformanceMetrics { get; set; }
         public DbSet<PerformanceMetricData> PerformanceMetricData { get; set; }
+        public DbSet<PerformanceSubmission> PerformanceSubmissions { get; set; }
         
         // Business Intelligence Models (commented out temporarily for port testing)
         // public DbSet<BusinessMetric> BusinessMetrics { get; set; }
@@ -215,6 +216,22 @@ namespace FipsReporting.Data
                     .WithMany(e => e.PerformanceData)
                     .HasForeignKey(e => e.PerformanceMetricId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Configure PerformanceSubmission
+            modelBuilder.Entity<PerformanceSubmission>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.UserEmail).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.ReportingPeriod).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.SubmittedBy).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.SubmittedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                
+                // Create unique index on UserEmail and ReportingPeriod to prevent duplicate submissions
+                entity.HasIndex(e => new { e.UserEmail, e.ReportingPeriod }).IsUnique();
             });
         }
     }
@@ -471,5 +488,27 @@ namespace FipsReporting.Data
 
         // Navigation properties
         public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+    }
+
+    public class PerformanceSubmission
+    {
+        public int Id { get; set; }
+        [Required]
+        [MaxLength(255)]
+        public string UserEmail { get; set; } = string.Empty;
+        [Required]
+        [MaxLength(20)]
+        public string ReportingPeriod { get; set; } = string.Empty; // e.g., "2025-08"
+        [Required]
+        [MaxLength(50)]
+        public string Status { get; set; } = string.Empty; // Submitted, Draft, Withdrawn
+        [Required]
+        [MaxLength(255)]
+        public string SubmittedBy { get; set; } = string.Empty;
+        public DateTime SubmittedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        [MaxLength(2000)]
+        public string? Notes { get; set; } // Optional notes about the submission
     }
 }

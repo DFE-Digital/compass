@@ -1,0 +1,136 @@
+@model IEnumerable<FipsReporting.Data.PerformanceSubmission>
+
+@{
+    ViewData["Title"] = "Submitted Returns";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "dashboard";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl">Submitted returns</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">View all your submitted performance returns.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-grid-row">
+    <!-- Vertical Navigation -->
+    <div class="govuk-grid-column-one-quarter">
+        <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+            <ul class="dfe-vertical-nav__section">
+                <li class="dfe-vertical-nav__section-item">
+                    <a href="@Url.Action("Index", "Reporting")" class="govuk-back-link govuk-!-margin-top-0">
+                        Back to dashboard
+                    </a>
+                </li>
+            </ul>
+            
+            <nav class="dfe-vertical-nav govuk-!-margin-top-6" data-module="dfe-vertical-nav">
+                <ul class="dfe-vertical-nav__section">
+                    <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                        <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Reporting")">
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "products" ? "dfe-vertical-nav__section-item--current" : "")">
+                        <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Products", "Reporting")">
+                            Your products
+                        </a>
+                    </li>
+                    <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "performance" ? "dfe-vertical-nav__section-item--current" : "")">
+                        <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Performance", "Reporting")">
+                            Performance reporting
+                        </a>
+                    </li>
+                    <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "milestones" ? "dfe-vertical-nav__section-item--current" : "")">
+                        <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Milestones", "Reporting")">
+                            Milestones
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="govuk-grid-column-three-quarters">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h2 class="govuk-heading-l">All submitted returns</h2>
+                <p class="govuk-body">Below are all the performance returns you have submitted.</p>
+            </div>
+        </div>
+
+        @if (Model.Any())
+        {
+            <div class="govuk-table-container">
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Period</th>
+                            <th scope="col" class="govuk-table__header">Due by</th>
+                            <th scope="col" class="govuk-table__header">Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var submission in Model)
+                        {
+                            var parts = submission.ReportingPeriod.Split('-');
+                            var year = parts[0];
+                            var monthNameLower = parts[1];
+                            var monthName = char.ToUpper(monthNameLower[0]) + monthNameLower.Substring(1);
+                            
+                            // Calculate the period display (e.g., "1 to 31 August")
+                            var monthDate = DateTime.ParseExact($"{monthName} {year}", "MMMM yyyy", null);
+                            var lastDayOfMonth = DateTime.DaysInMonth(int.Parse(year), monthDate.Month);
+                            var periodDisplay = $"1 to {lastDayOfMonth} {monthName}";
+                            var fullMonthName = $"{monthName} {year}";
+                            
+                            // Calculate due date (7th of following month)
+                            var dueDate = monthDate.AddMonths(1).AddDays(6);
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <a href="/reporting/@year/@monthName.ToLower()" class="govuk-link">
+                                        @fullMonthName
+                                    </a>
+                                    <div class="govuk-body-s govuk-!-margin-bottom-0">@periodDisplay</div>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @dueDate.ToString("dd MMM yyyy")
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @submission.SubmittedAt.ToString("dd MMM yyyy 'at' HH:mm")
+                                    <div class="govuk-body-s govuk-!-margin-bottom-0">@submission.SubmittedBy</div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="govuk-!-margin-top-4">
+                <p class="govuk-body">
+                    <strong>Total submitted returns: @Model.Count()</strong>
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                <p class="govuk-body">No returns have been submitted yet.</p>
+                <p class="govuk-body">
+                    <a href="@Url.Action("Performance", "Reporting")" class="govuk-link">
+                        Go to performance reporting to submit your first return
+                    </a>
+                </p>
+            </div>
+        }
+    </div>
+</div>

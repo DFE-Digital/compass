@@ -2,18 +2,51 @@
 
 @{
     ViewData["Title"] = "Objective Details";
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["ActiveNav"] = "admin";
+    ViewData["ActiveNavItem"] = "objective-details";
 }
 
-<div class="govuk-width-container">
-    <div class="govuk-main-wrapper">
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS admin</span>
+                    <h1 class="govuk-heading-xl">@Model.Title</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">@Model.Reference</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+     
+
         <div class="govuk-grid-row">
-            <div class="govuk-grid-column-full">
-                <h1 class="govuk-heading-xl">Objective details</h1>
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+            <a href="@Url.Action("Index")" class="govuk-back-link govuk-!-margin-bottom-7">Back to objectives</a>
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "objective-details" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Details", new { id = Model.Id })">
+                                Objective details
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "linked-milestones" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Milestones", new { id = Model.Id })">
+                                Linked milestones
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                <h2 class="govuk-heading-l">Objective details</h2>
                 
-                <div class="govuk-grid-row">
-                    <div class="govuk-grid-column-two-thirds">
-                        <dl class="govuk-summary-list">
+                <dl class="govuk-summary-list">
                             <div class="govuk-summary-list__row">
                                 <dt class="govuk-summary-list__key">Reference</dt>
                                 <dd class="govuk-summary-list__value">
@@ -64,69 +97,14 @@
                                     }
                                 </dd>
                             </div>
-                        </dl>
-                    </div>
-                </div>
-
-                @if (Model.Milestones.Any())
-                {
-                    <h2 class="govuk-heading-l">Linked Milestones</h2>
-                    <div class="govuk-table-container">
-                        <table class="govuk-table">
-                            <thead class="govuk-table__head">
-                                <tr class="govuk-table__row">
-                                    <th class="govuk-table__header">Title</th>
-                                    <th class="govuk-table__header">FIPS ID</th>
-                                    <th class="govuk-table__header">Status</th>
-                                    <th class="govuk-table__header">Priority</th>
-                                    <th class="govuk-table__header">Target Date</th>
-                                </tr>
-                            </thead>
-                            <tbody class="govuk-table__body">
-                                @foreach (var milestone in Model.Milestones)
-                                {
-                                    <tr class="govuk-table__row">
-                                        <td class="govuk-table__cell">
-                                            <a href="@Url.Action("Details", "AdminMilestones", new { id = milestone.Id })" class="govuk-link">
-                                                @milestone.Title
-                                            </a>
-                                        </td>
-                                        <td class="govuk-table__cell">@milestone.FipsId</td>
-                                        <td class="govuk-table__cell">
-                                            <span class="govuk-tag @GetMilestoneStatusTagClass(milestone.Status)">
-                                                @milestone.Status
-                                            </span>
-                                        </td>
-                                        <td class="govuk-table__cell">
-                                            <span class="govuk-tag @GetPriorityTagClass(milestone.Priority)">
-                                                @milestone.Priority
-                                            </span>
-                                        </td>
-                                        <td class="govuk-table__cell">
-                                            @(milestone.TargetDate?.ToString("dd MMM yyyy") ?? "Not set")
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                else
-                {
-                    <h2 class="govuk-heading-l">Linked Milestones</h2>
-                    <div class="govuk-inset-text">
-                        <p class="govuk-body">No milestones are currently linked to this objective.</p>
-                    </div>
-                }
+                </dl>
 
                 <div class="govuk-button-group">
                     <a href="@Url.Action("Edit", new { id = Model.Id })" class="govuk-button">Edit Objective</a>
-                    <a href="@Url.Action("Index")" class="govuk-button govuk-button--secondary">Back to Objectives</a>
                 </div>
             </div>
         </div>
-    </div>
-</div>
+
 
 @functions {
     string GetTypeTagClass(string type)
@@ -148,30 +126,6 @@
             "Completed" => "govuk-tag--blue",
             "Cancelled" => "govuk-tag--red",
             "On Hold" => "govuk-tag--yellow",
-            _ => "govuk-tag--grey"
-        };
-    }
-
-    string GetMilestoneStatusTagClass(string status)
-    {
-        return status switch
-        {
-            "Completed" => "govuk-tag--green",
-            "In Progress" => "govuk-tag--blue",
-            "Not Started" => "govuk-tag--grey",
-            "Overdue" => "govuk-tag--red",
-            "Cancelled" => "govuk-tag--red",
-            _ => "govuk-tag--grey"
-        };
-    }
-
-    string GetPriorityTagClass(string priority)
-    {
-        return priority switch
-        {
-            "High" => "govuk-tag--red",
-            "Medium" => "govuk-tag--yellow",
-            "Low" => "govuk-tag--green",
             _ => "govuk-tag--grey"
         };
     }

@@ -180,4 +180,45 @@ namespace FipsReporting.Models
         public string? UserName { get; set; }
         public string? DisplayName { get; set; }
     }
+
+    public class ProductPerformanceViewModel : ProductViewModel
+    {
+        public string ReportingStatus { get; set; } = "Not started";
+        public int CompletedMetrics { get; set; }
+        public int TotalMetrics { get; set; }
+        public int ProgressPercentage => TotalMetrics > 0 ? (int)Math.Round((double)CompletedMetrics / TotalMetrics * 100) : 0;
+        public string ProgressStatus
+        {
+            get
+            {
+                if (ProgressPercentage == 0) return "Not started";
+                if (ProgressPercentage == 100) return "Completed";
+                return "In progress";
+            }
+        }
+    }
+
+    public class ProductPerformanceFormViewModel
+    {
+        public ProductViewModel Product { get; set; } = new ProductViewModel();
+        public List<PerformanceMetricFormItem> Metrics { get; set; } = new List<PerformanceMetricFormItem>();
+        public string ReportingPeriod { get; set; } = string.Empty;
+        public int Year { get; set; }
+        public string Month { get; set; } = string.Empty;
+    }
+
+    public class PerformanceMetricFormItem
+    {
+        public int Id { get; set; }
+        public string UniqueId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Measure { get; set; } = string.Empty;
+        public bool Mandatory { get; set; }
+        public bool CanReportNullReturn { get; set; }
+        public string? Value { get; set; }
+        public bool IsNullReturn { get; set; }
+        public bool IsCompleted => !string.IsNullOrEmpty(Value) || IsNullReturn;
+    }
 }

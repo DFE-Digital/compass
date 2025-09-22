@@ -19,10 +19,11 @@ namespace FipsReporting.Services
             // Create a development user identity
             var claims = new[]
             {
+                
                 new Claim(ClaimTypes.Name, "Development User"),
-                new Claim(ClaimTypes.Email, "dev.user@education.gov.uk"),
-                new Claim(ClaimTypes.NameIdentifier, "dev-user-123"),
-                new Claim("preferred_username", "dev.user@education.gov.uk")
+                new Claim(ClaimTypes.Email, "andy.jones@education.gov.uk"),
+                new Claim(ClaimTypes.NameIdentifier, "andy-jones-123"),
+                new Claim("preferred_username", "andy.jones@education.gov.uk")
             };
 
             var identity = new ClaimsIdentity(claims, "Development");

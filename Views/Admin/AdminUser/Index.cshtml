@@ -20,7 +20,10 @@
 
     </div>
 }
-<div class="govuk-grid-row">
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
             <!-- Vertical Navigation -->
             <div class="govuk-grid-column-one-quarter">
                 <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
@@ -51,59 +54,70 @@
 
             <!-- Main Content -->
             <div class="govuk-grid-column-three-quarters">
-                <!-- Users -->
-                <div class="govuk-grid-row">
-                    <div class="govuk-grid-column-full">
-                        <div class="govuk-summary-card">
-                            <div class="govuk-summary-card__title-wrapper">
-                                <h2 class="govuk-summary-card__title">
-                                    Users
-                                </h2>
-                                <ul class="govuk-summary-card__actions">
-                                    <li class="govuk-summary-card__action">
-                                        <a class="govuk-link" href="@Url.Action("Create")">
-                                            Add new user<span class="govuk-visually-hidden"> to user management</span>
-                                        </a>
-                                    </li>
-                                    <li class="govuk-summary-card__action">
-                                        <a class="govuk-link" href="#" id="export-users">
-                                            Export CSV<span class="govuk-visually-hidden"> of all users</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="govuk-summary-card__content">
-                                @if (Model != null && Model.Any())
-                                {
-                                    <div class="govuk-table-container">
-                                        <table class="govuk-table">
-                                            <thead class="govuk-table__head">
-                                                <tr class="govuk-table__row">
-                                                    <th scope="col" class="govuk-table__header">Name</th>
-                                                    <th scope="col" class="govuk-table__header">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="govuk-table__body">
-                                                @foreach (var user in Model)
-                                                {
-                                                    <tr class="govuk-table__row">
-                                                        <td class="govuk-table__cell">
-                                                            <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Edit", new { id = user.Id })">
-                                                                @user.Name
-                                                            </a>
-                                                            <div class="govuk-body-s">@user.Email</div>
-                                                        </td>
-                                                        <td class="govuk-table__cell">
-                                                            <span class="govuk-tag govuk-tag--@(user.IsActive ? "green" : "red")">
-                                                                @(user.IsActive ? "Active" : "Inactive")
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                }
+                <!-- Search Bar -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-4">
+                    <div class="govuk-grid-column-two-thirds">
+                        <div class="govuk-form-group">
+                            <label class="govuk-label" for="users-search">Search users</label>
+                            <input class="govuk-input" id="users-search" name="search" type="text" placeholder="Search by name or email...">
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-third">
+                        <div class="govuk-form-group">
+                            <label class="govuk-label" for="status-filter">Filter by status</label>
+                            <select class="govuk-select" id="status-filter">
+                                <option value="">All users</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="govuk-summary-card">
+                    <div class="govuk-summary-card__title-wrapper">
+                        <h2 class="govuk-summary-card__title">
+                            Users
+                        </h2>
+                        <ul class="govuk-summary-card__actions">
+                            <li class="govuk-summary-card__action">
+                                <a class="govuk-link" href="@Url.Action("Create")">
+                                    Add user
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="govuk-summary-card__content">
+                        @if (Model != null && Model.Any())
+                        {
+                            <table class="govuk-table">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header">Name</th>
+                                        <th scope="col" class="govuk-table__header">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="govuk-table__body">
+                                    @foreach (var user in Model)
+                                    {
+                                        <tr class="govuk-table__row" data-name="@user.Name.ToLower()" data-email="@user.Email.ToLower()" data-status="@(user.IsActive ? "active" : "inactive")">
+                                            <td class="govuk-table__cell">
+                                                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Edit", new { id = user.Id })">
+                                                    @user.Name
+                                                </a>
+                                                <br>
+                                                <span class="govuk-body-s govuk-!-font-weight-regular">@user.Email</span>
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <span class="govuk-tag govuk-tag--@(user.IsActive ? "green" : "red")">
+                                                    @(user.IsActive ? "Active" : "Inactive")
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                                 else
                                 {
                                     <div class="govuk-inset-text">
@@ -119,13 +133,38 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script nonce="@Html.GetNonce()">
-        document.addEventListener('DOMContentLoaded', function() {
-            // Export functionality
-            document.getElementById('export-users').addEventListener('click', function(e) {
-                e.preventDefault();
-                alert('Export functionality would be implemented here');
+<script nonce="@Html.GetNonce()">
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('users-search');
+        const statusFilter = document.getElementById('status-filter');
+        const tableRows = document.querySelectorAll('.govuk-table__row[data-name]');
+
+        function filterRows() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const statusValue = statusFilter.value.toLowerCase();
+
+            tableRows.forEach(row => {
+                const name = row.getAttribute('data-name');
+                const email = row.getAttribute('data-email');
+                const status = row.getAttribute('data-status');
+
+                const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
+                const matchesStatus = !statusValue || status.includes(statusValue);
+
+                if (matchesSearch && matchesStatus) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
             });
-        });
-    </script>
+        }
+
+        searchInput.addEventListener('input', filterRows);
+        statusFilter.addEventListener('change', filterRows);
+    });
+</script>

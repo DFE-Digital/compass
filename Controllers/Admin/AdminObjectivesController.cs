@@ -80,12 +80,34 @@ namespace FipsReporting.Controllers.Admin
                     TempData["Error"] = "Objective not found.";
                     return RedirectToAction(nameof(Index));
                 }
-                return View(objective);
+                return View("~/Views/Admin/AdminObjectives/Details.cshtml", objective);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading objective details");
                 TempData["Error"] = "Error loading objective details. Please try again.";
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        public async Task<IActionResult> Milestones(int id)
+        {
+            try
+            {
+                ViewData["ActiveNav"] = "admin";
+                ViewData["ActiveNavItem"] = "linked-milestones";
+                var objective = await _objectiveService.GetObjectiveByIdAsync(id);
+                if (objective == null)
+                {
+                    TempData["Error"] = "Objective not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+                return View("~/Views/Admin/AdminObjectives/Milestones.cshtml", objective);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading objective milestones");
+                TempData["Error"] = "Error loading objective milestones. Please try again.";
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -102,7 +124,7 @@ namespace FipsReporting.Controllers.Admin
                     TempData["Error"] = "Objective not found.";
                     return RedirectToAction(nameof(Index));
                 }
-                return View(objective);
+                return View("~/Views/Admin/AdminObjectives/Edit.cshtml", objective);
             }
             catch (Exception ex)
             {
@@ -157,7 +179,7 @@ namespace FipsReporting.Controllers.Admin
                     TempData["Error"] = "Objective not found.";
                     return RedirectToAction(nameof(Index));
                 }
-                return View(objective);
+                return View("~/Views/Admin/AdminObjectives/Delete.cshtml", objective);
             }
             catch (Exception ex)
             {
