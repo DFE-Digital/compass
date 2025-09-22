@@ -1,0 +1,121 @@
+@model IEnumerable<FipsReporting.Models.ProductViewModel>
+
+@{
+    ViewData["Title"] = $"Performance Reporting - {ViewBag.Month} {ViewBag.Year}";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "performance";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl">Performance reporting - @ViewBag.Month @ViewBag.Year</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Complete your monthly performance returns for governance reporting.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Reporting")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "products" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Products", "Reporting")">
+                                Your products
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "performance" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Performance", "Reporting")">
+                                Performance reporting
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "milestones" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Milestones", "Reporting")">
+                                Milestones
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-two-thirds">
+                        <h2 class="govuk-heading-l">Services to report on</h2>
+                        <p class="govuk-body">Select a service to complete its performance return for @ViewBag.Month @ViewBag.Year.</p>
+                    </div>
+                </div>
+
+                @if (Model.Any())
+                {
+                    <div class="govuk-table-container">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Service</th>
+                                    <th scope="col" class="govuk-table__header">FIPS ID</th>
+                                    <th scope="col" class="govuk-table__header">Status</th>
+                                    <th scope="col" class="govuk-table__header">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var product in Model)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <strong>@product.Title</strong>
+                                            @if (!string.IsNullOrEmpty(product.ShortDescription))
+                                            {
+                                                <br>
+                                                <span class="govuk-body-s">@product.ShortDescription</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-body-s">@(product.FipsId ?? "Not assigned")</span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag govuk-tag--grey">Not started</span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @if (!string.IsNullOrEmpty(product.FipsId))
+                                            {
+                                                <a href="/reporting/@ViewBag.Year/@ViewBag.Month.ToLower()/performance/@product.FipsId" class="govuk-link">
+                                                    @product.Title
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="govuk-body-s">FIPS ID required</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">You are not currently assigned to any services for reporting.</p>
+                        <p class="govuk-body">Contact your administrator to be assigned to services.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

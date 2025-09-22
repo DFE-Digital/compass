@@ -1,0 +1,153 @@
+@model FipsReporting.Data.ReportingData
+@{
+    ViewData["Title"] = "Report Data";
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>Submit Reporting Data</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Product:</strong> @ViewBag.Product.Title
+                </div>
+                <div class="mb-3">
+                    <strong>Metric:</strong> @ViewBag.Metric.Name
+                    @if (!string.IsNullOrEmpty(ViewBag.Metric.Description))
+                    {
+                        <br><small class="text-muted">@ViewBag.Metric.Description</small>
+                    }
+                </div>
+                <div class="mb-3">
+                    <strong>Type:</strong> <span class="badge bg-info">@ViewBag.Metric.MeasurementType</span>
+                    @if (ViewBag.Metric.IsMandatory)
+                    {
+                        <span class="badge bg-danger">Mandatory</span>
+                    }
+                    @if (ViewBag.Metric.AllowNotApplicable)
+                    {
+                        <span class="badge bg-warning">N/A Allowed</span>
+                    }
+                </div>
+
+                <form asp-action="SubmitReportData" method="post">
+                    <input asp-for="ProductId" type="hidden" value="@ViewBag.Product.Id" />
+                    <input asp-for="MetricId" type="hidden" value="@ViewBag.Metric.Id" />
+                    
+                    <div class="mb-3">
+                        <label asp-for="ReportingPeriod" class="form-label">Reporting Period *</label>
+                        <select asp-for="ReportingPeriod" class="form-select" required>
+                            <option value="">Select reporting period</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="fortnightly">Fortnightly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="ad-hoc">Ad-hoc</option>
+                        </select>
+                        <span asp-validation-for="ReportingPeriod" class="text-danger"></span>
+                    </div>
+
+                    @if (ViewBag.Metric.MeasurementType == "percentage")
+                    {
+                        <div class="mb-3">
+                            <label asp-for="Value" class="form-label">Percentage Value *</label>
+                            <div class="input-group">
+                                <input asp-for="Value" type="number" step="0.01" min="0" max="100" class="form-control" placeholder="85.5" />
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <span asp-validation-for="Value" class="text-danger"></span>
+                            <div class="form-text">Enter percentage value (0-100)</div>
+                        </div>
+                    }
+                    else if (ViewBag.Metric.MeasurementType == "number")
+                    {
+                        <div class="mb-3">
+                            <label asp-for="Value" class="form-label">Numeric Value *</label>
+                            <input asp-for="Value" type="number" step="0.01" class="form-control" placeholder="1250" />
+                            <span asp-validation-for="Value" class="text-danger"></span>
+                            <div class="form-text">Enter numeric value</div>
+                        </div>
+                    }
+                    else if (ViewBag.Metric.MeasurementType == "text")
+                    {
+                        <div class="mb-3">
+                            <label asp-for="Value" class="form-label">Text Value *</label>
+                            <textarea asp-for="Value" class="form-control" rows="3" placeholder="Enter text value"></textarea>
+                            <span asp-validation-for="Value" class="text-danger"></span>
+                            <div class="form-text">Enter descriptive text</div>
+                        </div>
+                    }
+
+                    @if (ViewBag.Metric.AllowNotApplicable)
+                    {
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" id="notApplicable" class="form-check-input" />
+                                <label for="notApplicable" class="form-check-label">
+                                    Mark as Not Applicable
+                                </label>
+                            </div>
+                            <div class="form-text">Check this if this metric is not applicable to this product</div>
+                        </div>
+                    }
+
+                    <div class="d-flex justify-content-between">
+                        <a asp-action="Details" asp-route-id="@ViewBag.Product.Id" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Submit Report Data</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Reporting Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <h6>Reporting Periods</h6>
+                <ul class="small">
+                    <li><strong>Weekly:</strong> Every 7 days</li>
+                    <li><strong>Fortnightly:</strong> Every 14 days</li>
+                    <li><strong>Monthly:</strong> Calendar month basis</li>
+                    <li><strong>Ad-hoc:</strong> On-demand reporting</li>
+                </ul>
+
+                <h6>Data Quality</h6>
+                <ul class="small">
+                    <li>Ensure data accuracy</li>
+                    <li>Use consistent measurement units</li>
+                    <li>Document any assumptions</li>
+                    <li>Report actual values, not estimates</li>
+                </ul>
+
+                @if (ViewBag.Metric.IsMandatory)
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Mandatory Metric</strong><br>
+                        This metric must be reported for this product.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        document.getElementById('notApplicable').addEventListener('change', function() {
+            const valueInput = document.querySelector('input[name="Value"], textarea[name="Value"]');
+            if (this.checked) {
+                valueInput.value = 'N/A';
+                valueInput.disabled = true;
+            } else {
+                valueInput.disabled = false;
+                valueInput.value = '';
+            }
+        });
+    </script>
+}

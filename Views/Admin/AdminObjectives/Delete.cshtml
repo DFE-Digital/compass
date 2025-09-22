@@ -1,0 +1,157 @@
+@model FipsReporting.Data.Objective
+
+@{
+    ViewData["Title"] = "Delete Objective";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style nonce="@Html.GetNonce()">
+    .inline-form {
+        display: inline;
+    }
+</style>
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h1 class="govuk-heading-xl">Delete objective</h1>
+                
+                <div class="govuk-warning-text">
+                    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                    <strong class="govuk-warning-text__text">
+                        <span class="govuk-warning-text__assistive">Warning</span>
+                        You are about to delete this objective. This action cannot be undone.
+                    </strong>
+                </div>
+
+                @if (Model.Milestones.Any())
+                {
+                    <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                        <h2 class="govuk-error-summary__title" id="error-summary-title">
+                            Cannot delete objective
+                        </h2>
+                        <div class="govuk-error-summary__body">
+                            <p class="govuk-body">This objective cannot be deleted because it has @Model.Milestones.Count milestone(s) linked to it.</p>
+                            <p class="govuk-body">Please remove or reassign all linked milestones before deleting this objective.</p>
+                        </div>
+                    </div>
+                }
+
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Reference</dt>
+                        <dd class="govuk-summary-list__value">
+                            <strong>@Model.Reference</strong>
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Title</dt>
+                        <dd class="govuk-summary-list__value">@Model.Title</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Type</dt>
+                        <dd class="govuk-summary-list__value">
+                            <span class="govuk-tag @GetTypeTagClass(Model.Type)">
+                                @Model.Type
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Status</dt>
+                        <dd class="govuk-summary-list__value">
+                            <span class="govuk-tag @GetStatusTagClass(Model.Status)">
+                                @Model.Status
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Linked Milestones</dt>
+                        <dd class="govuk-summary-list__value">
+                            <span class="govuk-badge">@Model.Milestones.Count</span>
+                        </dd>
+                    </div>
+                </dl>
+
+                @if (Model.Milestones.Any())
+                {
+                    <h2 class="govuk-heading-l">Linked Milestones</h2>
+                    <div class="govuk-table-container">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th class="govuk-table__header">Title</th>
+                                    <th class="govuk-table__header">FIPS ID</th>
+                                    <th class="govuk-table__header">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var milestone in Model.Milestones)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">@milestone.Title</td>
+                                        <td class="govuk-table__cell">@milestone.FipsId</td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetMilestoneStatusTagClass(milestone.Status)">
+                                                @milestone.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                <div class="govuk-button-group">
+                    @if (!Model.Milestones.Any())
+                    {
+                        <form asp-action="Delete" method="post" class="inline-form">
+                            <input asp-for="Id" type="hidden" />
+                            <button type="submit" class="govuk-button govuk-button--warning">Delete Objective</button>
+                        </form>
+                    }
+                    <a href="@Url.Action("Details", new { id = Model.Id })" class="govuk-button govuk-button--secondary">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetTypeTagClass(string type)
+    {
+        return type switch
+        {
+            "DDT Objective" => "govuk-tag--blue",
+            "Government Mission" => "govuk-tag--green",
+            "Flagship" => "govuk-tag--purple",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Active" => "govuk-tag--green",
+            "Completed" => "govuk-tag--blue",
+            "Cancelled" => "govuk-tag--red",
+            "On Hold" => "govuk-tag--yellow",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetMilestoneStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "govuk-tag--green",
+            "In Progress" => "govuk-tag--blue",
+            "Not Started" => "govuk-tag--grey",
+            "Overdue" => "govuk-tag--red",
+            "Cancelled" => "govuk-tag--red",
+            _ => "govuk-tag--grey"
+        };
+    }
+}

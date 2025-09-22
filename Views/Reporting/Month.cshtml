@@ -1,0 +1,231 @@
+@model FipsReporting.Models.MonthReportingViewModel
+
+@{
+    ViewData["Title"] = $"Reporting {Model.FullMonthName}";
+    ViewData["ActiveNav"] = "reporting";
+}
+
+<style nonce="@Html.GetNonce()">
+    .nav-margin-top {
+        margin-top: 2rem;
+    }
+    .form-margin-top {
+        margin-top: 1rem;
+    }
+</style>
+
+@section BeforeContent {
+
+        <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                     <span class="govuk-caption-l govuk-!-margin-top-6">Performance reporting</span>
+                <h1 class="govuk-heading-xl">@Model.FullMonthName</h1>
+                    <table class="govuk-table govuk-!-margin-bottom-0">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Status</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Due</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Submission</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    @if (Model.DueDateStatus == "Overdue")
+                                    {
+                                        <span class="govuk-tag govuk-tag--red">@Model.DueDateStatus</span>
+                                    }
+                                    else if (Model.DueDateStatus == "Due soon")
+                                    {
+                                        <span class="govuk-tag govuk-tag--yellow">@Model.DueDateStatus</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--green">@Model.DueDateStatus</span>
+                                    }
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @Model.DueDate.ToString("d MMM yyyy")
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @if (Model.OverallSubmissionStatus == "Submitted")
+                                    {
+                                        <span class="govuk-tag govuk-tag--green">@Model.OverallSubmissionStatus</span>
+                                    }
+                                    else if (Model.OverallSubmissionStatus == "Ready to submit")
+                                    {
+                                        <span class="govuk-tag govuk-tag--blue">@Model.OverallSubmissionStatus</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--grey">@Model.OverallSubmissionStatus</span>
+                                    }
+                                </td>
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-body">@Model.CompletedServicesCount of @Model.TotalServicesCount</span>
+                                    <span class="govuk-visually-hidden">service performance data completed</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+            
+
+        <div class="govuk-grid-row">
+            <!-- Left Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item">
+                            <a href="@Url.Action("Index", "Reporting")" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">
+                                ← Back to reports
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                
+                <nav class="dfe-vertical-nav nav-margin-top">
+                    <h3 class="dfe-vertical-nav__title">Active and overdue reports</h3>
+                    <ul class="dfe-vertical-nav__section">
+                        @foreach (var period in Model.ReportingPeriods.Where(p => p.Status == "Overdue"))
+                        {
+                            var year = period.DueDate.Year;
+                            var month = period.Month.Split(' ')[0].ToLower();
+                            <li class="dfe-vertical-nav__section-item @(period.Month == Model.FullMonthName ? "dfe-vertical-nav__section-item--current" : "")">
+                                <a href="@Url.Action("Month", "Reporting", new { year = year, month = month })" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">
+                                    @period.Month
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+
+                <nav class="dfe-vertical-nav nav-margin-top">
+                    <h3 class="dfe-vertical-nav__title">Upcoming reports</h3>
+                    <ul class="dfe-vertical-nav__section">
+                        @foreach (var period in Model.ReportingPeriods.Where(p => p.Status == "Upcoming"))
+                        {
+                            var year = period.DueDate.Year;
+                            var month = period.Month.Split(' ')[0].ToLower();
+                            <li class="dfe-vertical-nav__section-item @(period.Month == Model.FullMonthName ? "dfe-vertical-nav__section-item--current" : "")">
+                                <a href="@Url.Action("Month", "Reporting", new { year = year, month = month })" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">
+                                    @period.Month
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+
+                <nav class="dfe-vertical-nav nav-margin-top">
+                    <h3 class="dfe-vertical-nav__title">Submitted reports</h3>
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item">
+                            <a href="#" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">July 2025</a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item">
+                            <a href="#" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">June 2025</a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item">
+                            <a href="#" class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline">May 2025</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                @if (Model.CompletedServicesCount == Model.TotalServicesCount && Model.TotalServicesCount > 0 && !Model.IsSubmitted)
+                {
+                    <div class="govuk-notification-banner" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                Information
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                All metrics have been completed all your products for @Model.FullMonthName. You can now submit this report.
+                            </p>
+                            <form method="post" action="@Url.Action("SubmitReport", "Reporting", new { year = Model.Year, month = Model.Month.ToLower() })" class="form-margin-top">
+                                <button type="submit" class="govuk-button" data-module="govuk-button">
+                                    Submit report
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+             
+<h2 class="govuk-heading-l">Your products</h2>
+
+<p class="govuk-body">You are responsible for reporting on the performance of the following @Model.AssignedProducts.Count products.</p>
+              
+
+                <!-- Services Table -->
+                @if (Model.AssignedProducts.Any())
+                {
+                    <table class="govuk-table">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header">
+                                    Product
+                                    <span class="govuk-visually-hidden">Sortable</span>
+                                </th>
+                                <th scope="col" class="govuk-table__header">
+                                    Status
+                                    <span class="govuk-visually-hidden">Sortable</span>
+                                </th>
+
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            @foreach (var product in Model.AssignedProducts)
+                            {
+                                <tr class="govuk-table__row">
+                                    <td class="govuk-table__cell">
+                                        <a href="@Url.Action("Service", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = product.FipsId })" class="govuk-link">
+                                            @product.Title
+                                        </a>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @if (Model.ProductStatuses.ContainsKey(product.FipsId))
+                                            {
+                                                var status = Model.ProductStatuses[product.FipsId];
+                                                @if (status == "Complete")
+                                                {
+                                                    <span class="govuk-tag govuk-tag--green">@status</span>
+                                                }
+                                                else if (status == "In progress")
+                                                {
+                                                    <span class="govuk-tag govuk-tag--yellow">@status</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="govuk-tag govuk-tag--red">@status</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="govuk-tag govuk-tag--red">Not started</span>
+                                            }
+                                        </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">No services assigned to you for this reporting period.</p>
+                    </div>
+                }
+            </div>
+        </div>
+

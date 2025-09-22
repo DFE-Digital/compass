@@ -1,0 +1,319 @@
+@using FipsReporting.Models
+@using FipsReporting.Helpers
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["ActiveNav"] = "dashboard";
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h1 class="govuk-heading-xl">Dashboard</h1>
+                <p class="govuk-body-l">Welcome back! Here's an overview of your reporting responsibilities and progress.</p>
+            </div>
+        </div>
+
+        <!-- Reporting Status Overview -->
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-full">
+                <h2 class="govuk-heading-l">Reporting Status</h2>
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Total Metrics</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold">@Model.ReportsStatus.TotalMetrics</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Submitted</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-green">@Model.ReportsStatus.SubmittedReports</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Pending</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-orange">@Model.ReportsStatus.PendingReports</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Overdue</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-red">@Model.ReportsStatus.OverdueReports</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reporting Cycles -->
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-full">
+                <h2 class="govuk-heading-l">Reporting Cycles</h2>
+                <p class="govuk-body">Monthly reporting cycles with 5-day grace period for submissions.</p>
+                
+                <div class="govuk-table__wrapper">
+                    <table class="govuk-table">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header">Month</th>
+                                <th scope="col" class="govuk-table__header">Cycle Period</th>
+                                <th scope="col" class="govuk-table__header">Due Date</th>
+                                <th scope="col" class="govuk-table__header">Status</th>
+                                <th scope="col" class="govuk-table__header">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            @foreach (var cycle in Model.ReportingCycles.Where(c => c.Status != ReportingCycleStatus.Completed).Take(6))
+                            {
+                                <tr class="govuk-table__row">
+                                    <td class="govuk-table__cell">
+                                        <strong>@cycle.MonthName @cycle.Year</strong>
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                        @cycle.CycleStart.ToString("dd MMM") - @cycle.CycleEnd.ToString("dd MMM")
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                        @cycle.DueDate.ToString("dd MMM yyyy")
+                                        @if (cycle.DaysRemaining > 0 && cycle.DaysRemaining <= 7)
+                                        {
+                                            <br><span class="govuk-body-s govuk-!-colour-orange">@cycle.DaysRemaining days remaining</span>
+                                        }
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                        @switch (cycle.Status)
+                                        {
+                                            case ReportingCycleStatus.Current:
+                                                <span class="govuk-tag govuk-tag--blue">Current</span>
+                                                break;
+                                            case ReportingCycleStatus.Due:
+                                                <span class="govuk-tag govuk-tag--orange">Due</span>
+                                                break;
+                                            case ReportingCycleStatus.Overdue:
+                                                <span class="govuk-tag govuk-tag--red">Overdue</span>
+                                                break;
+                                            case ReportingCycleStatus.Upcoming:
+                                                <span class="govuk-tag govuk-tag--grey">Upcoming</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                        @if (cycle.Status == ReportingCycleStatus.Current || cycle.Status == ReportingCycleStatus.Due)
+                                        {
+                                            <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" 
+                                               href="/reporting/metrics">Submit Reports</a>
+                                        }
+                                        else if (cycle.Status == ReportingCycleStatus.Overdue)
+                                        {
+                                            <a class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" 
+                                               href="/reporting/metrics">Submit Overdue</a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics History Charts -->
+        @if (Model.MetricsHistory.Any())
+        {
+            <div class="govuk-grid-row govuk-!-margin-top-6">
+                <div class="govuk-grid-column-full">
+                    <h2 class="govuk-heading-l">Metrics History</h2>
+                    <p class="govuk-body">Track your reporting progress over time.</p>
+                    
+                    <div class="govuk-grid-row">
+                        @foreach (var metric in Model.MetricsHistory.Where(m => m.HasData).Take(3))
+                        {
+                            <div class="govuk-grid-column-one-third">
+                                <div class="govuk-card">
+                                    <div class="govuk-card__content">
+                                        <h3 class="govuk-heading-s">@metric.MetricName</h3>
+                                        <canvas id="chart-@metric.MetricName.Replace(" ", "-")" width="400" height="200"></canvas>
+                                        <p class="govuk-body-s govuk-!-margin-top-2">
+                                            Last submission: @metric.LastSubmission?.ToString("dd MMM yyyy")
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    @if (Model.MetricsHistory.Count > 3)
+                    {
+                        <div class="govuk-button-group">
+                            <a class="govuk-button govuk-button--secondary" href="/reporting/metrics">View All Metrics</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Milestones Overview -->
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-full">
+                <h2 class="govuk-heading-l">Milestones Overview</h2>
+                
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Total</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold">@Model.MilestonesOverview.TotalMilestones</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Completed</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-green">@Model.MilestonesOverview.CompletedMilestones</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">In Progress</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-blue">@Model.MilestonesOverview.InProgressMilestones</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-quarter">
+                        <div class="govuk-card govuk-card--contained">
+                            <div class="govuk-card__content">
+                                <h3 class="govuk-heading-s">Overdue</h3>
+                                <p class="govuk-body govuk-!-font-size-36 govuk-!-font-weight-bold govuk-colour-red">@Model.MilestonesOverview.OverdueMilestones</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (Model.MilestonesOverview.RecentMilestones.Any())
+                {
+                    <div class="govuk-!-margin-top-4">
+                        <h3 class="govuk-heading-m">Recent Milestones</h3>
+                        <div class="govuk-table__wrapper">
+                            <table class="govuk-table">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header">Milestone</th>
+                                        <th scope="col" class="govuk-table__header">Product</th>
+                                        <th scope="col" class="govuk-table__header">Status</th>
+                                        <th scope="col" class="govuk-table__header">Due Date</th>
+                                        <th scope="col" class="govuk-table__header">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="govuk-table__body">
+                                    @foreach (var milestone in Model.MilestonesOverview.RecentMilestones)
+                                    {
+                                        <tr class="govuk-table__row">
+                                            <td class="govuk-table__cell">
+                                                <strong>@milestone.Title</strong>
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <span class="govuk-tag govuk-tag--blue">@milestone.ProductId</span>
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <span class="govuk-tag govuk-tag--@(milestone.Status.ToLower() switch {
+                                                    "completed" => "green",
+                                                    "in progress" => "blue",
+                                                    "overdue" => "red",
+                                                    "not started" => "grey",
+                                                    _ => "grey"
+                                                })">@milestone.Status</span>
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                @if (milestone.DueDate.HasValue)
+                                                {
+                                                    @milestone.DueDate.Value.ToString("dd MMM yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="govuk-body-s">No due date</span>
+                                                }
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" 
+                                                   href="/reporting/milestones?productId=@milestone.ProductId">Manage</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <div class="govuk-button-group govuk-!-margin-top-4">
+                    <a class="govuk-button" href="/reporting/milestones">Manage All Milestones</a>
+                    <a class="govuk-button govuk-button--secondary" href="/reporting/products">View Products</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-full">
+                <h2 class="govuk-heading-l">Quick Actions</h2>
+                <div class="govuk-button-group">
+                    <a class="govuk-button" href="/reporting/metrics">Submit Reports</a>
+                    <a class="govuk-button govuk-button--secondary" href="/reporting/milestones">Manage Milestones</a>
+                    <a class="govuk-button govuk-button--secondary" href="/reporting/products">View Products</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Html.GetNonce()">
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize charts for metrics history
+            @foreach (var metric in Model.MetricsHistory.Where(m => m.HasData).Take(3))
+            {
+                <text>
+                fetch('/dashboard/GetMetricChartData?metricName=@Html.Raw(metric.MetricName)')
+                    .then(response => response.json())
+                    .then(data => {
+                        const ctx = document.getElementById('chart-@metric.MetricName.Replace(" ", "-")').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: data,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error loading chart data:', error);
+                    });
+                </text>
+            }
+        });
+    </script>
+}

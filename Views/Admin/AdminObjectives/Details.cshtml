@@ -1,0 +1,178 @@
+@model FipsReporting.Data.Objective
+
+@{
+    ViewData["Title"] = "Objective Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-full">
+                <h1 class="govuk-heading-xl">Objective details</h1>
+                
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-two-thirds">
+                        <dl class="govuk-summary-list">
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Reference</dt>
+                                <dd class="govuk-summary-list__value">
+                                    <strong>@Model.Reference</strong>
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Title</dt>
+                                <dd class="govuk-summary-list__value">@Model.Title</dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Type</dt>
+                                <dd class="govuk-summary-list__value">
+                                    <span class="govuk-tag @GetTypeTagClass(Model.Type)">
+                                        @Model.Type
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Status</dt>
+                                <dd class="govuk-summary-list__value">
+                                    <span class="govuk-tag @GetStatusTagClass(Model.Status)">
+                                        @Model.Status
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Description</dt>
+                                <dd class="govuk-summary-list__value">@Model.Description</dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Created</dt>
+                                <dd class="govuk-summary-list__value">
+                                    @Model.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                    @if (!string.IsNullOrEmpty(Model.CreatedBy))
+                                    {
+                                        <br><small class="text-muted">by @Model.CreatedBy</small>
+                                    }
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Last Updated</dt>
+                                <dd class="govuk-summary-list__value">
+                                    @Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")
+                                    @if (!string.IsNullOrEmpty(Model.UpdatedBy))
+                                    {
+                                        <br><small class="text-muted">by @Model.UpdatedBy</small>
+                                    }
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+
+                @if (Model.Milestones.Any())
+                {
+                    <h2 class="govuk-heading-l">Linked Milestones</h2>
+                    <div class="govuk-table-container">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th class="govuk-table__header">Title</th>
+                                    <th class="govuk-table__header">FIPS ID</th>
+                                    <th class="govuk-table__header">Status</th>
+                                    <th class="govuk-table__header">Priority</th>
+                                    <th class="govuk-table__header">Target Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var milestone in Model.Milestones)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <a href="@Url.Action("Details", "AdminMilestones", new { id = milestone.Id })" class="govuk-link">
+                                                @milestone.Title
+                                            </a>
+                                        </td>
+                                        <td class="govuk-table__cell">@milestone.FipsId</td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetMilestoneStatusTagClass(milestone.Status)">
+                                                @milestone.Status
+                                            </span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetPriorityTagClass(milestone.Priority)">
+                                                @milestone.Priority
+                                            </span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @(milestone.TargetDate?.ToString("dd MMM yyyy") ?? "Not set")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <h2 class="govuk-heading-l">Linked Milestones</h2>
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">No milestones are currently linked to this objective.</p>
+                    </div>
+                }
+
+                <div class="govuk-button-group">
+                    <a href="@Url.Action("Edit", new { id = Model.Id })" class="govuk-button">Edit Objective</a>
+                    <a href="@Url.Action("Index")" class="govuk-button govuk-button--secondary">Back to Objectives</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetTypeTagClass(string type)
+    {
+        return type switch
+        {
+            "DDT Objective" => "govuk-tag--blue",
+            "Government Mission" => "govuk-tag--green",
+            "Flagship" => "govuk-tag--purple",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Active" => "govuk-tag--green",
+            "Completed" => "govuk-tag--blue",
+            "Cancelled" => "govuk-tag--red",
+            "On Hold" => "govuk-tag--yellow",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetMilestoneStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "govuk-tag--green",
+            "In Progress" => "govuk-tag--blue",
+            "Not Started" => "govuk-tag--grey",
+            "Overdue" => "govuk-tag--red",
+            "Cancelled" => "govuk-tag--red",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetPriorityTagClass(string priority)
+    {
+        return priority switch
+        {
+            "High" => "govuk-tag--red",
+            "Medium" => "govuk-tag--yellow",
+            "Low" => "govuk-tag--green",
+            _ => "govuk-tag--grey"
+        };
+    }
+}

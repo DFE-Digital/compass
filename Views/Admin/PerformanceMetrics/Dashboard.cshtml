@@ -1,0 +1,516 @@
+@model FipsReporting.Models.PerformanceMetricsDashboardViewModel
+
+@{
+    ViewData["Title"] = "Performance Metrics Dashboard";
+    ViewData["ActiveNav"] = "admin";
+    ViewData["ActiveNavItem"] = "manage-metrics";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS admin</span>
+                    <h1 class="govuk-heading-xl">Performance metrics dashboard</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Comprehensive overview of performance metrics across all services.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Admin")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-metrics" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminPerformanceMetrics")">
+                                Manage Metrics
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-users" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminUser")">
+                                Manage Users
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-objectives" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminObjectives")">
+                                Manage Objectives
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                <!-- Navigation Tabs -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-4">
+                    <div class="govuk-grid-column-full">
+                        <div class="govuk-tabs" data-module="govuk-tabs">
+                            <ul class="govuk-tabs__list">
+                                <li class="govuk-tabs__list-item govuk-tabs__list-item--selected">
+                                    <a class="govuk-tabs__tab" href="#overview">
+                                        Overview
+                                    </a>
+                                </li>
+                                <li class="govuk-tabs__list-item">
+                                    <a class="govuk-tabs__tab" href="#services">
+                                        Services
+                                    </a>
+                                </li>
+                                <li class="govuk-tabs__list-item">
+                                    <a class="govuk-tabs__tab" href="#categories">
+                                        Categories
+                                    </a>
+                                </li>
+                                <li class="govuk-tabs__list-item">
+                                    <a class="govuk-tabs__tab" href="#analytics">
+                                        Analytics
+                                    </a>
+                                </li>
+                            </ul>
+
+                            <!-- Overview Tab -->
+                            <section class="govuk-tabs__panel" id="overview">
+                                <!-- Summary Cards -->
+                                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                                    <div class="govuk-grid-column-one-quarter">
+                                        <div class="govuk-card metrics-summary-card metrics-summary-card--green">
+                                            <div class="govuk-card__content">
+                                                <h3 class="govuk-heading-s">On Target</h3>
+                                                <p class="metrics-summary-card__value">@Model.Overview.MetricsOnTarget</p>
+                                                <p class="metrics-summary-card__label">@Model.Overview.TotalMetrics total</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="govuk-grid-column-one-quarter">
+                                        <div class="govuk-card metrics-summary-card metrics-summary-card--yellow">
+                                            <div class="govuk-card__content">
+                                                <h3 class="govuk-heading-s">At Risk</h3>
+                                                <p class="metrics-summary-card__value">@Model.Overview.MetricsAtRisk</p>
+                                                <p class="metrics-summary-card__label">need attention</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="govuk-grid-column-one-quarter">
+                                        <div class="govuk-card metrics-summary-card metrics-summary-card--red">
+                                            <div class="govuk-card__content">
+                                                <h3 class="govuk-heading-s">Off Target</h3>
+                                                <p class="metrics-summary-card__value">@Model.Overview.MetricsOffTarget</p>
+                                                <p class="metrics-summary-card__label">require action</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="govuk-grid-column-one-quarter">
+                                        <div class="govuk-card metrics-summary-card metrics-summary-card--blue">
+                                            <div class="govuk-card__content">
+                                                <h3 class="govuk-heading-s">Services</h3>
+                                                <p class="metrics-summary-card__value">@Model.Overview.TotalServices</p>
+                                                <p class="metrics-summary-card__label">monitored</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Overall Compliance -->
+                                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                                    <div class="govuk-grid-column-full">
+                                        <div class="govuk-card">
+                                            <div class="govuk-card__content">
+                                                <h2 class="govuk-heading-m">Overall Compliance</h2>
+                                                <div class="compliance-score">
+                                                    <div class="compliance-score__value">@Model.Overview.OverallCompliancePercentage%</div>
+                                                    <div class="compliance-score__label">Compliance Score</div>
+                                                    <div class="compliance-score__bar">
+                                                        <div class="compliance-score__fill" style="width: @Model.Overview.OverallCompliancePercentage%"></div>
+                                                    </div>
+                                                </div>
+                                                <p class="govuk-body-s govuk-!-margin-top-2">
+                                                    Last updated: @Model.Overview.LastUpdated.ToString("dd MMM yyyy HH:mm")
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Trending Metrics -->
+                                @if (Model.TrendingMetrics.Any())
+                                {
+                                    <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                                        <div class="govuk-grid-column-full">
+                                            <h2 class="govuk-heading-m">Trending Metrics</h2>
+                                            <div class="govuk-card">
+                                                <div class="govuk-card__content">
+                                                    <div class="trending-metrics">
+                                                        @foreach (var trend in Model.TrendingMetrics)
+                                                        {
+                                                            <div class="trending-metric">
+                                                                <div class="trending-metric__header">
+                                                                    <h4 class="govuk-heading-s">@trend.Name</h4>
+                                                                    <span class="trending-metric__service">@trend.ServiceName</span>
+                                                                </div>
+                                                                <div class="trending-metric__values">
+                                                                    <div class="trending-metric__current">
+                                                                        <span class="govuk-body-l govuk-!-font-weight-bold">@trend.CurrentValue</span>
+                                                                        <span class="govuk-body-s">Current</span>
+                                                                    </div>
+                                                                    <div class="trending-metric__change trending-metric__change--@trend.Trend.ToLower()">
+                                                                        <span class="govuk-body-s">@trend.ChangePercentage% @trend.Trend</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Active Alerts -->
+                                @if (Model.ActiveAlerts.Any())
+                                {
+                                    <div class="govuk-grid-row">
+                                        <div class="govuk-grid-column-full">
+                                            <h2 class="govuk-heading-m">Active Alerts</h2>
+                                            <div class="govuk-card">
+                                                <div class="govuk-card__content">
+                                                    @foreach (var alert in Model.ActiveAlerts)
+                                                    {
+                                                        <div class="alert-item alert-item--@alert.Type.ToLower()">
+                                                            <div class="alert-item__header">
+                                                                <h4 class="govuk-heading-s">@alert.Title</h4>
+                                                                <span class="govuk-tag govuk-tag--@(alert.Priority.ToLower() == "high" ? "red" : alert.Priority.ToLower() == "medium" ? "yellow" : "green")">
+                                                                    @alert.Priority
+                                                                </span>
+                                                            </div>
+                                                            <p class="govuk-body-s">@alert.Description</p>
+                                                            <p class="govuk-body-s govuk-!-color-grey">
+                                                                @alert.ServiceName • @alert.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                                            </p>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </section>
+
+                            <!-- Services Tab -->
+                            <section class="govuk-tabs__panel govuk-tabs__panel--hidden" id="services">
+                                <h2 class="govuk-heading-l">Service Performance</h2>
+                                @if (Model.ServiceSummaries.Any())
+                                {
+                                    <table class="govuk-table">
+                                        <thead class="govuk-table__head">
+                                            <tr class="govuk-table__row">
+                                                <th scope="col" class="govuk-table__header">Service</th>
+                                                <th scope="col" class="govuk-table__header">Metrics</th>
+                                                <th scope="col" class="govuk-table__header">Compliance</th>
+                                                <th scope="col" class="govuk-table__header">Status</th>
+                                                <th scope="col" class="govuk-table__header">Last Updated</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="govuk-table__body">
+                                            @foreach (var service in Model.ServiceSummaries)
+                                            {
+                                                <tr class="govuk-table__row">
+                                                    <td class="govuk-table__cell">
+                                                        <strong>@service.ServiceName</strong>
+                                                        <br>
+                                                        <span class="govuk-body-s">@service.FipsId</span>
+                                                    </td>
+                                                    <td class="govuk-table__cell">
+                                                        <span class="govuk-body-s">@service.MetricsOnTarget/@service.TotalMetrics passing</span>
+                                                        <br>
+                                                        <span class="govuk-body-s govuk-!-color-red">@service.MetricsOffTarget off target</span>
+                                                    </td>
+                                                    <td class="govuk-table__cell">
+                                                        <div class="metrics-progress-bar">
+                                                            <div class="metrics-progress-bar__fill" style="width: @service.CompliancePercentage%"></div>
+                                                        </div>
+                                                        <span class="govuk-body-s">@service.CompliancePercentage%</span>
+                                                    </td>
+                                                    <td class="govuk-table__cell">
+                                                        <span class="govuk-tag govuk-tag--@(service.OverallRagStatus.ToLower() == "green" ? "green" : service.OverallRagStatus.ToLower() == "amber" ? "yellow" : "red")">
+                                                            @service.OverallRagStatus
+                                                        </span>
+                                                    </td>
+                                                    <td class="govuk-table__cell">
+                                                        <span class="govuk-body-s">@service.LastUpdated.ToString("dd MMM yyyy")</span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <div class="govuk-inset-text">
+                                        <p class="govuk-body">No service data available.</p>
+                                    </div>
+                                }
+                            </section>
+
+                            <!-- Categories Tab -->
+                            <section class="govuk-tabs__panel govuk-tabs__panel--hidden" id="categories">
+                                <h2 class="govuk-heading-l">Category Performance</h2>
+                                @if (Model.CategorySummaries.Any())
+                                {
+                                    <div class="govuk-grid-row">
+                                        @foreach (var category in Model.CategorySummaries)
+                                        {
+                                            <div class="govuk-grid-column-one-half">
+                                                <div class="govuk-card">
+                                                    <div class="govuk-card__content">
+                                                        <h3 class="govuk-heading-s">@category.Category</h3>
+                                                        <div class="category-metrics">
+                                                            <div class="category-metrics__stat">
+                                                                <span class="govuk-body-l govuk-!-font-weight-bold">@category.TotalMetrics</span>
+                                                                <span class="govuk-body-s">Total metrics</span>
+                                                            </div>
+                                                            <div class="category-metrics__stat">
+                                                                <span class="govuk-body-l govuk-!-font-weight-bold govuk-!-color-green">@category.MetricsOnTarget</span>
+                                                                <span class="govuk-body-s">On target</span>
+                                                            </div>
+                                                            <div class="category-metrics__stat">
+                                                                <span class="govuk-body-l govuk-!-font-weight-bold govuk-!-color-red">@category.MetricsOffTarget</span>
+                                                                <span class="govuk-body-s">Off target</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="metrics-progress-bar govuk-!-margin-top-3">
+                                                            <div class="metrics-progress-bar__fill" style="width: @category.CompletionPercentage%"></div>
+                                                        </div>
+                                                        <p class="govuk-body-s govuk-!-margin-top-2">@category.CompletionPercentage% complete</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="govuk-inset-text">
+                                        <p class="govuk-body">No category data available.</p>
+                                    </div>
+                                }
+                            </section>
+
+                            <!-- Analytics Tab -->
+                            <section class="govuk-tabs__panel govuk-tabs__panel--hidden" id="analytics">
+                                <h2 class="govuk-heading-l">Analytics & Trends</h2>
+                                <div class="govuk-inset-text">
+                                    <p class="govuk-body">Advanced analytics and trend analysis will be available here.</p>
+                                    <a href="@Url.Action("Analytics", "AdminPerformanceMetrics")" class="govuk-button">
+                                        View Full Analytics
+                                    </a>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style nonce="@Html.GetNonce()">
+/* Performance Metrics Dashboard Styling */
+.metrics-summary-card {
+    border-left: 4px solid #b1b4b6;
+    transition: transform 0.2s ease;
+}
+
+.metrics-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.metrics-summary-card--green {
+    border-left-color: #00703c;
+}
+
+.metrics-summary-card--yellow {
+    border-left-color: #f47738;
+}
+
+.metrics-summary-card--red {
+    border-left-color: #d4351c;
+}
+
+.metrics-summary-card--blue {
+    border-left-color: #1d70b8;
+}
+
+.metrics-summary-card__value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: 0;
+    color: #0b0c0c;
+}
+
+.metrics-summary-card__label {
+    font-size: 0.875rem;
+    color: #626a6e;
+    margin: 0.5rem 0 0 0;
+}
+
+.compliance-score {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.compliance-score__value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #1d70b8;
+    line-height: 1;
+    margin: 0;
+}
+
+.compliance-score__label {
+    font-size: 1rem;
+    color: #626a6e;
+    margin: 0.5rem 0 1rem 0;
+}
+
+.compliance-score__bar {
+    width: 100%;
+    height: 12px;
+    background-color: #f3f2f1;
+    overflow: hidden;
+}
+
+.compliance-score__fill {
+    height: 100%;
+    background-color: #1d70b8;
+    transition: width 0.3s ease;
+}
+
+.trending-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.trending-metric {
+    padding: 1rem;
+    border: 1px solid #b1b4b6;
+    background: #f8f8f8;
+}
+
+.trending-metric__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.trending-metric__service {
+    font-size: 0.875rem;
+    color: #626a6e;
+}
+
+.trending-metric__values {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.trending-metric__current {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.trending-metric__change {
+    font-weight: 600;
+}
+
+.trending-metric__change--improving {
+    color: #00703c;
+}
+
+.trending-metric__change--declining {
+    color: #d4351c;
+}
+
+.trending-metric__change--stable {
+    color: #626a6e;
+}
+
+.alert-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #b1b4b6;
+    background: #f8f8f8;
+}
+
+.alert-item--warning {
+    border-left-color: #f47738;
+}
+
+.alert-item--critical {
+    border-left-color: #d4351c;
+}
+
+.alert-item--info {
+    border-left-color: #1d70b8;
+}
+
+.alert-item__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.metrics-progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #f3f2f1;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.metrics-progress-bar__fill {
+    height: 100%;
+    background-color: #00703c;
+    transition: width 0.3s ease;
+}
+
+.category-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.category-metrics__stat {
+    text-align: center;
+}
+
+.category-metrics__stat span:first-child {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.category-metrics__stat span:last-child {
+    display: block;
+    font-size: 0.875rem;
+    color: #626a6e;
+}
+</style>

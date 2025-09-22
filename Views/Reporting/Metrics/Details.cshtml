@@ -1,0 +1,89 @@
+@using FipsReporting.Data
+@model ReportingMetric
+@{
+    ViewData["Title"] = "Metric Details - " + Model.Name;
+    ViewData["ActiveNav"] = "reporting-metrics";
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h1 class="govuk-heading-xl">@Model.Name</h1>
+                
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="govuk-body-l">@Model.Description</p>
+                }
+
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Measurement Type</dt>
+                        <dd class="govuk-summary-list__value">
+                            <span class="govuk-tag govuk-tag--@(Model.MeasurementType.ToLower() switch {
+                                "percentage" => "blue",
+                                "number" => "green", 
+                                "text" => "purple",
+                                _ => "grey"
+                            })">@Model.MeasurementType</span>
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Mandatory</dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.IsMandatory)
+                            {
+                                <span class="govuk-tag govuk-tag--red">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">No</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Allow Not Applicable</dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.AllowNotApplicable)
+                            {
+                                <span class="govuk-tag govuk-tag--green">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">No</span>
+                            }
+                        </dd>
+                    </div>
+                </dl>
+
+                @if (Model.Conditions.Any())
+                {
+                    <h2 class="govuk-heading-l">Applicability Conditions</h2>
+                    <p class="govuk-body">This metric applies to products that meet the following conditions:</p>
+                    
+                    <ul class="govuk-list govuk-list--bullet">
+                        @foreach (var condition in Model.Conditions)
+                        {
+                            <li>
+                                <strong>@condition.CategoryType</strong> 
+                                @condition.Operator.Replace("_", " ") 
+                                <strong>@condition.CategoryValue</strong>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">This metric applies to all products.</p>
+                    </div>
+                }
+
+                <div class="govuk-button-group govuk-!-margin-top-6">
+                    <a class="govuk-button" href="@Url.Action("ReportData", new { metricId = Model.Id })">Submit Data</a>
+                    <a class="govuk-button govuk-button--secondary" href="@Url.Action("Index")">Back to Metrics</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

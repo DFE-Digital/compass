@@ -1,0 +1,264 @@
+@model FipsReporting.Models.ServiceSummaryViewModel
+
+@{
+    ViewData["Title"] = "Service Summary";
+    ViewData["ActiveNav"] = "reporting";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl">@Model.Product.Title</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Service summary and compliance status for @Model.FullMonthName reporting period.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <!-- Left Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item dfe-vertical-nav__section-item--current">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Service", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })">
+                                Overview
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Performance", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })">
+                                Performance Metrics
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#milestones">
+                                Milestones
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="#outcomes">
+                                Outcomes
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                <!-- Service Information Header -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                    <div class="govuk-grid-column-full">
+                        <div class="govuk-card">
+                            <div class="govuk-card__content">
+                                <div class="govuk-grid-row">
+                                    <div class="govuk-grid-column-two-thirds">
+                                        <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Service Information</h2>
+                                        <p class="govuk-body-l govuk-!-font-weight-bold">@Model.Product.Title</p>
+                                        <p class="govuk-body-s govuk-!-margin-bottom-0">
+                                            <strong>FIPS ID:</strong> 
+                                            <a href="https://find-products-services-dev.education.gov.uk/product/@Model.FipsId" 
+                                               class="govuk-link" target="_blank">
+                                                @Model.FipsId
+                                                <span class="govuk-visually-hidden"> (opens in new window)</span>
+                                            </a>
+                                        </p>
+                                    </div>
+                                    <div class="govuk-grid-column-one-third">
+                                        <div class="govuk-tag govuk-tag--@(Model.RagStatus.ToLower() == "red" ? "red" : Model.RagStatus.ToLower() == "amber" ? "yellow" : "green")">
+                                            @Model.RagStatus
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Summary -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                    <div class="govuk-grid-column-one-half">
+                        <div class="govuk-card">
+                            <div class="govuk-card__content">
+                                <h2 class="govuk-heading-m">RAG Status</h2>
+                                <div class="govuk-tag govuk-tag--@(Model.RagStatus.ToLower() == "red" ? "red" : Model.RagStatus.ToLower() == "amber" ? "yellow" : "green") govuk-!-margin-bottom-3">
+                                    @Model.RagStatus
+                                </div>
+                                <p class="govuk-body-s">@Model.RagDescription</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="govuk-grid-column-one-half">
+                        <div class="govuk-card">
+                            <div class="govuk-card__content">
+                                <h2 class="govuk-heading-m">Progress Status</h2>
+                                <div class="govuk-tag govuk-tag--@(Model.ProgressStatus.ToLower().Replace(" ", "-")) govuk-!-margin-bottom-3">
+                                    @Model.ProgressStatus
+                                </div>
+                                <p class="govuk-body-s">Next update due: @Model.NextUpdateDue.ToString("d MMM yyyy")</p>
+                                <a href="@Url.Action("Performance", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" 
+                                   class="govuk-button govuk-button--primary govuk-!-margin-top-3">
+                                    Submit monthly update
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Metrics -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                    <div class="govuk-grid-column-full">
+                        <h2 class="govuk-heading-l">Key Metrics</h2>
+                        <div class="govuk-grid-row">
+                            <div class="govuk-grid-column-one-quarter">
+                                <div class="govuk-card">
+                                    <div class="govuk-card__content">
+                                        <h3 class="govuk-heading-s">Total Metrics</h3>
+                                        <p class="govuk-body-l govuk-!-font-weight-bold">@Model.TotalMetrics</p>
+                                        <p class="govuk-body-s">to report</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="govuk-grid-column-one-quarter">
+                                <div class="govuk-card">
+                                    <div class="govuk-card__content">
+                                        <h3 class="govuk-heading-s">Completed</h3>
+                                        <p class="govuk-body-l govuk-!-font-weight-bold govuk-!-color-green">@Model.CompletedMetrics</p>
+                                        <p class="govuk-body-s">reported</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="govuk-grid-column-one-quarter">
+                                <div class="govuk-card">
+                                    <div class="govuk-card__content">
+                                        <h3 class="govuk-heading-s">Pending</h3>
+                                        <p class="govuk-body-l govuk-!-font-weight-bold govuk-!-color-yellow">@(Model.TotalMetrics - Model.CompletedMetrics)</p>
+                                        <p class="govuk-body-s">awaiting data</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="govuk-grid-column-one-quarter">
+                                <div class="govuk-card">
+                                    <div class="govuk-card__content">
+                                        <h3 class="govuk-heading-s">Completion</h3>
+                                        <p class="govuk-body-l govuk-!-font-weight-bold">@(Model.TotalMetrics > 0 ? Math.Round((double)Model.CompletedMetrics / Model.TotalMetrics * 100) : 0)%</p>
+                                        <p class="govuk-body-s">complete</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Milestones Section -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                    <div class="govuk-grid-column-full">
+                        <h2 class="govuk-heading-l">Milestones</h2>
+                        @if (Model.Milestones.Any())
+                        {
+                            <table class="govuk-table">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header">Milestone</th>
+                                        <th scope="col" class="govuk-table__header">Due Date</th>
+                                        <th scope="col" class="govuk-table__header">RAG Status</th>
+                                        <th scope="col" class="govuk-table__header">Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="govuk-table__body">
+                                    @foreach (var milestone in Model.Milestones)
+                                    {
+                                        <tr class="govuk-table__row">
+                                            <td class="govuk-table__cell">
+                                                <strong>@milestone.Name</strong>
+                                                @if (!string.IsNullOrEmpty(milestone.Url))
+                                                {
+                                                    <br>
+                                                    <a href="@milestone.Url" class="govuk-link govuk-link--no-visited-state">
+                                                        View details
+                                                    </a>
+                                                }
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                @milestone.DueDate.ToString("d MMM yyyy")
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <span class="govuk-tag govuk-tag--@(milestone.CurrentRag.ToLower() == "green" ? "green" : milestone.CurrentRag.ToLower() == "red" ? "red" : "yellow")">
+                                                    @milestone.CurrentRag
+                                                </span>
+                                            </td>
+                                            <td class="govuk-table__cell">
+                                                <span class="govuk-tag govuk-tag--@(milestone.Change.ToLower() == "improved" ? "green" : milestone.Change.ToLower() == "worsened" ? "red" : "grey")">
+                                                    @milestone.Change
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="govuk-inset-text">
+                                <p class="govuk-body">No milestones found for this service.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-full">
+                        <div class="govuk-button-group">
+                            <a href="@Url.Action("Performance", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.FipsId })" 
+                               class="govuk-button govuk-button--primary">
+                                Submit monthly update
+                            </a>
+                            <a href="@Url.Action("Index", "Reporting")" 
+                               class="govuk-button govuk-button--secondary">
+                                Back to dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Clean card styling without border radius */
+.govuk-card {
+    background: #ffffff;
+    border: 1px solid #b1b4b6;
+    margin-bottom: 1rem;
+}
+
+.govuk-card__content {
+    padding: 1.5rem;
+}
+
+/* Tag color variants */
+.govuk-tag--yellow {
+    background: #f47738;
+    color: #ffffff;
+}
+
+.govuk-tag--green {
+    background: #00703c;
+    color: #ffffff;
+}
+
+.govuk-tag--red {
+    background: #d4351c;
+    color: #ffffff;
+}
+</style>

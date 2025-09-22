@@ -1,0 +1,109 @@
+@using FipsReporting.Data
+@model List<ReportingMetric>
+@{
+    ViewData["Title"] = "Reporting Metrics";
+    ViewData["ActiveNav"] = "reporting-metrics";
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h1 class="govuk-heading-xl">Reporting metrics</h1>
+                <p class="govuk-body-l">View and submit data for reporting metrics applicable to your products.</p>
+            </div>
+        </div>
+
+        @if (Model.Any())
+        {
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <div class="govuk-table__wrapper">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Metric Name</th>
+                                    <th scope="col" class="govuk-table__header">Type</th>
+                                    <th scope="col" class="govuk-table__header">Mandatory</th>
+                                    <th scope="col" class="govuk-table__header">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var metric in Model)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <strong>@metric.Name</strong>
+                                            @if (!string.IsNullOrEmpty(metric.Description))
+                                            {
+                                                <br><span class="govuk-body-s govuk-!-margin-top-1">@metric.Description</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag govuk-tag--@(metric.MeasurementType.ToLower() switch {
+                                                "percentage" => "blue",
+                                                "number" => "green", 
+                                                "text" => "purple",
+                                                _ => "grey"
+                                            })">@metric.MeasurementType</span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @if (metric.IsMandatory)
+                                            {
+                                                <span class="govuk-tag govuk-tag--red">Mandatory</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="govuk-tag govuk-tag--grey">Optional</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <div class="govuk-button-group">
+                                                <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" 
+                                                   href="@Url.Action("Details", new { id = metric.Id })">
+                                                    View Details
+                                                </a>
+                                                <a class="govuk-button govuk-!-margin-bottom-0" 
+                                                   href="@Url.Action("ReportData", new { metricId = metric.Id })">
+                                                    Submit Data
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-two-thirds">
+                    <div class="govuk-notification-banner govuk-notification-banner--info" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                No Metrics Available
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                There are currently no active reporting metrics available.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-two-thirds">
+                <div class="govuk-button-group">
+                    <a class="govuk-button govuk-button--secondary" href="@Url.Action("MyReports")">View My Reports</a>
+                    <a class="govuk-button govuk-button--secondary" href="/reporting/products">Back to Products</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

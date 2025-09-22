@@ -1,0 +1,250 @@
+@model FipsReporting.Models.UserPermissionViewModel
+@{
+    ViewData["Title"] = "Edit User";
+    ViewData["ActiveNav"] = "admin";
+    ViewData["ActiveNavItem"] = "manage-users";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS admin</span>
+                    <h1 class="govuk-heading-xl">Edit user</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Update user account details and permissions for the COMPASS reporting system.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Admin")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-metrics" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminPerformanceMetrics")">
+                                Manage Metrics
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-users" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminUser")">
+                                Manage users
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-objectives" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminObjectives")">
+                                Manage Objectives
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+        
+        <form method="post">
+            @Html.AntiForgeryToken()
+            @Html.HiddenFor(m => m.Id)
+            
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                    <h2 class="govuk-error-summary__title" id="error-summary-title">
+                        There is a problem
+                    </h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                            {
+                                <li>
+                                    <a href="#email">@error.ErrorMessage</a>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+
+            <div class="govuk-form-group @(ViewData.ModelState["Email"]?.Errors.Count > 0 ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" for="email">
+                    Email Address
+                </label>
+                @if (ViewData.ModelState["Email"]?.Errors.Count > 0)
+                {
+                    <span class="govuk-error-message">
+                        <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["Email"].Errors.First().ErrorMessage
+                    </span>
+                }
+                <input class="govuk-input @(ViewData.ModelState["Email"]?.Errors.Count > 0 ? "govuk-input--error" : "")" 
+                       id="email" name="Email" type="email" value="@Model.Email" aria-describedby="email-hint">
+            </div>
+
+            <div class="govuk-form-group">
+                <label class="govuk-label" for="name">
+                    Full Name (Optional)
+                </label>
+                <input class="govuk-input" id="name" name="Name" type="text" value="@Model.Name">
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        <h2 class="govuk-fieldset__heading">Product Permissions</h2>
+                    </legend>
+                    
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canAddProduct" name="CanAddProduct" type="checkbox" value="true" @(Model.CanAddProduct ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canAddProduct">
+                                Can Add Products
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canEditProduct" name="CanEditProduct" type="checkbox" value="true" @(Model.CanEditProduct ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canEditProduct">
+                                Can Edit Products
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canDeleteProduct" name="CanDeleteProduct" type="checkbox" value="true" @(Model.CanDeleteProduct ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canDeleteProduct">
+                                Can Delete Products
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        <h2 class="govuk-fieldset__heading">Metric Permissions</h2>
+                    </legend>
+                    
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canAddMetric" name="CanAddMetric" type="checkbox" value="true" @(Model.CanAddMetric ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canAddMetric">
+                                Can Add Metrics
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canEditMetric" name="CanEditMetric" type="checkbox" value="true" @(Model.CanEditMetric ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canEditMetric">
+                                Can Edit Metrics
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canDeleteMetric" name="CanDeleteMetric" type="checkbox" value="true" @(Model.CanDeleteMetric ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canDeleteMetric">
+                                Can Delete Metrics
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        <h2 class="govuk-fieldset__heading">Milestone Permissions</h2>
+                    </legend>
+                    
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canAddMilestone" name="CanAddMilestone" type="checkbox" value="true" @(Model.CanAddMilestone ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canAddMilestone">
+                                Can Add Milestones
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canEditMilestone" name="CanEditMilestone" type="checkbox" value="true" @(Model.CanEditMilestone ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canEditMilestone">
+                                Can Edit Milestones
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canDeleteMilestone" name="CanDeleteMilestone" type="checkbox" value="true" @(Model.CanDeleteMilestone ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canDeleteMilestone">
+                                Can Delete Milestones
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        <h2 class="govuk-fieldset__heading">User Management Permissions</h2>
+                    </legend>
+                    
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canAddUser" name="CanAddUser" type="checkbox" value="true" @(Model.CanAddUser ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canAddUser">
+                                Can Add Users
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canEditUser" name="CanEditUser" type="checkbox" value="true" @(Model.CanEditUser ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canEditUser">
+                                Can Edit Users
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        <h2 class="govuk-fieldset__heading">Reporting Permissions</h2>
+                    </legend>
+                    
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canViewReports" name="CanViewReports" type="checkbox" value="true" @(Model.CanViewReports ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canViewReports">
+                                Can View Reports
+                            </label>
+                        </div>
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="canSubmitReports" name="CanSubmitReports" type="checkbox" value="true" @(Model.CanSubmitReports ? "checked" : "")>
+                            <label class="govuk-label govuk-checkboxes__label" for="canSubmitReports">
+                                Can Submit Reports
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-form-group">
+                <div class="govuk-checkboxes__item">
+                    <input class="govuk-checkboxes__input" id="isActive" name="IsActive" type="checkbox" value="true" @(Model.IsActive ? "checked" : "")>
+                    <label class="govuk-label govuk-checkboxes__label" for="isActive">
+                        User is Active
+                    </label>
+                </div>
+            </div>
+
+            <div class="govuk-button-group">
+                <button class="govuk-button" type="submit">Update User</button>
+                <a class="govuk-button govuk-button--secondary" href="@Url.Action("Index")">Cancel</a>
+            </div>
+        </form>
+            </div>
+        </div>
+    </div>
+</div>

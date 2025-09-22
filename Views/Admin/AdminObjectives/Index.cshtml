@@ -1,0 +1,152 @@
+@model IEnumerable<FipsReporting.Data.Objective>
+
+@{
+    ViewData["Title"] = "Objectives Management";
+    ViewData["ActiveNav"] = "admin";
+    ViewData["ActiveNavItem"] = "manage-objectives";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS admin</span>
+                    <h1 class="govuk-heading-xl">Manage objectives</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">Manage DDT objectives, Government Missions, Flagship programmes and other strategic objectives.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+<div class="govuk-grid-row">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Admin")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-metrics" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminPerformanceMetrics")">
+                                Manage Metrics
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-users" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminUser")">
+                                Manage Users
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-objectives" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminObjectives")">
+                                Manage objectives
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-two-thirds">
+                        <h1 class="govuk-heading-l">Objectives Management</h1>
+                        
+                        <p class="govuk-body-l">
+                            Manage DDT objectives, government missions, flagship initiatives, and other objectives that milestones can be linked to.
+                        </p>
+                    </div>
+                    <div class="govuk-grid-column-one-third">
+                        <a href="@Url.Action("Create")" class="govuk-button">Create New Objective</a>
+                    </div>
+                </div>
+
+                @if (Model.Any())
+                {
+                    <div class="govuk-table-container">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th class="govuk-table__header">Reference</th>
+                                    <th class="govuk-table__header">Title</th>
+                                    <th class="govuk-table__header">Type</th>
+                                    <th class="govuk-table__header">Status</th>
+                                    <th class="govuk-table__header">Milestones</th>
+                                    <th class="govuk-table__header">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var objective in Model)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <strong>@objective.Reference</strong>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @objective.Title
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetTypeTagClass(objective.Type)">
+                                                @objective.Type
+                                            </span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag @GetStatusTagClass(objective.Status)">
+                                                @objective.Status
+                                            </span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-badge">@objective.Milestones.Count</span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <div class="govuk-button-group">
+                                                <a href="@Url.Action("Details", new { id = objective.Id })" class="govuk-link">View</a>
+                                                <a href="@Url.Action("Edit", new { id = objective.Id })" class="govuk-link">Edit</a>
+                                                <a href="@Url.Action("Delete", new { id = objective.Id })" class="govuk-link govuk-link--destructive">Delete</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body">No objectives have been created yet.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetTypeTagClass(string type)
+    {
+        return type switch
+        {
+            "DDT Objective" => "govuk-tag--blue",
+            "Government Mission" => "govuk-tag--green",
+            "Flagship" => "govuk-tag--purple",
+            _ => "govuk-tag--grey"
+        };
+    }
+
+    string GetStatusTagClass(string status)
+    {
+        return status switch
+        {
+            "Active" => "govuk-tag--green",
+            "Completed" => "govuk-tag--blue",
+            "Cancelled" => "govuk-tag--red",
+            "On Hold" => "govuk-tag--yellow",
+            _ => "govuk-tag--grey"
+        };
+    }
+}
+            </div>
+        </div>

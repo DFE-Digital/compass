@@ -1,0 +1,278 @@
+@model FipsReporting.Data.PerformanceMetric
+
+@{
+    ViewData["Title"] = "Performance Metric Details";
+    ViewData["ActiveNav"] = "admin";
+    ViewData["ActiveNavItem"] = "manage-metrics";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-6">COMPASS admin</span>
+                    <h1 class="govuk-heading-xl">Performance metric details</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">View details for @Model.Name</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-grid-row">
+    <!-- Vertical Navigation -->
+    <div class="govuk-grid-column-one-quarter">
+        <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+            <ul class="dfe-vertical-nav__section">
+                <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                    <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Admin")">
+                        Dashboard
+                    </a>
+                </li>
+                <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-metrics" ? "dfe-vertical-nav__section-item--current" : "")">
+                    <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminPerformanceMetrics")">
+                        Manage metrics
+                    </a>
+                </li>
+                <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-users" ? "dfe-vertical-nav__section-item--current" : "")">
+                    <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminUser")">
+                        Manage users
+                    </a>
+                </li>
+                <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "manage-objectives" ? "dfe-vertical-nav__section-item--current" : "")">
+                    <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "AdminObjectives")">
+                        Manage objectives
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="govuk-grid-column-three-quarters">
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">
+                    @Model.Name
+                </h2>
+                <ul class="govuk-summary-card__actions">
+                    <li class="govuk-summary-card__action">
+                        <a class="govuk-link" href="@Url.Action("Edit", "AdminPerformanceMetrics", new { id = Model.Id })">
+                            Edit<span class="govuk-visually-hidden"> @Model.Name</span>
+                        </a>
+                    </li>
+                    <li class="govuk-summary-card__action">
+                        @if (Model.Enabled)
+                        {
+                            <form method="post" action="@Url.Action("Disable", "AdminPerformanceMetrics", new { id = Model.Id })" style="display: inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="govuk-link govuk-link--no-visited-state" onclick="return confirm('Are you sure you want to disable this metric?')">
+                                    Disable<span class="govuk-visually-hidden"> @Model.Name</span>
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" action="@Url.Action("Enable", "AdminPerformanceMetrics", new { id = Model.Id })" style="display: inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="govuk-link govuk-link--no-visited-state" onclick="return confirm('Are you sure you want to enable this metric?')">
+                                    Enable<span class="govuk-visually-hidden"> @Model.Name</span>
+                                </button>
+                            </form>
+                        }
+                    </li>
+                </ul>
+            </div>
+            <div class="govuk-summary-card__content">
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Unique ID
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.UniqueId
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Name
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.Name
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Description
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.Description
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Category
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.Category
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Measure
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.Measure
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Legal/Regulatory
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.LegalRegulatory)
+                            {
+                                <span class="govuk-tag govuk-tag--blue">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">No</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Mandate
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.Mandate == "Legal")
+                            {
+                                <span class="govuk-tag govuk-tag--blue">Legal</span>
+                            }
+                            else if (Model.Mandate == "DSIT")
+                            {
+                                <span class="govuk-tag govuk-tag--purple">DSIT</span>
+                            }
+                            else if (Model.Mandate == "DfE")
+                            {
+                                <span class="govuk-tag govuk-tag--green">DfE</span>
+                            }
+                            else if (Model.Mandate == "DDT")
+                            {
+                                <span class="govuk-tag govuk-tag--orange">DDT</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">@Model.Mandate</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Service stages
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @{
+                                var phases = ViewBag.Phases as List<string> ?? new List<string>();
+                                var applicablePhases = new List<string>();
+                                
+                                if (!string.IsNullOrEmpty(Model.ApplicablePhases))
+                                {
+                                    try
+                                    {
+                                        applicablePhases = System.Text.Json.JsonSerializer.Deserialize<List<string>>(Model.ApplicablePhases) ?? new List<string>();
+                                    }
+                                    catch
+                                    {
+                                        applicablePhases = new List<string>();
+                                    }
+                                }
+                                
+                                var enabledStages = applicablePhases.Select(phase => (
+                                    true, 
+                                    phase.Substring(0, 1).ToUpper(), 
+                                    phase.ToLower()
+                                )).ToList();
+                            }
+                            
+                            @if (enabledStages.Any())
+                            {
+                                @foreach (var stage in enabledStages)
+                                {
+                                    <span class="govuk-tag govuk-tag--@stage.Item3 govuk-!-margin-right-1">@stage.Item2</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="govuk-body-s govuk-!-color-grey">No stages selected</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Mandatory
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.Mandatory)
+                            {
+                                <span class="govuk-tag govuk-tag--red">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">No</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Enabled
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.Enabled)
+                            {
+                                <span class="govuk-tag govuk-tag--green">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="govuk-tag govuk-tag--grey">No</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Created by
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.CreatedBy
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Created date
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Updated by
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.UpdatedBy
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Updated date
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>

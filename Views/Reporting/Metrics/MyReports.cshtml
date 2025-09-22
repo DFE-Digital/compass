@@ -1,0 +1,109 @@
+@using FipsReporting.Data
+@model List<ReportingData>
+@{
+    ViewData["Title"] = "My Reports";
+    ViewData["ActiveNav"] = "reporting-metrics";
+}
+
+<div class="govuk-width-container">
+    <div class="govuk-main-wrapper">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <h1 class="govuk-heading-xl">My reports</h1>
+                <p class="govuk-body-l">View your submitted reporting data.</p>
+            </div>
+        </div>
+
+        @if (Model.Any())
+        {
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <div class="govuk-table__wrapper">
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Metric</th>
+                                    <th scope="col" class="govuk-table__header">Product</th>
+                                    <th scope="col" class="govuk-table__header">Value</th>
+                                    <th scope="col" class="govuk-table__header">Period</th>
+                                    <th scope="col" class="govuk-table__header">Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var report in Model)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            <strong>@report.Metric?.Name</strong>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @if (!string.IsNullOrEmpty(report.ProductId))
+                                            {
+                                                <span class="govuk-tag govuk-tag--blue">@report.ProductId</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="govuk-tag govuk-tag--grey">General</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            @if (!string.IsNullOrEmpty(report.Value))
+                                            {
+                                                <span class="govuk-body">@report.Value</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="govuk-tag govuk-tag--grey">Not Applicable</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-tag govuk-tag--@(report.ReportingPeriod.ToLower() switch {
+                                                "weekly" => "green",
+                                                "fortnightly" => "blue",
+                                                "monthly" => "purple",
+                                                "quarterly" => "orange",
+                                                "ad-hoc" => "grey",
+                                                _ => "grey"
+                                            })">@report.ReportingPeriod</span>
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <span class="govuk-body-s">@report.SubmittedAt.ToString("dd MMM yyyy HH:mm")</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-two-thirds">
+                    <div class="govuk-notification-banner govuk-notification-banner--info" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                        <div class="govuk-notification-banner__header">
+                            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                                No Reports Submitted
+                            </h2>
+                        </div>
+                        <div class="govuk-notification-banner__content">
+                            <p class="govuk-notification-banner__heading">
+                                You haven't submitted any reporting data yet.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-grid-row govuk-!-margin-top-6">
+            <div class="govuk-grid-column-two-thirds">
+                <div class="govuk-button-group">
+                    <a class="govuk-button" href="@Url.Action("Index")">View All Metrics</a>
+                    <a class="govuk-button govuk-button--secondary" href="/reporting/products">Back to Products</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
