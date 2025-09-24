@@ -213,11 +213,6 @@ app.MapControllerRoute(
         defaults: new { controller = "AdminUser" });
 
 app.MapControllerRoute(
-    name: "admin-metrics",
-    pattern: "admin/metrics/{action=Index}/{id?}",
-    defaults: new { controller = "AdminMetrics" });
-
-app.MapControllerRoute(
     name: "admin-milestones",
     pattern: "admin/milestones/{action=Index}/{id?}",
     defaults: new { controller = "AdminMilestones" });

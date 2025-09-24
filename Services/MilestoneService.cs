@@ -17,6 +17,7 @@ namespace FipsReporting.Services
         Task<List<MilestoneUpdate>> GetMilestoneUpdatesAsync(int milestoneId);
         Task<MilestoneUpdate> AddMilestoneUpdateAsync(MilestoneUpdate update);
         Task<MilestoneUpdate> AddMilestoneUpdateAsync(int milestoneId, string updateText, string userEmail); // Overload for controllers
+        Task<MilestoneUpdate> AddMilestoneUpdateAsync(int milestoneId, string updateText, string statusChange, string userEmail); // Overload with status change
         Task<string> CalculateRagStatusAsync(Milestone milestone);
         Task<List<Milestone>> GetOverdueMilestonesAsync();
         Task<List<Milestone>> GetMilestonesByStatusAsync(string status);
@@ -124,6 +125,23 @@ namespace FipsReporting.Services
             update.UpdateDate = DateTime.UtcNow;
             update.UpdatedAt = DateTime.UtcNow;
             _context.MilestoneUpdates.Add(update);
+            
+            // Update milestone status if status change is provided
+            if (!string.IsNullOrEmpty(update.StatusChange))
+            {
+                var milestone = await _context.Milestones.FindAsync(update.MilestoneId);
+                if (milestone != null)
+                {
+                    milestone.Status = update.StatusChange;
+                    milestone.LastUpdatedDate = DateTime.UtcNow;
+                    milestone.UpdatedAt = DateTime.UtcNow;
+                    milestone.LastUpdatedBy = update.UpdatedBy;
+                    
+                    // Update RAG status based on new status
+                    milestone.RagStatus = CalculateRagStatusFromStatus(milestone.Status);
+                }
+            }
+            
             await _context.SaveChangesAsync();
             return update;
         }
@@ -134,6 +152,18 @@ namespace FipsReporting.Services
             {
                 MilestoneId = milestoneId,
                 UpdateText = updateText,
+                UpdatedBy = userEmail
+            };
+            return await AddMilestoneUpdateAsync(update);
+        }
+
+        public async Task<MilestoneUpdate> AddMilestoneUpdateAsync(int milestoneId, string updateText, string statusChange, string userEmail)
+        {
+            var update = new MilestoneUpdate
+            {
+                MilestoneId = milestoneId,
+                UpdateText = updateText,
+                StatusChange = statusChange,
                 UpdatedBy = userEmail
             };
             return await AddMilestoneUpdateAsync(update);
@@ -241,6 +271,20 @@ namespace FipsReporting.Services
             }
             
             return "Amber"; // Default for milestones without target dates
+        }
+
+        private string CalculateRagStatusFromStatus(string status)
+        {
+            // Calculate RAG status based on milestone status
+            return status?.ToLower() switch
+            {
+                "completed" => "Green",
+                "on track" => "Green", 
+                "at risk" => "Yellow",
+                "off track" or "delayed" => "Red",
+                "cancelled" => "Grey",
+                _ => "Grey" // Not started or unknown
+            };
         }
     }
 }

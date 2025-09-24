@@ -307,6 +307,252 @@ namespace FipsReporting.Controllers
             return View("~/Views/Reporting/performance/PerformanceByMonth.cshtml", productPerformanceViewModels);
         }
 
+        [HttpGet("{year:int}/{month}/performance/view")]
+        public async Task<IActionResult> PerformanceByMonthViewOnly(int year, string month)
+        {
+            ViewData["Title"] = $"Performance Reporting - {CapitalizeMonth(month)} {year} (View Only)";
+            ViewData["ActiveNav"] = "reporting";
+            ViewData["ActiveNavItem"] = "performance";
+
+            // Get user's email from claims
+            var userEmail = _authenticationService.GetUserEmailFromClaims(User);
+            
+            // For development, use a hardcoded email if no user is authenticated
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                userEmail = "andy.jones@education.gov.uk";
+                _logger.LogInformation("No authenticated user found, using development email: {Email}", userEmail);
+            }
+
+            // Get products assigned to current user
+            var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
+            
+            // Map CmsProduct to ProductPerformanceViewModel with progress calculation
+            var productPerformanceViewModels = new List<ProductPerformanceViewModel>();
+            foreach (var product in assignedProducts)
+            {
+                var productViewModel = _cmsApiService.MapToViewModel(product, true);
+                var performanceViewModel = new ProductPerformanceViewModel
+                {
+                    Id = productViewModel.Id,
+                    FipsId = productViewModel.FipsId,
+                    Title = productViewModel.Title,
+                    ShortDescription = productViewModel.ShortDescription,
+                    LongDescription = productViewModel.LongDescription,
+                    ProductUrl = productViewModel.ProductUrl,
+                    State = productViewModel.State,
+                    CategoryValues = productViewModel.CategoryValues,
+                    CategoryTypes = productViewModel.CategoryTypes,
+                    ProductContacts = productViewModel.ProductContacts,
+                    IsPublished = productViewModel.IsPublished,
+                    CreatedAt = productViewModel.CreatedAt,
+                    UpdatedAt = productViewModel.UpdatedAt,
+                    IsAllocatedToUser = productViewModel.IsAllocatedToUser
+                };
+
+                // Calculate actual progress based on submitted metrics
+                var reportingPeriod = $"{year}-{month.ToLower()}";
+                var allMetrics = await _performanceMetricService.GetActiveMetricsAsync();
+                var existingData = await _performanceMetricService.GetMetricDataForProductAsync(product.FipsId, reportingPeriod);
+                
+                performanceViewModel.TotalMetrics = allMetrics.Count;
+                performanceViewModel.CompletedMetrics = existingData.Count(d => !string.IsNullOrWhiteSpace(d.Value) || d.IsNullReturn);
+                performanceViewModel.ReportingStatus = performanceViewModel.ProgressStatus;
+
+                productPerformanceViewModels.Add(performanceViewModel);
+            }
+
+            // Check if there's an existing submission for this user and period
+            var reportingPeriodForSubmission = $"{year}-{month.ToLower()}";
+            var existingSubmission = await _context.PerformanceSubmissions
+                .FirstOrDefaultAsync(s => s.UserEmail == userEmail && s.ReportingPeriod == reportingPeriodForSubmission);
+
+            // Calculate proper due date
+            var fullMonthName = $"{CapitalizeMonth(month)} {year}";
+            var dueDate = GetDueDateForMonth(fullMonthName);
+
+            ViewBag.Year = year;
+            ViewBag.Month = CapitalizeMonth(month);
+            ViewBag.DueDate = dueDate;
+            ViewBag.IsSubmitted = existingSubmission != null && existingSubmission.Status == "Submitted";
+            ViewBag.SubmissionDate = existingSubmission?.SubmittedAt;
+            ViewBag.SubmittedBy = existingSubmission?.SubmittedBy;
+            ViewBag.IsViewOnly = true; // Flag to indicate this is read-only
+
+            return View("~/Views/Reporting/performance/PerformanceByMonthViewOnly.cshtml", productPerformanceViewModels);
+        }
+
+        [HttpGet("{year:int}/{month}/performance/view/{fipsId}")]
+        public async Task<IActionResult> PerformanceByProductViewOnly(int year, string month, string fipsId)
+        {
+            ViewData["Title"] = $"Performance Reporting - {CapitalizeMonth(month)} {year} - View Only";
+            ViewData["ActiveNav"] = "reporting";
+            ViewData["ActiveNavItem"] = "performance";
+            
+            // Set ViewBag values early
+            ViewBag.Year = year;
+            ViewBag.Month = CapitalizeMonth(month);
+
+            // Get user's email from claims
+            var userEmail = _authenticationService.GetUserEmailFromClaims(User);
+            
+            // For development, use a hardcoded email if no user is authenticated
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                userEmail = "andy.jones@education.gov.uk";
+                _logger.LogInformation("No authenticated user found, using development email: {Email}", userEmail);
+            }
+
+            // Get the specific product
+            var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
+            var product = assignedProducts.FirstOrDefault(p => p.FipsId == fipsId);
+            
+            if (product == null)
+            {
+                _logger.LogWarning("Product with FipsId {FipsId} not found for user {Email}", fipsId, userEmail);
+                return NotFound();
+            }
+
+            // Map to ProductViewModel
+            var productViewModel = _cmsApiService.MapToViewModel(product, true);
+
+            // Get all metrics for this product to show completion status
+            var reportingPeriod = $"{year}-{month.ToLower()}";
+            var allMetrics = await _performanceMetricService.GetActiveMetricsAsync();
+            var existingData = await _performanceMetricService.GetMetricDataForProductAsync(fipsId, reportingPeriod);
+
+            // Create ProductPerformanceFormViewModel for read-only view
+            var formViewModel = new ProductPerformanceFormViewModel
+            {
+                Year = year,
+                Month = CapitalizeMonth(month),
+                Product = productViewModel,
+                Metrics = allMetrics.Select(metric => new PerformanceMetricFormItem
+                {
+                    UniqueId = metric.UniqueId,
+                    Name = metric.Name,
+                    Description = metric.Description,
+                    Measure = metric.Measure,
+                    Category = metric.Category,
+                    Mandatory = metric.Mandatory,
+                    CanReportNullReturn = metric.CanReportNullReturn,
+                    Value = existingData.FirstOrDefault(d => d.PerformanceMetricId == metric.Id)?.Value ?? "",
+                    IsNullReturn = existingData.FirstOrDefault(d => d.PerformanceMetricId == metric.Id)?.IsNullReturn ?? false
+                }).ToList()
+            };
+
+            // Calculate due date
+            var fullMonthName = $"{CapitalizeMonth(month)} {year}";
+            var dueDate = GetDueDateForMonth(fullMonthName);
+            ViewBag.DueDate = dueDate;
+
+            // Get submission info
+            var reportingPeriodForSubmission = $"{year}-{month.ToLower()}";
+            var existingSubmission = await _context.PerformanceSubmissions
+                .FirstOrDefaultAsync(s => s.UserEmail == userEmail && s.ReportingPeriod == reportingPeriodForSubmission);
+
+            ViewBag.SubmissionDate = existingSubmission?.SubmittedAt;
+            ViewBag.SubmittedBy = existingSubmission?.SubmittedBy;
+            ViewBag.IsViewOnly = true; // Flag to indicate this is read-only
+
+            return View("~/Views/Reporting/performance/PerformanceByProductViewOnly.cshtml", formViewModel);
+        }
+
+        [HttpGet("{year:int}/{month}/performance/export/{fipsId}")]
+        public async Task<IActionResult> ExportPerformanceData(int year, string month, string fipsId)
+        {
+            // Get user's email from claims
+            var userEmail = _authenticationService.GetUserEmailFromClaims(User);
+            
+            // For development, use a hardcoded email if no user is authenticated
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                userEmail = "andy.jones@education.gov.uk";
+            }
+
+            // Get the specific product
+            var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
+            var product = assignedProducts.FirstOrDefault(p => p.FipsId == fipsId);
+            
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            // Get all metrics and data for this product
+            var reportingPeriod = $"{year}-{month.ToLower()}";
+            var allMetrics = await _performanceMetricService.GetActiveMetricsAsync();
+            var existingData = await _performanceMetricService.GetMetricDataForProductAsync(fipsId, reportingPeriod);
+
+            // Create CSV content (Excel-compatible)
+            var productName = product.Title.Replace(" ", "_").Replace("/", "_").Replace("\\", "_");
+            var monthName = CapitalizeMonth(month);
+            var fileName = $"{productName}_{monthName}_{year}_Performance_Report.csv";
+
+            var csvContent = new System.Text.StringBuilder();
+            csvContent.AppendLine($"Product: {product.Title}");
+            csvContent.AppendLine($"Period: {monthName} {year}");
+            csvContent.AppendLine($"FIPS ID: {fipsId}");
+            csvContent.AppendLine();
+            csvContent.AppendLine("Category,Metric Name,Value,Description");
+            
+            foreach (var metric in allMetrics.OrderBy(m => m.Category).ThenBy(m => m.Name))
+            {
+                var data = existingData.FirstOrDefault(d => d.PerformanceMetricId == metric.Id);
+                var value = data?.IsNullReturn == true ? "Null return" : data?.Value ?? "";
+                
+                csvContent.AppendLine($"\"{metric.Category}\",\"{metric.Name}\",\"{value}\",\"{metric.Description}\"");
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent.ToString());
+            return File(bytes, "text/csv", fileName);
+        }
+
+        [HttpGet("{year:int}/{month}/performance/export-all")]
+        public async Task<IActionResult> ExportAllPerformanceData(int year, string month)
+        {
+            var userEmail = _authenticationService.GetUserEmailFromClaims(User);
+            if (string.IsNullOrEmpty(userEmail)) { userEmail = "andy.jones@education.gov.uk"; }
+
+            var reportingPeriod = $"{year}-{month.ToLower()}";
+            var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
+            var allMetrics = await _performanceMetricService.GetActiveMetricsAsync();
+
+            var monthName = CapitalizeMonth(month);
+            var fileName = $"All_Products_{monthName}_{year}_Performance_Report.csv";
+
+            var csvContent = new System.Text.StringBuilder();
+            csvContent.AppendLine($"All Products Performance Report");
+            csvContent.AppendLine($"Period: {monthName} {year}");
+            csvContent.AppendLine($"Generated: {DateTime.Now:dd MMMM yyyy 'at' HH:mm}");
+            csvContent.AppendLine();
+            
+            foreach (var product in assignedProducts.OrderBy(p => p.Title))
+            {
+                csvContent.AppendLine($"Product: {product.Title}");
+                csvContent.AppendLine($"FIPS ID: {product.FipsId}");
+                csvContent.AppendLine($"Short Description: {product.ShortDescription ?? "N/A"}");
+                csvContent.AppendLine();
+                
+                var existingData = await _performanceMetricService.GetMetricDataForProductAsync(product.FipsId, reportingPeriod);
+                csvContent.AppendLine("Category,Metric Name,Value,Description");
+                
+                foreach (var metric in allMetrics.OrderBy(m => m.Category).ThenBy(m => m.Name))
+                {
+                    var data = existingData.FirstOrDefault(d => d.PerformanceMetricId == metric.Id);
+                    var value = data?.IsNullReturn == true ? "Null return" : data?.Value ?? "";
+                    csvContent.AppendLine($"\"{metric.Category}\",\"{metric.Name}\",\"{value}\",\"{metric.Description}\"");
+                }
+                
+                csvContent.AppendLine();
+                csvContent.AppendLine("---");
+                csvContent.AppendLine();
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent.ToString());
+            return File(bytes, "text/csv", fileName);
+        }
+
         [HttpPost]
         [Route("{year:int}/{month}/performance/submit")]
         [ValidateAntiForgeryToken]
@@ -482,20 +728,76 @@ namespace FipsReporting.Controllers
             var assignedProducts = await _cmsApiService.GetProductsByUserEmailAsync(userEmail);
             _logger.LogInformation("Milestones action: Found {Count} assigned products for user {UserEmail}", assignedProducts.Count, userEmail);
 
-            // Create a list of products with milestone counts
-            var productsWithMilestoneCounts = new List<object>();
+            // Get all milestones for all assigned products
+            var allMilestones = new List<Milestone>();
             foreach (var product in assignedProducts)
             {
-                var milestones = await _milestoneService.GetMilestonesByFipsIdAsync(product.FipsId);
-                productsWithMilestoneCounts.Add(new
+                if (!string.IsNullOrEmpty(product.FipsId))
                 {
-                    ProductName = product.Title,
-                    FipsId = product.FipsId,
-                    MilestoneCount = milestones.Count
-                });
+                    var milestones = await _milestoneService.GetMilestonesByFipsIdAsync(product.FipsId);
+                    // Add product name to each milestone for display
+                    foreach (var milestone in milestones)
+                    {
+                        milestone.ProductName = product.Title;
+                    }
+                    allMilestones.AddRange(milestones);
+                }
             }
 
-            return View("~/Views/Reporting/milestones/Index.cshtml", productsWithMilestoneCounts);
+            return View("~/Views/Reporting/milestones/Index.cshtml", allMilestones);
+        }
+
+        [HttpGet("milestone/{id}")]
+        public async Task<IActionResult> MilestoneDetails(int id)
+        {
+            try
+            {
+                var milestone = await _milestoneService.GetMilestoneByIdAsync(id);
+                if (milestone == null)
+                {
+                    return NotFound();
+                }
+
+                var updates = await _milestoneService.GetMilestoneUpdatesAsync(id);
+                
+                ViewBag.Updates = updates;
+                ViewBag.StatusOptions = new List<string> { "Not started", "On track", "At risk", "Off track", "Delayed", "Completed", "Cancelled" };
+                
+                return View("~/Views/Reporting/milestones/Details.cshtml", milestone);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading milestone details for ID {MilestoneId}", id);
+                TempData["ErrorMessage"] = "An error occurred while loading the milestone details.";
+                return RedirectToAction("Milestones");
+            }
+        }
+
+        [HttpPost("milestone/{id}/update")]
+        public async Task<IActionResult> AddMilestoneUpdate(int id, string updateText, string statusChange)
+        {
+            try
+            {
+                var userEmail = _authenticationService.GetUserEmailFromClaims(User);
+                if (string.IsNullOrEmpty(userEmail)) { userEmail = "andy.jones@education.gov.uk"; }
+
+                if (string.IsNullOrWhiteSpace(updateText))
+                {
+                    TempData["ErrorMessage"] = "Update text is required.";
+                    return RedirectToAction("MilestoneDetails", new { id });
+                }
+
+                await _milestoneService.AddMilestoneUpdateAsync(id, updateText, statusChange, userEmail);
+                TempData["SuccessMessage"] = "Milestone update added successfully.";
+                
+                return RedirectToAction("MilestoneDetails", new { id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding milestone update for ID {MilestoneId}", id);
+                TempData["ErrorMessage"] = "An error occurred while adding the milestone update.";
+                return RedirectToAction("MilestoneDetails", new { id });
+            }
         }
 
         [HttpGet("{year:int}/{month}")]

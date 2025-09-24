@@ -1,0 +1,672 @@
+@model FipsReporting.Data.Milestone
+
+@{
+    ViewData["Title"] = "Milestone Details";
+    
+    var updates = ViewBag.Updates as List<FipsReporting.Data.MilestoneUpdate>;
+    var hasUpdates = updates != null && updates.Any();
+    var isOverdue = Model.TargetDate.HasValue && Model.TargetDate.Value < DateTime.Now && Model.Status?.ToLower() != "completed";
+    var daysUntilDue = Model.TargetDate.HasValue ? (Model.TargetDate.Value - DateTime.Now).Days : 0;
+}
+
+@section BeforeContent
+{
+    <!-- Masthead -->
+    <div class="dfe-masthead">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-two-thirds">
+                    <nav class="govuk-breadcrumbs" aria-label="Breadcrumb">
+                        <ol class="govuk-breadcrumbs__list">
+                            <li class="govuk-breadcrumbs__list-item">
+                                <a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "Reporting")">Dashboard</a>
+                            </li>
+                            <li class="govuk-breadcrumbs__list-item">
+                                <a class="govuk-breadcrumbs__link" href="@Url.Action("Milestones", "Reporting")">All milestones</a>
+                            </li>
+                            <li class="govuk-breadcrumbs__list-item">
+                                <a class="govuk-breadcrumbs__link" href="@Url.Action("Milestones", "Reporting", new { productId = Model.FipsId })">@(Model.ProductName ?? "Product") milestones</a>
+                            </li>
+                            <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.Title ?? "Milestone")</li>
+                        </ol>
+                    </nav>
+                    
+                    <span class="govuk-caption-l govuk-!-margin-top-4">Milestone</span>
+                    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">@(Model.Title ?? "Milestone")</h1>
+                    <p class="govuk-body-l govuk-!-margin-bottom-0">@(Model.ProductName ?? "Unknown Product") • FIPS ID: @(Model.FipsId ?? "N/A")</p>
+                </div>
+                <div class="govuk-grid-column-one-third">
+                    <div class="milestone-header-actions">
+                        <a href="@Url.Action("Milestones", "Reporting", new { productId = Model.FipsId })" class="govuk-button govuk-button--secondary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                            </svg>
+                            Back to milestones
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="govuk-width-container">
+        <!-- Success/Error Messages -->
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+                </div>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--error" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">Error</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@TempData["ErrorMessage"]</p>
+                </div>
+            </div>
+        }
+
+        <div class="milestone-layout">
+            <!-- Main Content Area -->
+            <div class="milestone-main">
+                <!-- Milestone Header -->
+                <div class="milestone-header">
+                    <div class="milestone-title-section">
+                        <div class="milestone-status-badge">
+                            <span class="milestone-status-icon milestone-status-icon--@(Model.Status?.ToLower() switch { "completed" or "on track" => "green", "at risk" => "yellow", "off track" or "delayed" => "red", "cancelled" => "grey", _ => "grey" })"></span>
+                            <span class="milestone-status-text">@(Model.Status ?? "Not started")</span>
+                        </div>
+                        <div class="milestone-rag-badge">
+                            <span class="milestone-rag-dot milestone-rag-dot--@(Model.RagStatus?.ToLower() ?? "grey")"></span>
+                            <span class="milestone-rag-text">@(Model.RagStatus ?? "Not set")</span>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <div class="milestone-description">
+                            <p class="govuk-body">@Model.Description</p>
+                        </div>
+                    }
+                    
+                    <div class="milestone-meta">
+                        <div class="milestone-meta-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            <span>Created by @(Model.CreatedBy ?? "Unknown") on @Model.CreatedDate.ToString("dd MMM yyyy")</span>
+                        </div>
+                        @if (Model.TargetDate.HasValue)
+                        {
+                            <div class="milestone-meta-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                </svg>
+                                <span>Due @Model.TargetDate.Value.ToString("dd MMM yyyy")</span>
+                                @if (isOverdue)
+                                {
+                                    <span class="milestone-overdue">• Overdue</span>
+                                }
+                                else if (daysUntilDue <= 7 && daysUntilDue > 0)
+                                {
+                                    <span class="milestone-due-soon">• Due in @daysUntilDue days</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Updates Timeline -->
+                <div class="milestone-timeline">
+                    @if (hasUpdates)
+                    {
+                        @foreach (var update in updates.OrderByDescending(u => u.UpdateDate))
+                        {
+                            <div class="milestone-update">
+                                <div class="milestone-update-header">
+                                    <div class="milestone-update-avatar">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="milestone-update-info">
+                                        <div class="milestone-update-author">@update.UpdatedBy</div>
+                                        <div class="milestone-update-date">@update.UpdateDate.ToString("dd MMM yyyy 'at' HH:mm")</div>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(update.StatusChange))
+                                    {
+                                        <div class="milestone-update-status">
+                                            <span class="milestone-status-change milestone-status-change--@(update.StatusChange.ToLower() switch { "completed" or "on track" => "green", "at risk" => "yellow", "off track" or "delayed" => "red", "cancelled" => "grey", _ => "grey" })">
+                                                @update.StatusChange
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="milestone-update-content">
+                                    <p class="govuk-body">@update.UpdateText</p>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="milestone-empty-state">
+                            <div class="milestone-empty-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                            </div>
+                            <h3 class="govuk-heading-s">No updates yet</h3>
+                            <p class="govuk-body">This milestone doesn't have any updates yet. Add an update below to track progress.</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- Add Update Form -->
+                <div class="milestone-update-form">
+                    <h3 class="govuk-heading-m">Add update</h3>
+                    <form method="post" action="@Url.Action("AddMilestoneUpdate", "Reporting", new { id = Model.Id })" class="milestone-form">
+                        @Html.AntiForgeryToken()
+                        
+                        <div class="milestone-form-row">
+                            <div class="milestone-form-group">
+                                <label class="govuk-label govuk-label--s" for="statusChange">Status</label>
+                                <select class="govuk-select" id="statusChange" name="statusChange">
+                                    <option value="">Keep current (@(Model.Status ?? "Not started"))</option>
+                                    <option value="Not started">Not started</option>
+                                    <option value="On track">On track</option>
+                                    <option value="At risk">At risk</option>
+                                    <option value="Off track">Off track</option>
+                                    <option value="Delayed">Delayed</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="milestone-form-group">
+                                <label class="govuk-label govuk-label--s">RAG</label>
+                                <div class="milestone-rag-selector">
+                                    <label class="milestone-rag-option">
+                                        <input type="radio" name="ragStatus" value="Green" @(Model.RagStatus?.ToLower() == "green" ? "checked" : "")>
+                                        <span class="milestone-rag-indicator milestone-rag-indicator--green"></span>
+                                        <span class="milestone-rag-label">Green</span>
+                                    </label>
+                                    <label class="milestone-rag-option">
+                                        <input type="radio" name="ragStatus" value="Amber" @(Model.RagStatus?.ToLower() == "amber" ? "checked" : "")>
+                                        <span class="milestone-rag-indicator milestone-rag-indicator--yellow"></span>
+                                        <span class="milestone-rag-label">Amber</span>
+                                    </label>
+                                    <label class="milestone-rag-option">
+                                        <input type="radio" name="ragStatus" value="Red" @(Model.RagStatus?.ToLower() == "red" ? "checked" : "")>
+                                        <span class="milestone-rag-indicator milestone-rag-indicator--red"></span>
+                                        <span class="milestone-rag-label">Red</span>
+                                    </label>
+                                    <label class="milestone-rag-option">
+                                        <input type="radio" name="ragStatus" value="Grey" @(Model.RagStatus?.ToLower() == "grey" ? "checked" : "")>
+                                        <span class="milestone-rag-indicator milestone-rag-indicator--grey"></span>
+                                        <span class="milestone-rag-label">Grey</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="milestone-form-group">
+                            <label class="govuk-label govuk-label--s" for="updateText">Comment</label>
+                            <textarea class="govuk-textarea" id="updateText" name="updateText" rows="4" placeholder="Describe what has been accomplished, any challenges encountered, or changes to the milestone..." required></textarea>
+                        </div>
+                        
+                        <button type="submit" class="govuk-button" data-module="govuk-button">
+                            Comment
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Sidebar -->
+            <div class="milestone-sidebar">
+                <div class="milestone-sidebar-section">
+                    <h3 class="govuk-heading-s">Details</h3>
+                    <dl class="milestone-details">
+                        <div class="milestone-detail">
+                            <dt>Product</dt>
+                            <dd>@(Model.ProductName ?? "Unknown")</dd>
+                        </div>
+                        <div class="milestone-detail">
+                            <dt>FIPS ID</dt>
+                            <dd>@(Model.FipsId ?? "N/A")</dd>
+                        </div>
+                        <div class="milestone-detail">
+                            <dt>Priority</dt>
+                            <dd>
+                                <span class="milestone-priority milestone-priority--@(Model.Priority?.ToLower() switch { "high" => "high", "medium" => "medium", "low" => "low", _ => "medium" })">
+                                    @(Model.Priority ?? "Not set")
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="milestone-detail">
+                            <dt>Updates</dt>
+                            <dd>@(updates?.Count ?? 0)</dd>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="milestone-detail">
+                                <dt>Last updated</dt>
+                                <dd>@Model.UpdatedAt.Value.ToString("dd MMM yyyy")</dd>
+                            </div>
+                        }
+                    </dl>
+                </div>
+                
+                <div class="milestone-sidebar-section">
+                    <h3 class="govuk-heading-s">Actions</h3>
+                    <ul class="milestone-actions">
+                        <li>
+                            <a href="@Url.Action("Milestones", "Reporting", new { productId = Model.FipsId })" class="milestone-action-link">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                </svg>
+                                View product milestones
+                            </a>
+                        </li>
+                        <li>
+                            <a href="@Url.Action("Milestones", "Reporting")" class="milestone-action-link">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                </svg>
+                                All milestones
+                            </a>
+                        </li>
+                        <li>
+                            <a href="@Url.Action("Index", "Reporting")" class="milestone-action-link">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                                </svg>
+                                Dashboard
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style nonce="@Html.GetNonce()">
+/* GitHub Issue Style Layout */
+.milestone-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.milestone-main {
+    min-width: 0;
+}
+
+.milestone-sidebar {
+    position: sticky;
+    top: 24px;
+    height: fit-content;
+}
+
+/* Milestone Header */
+.milestone-header {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.milestone-title-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.milestone-status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.milestone-status-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.milestone-status-icon--green { background: #1a7f37; }
+.milestone-status-icon--yellow { background: #fb8500; }
+.milestone-status-icon--red { background: #cf222e; }
+.milestone-status-icon--grey { background: #6f777b; }
+
+.milestone-status-badge {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+}
+
+.milestone-rag-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+}
+
+.milestone-rag-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.milestone-rag-dot--green { background: #1a7f37; }
+.milestone-rag-dot--yellow { background: #fb8500; }
+.milestone-rag-dot--red { background: #cf222e; }
+.milestone-rag-dot--grey { background: #6f777b; }
+
+.milestone-description {
+    margin-bottom: 16px;
+}
+
+.milestone-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.milestone-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #656d76;
+}
+
+.milestone-overdue {
+    color: #cf222e;
+    font-weight: 500;
+}
+
+.milestone-due-soon {
+    color: #fb8500;
+    font-weight: 500;
+}
+
+/* Timeline */
+.milestone-timeline {
+    margin-bottom: 24px;
+}
+
+.milestone-update {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.milestone-update-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.milestone-update-avatar {
+    width: 32px;
+    height: 32px;
+    background: #f6f8fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #656d76;
+}
+
+.milestone-update-info {
+    flex: 1;
+}
+
+.milestone-update-author {
+    font-weight: 600;
+    font-size: 14px;
+    color: #24292f;
+}
+
+.milestone-update-date {
+    font-size: 12px;
+    color: #656d76;
+}
+
+.milestone-update-status {
+    margin-left: auto;
+}
+
+.milestone-status-change {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.milestone-status-change--green { background: #dafbe1; color: #1a7f37; }
+.milestone-status-change--yellow { background: #fff8c5; color: #9a6700; }
+.milestone-status-change--red { background: #ffebe9; color: #cf222e; }
+.milestone-status-change--grey { background: #f6f8fa; color: #656d76; }
+
+.milestone-update-content {
+    margin-left: 44px;
+}
+
+.milestone-empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+}
+
+.milestone-empty-icon {
+    color: #656d76;
+    margin-bottom: 16px;
+}
+
+/* Update Form */
+.milestone-update-form {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 24px;
+}
+
+.milestone-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.milestone-form-group {
+    margin-bottom: 16px;
+}
+
+.milestone-rag-selector {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.milestone-rag-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: white;
+    transition: all 0.2s;
+}
+
+.milestone-rag-option:hover {
+    background: #f6f8fa;
+}
+
+.milestone-rag-option input[type="radio"] {
+    margin: 0;
+}
+
+.milestone-rag-option input[type="radio"]:checked + .milestone-rag-indicator {
+    transform: scale(1.2);
+}
+
+.milestone-rag-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.milestone-rag-indicator--green { background: #1a7f37; }
+.milestone-rag-indicator--yellow { background: #fb8500; }
+.milestone-rag-indicator--red { background: #cf222e; }
+.milestone-rag-indicator--grey { background: #6f777b; }
+
+.milestone-rag-label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Sidebar */
+.milestone-sidebar-section {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.milestone-sidebar-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #24292f;
+}
+
+.milestone-details {
+    margin: 0;
+}
+
+.milestone-detail {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f6f8fa;
+}
+
+.milestone-detail:last-child {
+    border-bottom: none;
+}
+
+.milestone-detail dt {
+    font-size: 14px;
+    color: #656d76;
+    margin: 0;
+}
+
+.milestone-detail dd {
+    font-size: 14px;
+    font-weight: 500;
+    color: #24292f;
+    margin: 0;
+}
+
+.milestone-priority {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.milestone-priority--high { background: #ffebe9; color: #cf222e; }
+.milestone-priority--medium { background: #fff8c5; color: #9a6700; }
+.milestone-priority--low { background: #dafbe1; color: #1a7f37; }
+
+.milestone-actions {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.milestone-actions li {
+    margin-bottom: 8px;
+}
+
+.milestone-actions li:last-child {
+    margin-bottom: 0;
+}
+
+.milestone-action-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #24292f;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.milestone-action-link:hover {
+    background: #f6f8fa;
+    text-decoration: none;
+}
+
+/* Responsive */
+@@media (max-width: 768px) {
+    .milestone-layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .milestone-sidebar {
+        position: static;
+    }
+    
+    .milestone-form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .milestone-rag-selector {
+        flex-wrap: wrap;
+    }
+    
+    .milestone-title-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+</style>

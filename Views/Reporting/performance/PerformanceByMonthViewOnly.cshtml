@@ -1,0 +1,176 @@
+@model IEnumerable<FipsReporting.Models.ProductPerformanceViewModel>
+
+@{
+    ViewData["Title"] = $"Performance Reporting - {ViewBag.Month} {ViewBag.Year} (View Only)";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "performance";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+                <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-8">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl govuk-!-margin-bottom-3">@ViewBag.Month @ViewBag.Year</h1>
+                   
+                    <table class="govuk-table govuk-!-margin-bottom-0">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Period</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Submission status</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Completion status</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Due by</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-body">@ViewBag.Month @ViewBag.Year</span>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-tag govuk-tag--green">Submitted</span>
+                                   
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @{
+                                        var totalProducts = Model.Count();
+                                        var completedProducts = Model.Count(p => p.ProgressStatus == "Completed");
+                                        var inProgressProducts = Model.Count(p => p.ProgressStatus == "In progress");
+                                        var notStartedProducts = Model.Count(p => p.ProgressStatus == "Not started");
+                                    }
+                                    @if (completedProducts == totalProducts)
+                                    {
+                                        <span class="govuk-tag govuk-tag--green">All complete</span>
+                                    }
+                                    else if (completedProducts > 0 || inProgressProducts > 0)
+                                    {
+                                        <span class="govuk-tag govuk-tag--yellow">In progress</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-tag govuk-tag--red">Not started</span>
+                                    }
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @if (ViewBag.DueDate != null)
+                                    {
+                                        @(((DateTime)ViewBag.DueDate).ToString("d MMM yyyy"))
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-grid-row">
+    <!-- Vertical Navigation -->
+    <div class="govuk-grid-column-one-quarter">
+        <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+            <ul class="dfe-vertical-nav__section">
+                <li class="dfe-vertical-nav__section-item">
+                    <a href="@Url.Action("Performance", "Reporting")" class="govuk-back-link govuk-!-margin-top-0">
+                        Back to reporting
+                    </a>
+                </li>
+            </ul>
+            
+       
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="govuk-grid-column-three-quarters">
+        <h2 class="govuk-heading-l">Report</h2>
+        
+        <h2 class="govuk-heading-m">Submission details</h2>
+        <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">
+                    Submitted on
+                </dt>
+                <dd class="govuk-summary-list__value">
+                    @if (ViewBag.SubmissionDate != null)
+                    {
+                        @(((DateTime)ViewBag.SubmissionDate).ToString("dd MMMM yyyy 'at' HH:mm"))
+                    }
+                    else
+                    {
+                        <text>Not available</text>
+                    }
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">
+                    Submitted by
+                </dt>
+                <dd class="govuk-summary-list__value">
+                    @if (ViewBag.SubmittedBy != null)
+                    {
+                        @ViewBag.SubmittedBy
+                    }
+                    else
+                    {
+                        <text>Not available</text>
+                    }
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">
+                    Download
+                </dt>
+                <dd class="govuk-summary-list__value">
+                    <a href="@Url.Action("ExportAllPerformanceData", "Reporting", new { year = ViewBag.Year, month = ViewBag.Month.ToString().ToLower() })" class="govuk-link">
+                        Export all product reports to CSV
+                    </a>
+                </dd>
+            </div>
+        </dl>
+
+        <h2 class="govuk-heading-m">Products reported against</h2>
+
+        @if (Model.Any())
+        {
+            <div class="govuk-table-container">
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Product</th>
+                            <th scope="col" class="govuk-table__header">Metrics completed</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var product in Model)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <div class="govuk-body govuk-!-margin-bottom-2"> <a href="@Url.Action("PerformanceByProductViewOnly", "Reporting", new { year = ViewBag.Year, month = ViewBag.Month.ToString().ToLower(), fipsId = product.FipsId })" class="govuk-link">
+                                     @product.Title</a></div>
+                                    @if (!string.IsNullOrEmpty(product.ShortDescription))
+                                    {
+                                        <div class="govuk-body-s">@product.ShortDescription</div>
+                                    }
+                                    <div class="govuk-body-s">@product.FipsId</div>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @product.CompletedMetrics of @product.TotalMetrics
+                                </td>
+                                
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                <p class="govuk-body">No products found for this reporting period.</p>
+            </div>
+        }
+    </div>
+</div>

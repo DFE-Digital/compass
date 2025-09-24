@@ -2,51 +2,141 @@
 
 @{
     ViewData["Title"] = "My Milestones";
-    ViewData["ActiveNav"] = "reporting-milestones";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "milestones";
 }
 
-<div class="govuk-width-container">
-    <div class="govuk-main-wrapper">
-        <div class="govuk-grid-row">
-            <div class="govuk-grid-column-full">
-                <h1 class="govuk-heading-l">My Milestones</h1>
-                <p class="govuk-body">View and manage milestones for your products.</p>
+@section BeforeContent {
+    <div class="dfe-masthead">
+        <div class="govuk-width-container">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl govuk-!-margin-bottom-0">Milestones</h1>
+                      </div>
             </div>
         </div>
+    </div>
+}
 
         <div class="govuk-grid-row">
-            <div class="govuk-grid-column-full">
+            <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <nav class="dfe-vertical-nav" data-module="dfe-vertical-nav">
+                    <ul class="dfe-vertical-nav__section">
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "dashboard" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Index", "Reporting")">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "products" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Products", "Reporting")">
+                                Your products
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "performance" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Performance", "Reporting")">
+                                Performance reporting
+                            </a>
+                        </li>
+                        <li class="dfe-vertical-nav__section-item @(ViewData["ActiveNavItem"]?.ToString() == "milestones" ? "dfe-vertical-nav__section-item--current" : "")">
+                            <a class="dfe-vertical-nav__link govuk-link govuk-link--no-visited-state govuk-link--no-underline" href="@Url.Action("Milestones", "Reporting")">
+                                Milestones
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="govuk-grid-column-three-quarters">
+
+                @{
+                    var totalMilestones = Model?.Count ?? 0;
+                    var notStartedCount = Model?.Count(m => string.IsNullOrEmpty(m.Status) || m.Status?.ToLower() == "not started") ?? 0;
+                    var onTrackCount = Model?.Count(m => m.Status?.ToLower() == "on track") ?? 0;
+                    var atRiskCount = Model?.Count(m => m.Status?.ToLower() == "at risk") ?? 0;
+                    var offTrackCount = Model?.Count(m => m.Status?.ToLower() == "off track" || m.Status?.ToLower() == "delayed") ?? 0;
+                    var completedCount = Model?.Count(m => m.Status?.ToLower() == "completed") ?? 0;
+                    var cancelledCount = Model?.Count(m => m.Status?.ToLower() == "cancelled") ?? 0;
+                }
+
+             
+                <!-- Detailed Status Breakdown -->
+                <div class="govuk-grid-row govuk-!-margin-bottom-6">
+                    <div class="govuk-grid-column-full">
+                        <h3 class="govuk-heading-m">Status breakdown</h3>
+                        <div class="status-breakdown">
+                            <div class="status-item status-item--on-track">
+                                <span class="status-item__label">On track</span>
+                                <span class="status-item__count">@onTrackCount</span>
+                            </div>
+                            <div class="status-item status-item--at-risk">
+                                <span class="status-item__label">At risk</span>
+                                <span class="status-item__count">@atRiskCount</span>
+                            </div>
+                            <div class="status-item status-item--off-track">
+                                <span class="status-item__label">Off track</span>
+                                <span class="status-item__count">@offTrackCount</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 @if (Model != null && Model.Any())
                 {
                     <table class="govuk-table">
                         <thead class="govuk-table__head">
                             <tr class="govuk-table__row">
                                 <th class="govuk-table__header">Title</th>
-                                <th class="govuk-table__header">Description</th>
-                                <th class="govuk-table__header">Due Date</th>
-                                <th class="govuk-table__header">Status</th>
-                                <th class="govuk-table__header">RAG Status</th>
+                                <th class="govuk-table__header">Due date</th>
+                                <th class="govuk-table__header">Progress</th>
+                                <th class="govuk-table__header">RAG</th>
                             </tr>
                         </thead>
                         <tbody class="govuk-table__body">
                             @foreach (var milestone in Model)
                             {
                                 <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                    <a href="@Url.Action("MilestoneDetails", "Reporting", new { id = milestone.Id })" class="govuk-link">
+                        @milestone.Title
+                    </a>
+                    <div class="govuk-body-s">@(milestone.ProductName ?? "Unknown Product")</div>
+                </td>
                                     <td class="govuk-table__cell">
-                                        <a href="@Url.Action("Details", new { id = milestone.Id })" class="govuk-link">
-                                            @milestone.Title
-                                        </a>
+                                        @(milestone.DueDate?.ToString("d MMM yyyy") ?? "N/A")
                                     </td>
-                                    <td class="govuk-table__cell">@milestone.Description</td>
-                                    <td class="govuk-table__cell">@(milestone.DueDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
                                     <td class="govuk-table__cell">
-                                        <span class="govuk-tag govuk-tag--@(milestone.Status.ToLower() == "completed" ? "green" : milestone.Status.ToLower() == "in-progress" ? "blue" : "grey")">
-                                            @milestone.Status
+                                        @{
+                                            var statusColor = milestone.Status?.ToLower() switch
+                                            {
+                                                "completed" => "green",
+                                                "on track" => "green", 
+                                                "at risk" => "yellow",
+                                                "off track" or "delayed" => "red",
+                                                "cancelled" => "grey",
+                                                _ => "grey" // Not started or unknown
+                                            };
+                                            
+                                            var displayStatus = milestone.Status?.ToLower() switch
+                                            {
+                                                "on track" => "On track",
+                                                "at risk" => "At risk", 
+                                                "off track" => "Off track",
+                                                "delayed" => "Delayed",
+                                                "completed" => "Completed",
+                                                "cancelled" => "Cancelled",
+                                                _ => "Not started"
+                                            };
+                                        }
+                                        <span class="govuk-tag govuk-tag--@statusColor">
+                                            @displayStatus
                                         </span>
                                     </td>
                                     <td class="govuk-table__cell">
-                                        <span class="govuk-tag govuk-tag--@(milestone.RagStatus.ToLower() == "green" ? "green" : milestone.RagStatus.ToLower() == "amber" ? "yellow" : "red")">
-                                            @milestone.RagStatus
+                                        <span class="govuk-tag govuk-tag--@(milestone.RagStatus?.ToLower() == "green" ? "green" : milestone.RagStatus?.ToLower() == "amber" ? "yellow" : "red")">
+                                            @(milestone.RagStatus ?? "N/A")
                                         </span>
                                     </td>
                                 </tr>
@@ -62,5 +152,3 @@
                 }
             </div>
         </div>
-    </div>
-</div>

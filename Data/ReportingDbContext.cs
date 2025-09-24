@@ -328,7 +328,7 @@ namespace FipsReporting.Data
         public string? Description { get; set; }
         [Required]
         [MaxLength(50)]
-        public string Status { get; set; } = string.Empty; // Not Started, In Progress, Completed, Overdue, Cancelled
+        public string Status { get; set; } = "Not started"; // Not started, On track, At risk, Off track, Delayed, Completed, Cancelled
         public DateTime? TargetDate { get; set; }
         public DateTime? ActualDate { get; set; }
         [Required]

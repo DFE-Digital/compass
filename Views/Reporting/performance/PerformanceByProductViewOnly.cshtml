@@ -1,0 +1,170 @@
+@model FipsReporting.Models.ProductPerformanceFormViewModel
+
+@{
+    ViewData["Title"] = ViewData["Title"] ?? "Performance Reporting - View Only";
+    ViewData["ActiveNav"] = "reporting";
+    ViewData["ActiveNavItem"] = "performance";
+}
+
+@section BeforeContent {
+    <div class="dfe-masthead dfe-masthead--with-links">
+        <div class="govuk-width-container">
+                <div class="govuk-grid-row">
+                <div class="govuk-grid-column-full">
+                    <span class="govuk-caption-l govuk-!-margin-top-8">COMPASS reporting</span>
+                    <h1 class="govuk-heading-xl govuk-!-margin-bottom-3">@Model.Product.Title</h1>
+                    
+                     <table class="govuk-table govuk-!-margin-bottom-0">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th class="govuk-table__header govuk-!-width-one-quarter">FIPS ID</th>
+                                <th class="govuk-table__header govuk-!-width-one-quarter">Phase</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <span class="govuk-visually-hidden">FIPS ID: </span>
+                                    <span title="@(Model.Product.FipsId)">
+                                        @if (!string.IsNullOrWhiteSpace(Model.Product.FipsId))
+                                        {
+                                           <a href="https://find-products-services-dev.education.gov.uk/product/@Model.Product.FipsId" class="govuk-link">@Model.Product.FipsId</a>
+                                        }
+                                    </span>
+                                </td>
+                                <td class="govuk-table__cell">
+                                    @{
+                                        var phaseIndex = Model.Product.CategoryTypes?.FindIndex(ct => ct == "Phase");
+                                        var phaseValue = phaseIndex.HasValue && phaseIndex.Value >= 0 && Model.Product.CategoryValues?.Count > phaseIndex.Value 
+                                            ? Model.Product.CategoryValues[phaseIndex.Value] 
+                                            : null;
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(phaseValue))
+                                    {
+                                        <span class="govuk-tag govuk-tag--@(phaseValue.ToLower() == "live" ? "green" : phaseValue.ToLower() == "beta" ? "yellow" : phaseValue.ToLower() == "alpha" ? "red" : "grey")">@phaseValue</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-body">Not specified</span>
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="govuk-grid-row">
+    <!-- Vertical Navigation -->
+            <div class="govuk-grid-column-one-quarter">
+                <a href="@Url.Action("PerformanceByMonthViewOnly", "Reporting", new { year = Model.Year, month = Model.Month.ToLower() })" class="govuk-back-link govuk-!-margin-top-0">Back to products</a>
+            
+          
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="govuk-grid-column-three-quarters">
+                <h2 class="govuk-heading-l">Product report</h2>
+
+                <h2 class="govuk-heading-m">Submission details</h2>
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Submitted on
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (ViewBag.SubmissionDate != null)
+                            {
+                                @(((DateTime)ViewBag.SubmissionDate).ToString("dd MMMM yyyy 'at' HH:mm"))
+                            }
+                            else
+                            {
+                                <text>Not available</text>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Submitted by
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (ViewBag.SubmittedBy != null)
+                            {
+                                @ViewBag.SubmittedBy
+                            }
+                            else
+                            {
+                                <text>Not available</text>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Download
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            <a href="@Url.Action("ExportPerformanceData", "Reporting", new { year = Model.Year, month = Model.Month.ToLower(), fipsId = Model.Product.FipsId })" class="govuk-link">
+                                Export to CSV
+                            </a>
+                        </dd>
+                    </div>
+                </dl>
+
+    
+
+        @if (Model.Metrics.Any())
+        {
+            var groupedMetrics = Model.Metrics.GroupBy(m => m.Category).OrderBy(g => g.Key);
+            
+            foreach (var categoryGroup in groupedMetrics)
+            {
+                <h3 class="govuk-heading-m govuk-!-margin-top-6">@categoryGroup.Key</h3>
+                
+                <ul class="govuk-task-list">
+                    @foreach (var metric in categoryGroup.OrderBy(m => m.Name))
+                    {
+                        var isCompleted = !string.IsNullOrWhiteSpace(metric.Value) || metric.IsNullReturn;
+                        var statusText = isCompleted ? "Completed" : "Not started";
+                        var statusClass = isCompleted ? "" : "govuk-task-list__status--cannot-start";
+                        var valueText = metric.IsNullReturn ? "Null return" : metric.Value;
+                        
+                        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+                            <div class="govuk-task-list__name-and-hint">
+                                <span class="govuk-task-list__name">
+                                    <span class="govuk-body govuk-!-font-weight-bold">@metric.Name</span>
+                                 
+                                </span>
+                                @if (isCompleted && !string.IsNullOrWhiteSpace(valueText))
+                                {
+                                    <div class="govuk-task-list__hint">@metric.Description</div>
+                                }
+                            </div>
+                            <div class="govuk-task-list__status @statusClass" id="@metric.UniqueId-status">
+                                @if (isCompleted)
+                                {
+                                    @valueText
+                                }
+                                else
+                                {
+                                    @statusText
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+            
+          
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                <p class="govuk-body">No performance metrics found for this product.</p>
+            </div>
+        }
+    </div>
+</div>

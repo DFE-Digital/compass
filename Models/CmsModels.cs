@@ -170,6 +170,7 @@ namespace FipsReporting.Models
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public bool IsAllocatedToUser { get; set; }
+        public int MilestoneCount { get; set; } = 0;
     }
 
     public class ProductContactViewModel

@@ -11,12 +11,14 @@ namespace FipsReporting.Controllers.Reporting
         private readonly IReportingService _reportingService;
         private readonly CmsApiService _cmsApiService;
         private readonly IMetricsService _metricsService;
+        private readonly IMilestoneService _milestoneService;
 
-        public ReportingProductsController(IReportingService reportingService, CmsApiService cmsApiService, IMetricsService metricsService)
+        public ReportingProductsController(IReportingService reportingService, CmsApiService cmsApiService, IMetricsService metricsService, IMilestoneService milestoneService)
         {
             _reportingService = reportingService;
             _cmsApiService = cmsApiService;
             _metricsService = metricsService;
+            _milestoneService = milestoneService;
         }
 
         public async Task<IActionResult> Index(ProductFilter filter)
@@ -43,13 +45,31 @@ namespace FipsReporting.Controllers.Reporting
                 // Log the number of products returned
                 Console.WriteLine($"ReportingProductsController: Found {assignedProducts.Count} products for user {userEmail}");
                 
-                // Map CmsProduct to ProductViewModel
-                var products = assignedProducts.Select(p => _cmsApiService.MapToViewModel(p, true)).ToList();
+                // Map CmsProduct to ProductViewModel and calculate milestone counts
+                var productsWithMilestones = new List<ProductViewModel>();
+                
+                foreach (var product in assignedProducts)
+                {
+                    var productViewModel = _cmsApiService.MapToViewModel(product, true);
+                    
+                    // Get milestone count for this product
+                    if (!string.IsNullOrEmpty(productViewModel.FipsId))
+                    {
+                        var milestones = await _milestoneService.GetMilestonesByFipsIdAsync(productViewModel.FipsId);
+                        productViewModel.MilestoneCount = milestones.Count;
+                    }
+                    else
+                    {
+                        productViewModel.MilestoneCount = 0;
+                    }
+                    
+                    productsWithMilestones.Add(productViewModel);
+                }
                 
                 ViewBag.Filter = filter;
                 ViewBag.UserEmail = userEmail;
                 
-                return View("~/Views/Reporting/Products/Index.cshtml", products);
+                return View("~/Views/Reporting/Products/Index.cshtml", productsWithMilestones);
             }
             catch (Exception ex)
             {
