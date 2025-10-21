@@ -12,6 +12,13 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Check for data migration command
+if (args.Length > 0 && args[0] == "--migrate-data")
+{
+    await RunDataMigration(builder);
+    return;
+}
+
 // Add file logging
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -201,4 +208,69 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+static async Task RunDataMigration(WebApplicationBuilder builder)
+{
+    Console.WriteLine("=== Compass Data Migration Utility ===\n");
+    
+    // Build minimal services needed for migration
+    builder.Services.AddDbContext<CompassDbContext>(options =>
+        options.UseSqlite("Data Source=compass.db"), ServiceLifetime.Transient);
+    
+    var sqlConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrEmpty(sqlConnectionString))
+    {
+        Console.WriteLine("Error: DefaultConnection string not found in configuration.");
+        Console.WriteLine("Please ensure appsettings.Production.json has the Azure SQL connection string.");
+        return;
+    }
+    
+    builder.Services.AddDbContext<CompassDbContext>(options =>
+        options.UseSqlServer(sqlConnectionString), ServiceLifetime.Transient);
+    
+    var app = builder.Build();
+    
+    using var scope = app.Services.CreateScope();
+    var serviceProvider = scope.ServiceProvider;
+    
+    // Create SQLite context (source)
+    var sqliteOptions = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlite("Data Source=compass.db")
+        .Options;
+    using var sourceDb = new CompassDbContext(sqliteOptions);
+    
+    // Create Azure SQL context (target)
+    var sqlServerOptions = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlServer(sqlConnectionString)
+        .Options;
+    using var targetDb = new CompassDbContext(sqlServerOptions);
+    
+    // Test connections
+    Console.WriteLine("Testing database connections...");
+    try
+    {
+        await sourceDb.Database.CanConnectAsync();
+        Console.WriteLine("✓ Connected to SQLite source database");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Failed to connect to SQLite: {ex.Message}");
+        return;
+    }
+    
+    try
+    {
+        await targetDb.Database.CanConnectAsync();
+        Console.WriteLine("✓ Connected to Azure SQL target database");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Failed to connect to Azure SQL: {ex.Message}");
+        Console.WriteLine("Please verify the connection string and ensure the Azure SQL firewall allows your IP.");
+        return;
+    }
+    
+    Console.WriteLine("\nStarting migration...\n");
+    await DataMigrationUtility.MigrateDataAsync(sourceDb, targetDb);
+}
 
