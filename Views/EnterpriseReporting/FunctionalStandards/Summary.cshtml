@@ -1,0 +1,265 @@
+@model Compass.Models.FunctionalStandardAssessment
+@{
+    ViewData["Title"] = "Assessment summary";
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .theme-card {
+        margin-bottom: 2rem;
+    }
+    .practice-area-section {
+        background: #f8f9fa;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 3px solid #007bff;
+    }
+    .rating-section {
+        margin-bottom: 1.5rem;
+    }
+    .rating-section-header {
+        padding: 0.5rem;
+        font-weight: 600;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+    .rating-good {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+    .rating-better {
+        background: #cfe2ff;
+        color: #084298;
+    }
+    .rating-best {
+        background: #d1e7dd;
+        color: #0f5132;
+    }
+    .criteria-row {
+        padding: 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+        background: white;
+    }
+    .criteria-row:last-child {
+        border-bottom: none;
+    }
+    .summary-stat {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 4px;
+        background: #f8f9fa;
+    }
+    .summary-stat-number {
+        font-size: 2rem;
+        font-weight: 600;
+        display: block;
+    }
+    .summary-stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="FunctionalStandards">Functional standards</a></li>
+                    <li class="breadcrumb-item"><a asp-action="SelectStandard" asp-route-standardId="@Model.FunctionalStandardId">@Model.FunctionalStandard?.Title</a></li>
+                    <li class="breadcrumb-item active">Assessment summary</li>
+                </ol>
+                <h1 class="m-0">Assessment summary</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="info-box bg-primary">
+                    <span class="info-box-icon"><i class="fas fa-clipboard-check"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Assessment</span>
+                        <span class="info-box-number">@Model.AssessmentName</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-success">
+                    <span class="info-box-icon"><i class="fas fa-book"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Standard</span>
+                        <span class="info-box-number">@Model.FunctionalStandard?.Title</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-info">
+                    <span class="info-box-icon"><i class="fas fa-calendar"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Submitted</span>
+                        <span class="info-box-number">@Model.SubmittedAt?.ToString("d MMM yyyy HH:mm")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var totalCriteria = Model.CriteriaResponses.Count;
+            var fullyMet = Model.CriteriaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.FullyMet);
+            var partiallyMet = Model.CriteriaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.PartiallyMet);
+            var notMet = Model.CriteriaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.NotOrSeldomMet);
+        }
+
+        <div class="row mb-3">
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="summary-stat">
+                    <span class="summary-stat-number text-primary">@totalCriteria</span>
+                    <span class="summary-stat-label">Total criteria</span>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="summary-stat">
+                    <span class="summary-stat-number text-success">@fullyMet</span>
+                    <span class="summary-stat-label">Fully met</span>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="summary-stat">
+                    <span class="summary-stat-number text-warning">@partiallyMet</span>
+                    <span class="summary-stat-label">Partially met</span>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="summary-stat">
+                    <span class="summary-stat-number text-danger">@notMet</span>
+                    <span class="summary-stat-label">Not met</span>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.FunctionalStandard?.Themes != null)
+        {
+            @foreach (var theme in Model.FunctionalStandard.Themes.OrderBy(t => t.ThemeId))
+            {
+                <div class="card theme-card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-layer-group"></i> Theme @theme.ThemeId: @theme.Title
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        @if (theme.PracticeAreas != null)
+                        {
+                            @foreach (var practiceArea in theme.PracticeAreas.OrderBy(pa => pa.PracticeAreaId))
+                            {
+                                var practiceAreaCriteria = practiceArea.Criteria?.OrderBy(c => c.CriteriaCode).ToList() ?? new List<Compass.Models.Criterion>();
+                                var practiceAreaResponses = Model.CriteriaResponses
+                                    .Where(cr => cr.ThemeId == theme.ThemeId && cr.PracticeAreaId == practiceArea.PracticeAreaId)
+                                    .ToList();
+                                
+                                var practiceAreaFullyMet = practiceAreaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.FullyMet);
+                                var practiceAreaPartiallyMet = practiceAreaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.PartiallyMet);
+                                var practiceAreaNotMet = practiceAreaResponses.Count(r => r.Attainment == Compass.Models.AttainmentLevel.NotOrSeldomMet);
+
+                                <div class="practice-area-section">
+                                    <div class="row mb-3 align-items-center">
+                                        <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
+                                            <h5>Practice Area @practiceArea.PracticeAreaId: @practiceArea.Title</h5>
+                                            @if (!string.IsNullOrEmpty(practiceArea.Description))
+                                            {
+                                                <p class="mb-0"><small class="text-muted">@practiceArea.Description</small></p>
+                                            }
+                                        </div>
+                                        <div class="col-md-4 text-right">
+                                            <span class="badge badge-success">@practiceAreaFullyMet fully met</span>
+                                            <span class="badge badge-warning">@practiceAreaPartiallyMet partially met</span>
+                                            <span class="badge badge-danger">@practiceAreaNotMet not met</span>
+                                        </div>
+                                    </div>
+
+                                    @* Group criteria by rating *@
+                                    @foreach (var rating in new[] { Compass.Models.CriteriaRating.Good, Compass.Models.CriteriaRating.Better, Compass.Models.CriteriaRating.Best })
+                                    {
+                                        var criteriaForRating = practiceAreaCriteria.Where(c => c.Rating == rating).ToList();
+                                        
+                                        @if (criteriaForRating.Any())
+                                        {
+                                            <div class="rating-section">
+                                                <div class="rating-section-header rating-@(rating.ToString().ToLower())">
+                                                    <i class="fas fa-star"></i> @rating criteria
+                                                </div>
+                                                
+                                                @foreach (var criterion in criteriaForRating)
+                                                {
+                                                    var response = practiceAreaResponses.FirstOrDefault(r => r.CriteriaCode == criterion.CriteriaCode);
+                                                    
+                                                    <div class="criteria-row">
+                                                        <div class="row">
+                                                            <div class="col-md-1 text-center">
+                                                                <strong>@criterion.CriteriaCode</strong>
+                                                            </div>
+                                                            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                                                <p class="mb-0">@criterion.Criteria</p>
+                                                            </div>
+                                                            <div class="col-md-5">
+                                                                @if (response != null && response.Attainment.HasValue)
+                                                                {
+                                                                    <div>
+                                                                        @switch (response.Attainment.Value)
+                                                                        {
+                                                                            case Compass.Models.AttainmentLevel.NotOrSeldomMet:
+                                                                                <span class="badge badge-danger">Not, or seldom met</span>
+                                                                                break;
+                                                                            case Compass.Models.AttainmentLevel.PartiallyMet:
+                                                                                <span class="badge badge-warning">Partially met</span>
+                                                                                break;
+                                                                            case Compass.Models.AttainmentLevel.FullyMet:
+                                                                                <span class="badge badge-success">Fully met</span>
+                                                                                break;
+                                                                        }
+                                                                    </div>
+                                                                    @if (!string.IsNullOrEmpty(response.Notes))
+                                                                    {
+                                                                        <div class="mt-2"><small class="text-muted"><i class="fas fa-sticky-note"></i> @response.Notes</small></div>
+                                                                    }
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        <div class="card">
+            <div class="card-footer">
+                <a asp-action="SelectStandard" asp-route-standardId="@Model.FunctionalStandardId" class="btn btn-primary">
+                    Back to standard
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+

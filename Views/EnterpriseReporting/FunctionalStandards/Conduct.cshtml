@@ -1,0 +1,616 @@
+@model Compass.Models.FunctionalStandardAssessment
+@{
+    ViewData["Title"] = Model.AssessmentName;
+    var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .theme-card {
+        margin-bottom: 2rem;
+    }
+    .practice-area-section {
+        background: #f8f9fa;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 3px solid #007bff;
+    }
+    .rating-section {
+        margin-bottom: 1.5rem;
+    }
+    .rating-section-header {
+        padding: 0.5rem;
+        font-weight: 600;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+    .rating-good {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+    .rating-better {
+        background: #cfe2ff;
+        color: #084298;
+    }
+    .rating-best {
+        background: #d1e7dd;
+        color: #0f5132;
+    }
+    .criteria-row {
+        padding: 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+        background: white;
+    }
+    .criteria-row:last-child {
+        border-bottom: none;
+    }
+    .rating-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .notes-textarea {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .progress-badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+    }
+    .submitted-badge {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+    .accordion .btn-link {
+        box-shadow: none !important;
+        outline: none !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .accordion .btn-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .accordion .btn-link .fa-chevron-down {
+        transition: transform 0.3s ease;
+        font-size: 1.1rem;
+        margin-left: 1rem;
+        opacity: 0.9;
+    }
+    .accordion .btn-link:not(.collapsed) .fa-chevron-down {
+        transform: rotate(180deg);
+    }
+    .theme-title-text {
+        flex: 1;
+    }
+    .theme-progress-badge {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+        font-weight: 600;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="FunctionalStandards">Functional standards</a></li>
+                    <li class="breadcrumb-item active">Assessment</li>
+                </ol>
+                <h1 class="m-0">@(isReadOnly ? "View" : "Conduct") assessment</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        
+        @{
+            var totalCriteriaCountTop = Model.FunctionalStandard?.Themes?
+                .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
+            var completedCriteriaCountTop = Model.CriteriaResponses.Count(r => r.Attainment.HasValue);
+            var percentageComplete = totalCriteriaCountTop > 0 ? (int)Math.Round((double)completedCriteriaCountTop / totalCriteriaCountTop * 100) : 0;
+            
+            string overallBadgeColor;
+            if (completedCriteriaCountTop == 0)
+            {
+                overallBadgeColor = "danger";
+            }
+            else if (completedCriteriaCountTop == totalCriteriaCountTop && totalCriteriaCountTop > 0)
+            {
+                overallBadgeColor = "success";
+            }
+            else
+            {
+                overallBadgeColor = "warning";
+            }
+        }
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@Model.FunctionalStandard?.Title</h3>
+                        <p>Standard</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@Model.AssessmentName</h3>
+                        <p>Assessment</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@Model.AssessmentDate.ToString("d MMM yyyy")</h3>
+                        <p>Assessment started</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-calendar"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                <div class="small-box bg-@overallBadgeColor" id="overallProgressBox">
+                    <div class="inner">
+                        <h3 id="overallProgressNumber">@completedCriteriaCountTop / @totalCriteriaCountTop (@percentageComplete%)</h3>
+                        <p>Overall progress</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.FunctionalStandard?.Themes != null)
+        {
+            <div class="row mb-3">
+                <div class="col-12">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBtn">
+                        <i class="fas fa-expand-alt"></i> Expand all themes
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="collapseAllBtn">
+                        <i class="fas fa-compress-alt"></i> Collapse all themes
+                    </button>
+                </div>
+            </div>
+            
+            <div class="accordion" id="themesAccordion">
+            @foreach (var theme in Model.FunctionalStandard.Themes.OrderBy(t => t.ThemeId))
+            {
+                var themeIndex = theme.ThemeId;
+                
+                @* Calculate theme-level progress *@
+                var themeCriteria = theme.PracticeAreas?
+                    .SelectMany(pa => pa.Criteria ?? new List<Compass.Models.Criterion>())
+                    .ToList() ?? new List<Compass.Models.Criterion>();
+                var themeResponses = Model.CriteriaResponses
+                    .Where(cr => cr.ThemeId == theme.ThemeId)
+                    .ToList();
+                var themeTotalCriteria = themeCriteria.Count;
+                var themeCompletedCount = themeResponses.Count(r => r.Attainment.HasValue);
+                
+                string themeBadgeColor;
+                if (themeCompletedCount == 0)
+                {
+                    themeBadgeColor = "danger";
+                }
+                else if (themeCompletedCount == themeTotalCriteria && themeTotalCriteria > 0)
+                {
+                    themeBadgeColor = "success";
+                }
+                else
+                {
+                    themeBadgeColor = "warning";
+                }
+                
+                <div class="card theme-card">
+                    <div class="card-header bg-primary d-flex align-items-center justify-content-between" id="themeHeading@(themeIndex)">
+                        <button class="btn btn-link text-white text-decoration-none collapsed text-left d-flex align-items-center" 
+                                type="button" 
+                                data-toggle="collapse" 
+                                data-target="#themeCollapse@(themeIndex)" 
+                                aria-expanded="false" 
+                                aria-controls="themeCollapse@(themeIndex)">
+                            <h3 class="card-title mb-0 mr-2">
+                                <span class="theme-title-text">
+                                    Theme @theme.ThemeId: @theme.Title
+                                </span>
+                            </h3>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <span class="badge badge-@themeBadgeColor theme-progress-badge ml-auto" data-theme-id="@theme.ThemeId">
+                            @themeCompletedCount of @themeTotalCriteria completed
+                        </span>
+                    </div>
+                    <div id="themeCollapse@(themeIndex)" 
+                         class="collapse" 
+                         aria-labelledby="themeHeading@(themeIndex)">
+                        <div class="card-body">
+                      
+
+                        @if (theme.PracticeAreas != null)
+                        {
+                            @foreach (var practiceArea in theme.PracticeAreas.OrderBy(pa => pa.PracticeAreaId))
+                            {
+                                var practiceAreaCriteria = practiceArea.Criteria?.OrderBy(c => c.CriteriaCode).ToList() ?? new List<Compass.Models.Criterion>();
+                                var practiceAreaResponses = Model.CriteriaResponses
+                                    .Where(cr => cr.ThemeId == theme.ThemeId && cr.PracticeAreaId == practiceArea.PracticeAreaId)
+                                    .ToList();
+                                
+                                var totalCriteria = practiceAreaCriteria.Count;
+                                
+                                // Count responses where the user has made a selection (Attainment is not null)
+                                var completedCount = practiceAreaResponses
+                                    .Count(r => r.Attainment.HasValue);
+                                
+                                // Determine badge color: red (0), orange (partial), green (complete)
+                                string badgeColor;
+                                if (completedCount == 0)
+                                {
+                                    badgeColor = "danger"; // Red
+                                }
+                                else if (completedCount == totalCriteria && totalCriteria > 0)
+                                {
+                                    badgeColor = "success"; // Green
+                                }
+                                else
+                                {
+                                    badgeColor = "warning"; // Orange
+                                }
+
+                                <div class="practice-area-section">
+                                    <div class="row mb-3 align-items-center">
+                                        <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
+                                            <h5>Practice Area @practiceArea.PracticeAreaId: @practiceArea.Title</h5>
+                                            @if (!string.IsNullOrEmpty(practiceArea.Description))
+                                            {
+                                                <p class="mb-0"><small class="text-muted">@practiceArea.Description</small></p>
+                                            }
+                                        </div>
+                                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12 text-right">
+                                            <span class="badge badge-@badgeColor progress-badge">
+                                                @completedCount / @totalCriteria criteria assessed
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    @* Group criteria by rating *@
+                                    @foreach (var rating in new[] { Compass.Models.CriteriaRating.Good, Compass.Models.CriteriaRating.Better, Compass.Models.CriteriaRating.Best })
+                                    {
+                                        var criteriaForRating = practiceAreaCriteria.Where(c => c.Rating == rating).ToList();
+                                        
+                                        @if (criteriaForRating.Any())
+                                        {
+                                            <div class="rating-section">
+                                                <div class="rating-section-header rating-@(rating.ToString().ToLower())">
+                                                    <i class="fas fa-star"></i> @rating criteria
+                                                </div>
+                                                
+                                                @foreach (var criterion in criteriaForRating)
+                                                {
+                                                    var response = practiceAreaResponses.FirstOrDefault(r => r.CriteriaCode == criterion.CriteriaCode);
+                                                    
+                                                    <div class="criteria-row">
+                                                        <div class="row">
+                                                            <div class="col-xxl-1 col-xl-1 col-lg-1 col-md-2 col-sm-12 col-12 text-center">
+                                                                <strong>@criterion.CriteriaCode</strong>
+                                                            </div>
+                                                            <div class="col-xxl-6 col-xl-6 col-lg-5 col-md-5 col-sm-12 col-12">
+                                                                <p class="mb-0">@criterion.Criteria</p>
+                                                            </div>
+                                                            <div class="col-xxl-5 col-xl-5 col-lg-6 col-md-5 col-sm-12 col-12">
+                                                                @if (response != null)
+                                                                {
+                                                                    @if (!isReadOnly)
+                                                                    {
+                                                                        <select class="form-control form-control-sm attainment-select" 
+                                                                                data-response-id="@response.Id">
+                                                                            <option value="" selected="@(!response.Attainment.HasValue)">-- Select attainment level --</option>
+                                                                            <option value="0" selected="@(response.Attainment == Compass.Models.AttainmentLevel.NotOrSeldomMet)">Not, or seldom met</option>
+                                                                            <option value="1" selected="@(response.Attainment == Compass.Models.AttainmentLevel.PartiallyMet)">Partially met</option>
+                                                                            <option value="2" selected="@(response.Attainment == Compass.Models.AttainmentLevel.FullyMet)">Fully met</option>
+                                                                        </select>
+                                                                        <textarea class="form-control notes-textarea mt-2" 
+                                                                                  rows="2" 
+                                                                                  placeholder="Add comments..."
+                                                                                  data-response-id="@response.Id">@response.Notes</textarea>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div>
+                                                                            @switch (response.Attainment)
+                                                                            {
+                                                                                case Compass.Models.AttainmentLevel.NotOrSeldomMet:
+                                                                                    <span class="badge badge-danger">Not, or seldom met</span>
+                                                                                    break;
+                                                                                case Compass.Models.AttainmentLevel.PartiallyMet:
+                                                                                    <span class="badge badge-warning">Partially met</span>
+                                                                                    break;
+                                                                                case Compass.Models.AttainmentLevel.FullyMet:
+                                                                                    <span class="badge badge-success">Fully met</span>
+                                                                                    break;
+                                                                            }
+                                                                        </div>
+                                                                        @if (!string.IsNullOrEmpty(response.Notes))
+                                                                        {
+                                                                            <div class="mt-2"><small class="text-muted"><i class="fas fa-sticky-note"></i> @response.Notes</small></div>
+                                                                        }
+                                                                    }
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                        </div>
+                    </div>
+                </div>
+            }
+            </div>
+        }
+
+        @{
+            var totalCriteriaCount = Model.FunctionalStandard?.Themes?
+                .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
+            var completedCriteriaCount = Model.CriteriaResponses.Count(r => r.Attainment.HasValue);
+            var allCriteriaComplete = completedCriteriaCount == totalCriteriaCount && totalCriteriaCount > 0;
+        }
+
+        <div class="card">
+            <div class="card-footer">
+                <a asp-action="SelectStandard" asp-route-standardId="@Model.FunctionalStandardId" class="btn btn-default">
+                    Back to standard
+                </a>
+                @if (!isReadOnly)
+                {
+                    @if (allCriteriaComplete && !Model.SubmittedAt.HasValue)
+                    {
+                        <form asp-action="SubmitAssessment" method="post" class="d-inline ml-3">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="assessmentId" value="@Model.Id" />
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check-circle"></i> Submit assessment
+                            </button>
+                        </form>
+                    }
+                    <span class="text-muted ml-3">
+                        Outcomes are saved when selected, comments save after 1 second
+                    </span>
+                }
+                @if (Model.SubmittedAt.HasValue)
+                {
+                    <span class="badge badge-success ml-3 submitted-badge">
+                        <i class="fas fa-check-circle"></i> Submitted @Model.SubmittedAt.Value.ToString("d MMM yyyy HH:mm")
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@Html.AntiForgeryToken()
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var saveTimeout;
+            
+            // Handle attainment dropdown change
+            $('.attainment-select').change(function() {
+                var select = $(this);
+                var responseId = select.data('response-id');
+                var attainment = select.val();
+                var notesTextarea = $('.notes-textarea[data-response-id="' + responseId + '"]');
+                var notes = notesTextarea.val() || null;
+                
+                if (attainment !== '') {
+                    saveResponse(responseId, attainment, notes);
+                }
+            });
+            
+            // Handle notes textarea change with debounce
+            $('.notes-textarea').on('input', function() {
+                var textarea = $(this);
+                var responseId = textarea.data('response-id');
+                var notes = textarea.val() || null;
+                var select = $('.attainment-select[data-response-id="' + responseId + '"]');
+                var attainment = select.val();
+                
+                // Clear previous timeout
+                clearTimeout(saveTimeout);
+                
+                // Set new timeout to save after 1 second of no typing
+                saveTimeout = setTimeout(function() {
+                    if (attainment !== '') {
+                        saveResponse(responseId, attainment, notes);
+                    }
+                }, 1000);
+            });
+            
+            function saveResponse(responseId, attainment, notes) {
+                $.ajax({
+                    url: '@Url.Action("SaveCriteriaResponse", "EnterpriseReporting")',
+                    type: 'POST',
+                    data: {
+                        responseId: responseId,
+                        attainment: attainment,
+                        notes: notes,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Show brief success indicator
+                            var indicator = $('<span class="text-success ml-2">Saved</span>');
+                            var select = $('.attainment-select[data-response-id="' + responseId + '"]');
+                            select.after(indicator);
+                            setTimeout(function() {
+                                indicator.fadeOut(function() { $(this).remove(); });
+                            }, 2000);
+                            
+                            // Update the count badge for this practice area
+                            updatePracticeAreaCount(select);
+                        } else {
+                            alert('Error saving response: ' + response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('An error occurred while saving');
+                    }
+                });
+            }
+            
+            function updatePracticeAreaCount(element) {
+                // Find the practice area section containing this element
+                var practiceAreaSection = element.closest('.practice-area-section');
+                
+                // Count how many dropdowns have a value selected (not empty)
+                var completedCount = practiceAreaSection.find('.attainment-select').filter(function() {
+                    return $(this).val() !== '';
+                }).length;
+                
+                // Count total criteria in this practice area
+                var totalCount = practiceAreaSection.find('.attainment-select').length;
+                
+                // Find and update the badge
+                var badge = practiceAreaSection.find('.progress-badge');
+                badge.text(completedCount + ' / ' + totalCount + ' criteria assessed');
+                
+                // Update badge color based on completion status
+                badge.removeClass('badge-danger badge-warning badge-success');
+                
+                if (completedCount === 0) {
+                    // Red when nothing completed
+                    badge.addClass('badge-danger');
+                } else if (completedCount === totalCount && totalCount > 0) {
+                    // Green when all completed
+                    badge.addClass('badge-success');
+                } else {
+                    // Orange when partially completed
+                    badge.addClass('badge-warning');
+                }
+                
+                // Update theme progress badge
+                updateThemeProgress(element);
+                
+                // Update overall progress
+                updateOverallProgress();
+            }
+            
+            function updateThemeProgress(element) {
+                // Find the theme card containing this element
+                var themeCard = element.closest('.card.theme-card');
+                
+                // Count completed criteria in this theme
+                var completedCount = themeCard.find('.attainment-select').filter(function() {
+                    return $(this).val() !== '';
+                }).length;
+                
+                // Count total criteria in this theme
+                var totalCount = themeCard.find('.attainment-select').length;
+                
+                // Find the theme progress badge in the header
+                var themeBadge = themeCard.find('.theme-progress-badge');
+                themeBadge.text(completedCount + ' of ' + totalCount + ' completed');
+                
+                // Update badge color
+                themeBadge.removeClass('badge-danger badge-warning badge-success');
+                
+                if (completedCount === 0) {
+                    themeBadge.addClass('badge-danger');
+                } else if (completedCount === totalCount && totalCount > 0) {
+                    themeBadge.addClass('badge-success');
+                } else {
+                    themeBadge.addClass('badge-warning');
+                }
+            }
+            
+            function updateOverallProgress() {
+                // Count all completed criteria across all themes
+                var totalCompleted = $('.attainment-select').filter(function() {
+                    return $(this).val() !== '';
+                }).length;
+                
+                // Count all criteria
+                var totalCriteria = $('.attainment-select').length;
+                
+                // Calculate percentage
+                var percentage = totalCriteria > 0 ? Math.round((totalCompleted / totalCriteria) * 100) : 0;
+                
+                // Update the overall progress number
+                $('#overallProgressNumber').text(totalCompleted + ' / ' + totalCriteria + ' (' + percentage + '%)');
+                
+                // Update overall info box color
+                var overallBox = $('#overallProgressBox');
+                overallBox.removeClass('bg-danger bg-warning bg-success');
+                
+                if (totalCompleted === 0) {
+                    overallBox.addClass('bg-danger');
+                } else if (totalCompleted === totalCriteria && totalCriteria > 0) {
+                    overallBox.addClass('bg-success');
+                } else {
+                    overallBox.addClass('bg-warning');
+                }
+            }
+            
+            // Expand all / Collapse all functionality
+            $('#expandAllBtn').click(function() {
+                $('.collapse').collapse('show');
+                $(this).addClass('d-none');
+                $('#collapseAllBtn').removeClass('d-none');
+            });
+            
+            $('#collapseAllBtn').click(function() {
+                $('.collapse').collapse('hide');
+                $(this).addClass('d-none');
+                $('#expandAllBtn').removeClass('d-none');
+            });
+            
+            // Toggle buttons based on accordion state
+            $('#themesAccordion').on('shown.bs.collapse hidden.bs.collapse', function() {
+                var allExpanded = $('.collapse.show').length === $('.collapse').length;
+                var allCollapsed = $('.collapse.show').length === 0;
+                
+                if (allExpanded) {
+                    $('#expandAllBtn').addClass('d-none');
+                    $('#collapseAllBtn').removeClass('d-none');
+                } else if (allCollapsed) {
+                    $('#expandAllBtn').removeClass('d-none');
+                    $('#collapseAllBtn').addClass('d-none');
+                } else {
+                    $('#expandAllBtn').removeClass('d-none');
+                    $('#collapseAllBtn').removeClass('d-none');
+                }
+            });
+        });
+    </script>
+}
+

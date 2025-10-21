@@ -1,0 +1,389 @@
+@model ProductsIndexViewModel
+@{
+    ViewData["Title"] = "Products";
+    var currentPage = ViewBag.CurrentPage ?? 1;
+    var totalPages = ViewBag.TotalPages ?? 1;
+    var totalOtherProducts = ViewBag.TotalOtherProducts ?? 0;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Products</li>
+                </ol>
+                <h1 class="m-0">Products</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row">
+            <div class="col-xxl-3 col-xl-3 col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12 col-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@Model.TotalProducts</h3>
+                        <p>Total products</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12 col-12">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@Model.MyProductsCount</h3>
+                        <p>My products</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12 col-12">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@Model.TotalHighRisks</h3>
+                        <p>High risks (15+)</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12 col-12">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@Model.TotalCriticalIssues</h3>
+                        <p>Critical issues</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Products -->
+        @if (Model.MyProducts.Any())
+        {
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="card-title">
+                        <i class="fas fa-user-check"></i> My products
+                    </h3>
+                    <div class="card-tools">
+                        <span class="badge badge-light">@Model.MyProducts.Count products</span>
+                    </div>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 35%;">Product</th>
+                                <th style="width: 10%;">Health</th>
+                                <th style="width: 11%;">Risks</th>
+                                <th style="width: 11%;">Issues</th>
+                                <th style="width: 11%;">Actions</th>
+                                <th style="width: 11%;">Milestones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.MyProducts)
+                            {
+                                var rowClass = product.HealthScore < 30 ? "table-danger" : 
+                                             product.HealthScore < 60 ? "table-warning" : "";
+                                <tr class="@rowClass">
+                                    <td>
+                                        <a asp-action="Dashboard" asp-route-id="@product.FipsId" class="font-weight-bold">
+                                            @product.ProductTitle
+                                        </a>
+                                        <br />
+                                        <small class="text-muted">
+                                            @product.FipsId
+                                            @if (!string.IsNullOrEmpty(product.BusinessArea))
+                                            {
+                                                <text> | @product.BusinessArea</text>
+                                            }
+                                            @if (!string.IsNullOrEmpty(product.Phase))
+                                            {
+                                                <text> | @product.Phase</text>
+                                            }
+                                        </small>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var healthBadgeClass = product.HealthScore >= 80 ? "badge-success" :
+                                                                   product.HealthScore >= 60 ? "badge-info" :
+                                                                   product.HealthScore >= 40 ? "badge-warning" :
+                                                                   product.HealthScore >= 20 ? "badge-danger" : "badge-dark";
+                                        }
+                                        <span class="badge @healthBadgeClass">@product.HealthScore</span>
+                                    </td>
+                                    <td>
+                                        @if (product.TotalRisks > 0)
+                                        {
+                                            <span class="badge badge-info">@product.TotalRisks</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalIssues > 0)
+                                        {
+                                            <span class="badge badge-warning">@product.TotalIssues</span>
+                                            @if (product.CriticalIssues > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.CriticalIssues critical</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalActions > 0)
+                                        {
+                                            <span class="badge badge-primary">@product.TotalActions</span>
+                                            @if (product.OverdueActions > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.OverdueActions overdue</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalMilestones > 0)
+                                        {
+                                            <span class="badge badge-success">@product.TotalMilestones</span>
+                                            @if (product.OverdueMilestones > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.OverdueMilestones overdue</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- All Products -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-box"></i> All products
+                </h3>
+                <div class="card-tools">
+                    <span class="badge badge-info">@totalOtherProducts products</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.AllProducts.Any())
+                {
+                    <table class="table table-hover text-nowrap" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 35%;">Product</th>
+                                <th style="width: 10%;">Health</th>
+                                <th style="width: 11%;">Risks</th>
+                                <th style="width: 11%;">Issues</th>
+                                <th style="width: 11%;">Actions</th>
+                                <th style="width: 11%;">Milestones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.AllProducts)
+                            {
+                                var rowClass = product.HealthScore < 30 ? "table-danger" : 
+                                             product.HealthScore < 60 ? "table-warning" : "";
+                                <tr class="@rowClass">
+                                    <td>
+                                        <a asp-action="Dashboard" asp-route-id="@product.FipsId" class="font-weight-bold">
+                                            @product.ProductTitle
+                                        </a>
+                                        <br />
+                                        <small class="text-muted">
+                                            @product.FipsId
+                                            @if (!string.IsNullOrEmpty(product.BusinessArea))
+                                            {
+                                                <text> | @product.BusinessArea</text>
+                                            }
+                                            @if (!string.IsNullOrEmpty(product.Phase))
+                                            {
+                                                <text> | @product.Phase</text>
+                                            }
+                                        </small>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var healthBadgeClass = product.HealthScore >= 80 ? "badge-success" :
+                                                                   product.HealthScore >= 60 ? "badge-info" :
+                                                                   product.HealthScore >= 40 ? "badge-warning" :
+                                                                   product.HealthScore >= 20 ? "badge-danger" : "badge-dark";
+                                        }
+                                        <span class="badge @healthBadgeClass">@product.HealthScore</span>
+                                    </td>
+                                    <td>
+                                        @if (product.TotalRisks > 0)
+                                        {
+                                            <span class="badge badge-info">@product.TotalRisks</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalIssues > 0)
+                                        {
+                                            <span class="badge badge-warning">@product.TotalIssues</span>
+                                            @if (product.CriticalIssues > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.CriticalIssues critical</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalActions > 0)
+                                        {
+                                            <span class="badge badge-primary">@product.TotalActions</span>
+                                            @if (product.OverdueActions > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.OverdueActions overdue</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalMilestones > 0)
+                                        {
+                                            <span class="badge badge-success">@product.TotalMilestones</span>
+                                            @if (product.OverdueMilestones > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.OverdueMilestones overdue</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-box fa-3x mb-3"></i>
+                        <p class="mb-0">No other products available</p>
+                    </div>
+                }
+            </div>
+            @if (totalPages > 1)
+            {
+                <div class="card-footer clearfix">
+                    <ul class="pagination pagination-sm m-0 float-right">
+                        @if (currentPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="Index" asp-route-page="@(currentPage - 1)">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        }
+                        
+                        @for (var i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        {
+                            <li class="page-item @(i == currentPage ? "active" : "")">
+                                <a class="page-link" asp-action="Index" asp-route-page="@i">@i</a>
+                            </li>
+                        }
+                        
+                        @if (currentPage < totalPages)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="Index" asp-route-page="@(currentPage + 1)">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+
+        <!-- Legend -->
+        <div class="row">
+            <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
+                <div class="card card-outline card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">Legend</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                <h5>Health score calculation</h5>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-minus text-danger"></i> Open risks: -2 points each</li>
+                                    <li><i class="fas fa-minus text-danger"></i> High risks (15+): -5 points each</li>
+                                    <li><i class="fas fa-minus text-danger"></i> Open issues: -3 points each</li>
+                                    <li><i class="fas fa-minus text-danger"></i> Critical issues: -10 points each</li>
+                                    <li><i class="fas fa-minus text-danger"></i> Blocked issues: -8 points each</li>
+                                    <li><i class="fas fa-minus text-warning"></i> Overdue actions: -2 points each</li>
+                                    <li><i class="fas fa-minus text-warning"></i> Overdue milestones: -5 points each</li>
+                                </ul>
+                            </div>
+                            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                <h5>Health score ranges</h5>
+                                <ul class="list-unstyled">
+                                    <li><span class="badge badge-success">80-100</span> Good health</li>
+                                    <li><span class="badge badge-info">60-79</span> Fair health</li>
+                                    <li><span class="badge badge-warning">40-59</span> Needs monitoring</li>
+                                    <li><span class="badge badge-danger">20-39</span> Urgent attention required</li>
+                                    <li><span class="badge badge-dark">0-19</span> Critical</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

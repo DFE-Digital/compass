@@ -1,0 +1,115 @@
+@{
+    ViewData["Title"] = "Functional standards assessments";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Functional standards</li>
+                </ol>
+                <h1 class="m-0">Functional standards assessments</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a href="@Url.Action("Index", "Documentation")#functional-standards" class="btn btn-outline-info btn-sm">
+                    View documentation
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title"><i class="fas fa-clipboard-check"></i> Available functional standards</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="col-identifier">Standard ID</th>
+                            <th style="width: 40%;">Title</th>
+                            <th class="col-date">Published</th>
+                            <th class="col-status">Assessments</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (ViewBag.Standards != null)
+                        {
+                            @foreach (dynamic item in ViewBag.Standards)
+                            {
+                                Compass.Models.FunctionalStandard standard = item.Standard;
+                                int assessmentCount = item.AssessmentCount;
+                                bool hasInProgressAssessments = item.HasInProgressAssessments;
+                                
+                                <tr>
+                                    <td><strong>@standard.Id</strong></td>
+                                    <td>@standard.Title</td>
+                                    <td>
+                                        @if (standard.PublishedDate.HasValue)
+                                        {
+                                            @standard.PublishedDate.Value.ToString("d MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not published</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (assessmentCount > 0)
+                                        {
+                                            <span class="badge badge-info">@assessmentCount assessment(s)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No assessments</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="SelectStandard" asp-route-standardId="@standard.Id" class="btn btn-sm btn-primary">
+                                            @if (hasInProgressAssessments)
+                                            {
+                                                <text>Continue assessments</text>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-clipboard-check"></i> <text>Start assessment</text>
+                                            }
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No functional standards found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+

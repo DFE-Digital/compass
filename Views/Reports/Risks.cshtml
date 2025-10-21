@@ -1,0 +1,796 @@
+@model List<Compass.Models.Risk>
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Risks report";
+    var groupBy = ViewBag.GroupBy as string ?? "impact-likelihood";
+    var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var riskTypes = ViewBag.RiskTypes as List<Compass.Models.RiskType> ?? new List<Compass.Models.RiskType>();
+    var riskTiers = ViewBag.RiskTiers as List<Compass.Models.RiskTier> ?? new List<Compass.Models.RiskTier>();
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Risks report</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-info">
+                    <span class="info-box-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total risks</span>
+                        <span class="info-box-number">@ViewBag.TotalRisks</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-danger">
+                    <span class="info-box-icon"><i class="fas fa-exclamation"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">High (≥15)</span>
+                        <span class="info-box-number">@ViewBag.HighRisks</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-warning">
+                    <span class="info-box-icon"><i class="fas fa-minus-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Medium (10-14)</span>
+                        <span class="info-box-number">@ViewBag.MediumRisks</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-success">
+                    <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Low (<10)</span>
+                        <span class="info-box-number">@ViewBag.LowRisks</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-primary">
+                    <span class="info-box-icon"><i class="fas fa-folder-open"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Open/Treating</span>
+                        <span class="info-box-number">@ViewBag.OpenRisks</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-12 col-12">
+                <div class="info-box bg-secondary">
+                    <span class="info-box-icon"><i class="fas fa-archive"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Closed</span>
+                        <span class="info-box-number">@ViewBag.ClosedRisks</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout: Sidebar + Content -->
+        <div class="row">
+
+            <!-- LEFT SIDEBAR: Group By Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Group by</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Risks", new { groupBy = "impact-likelihood" })" 
+                               class="nav-link @(groupBy == "impact-likelihood" ? "active" : "")">
+                                <i class="fas fa-chart-line mr-2"></i> Impact & Likelihood
+                            </a>
+                            <a href="@Url.Action("Risks", new { groupBy = "business-area" })" 
+                               class="nav-link @(groupBy == "business-area" ? "active" : "")">
+                                <i class="fas fa-building mr-2"></i> Business area
+                            </a>
+                            <a href="@Url.Action("Risks", new { groupBy = "product" })" 
+                               class="nav-link @(groupBy == "product" ? "active" : "")">
+                                <i class="fas fa-box mr-2"></i> Product
+                            </a>
+                            <a href="@Url.Action("Risks", new { groupBy = "risk-type" })" 
+                               class="nav-link @(groupBy == "risk-type" ? "active" : "")">
+                                <i class="fas fa-tags mr-2"></i> Risk type
+                            </a>
+                            <a href="@Url.Action("Risks", new { groupBy = "risk-tier" })" 
+                               class="nav-link @(groupBy == "risk-tier" ? "active" : "")">
+                                <i class="fas fa-layer-group mr-2"></i> Risk tier
+                            </a>
+                            <a href="@Url.Action("Risks", new { groupBy = "status" })" 
+                               class="nav-link @(groupBy == "status" ? "active" : "")">
+                                <i class="fas fa-flag mr-2"></i> Status
+                            </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- RIGHT CONTENT: Grouped Results -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+        @if (groupBy == "impact-likelihood")
+        {
+            <!-- Impact x Likelihood Matrix -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>Risks by impact and likelihood</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered text-center risk-matrix-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="bg-light align-middle">Impact →<br/>Likelihood ↓</th>
+                                            <th class="bg-light">1</th>
+                                            <th class="bg-light">2</th>
+                                            <th class="bg-light">3</th>
+                                            <th class="bg-light">4</th>
+                                            <th class="bg-light">5</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int l = 5; l >= 1; l--)
+                                        {
+                                            <tr>
+                                                <th class="bg-light">@l</th>
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    var cellRisks = Model.Where(r => r.ImpactRating == i && r.LikelihoodRating == l).ToList();
+                                                    var score = i * l;
+                                                    var cellClass = score >= 15 ? "table-danger" : score >= 10 ? "table-warning" : "table-success";
+                                                    var badgeClass = score >= 15 ? "badge-danger" : score >= 10 ? "badge-warning" : "badge-success";
+                                                    <td class="@cellClass risk-matrix-cell">
+                                                        @if (cellRisks.Any())
+                                                        {
+                                                            <a href="javascript:void(0)" onclick="showRisks(@i, @l)" class="badge @badgeClass badge-pill" style="font-size: 1.2em; padding: 0.5em 0.75em;">
+                                                                @cellRisks.Count
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">0</span>
+                                                        }
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (groupBy == "business-area")
+        {
+                    // Create a list of all business areas with their counts
+                    var allBusinessAreas = new List<(string Area, int Total, int High, int Medium, int Low)>();
+                    
+                    foreach (var area in businessAreas)
+                    {
+                        var areaRisks = Model.Where(r => r.BusinessArea == area).ToList();
+                        allBusinessAreas.Add((
+                            area,
+                            areaRisks.Count,
+                            areaRisks.Count(r => r.RiskScore >= 15),
+                            areaRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            areaRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                    // Add unspecified if there are any
+                    var unspecifiedRisks = Model.Where(r => string.IsNullOrEmpty(r.BusinessArea)).ToList();
+                    if (unspecifiedRisks.Any())
+                    {
+                        allBusinessAreas.Add((
+                            "Unspecified",
+                            unspecifiedRisks.Count,
+                            unspecifiedRisks.Count(r => r.RiskScore >= 15),
+                            unspecifiedRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            unspecifiedRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                    // Sort by total risks then high risks (descending)
+                    allBusinessAreas = allBusinessAreas.OrderByDescending(a => a.Total).ThenByDescending(a => a.High).ToList();
+                    
+                        <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-building mr-2"></i>Risks by business area</h3>
+                            </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Business area</th>
+                                        <th class="text-center" style="width: 100px;">Total</th>
+                                        <th class="text-center" style="width: 100px;">High (≥15)</th>
+                                        <th class="text-center" style="width: 120px;">Medium (10-14)</th>
+                                        <th class="text-center" style="width: 100px;">Low (<10)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var area in allBusinessAreas)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@area.Area</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                @if (area.Total > 0)
+                                                {
+                                                    <a href="javascript:void(0)" onclick="showGroupRisks('@area.Area', 'business-area')" class="badge badge-info badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                        @area.Total
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (area.High > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@area.High</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (area.Medium > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@area.Medium</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (area.Low > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@area.Low</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+            </div>
+        }
+        else if (groupBy == "product")
+                {
+                    // Only show products that have risks associated with them
+                    var productsWithRisks = Model
+                        .Where(r => !string.IsNullOrEmpty(r.FipsId))
+                        .GroupBy(r => r.FipsId)
+                        .Select(g => new
+                        {
+                            FipsId = g.Key,
+                            Product = products.FirstOrDefault(p => p.FipsId == g.Key),
+                            Total = g.Count(),
+                            High = g.Count(r => r.RiskScore >= 15),
+                            Medium = g.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            Low = g.Count(r => r.RiskScore < 10)
+                        })
+                        .OrderByDescending(p => p.Total)
+                        .ThenByDescending(p => p.High)
+                        .ToList();
+                    
+                    // Add risks with no product
+                    var noProductRisks = Model.Where(r => string.IsNullOrEmpty(r.FipsId)).ToList();
+                    
+                        <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-box mr-2"></i>Risks by product</h3>
+                            </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Product</th>
+                                        <th class="text-center" style="width: 100px;">Total</th>
+                                        <th class="text-center" style="width: 100px;">High (≥15)</th>
+                                        <th class="text-center" style="width: 120px;">Medium (10-14)</th>
+                                        <th class="text-center" style="width: 100px;">Low (<10)</th>
+                                        <th class="text-center" style="width: 100px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in productsWithRisks)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@(item.Product?.Title ?? item.FipsId)</strong>
+                                                <br><small class="text-muted">@item.FipsId</small>
+                                            </td>
+                                            <td class="text-center">
+                                                <a href="javascript:void(0)" onclick="showGroupRisks('@item.FipsId', 'product')" class="badge badge-info badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                    @item.Total
+                                                </a>
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.High > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@item.High</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.Medium > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@item.Medium</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.Low > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@item.Low</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (item.Product != null)
+                                                {
+                                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{item.FipsId}")" target="_blank" class="btn btn-xs btn-outline-info" title="View product">
+                                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (noProductRisks.Any())
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>No product assigned</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <a href="javascript:void(0)" onclick="showGroupRisks('No product', 'product')" class="badge badge-info badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                    @noProductRisks.Count
+                                                </a>
+                                            </td>
+                                            <td class="text-center">
+                                                @if (noProductRisks.Count(r => r.RiskScore >= 15) > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@noProductRisks.Count(r => r.RiskScore >= 15)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (noProductRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15) > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@noProductRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (noProductRisks.Count(r => r.RiskScore < 10) > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@noProductRisks.Count(r => r.RiskScore < 10)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+            </div>
+        }
+        else if (groupBy == "risk-type")
+                {
+                    // Create list of all risk types with counts
+                    var allRiskTypes = new List<(string Type, int Total, int High, int Medium, int Low)>();
+                    
+                    foreach (var riskType in riskTypes.OrderBy(rt => rt.Name))
+                    {
+                        var typeRisks = Model.Where(r => r.RiskRiskTypes != null && r.RiskRiskTypes.Any(rrt => rrt.RiskType?.Id == riskType.Id)).ToList();
+                        allRiskTypes.Add((
+                            riskType.Name,
+                            typeRisks.Count,
+                            typeRisks.Count(r => r.RiskScore >= 15),
+                            typeRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            typeRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                    // Add unassigned risks
+                    var noTypeRisks = Model.Where(r => r.RiskRiskTypes == null || !r.RiskRiskTypes.Any()).ToList();
+                    if (noTypeRisks.Any())
+                    {
+                        allRiskTypes.Add((
+                            "No type assigned",
+                            noTypeRisks.Count,
+                            noTypeRisks.Count(r => r.RiskScore >= 15),
+                            noTypeRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            noTypeRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-tags mr-2"></i>Risks by type</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Risk type</th>
+                                        <th class="text-center" style="width: 100px;">Total</th>
+                                        <th class="text-center" style="width: 100px;">High (≥15)</th>
+                                        <th class="text-center" style="width: 120px;">Medium (10-14)</th>
+                                        <th class="text-center" style="width: 100px;">Low (<10)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var type in allRiskTypes)
+                                    {
+                                        <tr>
+                                            <td><strong>@type.Type</strong></td>
+                                            <td class="text-center">
+                                                @if (type.Total > 0)
+                                                {
+                                                    <a href="javascript:void(0)" onclick="showGroupRisks('@type.Type', 'risk-type')" class="badge badge-info badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                        @type.Total
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (type.High > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@type.High</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (type.Medium > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@type.Medium</span>
+                }
+                else
+                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (type.Low > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@type.Low</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+            </div>
+        }
+        else if (groupBy == "risk-tier")
+        {
+                    // Create list of all risk tiers with counts
+                    var allRiskTiers = new List<(string Tier, int Total, int High, int Medium, int Low)>();
+                    
+                    foreach (var tier in riskTiers.OrderBy(rt => rt.Name))
+                    {
+                        var tierRisks = Model.Where(r => r.RiskTier?.Id == tier.Id).ToList();
+                        allRiskTiers.Add((
+                            tier.Name,
+                            tierRisks.Count,
+                            tierRisks.Count(r => r.RiskScore >= 15),
+                            tierRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            tierRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                    // Add unassigned risks
+                    var noTierRisks = Model.Where(r => r.RiskTier == null).ToList();
+                    if (noTierRisks.Any())
+                    {
+                        allRiskTiers.Add((
+                            "No tier assigned",
+                            noTierRisks.Count,
+                            noTierRisks.Count(r => r.RiskScore >= 15),
+                            noTierRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            noTierRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                        <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-layer-group mr-2"></i>Risks by tier</h3>
+                            </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Risk tier</th>
+                                        <th class="text-center" style="width: 100px;">Total</th>
+                                        <th class="text-center" style="width: 100px;">High (≥15)</th>
+                                        <th class="text-center" style="width: 120px;">Medium (10-14)</th>
+                                        <th class="text-center" style="width: 100px;">Low (<10)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tier in allRiskTiers)
+                                    {
+                                        <tr>
+                                            <td><strong>@tier.Tier</strong></td>
+                                            <td class="text-center">
+                                                @if (tier.Total > 0)
+                                                {
+                                                    <a href="javascript:void(0)" onclick="showGroupRisks('@tier.Tier', 'risk-tier')" class="badge badge-info badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                        @tier.Total
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (tier.High > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@tier.High</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (tier.Medium > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@tier.Medium</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (tier.Low > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@tier.Low</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+            </div>
+        }
+        else if (groupBy == "status")
+        {
+                    // All possible statuses
+                    var allStatuses = new[] { "new", "open", "treating", "monitoring", "closed" };
+                    var statusData = new List<(string Status, int Total, int High, int Medium, int Low)>();
+                    
+                    foreach (var status in allStatuses)
+                    {
+                        var statusRisks = Model.Where(r => r.Status == status).ToList();
+                        statusData.Add((
+                            status,
+                            statusRisks.Count,
+                            statusRisks.Count(r => r.RiskScore >= 15),
+                            statusRisks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15),
+                            statusRisks.Count(r => r.RiskScore < 10)
+                        ));
+                    }
+                    
+                        <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-flag mr-2"></i>Risks by status</h3>
+                            </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Status</th>
+                                        <th class="text-center" style="width: 100px;">Total</th>
+                                        <th class="text-center" style="width: 100px;">High (≥15)</th>
+                                        <th class="text-center" style="width: 120px;">Medium (10-14)</th>
+                                        <th class="text-center" style="width: 100px;">Low (<10)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var status in statusData)
+                                    {
+                                        var badgeClass = status.Status == "open" || status.Status == "new" ? "danger" : 
+                                                        status.Status == "treating" ? "warning" : 
+                                                        status.Status == "monitoring" ? "info" : "success";
+                                        
+                                        <tr>
+                                            <td>
+                                                <strong class="text-capitalize">@status.Status</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                @if (status.Total > 0)
+                                                {
+                                                    <a href="javascript:void(0)" onclick="showGroupRisks('@status.Status', 'status')" class="badge badge-@badgeClass badge-pill" style="font-size: 1em; padding: 0.4em 0.6em;">
+                                                        @status.Total
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (status.High > 0)
+                                                {
+                                                    <span class="badge badge-danger badge-pill">@status.High</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (status.Medium > 0)
+                                                {
+                                                    <span class="badge badge-warning badge-pill">@status.Medium</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (status.Low > 0)
+                                                {
+                                                    <span class="badge badge-success badge-pill">@status.Low</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Detailed List Modal -->
+        <div class="modal fade" id="riskDetailModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Risks</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="riskDetailContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        var allRisks = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(r => new {
+            id = r.Id,
+            title = r.Title,
+            fipsId = r.FipsId,
+            businessArea = r.BusinessArea,
+            riskScore = r.RiskScore,
+            impactRating = r.ImpactRating,
+            likelihoodRating = r.LikelihoodRating,
+            status = r.Status,
+            riskTier = r.RiskTier != null ? r.RiskTier.Name : null,
+            riskTypes = r.RiskRiskTypes != null ? r.RiskRiskTypes.Select(rrt => rrt.RiskType != null ? rrt.RiskType.Name : null).ToList() : new List<string>()
+        })));
+
+        function showRisks(impact, likelihood) {
+            var filtered = allRisks.filter(r => r.impactRating === impact && r.likelihoodRating === likelihood);
+            displayRisks(filtered, `Impact ${impact} × Likelihood ${likelihood}`);
+        }
+
+        function showGroupRisks(groupValue, groupType) {
+            var filtered = [];
+            
+            if (groupType === 'business-area') {
+                filtered = allRisks.filter(r => (r.businessArea || 'Unspecified') === groupValue);
+            } else if (groupType === 'product') {
+                filtered = allRisks.filter(r => (r.fipsId || 'No product') === groupValue);
+            } else if (groupType === 'risk-type') {
+                filtered = allRisks.filter(r => r.riskTypes.includes(groupValue) || (r.riskTypes.length === 0 && groupValue === 'No type assigned'));
+            } else if (groupType === 'risk-tier') {
+                filtered = allRisks.filter(r => (r.riskTier || 'No tier assigned') === groupValue);
+            } else if (groupType === 'status') {
+                filtered = allRisks.filter(r => r.status === groupValue);
+            }
+            
+            displayRisks(filtered, groupValue);
+        }
+
+        function displayRisks(risks, title) {
+            var html = '<h6>' + title + ' (' + risks.length + ' risks)</h6>';
+            html += '<div class="table-responsive"><table class="table table-hover table-striped"><thead><tr>';
+            html += '<th>Title</th><th>Score</th><th>Status</th><th>Business Area</th><th>Actions</th></tr></thead><tbody>';
+            
+            risks.sort((a, b) => b.riskScore - a.riskScore);
+            
+            risks.forEach(function(risk) {
+                var badgeClass = risk.riskScore >= 15 ? 'danger' : risk.riskScore >= 10 ? 'warning' : 'success';
+                html += '<tr>';
+                html += '<td>' + risk.title + '</td>';
+                html += '<td><span class="badge badge-' + badgeClass + '">' + risk.riskScore + '</span></td>';
+                html += '<td>' + (risk.status || '-') + '</td>';
+                html += '<td>' + (risk.businessArea || '-') + '</td>';
+                html += '<td><a href="/Risk/Details/' + risk.id + '" class="btn btn-sm btn-info">View</a></td>';
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            $('#riskDetailContent').html(html);
+            $('#riskDetailModal').modal('show');
+        }
+    </script>
+}
+

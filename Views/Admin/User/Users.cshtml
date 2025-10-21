@@ -1,0 +1,106 @@
+@model IEnumerable<Compass.Models.User>
+@{
+    ViewData["Title"] = "User management";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">User management</li>
+                </ol>
+                <h1 class="m-0">User management</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Users</h3>
+                <div class="card-tools">
+                    <a asp-action="CreateUser" class="btn btn-primary btn-sm">
+                        Add new user
+                    </a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var user in Model)
+                            {
+                                <tr>
+                                    <td>@user.Name</td>
+                                    <td>@user.Email</td>
+                                    <td>
+                                        @switch (user.Role)
+                                        {
+                                            case Compass.Models.UserRole.SuperAdmin:
+                                                <span class="badge badge-danger">Super admin</span>
+                                                break;
+                                            case Compass.Models.UserRole.Admin:
+                                                <span class="badge badge-warning">Admin</span>
+                                                break;
+                                            case Compass.Models.UserRole.Reporter:
+                                                <span class="badge badge-info">Reporter</span>
+                                                break;
+                                            default:
+                                                <span class="badge badge-secondary">Visitor</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>@user.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                    <td class="col-actions">
+                                        <a asp-action="EditUser" asp-route-id="@user.Id" class="btn btn-sm btn-primary">
+                                            Edit
+                                        </a>
+                                        <a asp-action="DeleteUser" asp-route-id="@user.Id" class="btn btn-sm btn-danger">
+                                            Delete
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center">No users found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+

@@ -1,0 +1,573 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Objective details";
+    var objective = ViewBag.Objective as Compass.Models.Objective;
+    var risks = ViewBag.Risks as List<Compass.Models.Risk> ?? new List<Compass.Models.Risk>();
+    var issues = ViewBag.Issues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
+    var objectiveActions = ViewBag.Actions as List<Compass.Models.Action> ?? new List<Compass.Models.Action>();
+    var milestones = ViewBag.Milestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
+    var associatedProducts = ViewBag.AssociatedProducts as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var allProducts = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var relatedObjectives = ViewBag.RelatedObjectives as List<Compass.Models.Objective> ?? new List<Compass.Models.Objective>();
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Objectives">Strategic objectives</a></li>
+                    <li class="breadcrumb-item active">Objective</li>
+                </ol>
+                <h1 class="m-0">
+                    @objective.Title
+                    @if (!string.IsNullOrEmpty(objective.Theme))
+                    {
+                        <br />
+                        <small class="text-primary"><i class="fas fa-tag"></i> @objective.Theme</small>
+                    }
+                </h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@associatedProducts.Count</h3>
+                        <p>Products</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@risks.Count</h3>
+                        <p>Risks</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@issues.Count</h3>
+                        <p>Issues</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-bug"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@objectiveActions.Count</h3>
+                        <p>Actions</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@milestones.Count</h3>
+                        <p>Milestones</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-flag-checkered"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-secondary">
+                    <div class="inner">
+                        <h3>@(objective.ProgressPercent?.ToString() ?? "0")%</h3>
+                        <p>Progress</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12">
+                <!-- Description -->
+                @if (!string.IsNullOrEmpty(objective.Description))
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-align-left"></i> Description</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@objective.Description</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Success Measures -->
+                @if (!string.IsNullOrEmpty(objective.SuccessMeasures))
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-trophy"></i> Success measures</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@objective.SuccessMeasures</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Associated Products -->
+                @if (associatedProducts.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-box"></i> Associated products</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                @foreach (var product in associatedProducts.OrderBy(p => p.Title))
+                                {
+                                    <div class="col-md-6 mb-2">
+                                        <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" target="_blank" class="d-block">
+                                            <i class="fas fa-external-link-alt mr-2"></i>@product.Title
+                                        </a>
+                                        <small class="text-muted">@product.FipsId</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Risks -->
+                @if (risks.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="card-title mb-0"><i class="fas fa-exclamation-triangle"></i> Risks (@risks.Count)</h5>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Risk Score</th>
+                                        <th>Status</th>
+                                        <th>Product</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var risk in risks)
+                                    {
+                                        var product = allProducts.FirstOrDefault(p => p.FipsId == risk.FipsId);
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id">
+                                                    @risk.Title
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(risk.RiskScore >= 15 ? "danger" : risk.RiskScore >= 10 ? "warning" : "success")">
+                                                    @risk.RiskScore
+                                                </span>
+                                            </td>
+                                            <td>@(risk.Status ?? "-")</td>
+                                            <td>
+                                                @if (product != null)
+                                                {
+                                                    <text>@product.Title</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>@(risk.FipsId ?? "-")</text>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Issues -->
+                @if (issues.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="card-title mb-0"><i class="fas fa-bug"></i> Issues (@issues.Count)</h5>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Severity</th>
+                                        <th>Status</th>
+                                        <th>Product</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in issues)
+                                    {
+                                        var product = allProducts.FirstOrDefault(p => p.FipsId == issue.FipsId);
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">
+                                                    @issue.Title
+                                                    @if (issue.BlockedFlag)
+                                                    {
+                                                        <i class="fas fa-ban text-danger ml-1"></i>
+                                                    }
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Severity == "critical" ? "danger" : issue.Severity == "high" ? "warning" : "info")">
+                                                    @(issue.Severity ?? "-")
+                                                </span>
+                                            </td>
+                                            <td>@(issue.Status ?? "-")</td>
+                                            <td>
+                                                @if (product != null)
+                                                {
+                                                    <text>@product.Title</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>@(issue.FipsId ?? "-")</text>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Actions -->
+                @if (objectiveActions.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0"><i class="fas fa-tasks"></i> Actions (@objectiveActions.Count)</h5>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Source</th>
+                                        <th>Due Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        foreach (Compass.Models.Action actionModel in objectiveActions)
+                                        {
+                                            var isOverdue = actionModel.DueDate.HasValue && actionModel.DueDate < DateTime.Today && actionModel.Status != "done" && actionModel.Status != "cancelled";
+                                            var actId = actionModel.Id;
+                                            var actTitle = actionModel.Title;
+                                            var actStatus = actionModel.Status;
+                                            var actDueDate = actionModel.DueDate;
+                                            var actSource = actionModel.ActionSource?.Name;
+                                            
+                                            <tr class="@(isOverdue ? "table-warning" : "")">
+                                                <td>
+                                                    <a href="/Action/Details/@actId">
+                                                        @actTitle
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(actStatus == "done" ? "success" : actStatus == "in_progress" ? "primary" : actStatus == "blocked" ? "danger" : "secondary")">
+                                                        @(actStatus?.Replace("_", " ") ?? "-")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @(actSource ?? "-")
+                                                </td>
+                                                <td>
+                                                    @if (actDueDate.HasValue)
+                                                    {
+                                                        <span class="@(isOverdue ? "text-danger font-weight-bold" : "")">
+                                                            @actDueDate.Value.ToString("d MMM yyyy")
+                                                            @if (isOverdue)
+                                                            {
+                                                                <i class="fas fa-clock ml-1"></i>
+                                                            }
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Milestones -->
+                @if (milestones.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0"><i class="fas fa-flag-checkered"></i> Milestones (@milestones.Count)</h5>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Due Date</th>
+                                        <th>Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var milestone in milestones)
+                                    {
+                                        var isOverdue = milestone.DueDate < DateTime.Today && milestone.Status != "complete" && milestone.Status != "cancelled";
+                                        <tr class="@(isOverdue ? "table-warning" : "")">
+                                            <td>
+                                                <a asp-controller="Milestone" asp-action="Details" asp-route-id="@milestone.Id">
+                                                    @milestone.Name
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "on_track" ? "primary" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "delayed" ? "danger" : "secondary")">
+                                                    @(milestone.Status?.Replace("_", " ") ?? "-")
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="@(isOverdue ? "text-danger font-weight-bold" : "")">
+                                                    @milestone.DueDate.ToString("d MMM yyyy")
+                                                    @if (isOverdue)
+                                                    {
+                                                        <i class="fas fa-clock ml-1"></i>
+                                                    }
+                                                </span>
+                                            </td>
+                                            <td>@(milestone.ProgressPercent?.ToString() ?? "0")%</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12">
+                <!-- Objective Info -->
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Objective details</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(objective.Theme))
+                        {
+                            <div class="mb-3">
+                                <label class="font-weight-bold text-muted small">Theme</label>
+                                <div>@objective.Theme</div>
+                            </div>
+                        }
+                        
+                        @if (objective.OwnerUser != null)
+                        {
+                            <div class="mb-3">
+                                <label class="font-weight-bold text-muted small">Owner</label>
+                                <div>@objective.OwnerUser.Name</div>
+                                @if (!string.IsNullOrEmpty(objective.OwnerUser.Email))
+                                {
+                                    <small><a href="mailto:@objective.OwnerUser.Email">@objective.OwnerUser.Email</a></small>
+                                }
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(objective.Status))
+                        {
+                            <div class="mb-3">
+                                <label class="font-weight-bold text-muted small">Status</label>
+                                <div>
+                                    <span class="badge badge-@(objective.Status == "active" ? "success" : objective.Status == "completed" ? "primary" : "secondary")">
+                                        @objective.Status
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(objective.RagStatus))
+                        {
+                            <div class="mb-3">
+                                <label class="font-weight-bold text-muted small">RAG Status</label>
+                                <div>
+                                    <span class="badge badge-@(objective.RagStatus == "red" ? "danger" : objective.RagStatus == "amber" ? "warning" : "success")">
+                                        @objective.RagStatus.ToUpper()
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (objective.ProgressPercent.HasValue)
+                        {
+                            <div class="mb-3">
+                                <label class="font-weight-bold text-muted small">Progress</label>
+                                <div>
+                                    <span class="badge badge-@(objective.ProgressPercent >= 75 ? "success" : objective.ProgressPercent >= 50 ? "info" : objective.ProgressPercent >= 25 ? "warning" : "danger")">
+                                        @objective.ProgressPercent%
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div>
+                            <label class="font-weight-bold text-muted small">Objective ID</label>
+                            <div>#@objective.Id</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dates -->
+                @if (objective.StartDate.HasValue || objective.EndDate.HasValue)
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-calendar"></i> Timeline</h6>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row small mb-0">
+                                @if (objective.StartDate.HasValue)
+                                {
+                                    <dt class="col-sm-5">Start date:</dt>
+                                    <dd class="col-sm-7">@objective.StartDate.Value.ToString("d MMM yyyy")</dd>
+                                }
+                                
+                                @if (objective.EndDate.HasValue)
+                                {
+                                    <dt class="col-sm-5">End date:</dt>
+                                    <dd class="col-sm-7">@objective.EndDate.Value.ToString("d MMM yyyy")</dd>
+                                }
+                                
+                                <dt class="col-sm-5">Created:</dt>
+                                <dd class="col-sm-7">@objective.CreatedAt.ToString("d MMM yyyy")</dd>
+                                
+                                <dt class="col-sm-5">Updated:</dt>
+                                <dd class="col-sm-7">@objective.UpdatedAt.ToString("d MMM yyyy")</dd>
+                            </dl>
+                        </div>
+                    </div>
+                }
+
+                <!-- Quick Stats -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Quick statistics</h6>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row small mb-0">
+                            <dt class="col-sm-7">High risks:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-danger">@risks.Count(r => r.RiskScore >= 15)</span>
+                            </dd>
+                            
+                            <dt class="col-sm-7">Critical issues:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-danger">@issues.Count(i => i.Severity == "critical")</span>
+                            </dd>
+                            
+                            <dt class="col-sm-7">Blocked issues:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-dark">@issues.Count(i => i.BlockedFlag)</span>
+                            </dd>
+                            
+                            <dt class="col-sm-7">Overdue actions:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-warning">@objectiveActions.Count(act => act.DueDate.HasValue && act.DueDate < DateTime.Today && act.Status != "done" && act.Status != "cancelled")</span>
+                            </dd>
+                            
+                            <dt class="col-sm-7">Done actions:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-success">@objectiveActions.Count(act => act.Status == "done")</span>
+                            </dd>
+                            
+                            <dt class="col-sm-7">Delayed milestones:</dt>
+                            <dd class="col-sm-5 text-right">
+                                <span class="badge badge-danger">@milestones.Count(m => m.Status == "delayed" || (m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled"))</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Related Objectives in Same Theme -->
+                @if (relatedObjectives.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-link"></i> Related objectives</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted mb-2">Other objectives in <strong>@objective.Theme</strong></p>
+                            <ul class="list-unstyled mb-3">
+                                @foreach (var relatedObj in relatedObjectives)
+                                {
+                                    <li class="mb-2">
+                                        <a asp-action="ObjectiveDetails" asp-route-id="@relatedObj.Id">
+                                            @relatedObj.Title
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                            <a asp-action="Objectives" class="btn btn-sm btn-block btn-outline-primary">
+                                <i class="fas fa-list"></i> View all objectives
+                            </a>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <a asp-action="Objectives" class="btn btn-sm btn-block btn-outline-primary">
+                                <i class="fas fa-list"></i> View all objectives
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+

@@ -1,0 +1,345 @@
+@model IEnumerable<Compass.Models.Action>
+@{
+    ViewData["Title"] = "Actions";
+    var objectiveTitle = ViewBag.ObjectiveTitle as string;
+    var riskTitle = ViewBag.RiskTitle as string;
+    var issueTitle = ViewBag.IssueTitle as string;
+    var milestoneName = ViewBag.MilestoneName as string;
+    var currentTab = ViewBag.CurrentTab as string ?? "active";
+    var currentViewScope = ViewBag.CurrentViewScope as string ?? "assigned_to_me";
+    var currentDimension = ViewBag.CurrentDimension as string;
+    var currentBusinessArea = ViewBag.CurrentBusinessArea as string;
+    var currentStatus = ViewBag.CurrentStatus as string;
+    var currentProducts = ViewBag.CurrentProducts as string[] ?? Array.Empty<string>();
+    var currentActionSourceId = ViewBag.CurrentActionSourceId as int?;
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var actionSources = ViewBag.ActionSources as List<Compass.Models.ActionSource> ?? new List<Compass.Models.ActionSource>();
+    var userBusinessAreas = ViewBag.UserBusinessAreas as List<string> ?? new List<string>();
+    var myActions = ViewBag.MyActions as List<Compass.Models.Action> ?? new List<Compass.Models.Action>();
+    var openCount = ViewBag.OpenCount as int? ?? 0;
+    var closedCount = ViewBag.ClosedCount as int? ?? 0;
+    var overdueCount = ViewBag.OverdueCount as int? ?? 0;
+    var assignedToMeCount = ViewBag.AssignedToMeCount as int? ?? 0;
+    var myProductsCount = ViewBag.MyProductsCount as int? ?? 0;
+    var organisationWideCount = ViewBag.OrganisationWideCount as int? ?? 0;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    @if (objectiveTitle != null)
+                    {
+                        <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Objectives">Strategic objectives</a></li>
+                        <li class="breadcrumb-item active">Actions for @objectiveTitle</li>
+                    }
+                    else if (riskTitle != null)
+                    {
+                        <li class="breadcrumb-item"><a asp-controller="Risk" asp-action="Index">Risks</a></li>
+                        <li class="breadcrumb-item active">Actions for @riskTitle</li>
+                    }
+                    else if (issueTitle != null)
+                    {
+                        <li class="breadcrumb-item"><a asp-controller="Issue" asp-action="Index">Issues</a></li>
+                        <li class="breadcrumb-item active">Actions for @issueTitle</li>
+                    }
+                    else if (milestoneName != null)
+                    {
+                        <li class="breadcrumb-item"><a asp-controller="Milestone" asp-action="Index">Milestones</a></li>
+                        <li class="breadcrumb-item active">Actions for @milestoneName</li>
+                    }
+                    else
+                    {
+                        <li class="breadcrumb-item active">Actions</li>
+                    }
+                </ol>
+                <h1 class="m-0">Actions</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="Create" asp-route-objectiveId="@ViewBag.ObjectiveId">
+                                Add action
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item export-placeholder" href="#">
+                                Export to Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: View Options and Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- View Scope Options -->
+                <div class="card">
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me", tab = currentTab })" 
+                               class="nav-link @(currentViewScope == "assigned_to_me" ? "active" : "")">
+                                Assigned to me
+                                <span class="badge badge-primary float-right">@assignedToMeCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products", tab = currentTab })" 
+                               class="nav-link @(currentViewScope == "my_products" ? "active" : "")">
+                                My products
+                                <span class="badge badge-info float-right">@myProductsCount</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide", tab = currentTab })" 
+                               class="nav-link @(currentViewScope == "organisation_wide" ? "active" : "")">
+                                Organisation-wide
+                                <span class="badge badge-secondary float-right">@organisationWideCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="filterForm">
+                            @if (ViewBag.ObjectiveId != null)
+                            {
+                                <input type="hidden" name="objectiveId" value="@ViewBag.ObjectiveId" />
+                            }
+                            @if (ViewBag.RiskId != null)
+                            {
+                                <input type="hidden" name="riskId" value="@ViewBag.RiskId" />
+                            }
+                            @if (ViewBag.IssueId != null)
+                            {
+                                <input type="hidden" name="issueId" value="@ViewBag.IssueId" />
+                            }
+                            @if (ViewBag.MilestoneId != null)
+                            {
+                                <input type="hidden" name="milestoneId" value="@ViewBag.MilestoneId" />
+                            }
+                            <input type="hidden" name="viewScope" value="@currentViewScope" />
+                            <input type="hidden" name="tab" id="tabInput" value="@currentTab" />
+                            
+                            <div class="form-group">
+                                <label>Business area</label>
+                                <select name="businessArea" class="form-control form-control-sm auto-submit">
+                                    <option value="">All</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        <option value="@ba" selected="@(currentBusinessArea == ba)">@ba</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="status" class="form-control form-control-sm" onchange="this.form.submit()">
+                                    <option value="">All statuses</option>
+                                    <option value="not_started" selected="@(currentStatus == "not_started")">Not started</option>
+                                    <option value="in_progress" selected="@(currentStatus == "in_progress")">In progress</option>
+                                    <option value="blocked" selected="@(currentStatus == "blocked")">Blocked</option>
+                                    <option value="done" selected="@(currentStatus == "done")">Done</option>
+                                    <option value="cancelled" selected="@(currentStatus == "cancelled")">Cancelled</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Products</label>
+                                <select name="products" class="form-control form-control-sm select2-multiple" multiple="multiple" data-placeholder="All products">
+                                    @foreach (var product in products)
+                                    {
+                                        <option value="@product.FipsId" selected="@(((IEnumerable<string>)currentProducts).Contains(product.FipsId))">@product.Title</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Action source</label>
+                                <select name="actionSourceId" class="form-control form-control-sm">
+                                    <option value="">All sources</option>
+                                    @foreach (var source in actionSources)
+                                    {
+                                        <option value="@source.Id" selected="@(currentActionSourceId == source.Id)">@source.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, riskId = ViewBag.RiskId, issueId = ViewBag.IssueId, milestoneId = ViewBag.MilestoneId, viewScope = currentViewScope, tab = currentTab })" class="btn btn-default btn-sm btn-block">Clear filters</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Tabs and Table -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Tabs -->
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link @(currentTab == "active" ? "active" : "")" href="#" data-tab="active">
+                            Active <span class="badge badge-primary">@openCount</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(currentTab == "closed" ? "active" : "")" href="#" data-tab="closed">
+                            Completed <span class="badge badge-secondary">@closedCount</span>
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Table Content -->
+                <div class="card mb-0" style="border-top: none; border-top-left-radius: 0;">
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Assigned to</th>
+                                    <th>Status</th>
+                                    <th>Due date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model != null && Model.Any())
+                                {
+                                    @foreach (var action in Model)
+                                    {
+                                        var isOverdue = action.DueDate.HasValue && action.DueDate < DateTime.Now && action.Status != "done" && action.Status != "cancelled";
+                                        <tr class="@(isOverdue ? "border-warning" : "")">
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@action.Id">@action.Title</a>
+                                                @if (!string.IsNullOrEmpty(action.FipsId) || !string.IsNullOrEmpty(action.Priority))
+                                                {
+                                                    <br /><small class="text-muted">
+                                                        @if (!string.IsNullOrEmpty(action.FipsId))
+                                                        {
+                                                            @action.FipsId
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(action.Priority))
+                                                        {
+                                                            if (!string.IsNullOrEmpty(action.FipsId)) { <text> | </text> }
+                                                            <text>Priority: @action.Priority</text>
+                                                        }
+                                                    </small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(action.AssignedToEmail))
+                                                {
+                                                    <a href="mailto:@action.AssignedToEmail">@action.AssignedToEmail</a>
+                                                }
+                                                else
+                                                {
+                                                    <span>-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (action.Status)
+                                                {
+                                                    case "done":
+                                                        <span class="badge badge-success">Done</span>
+                                                        break;
+                                                    case "in_progress":
+                                                        <span class="badge badge-primary">In progress</span>
+                                                        break;
+                                                    case "blocked":
+                                                        <span class="badge badge-danger">Blocked</span>
+                                                        break;
+                                                    case "not_started":
+                                                        <span class="badge badge-secondary">Not started</span>
+                                                        break;
+                                                    case "cancelled":
+                                                        <span class="badge badge-dark">Cancelled</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@action.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <small>@(action.DueDate?.ToString("d MMM yyyy") ?? "-")</small>
+                                                @if (action.CompletedDate.HasValue)
+                                                {
+                                                    <br /><small class="text-muted">Done: @action.CompletedDate.Value.ToString("d MMM yyyy")</small>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center">No actions found</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        function switchTab(tab) {
+            document.getElementById('tabInput').value = tab;
+            document.getElementById('filterForm').submit();
+        }
+
+        $(document).ready(function() {
+            // Initialize Select2
+            $('.select2-multiple').select2({
+                theme: 'bootstrap4',
+                width: '100%'
+            });
+
+            $('.select2-multiple').on('change', function() {
+                $('#filterForm').submit();
+            });
+
+            // Handle tab clicks
+            $('.nav-tabs a[data-tab]').on('click', function(e) {
+                e.preventDefault();
+                var tab = $(this).data('tab');
+                switchTab(tab);
+            });
+
+            // Handle export placeholder click
+            $('.export-placeholder').on('click', function(e) {
+                e.preventDefault();
+                alert('Export feature coming soon');
+            });
+
+            // Auto-submit form on filter change
+            $('.auto-submit').on('change', function() {
+                $(this).closest('form').submit();
+            });
+        });
+    </script>
+}

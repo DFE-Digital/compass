@@ -1,0 +1,907 @@
+@{
+    ViewData["Title"] = "API";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Documentation")">Documentation</a></li>
+            <li class="breadcrumb-item active" aria-current="page">API</li>
+        </ol>
+    </nav>
+}
+
+@section TableOfContents {
+    <nav class="documentation-toc">
+        <div class="toc-title">On this page</div>
+        <nav class="nav">
+            <a class="nav-link" href="#overview">Overview</a>
+            <a class="nav-link" href="#authentication">Authentication</a>
+            <a class="nav-link" href="#endpoints">Endpoints</a>
+            <a class="nav-link" href="#errors">Error handling</a>
+            <a class="nav-link" href="#rate-limiting">Rate limiting</a>
+        </nav>
+    </nav>
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    /* API Documentation Specific Styles */
+    .api-endpoint {
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    
+    .api-endpoint-header {
+        background: #f6f8fa;
+        padding: 1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: background 0.2s;
+    }
+    
+    .api-endpoint-header:hover {
+        background: #e1e4e8;
+    }
+    
+    .api-method {
+        font-weight: 700;
+        font-size: 0.875rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-family: 'Courier New', monospace;
+    }
+    
+    .api-method-get {
+        background: #61affe;
+        color: white;
+    }
+    
+    .api-method-post {
+        background: #49cc90;
+        color: white;
+    }
+    
+    .api-method-put {
+        background: #fca130;
+        color: white;
+    }
+    
+    .api-method-delete {
+        background: #f93e3e;
+        color: white;
+    }
+    
+    .api-path {
+        font-family: 'Courier New', monospace;
+        font-size: 1rem;
+        font-weight: 500;
+        flex: 1;
+    }
+    
+    .api-endpoint-body {
+        padding: 1.5rem;
+        display: none;
+    }
+    
+    .api-endpoint.active .api-endpoint-body {
+        display: block;
+    }
+    
+    .api-endpoint.active .api-endpoint-header {
+        background: #fff;
+        border-bottom: 1px solid #e1e4e8;
+    }
+    
+    .api-section-tabs {
+        border-bottom: 1px solid #e1e4e8;
+        margin-bottom: 1rem;
+    }
+    
+    .api-section-tabs .nav-link {
+        border: none;
+        color: #586069;
+        padding: 0.5rem 1rem;
+        border-bottom: 2px solid transparent;
+    }
+    
+    .api-section-tabs .nav-link.active {
+        color: #0366d6;
+        border-bottom-color: #0366d6;
+    }
+    
+    .api-param-table {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+    
+    .api-param-table th {
+        background: #f6f8fa;
+        padding: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .api-param-table td {
+        padding: 0.5rem;
+        border-top: 1px solid #e1e4e8;
+        vertical-align: top;
+    }
+    
+    .api-param-name {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+    }
+    
+    .api-param-type {
+        font-family: 'Courier New', monospace;
+        color: #6f42c1;
+        font-size: 0.8125rem;
+    }
+    
+    .api-param-required {
+        color: #d73a49;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .api-code-block {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        overflow-x: auto;
+    }
+    
+    .api-code-block pre {
+        margin: 0;
+        background: transparent;
+        border: none;
+    }
+    
+    .api-response-code {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .api-response-200 {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .api-response-201 {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .api-response-400 {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .api-response-401 {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .api-response-404 {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .api-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .api-badge-beta {
+        background: #ffeaa7;
+        color: #856404;
+    }
+    
+    .try-it-section {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .try-it-input {
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+    }
+</style>
+
+<h1 class="doc-page-title">API documentation</h1>
+<p class="doc-page-lead">COMPASS provides a RESTful API for programmatic access to RAID data, metrics, and reporting.</p>
+
+<h2 id="overview">Overview</h2>
+
+        <div class="alert alert-info">
+            <p class="mb-0"><i class="fas fa-info-circle"></i> The COMPASS API is currently available for internal use. External API access requires authorisation from the COMPASS team.</p>
+        </div>
+
+        <h3 class="h5 mt-4">Base URL</h3>
+        <div class="api-code-block">
+            <pre>Production:  https://compass.education.gov.uk/api
+Test:        https://compass-test.education.gov.uk/api
+Development: http://localhost:5500/api</pre>
+        </div>
+
+        <h3 class="h5 mt-4">API version</h3>
+        <p>Current API version: <code>v1</code></p>
+        <p>The API version is included in the endpoint path: <code>/api/v1/{resource}</code></p>
+
+        <hr class="my-4">
+
+        <h2 id="authentication">Authentication</h2>
+        
+        <h3 class="h5 mt-4">API token authentication</h3>
+        <p>The COMPASS API uses bearer token authentication. API tokens can be generated and managed through the admin interface.</p>
+
+        <h4 class="h6 mt-3">Creating an API token:</h4>
+        <ol>
+            <li>Navigate to <strong>Settings → API tokens</strong> in the admin interface</li>
+            <li>Click <strong>Create token</strong></li>
+            <li>Provide a descriptive name (e.g. "PowerBI-Integration", "SAS-ReadOnly")</li>
+            <li>Optionally set an expiry date</li>
+            <li>Configure granular permissions for each resource</li>
+            <li>Copy the generated token (you won't be able to see it again)</li>
+        </ol>
+
+        <div class="alert alert-info mt-3">
+            <p class="mb-0"><i class="fas fa-info-circle"></i> Only administrators can create and manage API tokens.</p>
+        </div>
+
+        <h4 class="h6 mt-3">Using your API token:</h4>
+        <p>Include the API token in the Authorization header of your requests:</p>
+        <div class="api-code-block">
+            <pre>Authorization: Bearer cps_your_token_here</pre>
+        </div>
+
+        <h4 class="h6 mt-3">Example request:</h4>
+        <div class="api-code-block">
+            <pre>curl -H "Authorization: Bearer cps_your_token_here" \
+     https://compass.education.gov.uk/api/v1/risks</pre>
+        </div>
+
+        <h4 class="h6 mt-3">Token management:</h4>
+        <ul>
+            <li><strong>Permissions:</strong> Each token has granular permissions (read, create, update, delete) for each resource</li>
+            <li><strong>Status:</strong> Tokens can be enabled/disabled without deleting them</li>
+            <li><strong>Expiry:</strong> Tokens can be set to expire automatically</li>
+            <li><strong>Logging:</strong> All API requests and responses are logged for audit purposes</li>
+            <li><strong>Last used:</strong> Track when each token was last used</li>
+        </ul>
+
+        <div class="alert alert-warning mt-3">
+            <p class="mb-0"><i class="fas fa-exclamation-triangle"></i> Keep your API tokens secure. Never commit them to version control or share them publicly.</p>
+        </div>
+
+        <hr class="my-4">
+
+        <h2 id="endpoints">API endpoints</h2>
+
+        <!-- Health Check Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-get">GET</span>
+                <span class="api-path">/api/health</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Verify API availability and health status.</p>
+                
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#health-response">Response</a>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="health-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "status": "healthy",
+  "timestamp": "2025-10-19T10:30:00Z"
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Get All Risks Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-get">GET</span>
+                <span class="api-path">/api/v1/risks</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Retrieve a list of all risks with optional filtering.</p>
+                
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risks-get-params">Parameters</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risks-get-response">Response</a>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risks-get-params">
+                        <h5 class="mt-3">Query parameters</h5>
+                        <table class="api-param-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="api-param-name">fipsId</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Filter by FIPS product ID</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">status</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Filter by status (new, open, treating, monitoring, closed)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">minScore</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Filter by minimum risk score (1-25)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">page</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Page number (default: 1)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">pageSize</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Results per page (default: 50, max: 100)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="risks-get-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "data": [
+    {
+      "id": 1,
+      "title": "Risk title",
+      "description": "Risk description",
+      "fipsId": "PROD123",
+      "impactRating": 4,
+      "likelihoodRating": 3,
+      "riskScore": 12,
+      "status": "open",
+      "createdAt": "2025-10-01T09:00:00Z",
+      "updatedAt": "2025-10-15T14:30:00Z"
+    }
+  ],
+  "pagination": {
+    "currentPage": 1,
+    "pageSize": 50,
+    "totalPages": 5,
+    "totalRecords": 223
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Get Risk by ID Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-get">GET</span>
+                <span class="api-path">/api/v1/risks/{id}</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Retrieve a specific risk by its ID.</p>
+                
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risk-get-id-params">Parameters</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risk-get-id-response">Response</a>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risk-get-id-params">
+                        <h5 class="mt-3">Path parameters</h5>
+                        <table class="api-param-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="api-param-name">id</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>The ID of the risk to retrieve</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="risk-get-id-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "id": 1,
+  "title": "Risk title",
+  "description": "Detailed risk description",
+  "fipsId": "PROD123",
+  "objectiveId": 5,
+  "riskTierId": 2,
+  "impactRating": 4,
+  "likelihoodRating": 3,
+  "riskScore": 12,
+  "status": "open",
+  "ownerEmail": "owner@education.gov.uk",
+  "riskTypes": [
+    { "id": 1, "name": "Strategic" },
+    { "id": 3, "name": "Operational" }
+  ],
+  "actions": [...],
+  "createdAt": "2025-10-01T09:00:00Z",
+  "updatedAt": "2025-10-15T14:30:00Z"
+}</pre>
+                        </div>
+                        
+                        <h5 class="mt-4"><span class="api-response-code api-response-404">404 Not Found</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Risk not found"
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Risk Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-post">POST</span>
+                <span class="api-path">/api/v1/risks</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Create a new risk.</p>
+                
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risk-post-body">Request body</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risk-post-response">Response</a>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risk-post-body">
+                        <h5 class="mt-3">Request body <span class="text-muted">(application/json)</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "title": "New risk title",
+  "description": "Risk description",
+  "fipsId": "PROD123",
+  "impactRating": 4,
+  "likelihoodRating": 3,
+  "ownerEmail": "owner@education.gov.uk",
+  "status": "open",
+  "riskTypeIds": [1, 3]
+}</pre>
+                        </div>
+                        
+                        <h5 class="mt-3">Fields</h5>
+                        <table class="api-param-table">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="api-param-name">title</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Brief descriptive title (max 200 characters)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">description</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Detailed risk description</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">fipsId</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Associated FIPS product ID</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">impactRating</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Impact severity (1-5)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">likelihoodRating</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Probability rating (1-5)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">ownerEmail</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Email of risk owner</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">status</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Risk status (default: "new")</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">riskTypeIds</span></td>
+                                    <td><span class="api-param-type">array</span></td>
+                                    <td>Array of risk type IDs</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="risk-post-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-201">201 Created</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "id": 224,
+  "title": "New risk title",
+  "description": "Risk description",
+  "fipsId": "PROD123",
+  "impactRating": 4,
+  "likelihoodRating": 3,
+  "riskScore": 12,
+  "status": "new",
+  "createdAt": "2025-10-19T10:30:00Z",
+  "updatedAt": "2025-10-19T10:30:00Z"
+}</pre>
+                        </div>
+                        
+                        <h5 class="mt-4"><span class="api-response-code api-response-400">400 Bad Request</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request data",
+    "details": [
+      {
+        "field": "impactRating",
+        "message": "Must be between 1 and 5"
+      }
+    ]
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Risk Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-put">PUT</span>
+                <span class="api-path">/api/v1/risks/{id}</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Update an existing risk.</p>
+                
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risk-put-body">Request body</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risk-put-response">Response</a>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risk-put-body">
+                        <h5 class="mt-3">Request body <span class="text-muted">(application/json)</span></h5>
+                        <p class="small">Only include fields you want to update</p>
+                        <div class="api-code-block">
+                            <pre>{
+  "title": "Updated risk title",
+  "impactRating": 3,
+  "likelihoodRating": 2,
+  "status": "monitoring"
+}</pre>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="risk-put-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "id": 224,
+  "title": "Updated risk title",
+  "impactRating": 3,
+  "likelihoodRating": 2,
+  "riskScore": 6,
+  "status": "monitoring",
+  "updatedAt": "2025-10-19T11:00:00Z"
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Risk Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-delete">DELETE</span>
+                <span class="api-path">/api/v1/risks/{id}</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Delete a risk (soft delete).</p>
+                
+                <h5 class="mt-3">Path parameters</h5>
+                <table class="api-param-table">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="api-param-name">id</span> <span class="api-param-required">required</span></td>
+                            <td><span class="api-param-type">integer</span></td>
+                            <td>The ID of the risk to delete</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h5 class="mt-3"><span class="api-response-code api-response-200">204 No Content</span></h5>
+                <p class="small">Risk successfully deleted (soft deleted - marked as IsDeleted=true)</p>
+            </div>
+        </div>
+
+        <h3 class="h5 mt-5">Other resources</h3>
+        <p>The following endpoints follow similar patterns:</p>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="h6"><i class="fas fa-bug text-warning"></i> Issues</h4>
+                        <ul class="list-unstyled small mb-0">
+                            <li><code>GET /api/v1/issues</code></li>
+                            <li><code>GET /api/v1/issues/{id}</code></li>
+                            <li><code>POST /api/v1/issues</code></li>
+                            <li><code>PUT /api/v1/issues/{id}</code></li>
+                            <li><code>DELETE /api/v1/issues/{id}</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="h6"><i class="fas fa-tasks text-primary"></i> Actions</h4>
+                        <ul class="list-unstyled small mb-0">
+                            <li><code>GET /api/v1/actions</code></li>
+                            <li><code>GET /api/v1/actions/{id}</code></li>
+                            <li><code>POST /api/v1/actions</code></li>
+                            <li><code>PUT /api/v1/actions/{id}</code></li>
+                            <li><code>DELETE /api/v1/actions/{id}</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="h6"><i class="fas fa-flag-checkered text-success"></i> Milestones</h4>
+                        <ul class="list-unstyled small mb-0">
+                            <li><code>GET /api/v1/milestones</code></li>
+                            <li><code>GET /api/v1/milestones/{id}</code></li>
+                            <li><code>POST /api/v1/milestones</code></li>
+                            <li><code>PUT /api/v1/milestones/{id}</code></li>
+                            <li><code>DELETE /api/v1/milestones/{id}</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="h6"><i class="fas fa-chart-line text-info"></i> Metrics</h4>
+                        <ul class="list-unstyled small mb-0">
+                            <li><code>POST /api/v1/metrics/performance</code></li>
+                            <li><code>GET /api/v1/metrics/performance/{id}</code></li>
+                            <li><code>POST /api/v1/metrics/enterprise</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <h2 id="errors">Error handling</h2>
+        
+        <h3 class="h5 mt-4">Error response format</h3>
+        <div class="api-code-block">
+            <pre>{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request data",
+    "details": [
+      {
+        "field": "impactRating",
+        "message": "Must be between 1 and 5"
+      }
+    ]
+  }
+}</pre>
+        </div>
+
+        <h3 class="h5 mt-4">HTTP status codes</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Meaning</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="api-response-code api-response-200">200</span></td>
+                    <td>OK</td>
+                    <td>Request successful</td>
+                </tr>
+                <tr>
+                    <td><span class="api-response-code api-response-201">201</span></td>
+                    <td>Created</td>
+                    <td>Resource created successfully</td>
+                </tr>
+                <tr>
+                    <td><span class="api-response-code api-response-400">400</span></td>
+                    <td>Bad Request</td>
+                    <td>Invalid request data</td>
+                </tr>
+                <tr>
+                    <td><span class="api-response-code api-response-401">401</span></td>
+                    <td>Unauthorised</td>
+                    <td>Authentication required or failed</td>
+                </tr>
+                <tr>
+                    <td><span class="api-response-code api-response-404">404</span></td>
+                    <td>Not Found</td>
+                    <td>Resource not found</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr class="my-4">
+
+        <h2 id="rate-limiting">Rate limiting</h2>
+        
+        <p>API requests are rate-limited to ensure fair usage:</p>
+        <ul>
+            <li><strong>Rate limit:</strong> 1000 requests per hour per token</li>
+            <li><strong>Burst limit:</strong> 100 requests per minute</li>
+        </ul>
+
+        <h3 class="h6 mt-3">Rate limit headers:</h3>
+        <div class="api-code-block">
+            <pre>X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 847
+X-RateLimit-Reset: 1634567890</pre>
+        </div>
+
+        <p>When rate limit is exceeded:</p>
+        <div class="api-code-block">
+            <pre>HTTP 429 Too Many Requests
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Rate limit exceeded. Try again in 45 seconds."
+  }
+}</pre>
+        </div>
+
+        <div class="alert alert-primary mt-4">
+            <h3 class="h6"><i class="fas fa-code"></i> Getting started with the API</h3>
+            <p>To start using the COMPASS API:</p>
+            <ol class="small mb-0">
+                <li>Contact a COMPASS administrator to create an API token for you</li>
+                <li>Configure the appropriate permissions for your use case</li>
+                <li>Copy and securely store your API token</li>
+                <li>Start making API requests using the token in the Authorization header</li>
+                <li>Monitor your API usage in the logs section</li>
+            </ol>
+        </div>
+
+<script nonce="@Context.Items["Nonce"]">
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add click event listeners to all API endpoint headers
+        const headers = document.querySelectorAll('.api-endpoint-header');
+        
+        headers.forEach(function(header) {
+            header.addEventListener('click', function() {
+                const endpoint = this.closest('.api-endpoint');
+                const allEndpoints = document.querySelectorAll('.api-endpoint');
+                
+                // Toggle current endpoint
+                if (endpoint.classList.contains('active')) {
+                    endpoint.classList.remove('active');
+                } else {
+                    // Close all other endpoints
+                    allEndpoints.forEach(function(ep) {
+                        ep.classList.remove('active');
+                    });
+                    // Open clicked endpoint
+                    endpoint.classList.add('active');
+                }
+                
+                // Update chevron icon
+                const icon = this.querySelector('.fa-chevron-down, .fa-chevron-up');
+                if (icon) {
+                    if (endpoint.classList.contains('active')) {
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-up');
+                    } else {
+                        icon.classList.remove('fa-chevron-up');
+                        icon.classList.add('fa-chevron-down');
+                    }
+                }
+            });
+        });
+    });
+</script>

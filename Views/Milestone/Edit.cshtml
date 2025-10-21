@@ -1,0 +1,414 @@
+@model Compass.Models.Milestone
+@{
+    ViewData["Title"] = "Edit milestone";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Milestones</a></li>
+                    <li class="breadcrumb-item active">Edit</li>
+                </ol>
+                <h1 class="m-0">Edit milestone</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Edit: @Model.Name</h3>
+            </div>
+            <form asp-action="Edit" method="post">
+                <input type="hidden" asp-for="Id" />
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Name" class="control-label"></label>
+                        <input asp-for="Name" class="form-control" />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ObjectiveId" class="control-label">Strategic objective</label>
+                                <select asp-for="ObjectiveId" class="form-control" asp-items="ViewBag.Objectives">
+                                    <option value="">-- Select objective (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ObjectiveId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="FipsId" class="control-label">Product</label>
+                                <select asp-for="FipsId" class="form-control">
+                                    <option value="">-- Select product (optional) --</option>
+                                    @if (ViewBag.Products != null)
+                                    {
+                                        @foreach (var product in ViewBag.Products)
+                                        {
+                                            <option value="@product.FipsId">@product.Title (@product.FipsId)</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="FipsId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="OwnerEmail" class="control-label">Owner</label>
+                                <input type="text" 
+                                       id="OwnerUserSearch" 
+                                       class="form-control staff-autocomplete-email" 
+                                       placeholder="Start typing name or email..."
+                                       autocomplete="off"
+                                       value="@(Model.OwnerEmail ?? "")" />
+                                <input type="hidden" asp-for="OwnerEmail" id="OwnerEmail" />
+                                <span asp-validation-for="OwnerEmail" class="text-danger"></span>
+                                <small class="form-text text-muted">Start typing to search for staff</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="BusinessArea" class="control-label">Business area</label>
+                        <select asp-for="BusinessArea" class="form-control">
+                            <option value="">-- Select business area (optional) --</option>
+                            @if (ViewBag.BusinessAreas != null)
+                            {
+                                @foreach (var area in ViewBag.BusinessAreas)
+                                {
+                                    <option value="@area">@area</option>
+                                }
+                            }
+                        </select>
+                        <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BaselineDueDate" class="control-label">Baseline due date</label>
+                                <input asp-for="BaselineDueDate" type="date" class="form-control" />
+                                <span asp-validation-for="BaselineDueDate" class="text-danger"></span>
+                                <small class="form-text text-muted">Original planned date</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="DueDate" class="control-label">Due date</label>
+                                <input asp-for="DueDate" type="date" class="form-control" required />
+                                <span asp-validation-for="DueDate" class="text-danger"></span>
+                                <small class="form-text text-muted">Current target date</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ActualDate" class="control-label">Actual date</label>
+                                <input asp-for="ActualDate" type="date" class="form-control" />
+                                <span asp-validation-for="ActualDate" class="text-danger"></span>
+                                <small class="form-text text-muted">When completed</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label"></label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="not_started">Not started</option>
+                                    <option value="on_track">On track</option>
+                                    <option value="at_risk">At risk</option>
+                                    <option value="delayed">Delayed</option>
+                                    <option value="complete">Complete</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ProgressPercent" class="control-label">Progress (%)</label>
+                                <input asp-for="ProgressPercent" type="number" min="0" max="100" class="form-control" />
+                                <span asp-validation-for="ProgressPercent" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label">External links</label>
+                        <div id="externalLinksContainer">
+                            <div class="external-link-item mb-3 p-3 border rounded">
+                                <div class="row">
+                                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                        <div class="form-group">
+                                            <label class="control-label">Link text</label>
+                                            <input type="text" class="form-control link-text" placeholder="e.g., Project plan" />
+                                        </div>
+                                    </div>
+                                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                        <div class="form-group">
+                                            <label class="control-label">Link URL</label>
+                                            <input type="url" class="form-control link-url" placeholder="https://..." />
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-danger remove-link" style="display: none;">Remove link</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addExternalLink">Add another link</button>
+                        <small class="form-text text-muted">Add external references and links</small>
+                        
+                        <!-- Hidden field to store the external links data -->
+                        <input type="hidden" asp-for="ExternalRef" id="ExternalRefData" />
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Notes" class="control-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Notes" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        Update milestone
+                    </button>
+                    <a asp-action="Index" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        // Staff autocomplete for email field
+        $(document).ready(function() {
+            var $input = $('#OwnerUserSearch');
+            var $hiddenInput = $('#OwnerEmail');
+            var timeoutId;
+            var $resultsContainer = $('<div class="autocomplete-results"></div>');
+            $input.after($resultsContainer);
+            
+            // Handle input with debounce
+            $input.on('input', function() {
+                clearTimeout(timeoutId);
+                var searchTerm = $(this).val();
+                
+                if (searchTerm.length < 2) {
+                    $resultsContainer.hide().empty();
+                    return;
+                }
+                
+                timeoutId = setTimeout(function() {
+                    $.ajax({
+                        url: '/api/staff/search',
+                        data: { q: searchTerm },
+                        dataType: 'json',
+                        success: function(data) {
+                            displayResults(data.results);
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Failed to search staff:', status, error);
+                        }
+                    });
+                }, 250);
+            });
+            
+            function displayResults(results) {
+                $resultsContainer.empty();
+                
+                if (!results || results.length === 0) {
+                    $resultsContainer.html('<div class="autocomplete-item no-results">No staff found</div>');
+                    $resultsContainer.show();
+                    return;
+                }
+                
+                results.forEach(function(staff) {
+                    var $item = $('<div class="autocomplete-item"></div>');
+                    $item.html(
+                        '<div class="autocomplete-name">' + staff.displayName + '</div>' +
+                        '<div class="autocomplete-details">' + staff.email + 
+                        (staff.jobTitle ? ' • ' + staff.jobTitle : '') + '</div>'
+                    );
+                    
+                    $item.on('click', function() {
+                        $input.val(staff.email);
+                        $hiddenInput.val(staff.email);
+                        $resultsContainer.hide().empty();
+                    });
+                    
+                    $resultsContainer.append($item);
+                });
+                
+                $resultsContainer.show();
+            }
+            
+            // Hide results when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#OwnerUserSearch').length && 
+                    !$(e.target).closest('.autocomplete-results').length) {
+                    $resultsContainer.hide();
+                }
+            });
+            
+            // Keyboard navigation
+            $input.on('keydown', function(e) {
+                var $items = $resultsContainer.find('.autocomplete-item');
+                var $selected = $items.filter('.selected');
+                
+                if (!$resultsContainer.is(':visible') || $items.length === 0) {
+                    return;
+                }
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.first().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $next = $selected.next('.autocomplete-item');
+                        if ($next.length) {
+                            $next.addClass('selected');
+                        } else {
+                            $items.first().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.last().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $prev = $selected.prev('.autocomplete-item');
+                        if ($prev.length) {
+                            $prev.addClass('selected');
+                        } else {
+                            $items.last().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'Enter') {
+                    if ($selected.length) {
+                        e.preventDefault();
+                        $selected.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    $resultsContainer.hide();
+                }
+            });
+            
+            // External links functionality
+            initializeExternalLinks();
+        });
+        
+        function initializeExternalLinks() {
+            // Parse existing external reference data
+            var existingData = $('#ExternalRefData').val();
+            if (existingData) {
+                try {
+                    var links = JSON.parse(existingData);
+                    if (Array.isArray(links) && links.length > 0) {
+                        // Clear the default empty link
+                        $('#externalLinksContainer').empty();
+                        
+                        // Add each existing link
+                        links.forEach(function(link) {
+                            addExternalLinkItem(link.text || '', link.url || '');
+                        });
+                    }
+                } catch (e) {
+                    // If it's not JSON, treat as a single URL
+                    if (existingData.trim()) {
+                        $('#externalLinksContainer').empty();
+                        addExternalLinkItem('External reference', existingData);
+                    }
+                }
+            }
+            
+            // Add link button
+            $('#addExternalLink').click(function() {
+                addExternalLinkItem('', '');
+            });
+            
+            // Remove link functionality
+            $(document).on('click', '.remove-link', function() {
+                $(this).closest('.external-link-item').remove();
+                updateExternalRefData();
+                updateRemoveButtons();
+            });
+            
+            // Update data when inputs change
+            $(document).on('input', '.link-text, .link-url', function() {
+                updateExternalRefData();
+            });
+            
+            updateRemoveButtons();
+        }
+        
+        function addExternalLinkItem(text, url) {
+            var linkHtml = `
+                <div class="external-link-item mb-3 p-3 border rounded">
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label class="control-label">Link text</label>
+                                <input type="text" class="form-control link-text" placeholder="e.g., Project plan" value="${text}" />
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label class="control-label">Link URL</label>
+                                <input type="url" class="form-control link-url" placeholder="https://..." value="${url}" />
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger remove-link">Remove link</button>
+                </div>
+            `;
+            $('#externalLinksContainer').append(linkHtml);
+            updateRemoveButtons();
+        }
+        
+        function updateRemoveButtons() {
+            var linkCount = $('.external-link-item').length;
+            $('.remove-link').toggle(linkCount > 1);
+        }
+        
+        function updateExternalRefData() {
+            var links = [];
+            $('.external-link-item').each(function() {
+                var text = $(this).find('.link-text').val().trim();
+                var url = $(this).find('.link-url').val().trim();
+                
+                if (text || url) {
+                    links.push({
+                        text: text,
+                        url: url
+                    });
+                }
+            });
+            
+            $('#ExternalRefData').val(JSON.stringify(links));
+        }
+    </script>
+}
+

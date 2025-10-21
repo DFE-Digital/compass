@@ -1,0 +1,653 @@
+@model ProductDashboardViewModel
+@{
+    ViewData["Title"] = $"Product dashboard - {Model.ProductTitle}";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Analysis">Reports</a></li>
+                    <li class="breadcrumb-item active">Product dashboard</li>
+                </ol>
+                <h1 class="m-0">@Model.ProductTitle</h1>
+                <p class="text-muted">@Model.FipsId</p>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a asp-action="Analysis" class="btn btn-default">
+                    Back to analysis
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Health Status Overview -->
+        <div class="row">
+            <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
+                <div class="card @(Model.NeedsAttention ? Model.ProblemScore > 70 ? "card-danger" : "card-warning" : "card-success")">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas @(Model.NeedsAttention ? "fa-exclamation-triangle" : "fa-check-circle")"></i>
+                            Overall health: @Model.HealthStatus
+                        </h3>
+                        <div class="card-tools">
+                            <span class="badge @(Model.ProblemScore > 70 ? "badge-danger" : Model.ProblemScore > 50 ? "badge-warning" : Model.ProblemScore > 20 ? "badge-info" : "badge-success")">
+                                Problem score: @Model.ProblemScore/100
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress progress-sm">
+                            <div class="progress-bar @(Model.ProblemScore > 70 ? "bg-danger" : Model.ProblemScore > 50 ? "bg-warning" : Model.ProblemScore > 20 ? "bg-info" : "bg-success")" 
+                                 style="width: @(100 - Model.ProblemScore)%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="row">
+            <!-- Risks -->
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="info-box bg-danger">
+                    <span class="info-box-icon">
+                        <i class="fas fa-fire"></i>
+                    </span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total risks</span>
+                        <span class="info-box-number">@Model.TotalRisks</span>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        <span class="progress-description">
+                            @Model.OpenRisks open | @Model.HighRisks high severity
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Issues -->
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="info-box bg-success">
+                    <span class="info-box-icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total issues</span>
+                        <span class="info-box-number">@Model.TotalIssues</span>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        <span class="progress-description">
+                            @Model.OpenIssues open | @Model.CriticalIssues critical
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="info-box bg-primary">
+                    <span class="info-box-icon">
+                        <i class="fas fa-tasks"></i>
+                    </span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total actions</span>
+                        <span class="info-box-number">@Model.TotalActions</span>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        <span class="progress-description">
+                            @Model.InProgressActions in progress | @Model.OverdueActions overdue
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Milestones -->
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="info-box bg-info">
+                    <span class="info-box-icon">
+                        <i class="fas fa-flag-checkered"></i>
+                    </span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total milestones</span>
+                        <span class="info-box-number">@Model.TotalMilestones</span>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        <span class="progress-description">
+                            @Model.CompletedMilestones complete | @Model.DelayedMilestones delayed
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAID Details -->
+        <div class="row">
+            <!-- Top Risks -->
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-12 col-sm-12 col-12 mb-3">
+                <div class="card card-outline card-danger h-100">
+                    <div class="card-header bg-danger text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-fire"></i> Top risks
+                        </h3>
+                        <div class="card-tools">
+                            <a asp-controller="Risk" asp-action="Index" asp-route-fipsId="@Model.FipsId" class="btn btn-tool btn-sm text-white">
+                                View all <i class="fas fa-external-link-alt ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.TopRisks.Any())
+                        {
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 10;">
+                                        <tr>
+                                            <th>Risk</th>
+                                            <th class="text-center" style="width: 80px;">Score</th>
+                                            <th style="width: 120px;">Status</th>
+                                            <th style="width: 150px;">Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var risk in Model.TopRisks)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id" class="font-weight-bold">
+                                                        @risk.Title
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-lg @(risk.RiskScore >= 15 ? "badge-danger" : risk.RiskScore >= 10 ? "badge-warning" : "badge-info")">
+                                                        @risk.RiskScore
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@risk.Status</span>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">@(risk.OwnerEmail ?? "Unassigned")</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                                <p class="mb-0">No risks recorded</p>
+                            </div>
+                        }
+                    </div>
+                    @if (Model.TopRisks.Any() && Model.TotalRisks > 5)
+                    {
+                        <div class="card-footer bg-white text-center">
+                            <small class="text-muted">Showing @Model.TopRisks.Count of @Model.TotalRisks total risks</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Top Issues -->
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-12 col-sm-12 col-12 mb-3">
+                <div class="card card-outline card-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-circle"></i> Top issues
+                        </h3>
+                        <div class="card-tools">
+                            <a asp-controller="Issue" asp-action="Index" asp-route-fipsId="@Model.FipsId" class="btn btn-tool btn-sm text-white">
+                                View all <i class="fas fa-external-link-alt ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.TopIssues.Any())
+                        {
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 10;">
+                                        <tr>
+                                            <th>Issue</th>
+                                            <th style="width: 100px;">Severity</th>
+                                            <th style="width: 100px;">Status</th>
+                                            <th class="text-center" style="width: 80px;">Age</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in Model.TopIssues)
+                                        {
+                                            var daysOpen = (DateTime.UtcNow - issue.DetectedDate).Days;
+                                            <tr class="@(issue.BlockedFlag ? "table-warning" : "")">
+                                                <td>
+                                                    <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id" class="font-weight-bold">
+                                                        @issue.Title
+                                                    </a>
+                                                    @if (issue.BlockedFlag)
+                                                    {
+                                                        <i class="fas fa-ban text-danger ml-1" title="Blocked"></i>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge @(issue.Severity == "critical" ? "badge-danger" : issue.Severity == "high" ? "badge-warning" : "badge-info")">
+                                                        @issue.Severity
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@issue.Status</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <small class="@(daysOpen > 90 ? "text-danger font-weight-bold" : daysOpen > 30 ? "text-warning" : "text-muted")">
+                                                        @daysOpen d
+                                                    </small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                                <p class="mb-0">No issues recorded</p>
+                            </div>
+                        }
+                    </div>
+                    @if (Model.TopIssues.Any() && Model.TotalIssues > 5)
+                    {
+                        <div class="card-footer bg-white text-center">
+                            <small class="text-muted">Showing @Model.TopIssues.Count of @Model.TotalIssues total issues</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Upcoming Actions -->
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-12 col-sm-12 col-12 mb-3">
+                <div class="card card-outline card-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">
+                            Upcoming actions
+                        </h3>
+                        <div class="card-tools">
+                            <a asp-controller="Action" asp-action="Index" asp-route-fipsId="@Model.FipsId" class="btn btn-tool btn-sm text-white">
+                                View all <i class="fas fa-external-link-alt ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.UpcomingActions.Any())
+                        {
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 10;">
+                                        <tr>
+                                            <th>Action</th>
+                                            <th style="width: 120px;">Due date</th>
+                                            <th style="width: 150px;">Owner</th>
+                                            <th style="width: 100px;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var action in Model.UpcomingActions)
+                                        {
+                                            var isOverdue = action.DueDate.HasValue && action.DueDate < DateTime.UtcNow;
+                                            <tr class="@(isOverdue ? "table-warning" : "")">
+                                                <td>
+                                                    <a asp-controller="Action" asp-action="Edit" asp-route-id="@action.Id" class="font-weight-bold">
+                                                        @action.Title
+                                                    </a>
+                                                    @if (isOverdue)
+                                                    {
+                                                        <i class="fas fa-exclamation-triangle text-danger ml-1" title="Overdue"></i>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (action.DueDate.HasValue)
+                                                    {
+                                                        <small class="@(isOverdue ? "text-danger font-weight-bold" : "text-muted")">
+                                                            @action.DueDate.Value.ToString("dd/MM/yyyy")
+                                                        </small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <small class="text-muted">No date</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">@(action.AssignedToEmail ?? "Unassigned")</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @(action.Status == "in_progress" ? "badge-primary" : "badge-secondary")">
+                                                        @action.Status
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                                <p class="mb-0">No actions recorded</p>
+                            </div>
+                        }
+                    </div>
+                    @if (Model.UpcomingActions.Any() && Model.TotalActions > 5)
+                    {
+                        <div class="card-footer bg-white text-center">
+                            <small class="text-muted">Showing @Model.UpcomingActions.Count of @Model.TotalActions total actions</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Key Milestones -->
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-12 col-sm-12 col-12 mb-3">
+                <div class="card card-outline card-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-flag-checkered"></i> Key milestones
+                        </h3>
+                        <div class="card-tools">
+                            <a asp-controller="Milestone" asp-action="Index" asp-route-fipsId="@Model.FipsId" class="btn btn-tool btn-sm text-white">
+                                View all <i class="fas fa-external-link-alt ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.KeyMilestones.Any())
+                        {
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 10;">
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th style="width: 120px;">Due date</th>
+                                            <th style="width: 120px;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var milestone in Model.KeyMilestones)
+                                        {
+                                            var isDelayed = milestone.DueDate < DateTime.UtcNow && 
+                                                           milestone.Status != "complete" && 
+                                                           milestone.Status != "cancelled";
+                                            var isComplete = milestone.Status == "complete";
+                                            <tr class="@(isDelayed ? "table-warning" : isComplete ? "table-success" : "")">
+                                                <td>
+                                                    <a asp-controller="Milestone" asp-action="Edit" asp-route-id="@milestone.Id" class="font-weight-bold">
+                                                        @milestone.Name
+                                                    </a>
+                                                    @if (isDelayed)
+                                                    {
+                                                        <i class="fas fa-exclamation-triangle text-danger ml-1" title="Delayed"></i>
+                                                    }
+                                                    else if (isComplete)
+                                                    {
+                                                        <i class="fas fa-check-circle text-success ml-1" title="Complete"></i>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <small class="@(isDelayed ? "text-danger font-weight-bold" : "text-muted")">
+                                                        @milestone.DueDate.ToString("dd/MM/yyyy")
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @(isComplete ? "badge-success" : isDelayed ? "badge-danger" : "badge-secondary")">
+                                                        @milestone.Status
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                                <p class="mb-0">No milestones recorded</p>
+                            </div>
+                        }
+                    </div>
+                    @if (Model.KeyMilestones.Any() && Model.TotalMilestones > 5)
+                    {
+                        <div class="card-footer bg-white text-center">
+                            <small class="text-muted">Showing @Model.KeyMilestones.Count of @Model.TotalMilestones total milestones</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="row">
+            <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
+                <div class="card card-outline card-purple">
+                    <div class="card-header bg-purple text-white">
+                        <h3 class="card-title">
+                            Performance metrics overview
+                        </h3>
+                        <div class="card-tools">
+                            <a asp-controller="ProductReporting" asp-action="Index" asp-route-fipsId="@Model.FipsId" class="btn btn-tool btn-sm text-white">
+                                View all <i class="fas fa-external-link-alt ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.HasMetricsData)
+                        {
+                            @if (Model.LastReportDate.HasValue)
+                            {
+                                <div class="alert alert-info border-0 mb-3">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    <strong>Last submitted:</strong> @Model.LastReportDate.Value.ToString("dd/MM/yyyy")
+                                </div>
+                            }
+                            <div class="row">
+                                @if (Model.UserSatisfaction.HasValue)
+                                {
+                                    <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                                        <div class="info-box @(Model.UserSatisfaction < 60 ? "bg-danger" : Model.UserSatisfaction < 75 ? "bg-warning" : "bg-success")">
+                                            <span class="info-box-icon">
+                                                <i class="fas fa-smile"></i>
+                                            </span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">User satisfaction</span>
+                                                <span class="info-box-number">@Model.UserSatisfaction.Value.ToString("F1")%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                @if (Model.RecentMetrics.Any())
+                                {
+                                    var displayMetrics = Model.RecentMetrics.Take(Model.UserSatisfaction.HasValue ? 3 : 4).ToList();
+                                    @foreach (var metric in displayMetrics)
+                                    {
+                                        <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                                            <div class="info-box bg-purple">
+                                                <span class="info-box-icon">
+                                                    <i class="fas fa-chart-bar"></i>
+                                                </span>
+                                                <div class="info-box-content">
+                                                    <span class="info-box-text">@metric.MetricName</span>
+                                                    <span class="info-box-number">@metric.Value</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            @if (Model.RecentMetrics.Count > (Model.UserSatisfaction.HasValue ? 3 : 4))
+                            {
+                                <div class="text-center mt-2">
+                                    <p class="text-muted mb-0">
+                                        <small>Showing @Math.Min(Model.UserSatisfaction.HasValue ? 3 : 4, Model.RecentMetrics.Count) of @Model.RecentMetrics.Count metrics</small>
+                                    </p>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="callout callout-info">
+                                <h5><i class="fas fa-info-circle"></i> No performance data</h5>
+                                <p class="mb-0">No performance metrics have been submitted for this product yet. Performance data will appear here once submitted.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Statistics -->
+        <div class="row">
+            <!-- Risk Statistics -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card card-outline card-danger h-100">
+                    <div class="card-header bg-danger text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-fire"></i> Risk statistics
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Total risks</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.TotalRisks</strong></dd>
+                            
+                            <dt class="col-sm-7">Open risks</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.OpenRisks</strong></dd>
+                            
+                            <dt class="col-sm-7">High severity</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-danger">@Model.HighRisks</span></dd>
+                            
+                            <dt class="col-sm-7">Medium severity</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-warning">@Model.MediumRisks</span></dd>
+                            
+                            <dt class="col-sm-7">Average score</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.AverageRiskScore.ToString("F1")</strong></dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Issue Statistics -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card card-outline card-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-circle"></i> Issue statistics
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Total issues</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.TotalIssues</strong></dd>
+                            
+                            <dt class="col-sm-7">Open issues</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.OpenIssues</strong></dd>
+                            
+                            <dt class="col-sm-7">Critical</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-danger">@Model.CriticalIssues</span></dd>
+                            
+                            <dt class="col-sm-7">High severity</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-warning">@Model.HighIssues</span></dd>
+                            
+                            <dt class="col-sm-7">Blocked</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-warning">@Model.BlockedIssues</span></dd>
+                            
+                            @if (Model.OldestOpenIssue.HasValue)
+                            {
+                                var daysOpen = (DateTime.UtcNow - Model.OldestOpenIssue.Value).Days;
+                                <dt class="col-sm-7">Oldest issue</dt>
+                                <dd class="col-sm-5 text-right"><strong>@daysOpen days</strong></dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Statistics -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card card-outline card-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">
+                            Action statistics
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Total actions</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.TotalActions</strong></dd>
+                            
+                            <dt class="col-sm-7">In progress</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.InProgressActions</strong></dd>
+                            
+                            <dt class="col-sm-7">Overdue</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-warning">@Model.OverdueActions</span></dd>
+                            
+                            <dt class="col-sm-7">Completed</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-success">@Model.CompletedActions</span></dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Milestone Statistics -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card card-outline card-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="card-title">
+                            <i class="fas fa-flag-checkered"></i> Milestone statistics
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-7">Total milestones</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.TotalMilestones</strong></dd>
+                            
+                            <dt class="col-sm-7">Upcoming</dt>
+                            <dd class="col-sm-5 text-right"><strong>@Model.UpcomingMilestones</strong></dd>
+                            
+                            <dt class="col-sm-7">Delayed</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-danger">@Model.DelayedMilestones</span></dd>
+                            
+                            <dt class="col-sm-7">Completed</dt>
+                            <dd class="col-sm-5 text-right"><span class="badge badge-success">@Model.CompletedMilestones</span></dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

@@ -1,0 +1,261 @@
+@{
+    ViewData["Title"] = "Start assessment";
+    var standard = ViewBag.Standard as Compass.Models.FunctionalStandard;
+    var inProgressAssessments = ViewBag.InProgressAssessments as List<dynamic>;
+    var submittedAssessments = ViewBag.SubmittedAssessments as List<dynamic>;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="FunctionalStandards">Functional standards</a></li>
+                    <li class="breadcrumb-item active">@standard.Title</li>
+                </ol>
+                <h1 class="m-0">@standard.Title</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        
+        <div class="row mb-3">
+            <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
+                <div class="info-box bg-primary">
+                    <span class="info-box-icon"><i class="fas fa-clipboard-check"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Functional standard</span>
+                        <span class="info-box-number">@standard.Title</span>
+                        <small>
+                            Standard @standard.Id
+                            @if (standard.PublishedDate.HasValue)
+                            {
+                                <text> - Published @standard.PublishedDate.Value.ToString("d MMM yyyy")</text>
+                            }
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (inProgressAssessments != null && inProgressAssessments.Any())
+        {
+            <div class="card card-warning">
+                <div class="card-header">
+                    <h3 class="card-title">In progress assessments</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Assessment name</th>
+                                <th class="col-date">Started</th>
+                                <th class="col-progress">Progress</th>
+                                <th class="col-actions-wide text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (dynamic item in inProgressAssessments)
+                            {
+                                Compass.Models.FunctionalStandardAssessment assessment = item.Assessment;
+                                int completedCount = item.CompletedCount;
+                                int totalCount = item.TotalCount;
+                                bool isComplete = item.IsComplete;
+                                
+                                <tr>
+                                    <td style="width: 40%;"><strong>@assessment.AssessmentName</strong></td>
+                                    <td>@assessment.AssessmentDate.ToString("d MMM yyyy HH:mm")</td>
+                                    <td>
+                                        @if (isComplete)
+                                        {
+                                            <span class="badge badge-success">@completedCount / @totalCount complete</span>
+                                        }
+                                        else if (completedCount == 0)
+                                        {
+                                            <span class="badge badge-danger">@completedCount / @totalCount</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warning">@completedCount / @totalCount</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions-wide text-right">
+                                        <a asp-action="ConductAssessment" asp-route-assessmentId="@assessment.Id" class="btn btn-sm btn-primary">
+                                            Continue
+                                        </a>
+                                        @if (isComplete)
+                                        {
+                                            <form asp-action="SubmitAssessment" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="assessmentId" value="@assessment.Id" />
+                                                <button type="submit" class="btn btn-sm btn-success">
+                                                    <i class="fas fa-check-circle"></i> Submit
+                                                </button>
+                                            </form>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                data-toggle="modal" 
+                                                data-target="#deleteModal-@assessment.Id">
+                                            Delete
+                                        </button>
+                                        
+                                        <!-- Delete Confirmation Modal -->
+                                        <div class="modal fade" id="deleteModal-@assessment.Id" tabindex="-1" role="dialog">
+                                            <div class="modal-dialog" role="document">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-danger">
+                                                        <h5 class="modal-title">Delete assessment</h5>
+                                                        <button type="button" class="close" data-dismiss="modal">
+                                                            <span>&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body text-left">
+                                                        <p>Are you sure you want to delete the assessment <strong>@assessment.AssessmentName</strong>?</p>
+                                                        <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> This action cannot be undone. All assessment responses will be permanently deleted.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                                        <form asp-action="DeleteAssessment" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="assessmentId" value="@assessment.Id" />
+                                                            <input type="hidden" name="standardId" value="@standard.Id" />
+                                                            <button type="submit" class="btn btn-danger">
+                                                                Delete assessment
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-plus-circle"></i> Start new assessment</h3>
+            </div>
+            <div class="card-body">
+                <p>Create a new assessment for <strong>@standard.Title</strong>.</p>
+                <p class="text-muted">
+                    @if (standard.Themes != null)
+                    {
+                        var totalCriteria = standard.Themes.Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0);
+                        <span>This assessment includes @totalCriteria criteria across @standard.Themes.Count themes.</span>
+                    }
+                </p>
+                <form asp-action="StartAssessment" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="standardId" value="@standard.Id" />
+                    <div class="form-group">
+                        <label for="assessmentName">Assessment name</label>
+                        <input type="text" id="assessmentName" name="assessmentName" class="form-control" placeholder="e.g., Q4 2025 Assessment" required />
+                        <small class="form-text text-muted">Provide a name to identify this assessment</small>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-play"></i> Start assessment
+                    </button>
+                    <a asp-action="FunctionalStandards" class="btn btn-default btn-lg">
+                        Back to standards
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        @if (submittedAssessments != null && submittedAssessments.Any())
+        {
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="card-title"><i class="fas fa-check-circle"></i> Submitted assessments</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Assessment name</th>
+                                <th class="col-date">Submitted</th>
+                                <th class="col-date">Assessed by</th>
+                                <th class="col-actions text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (dynamic item in submittedAssessments)
+                            {
+                                Compass.Models.FunctionalStandardAssessment assessment = item.Assessment;
+                                
+                                <tr>
+                                    <td style="width: 40%;"><strong>@assessment.AssessmentName</strong></td>
+                                    <td>@assessment.SubmittedAt?.ToString("d MMM yyyy HH:mm")</td>
+                                    <td>@assessment.AssessedBy</td>
+                                    <td class="col-actions text-right">
+                                        <a asp-action="ViewAssessmentSummary" asp-route-assessmentId="@assessment.Id" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-chart-bar"></i> View summary
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                data-toggle="modal" 
+                                                data-target="#deleteModalSubmitted-@assessment.Id">
+                                            Delete
+                                        </button>
+                                        
+                                        <!-- Delete Confirmation Modal -->
+                                        <div class="modal fade" id="deleteModalSubmitted-@assessment.Id" tabindex="-1" role="dialog">
+                                            <div class="modal-dialog" role="document">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-danger">
+                                                        <h5 class="modal-title">Delete submitted assessment</h5>
+                                                        <button type="button" class="close" data-dismiss="modal">
+                                                            <span>&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body text-left">
+                                                        <p>Are you sure you want to delete the submitted assessment <strong>@assessment.AssessmentName</strong>?</p>
+                                                        <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> This action cannot be undone. All assessment data and responses will be permanently deleted.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                                        <form asp-action="DeleteAssessment" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="assessmentId" value="@assessment.Id" />
+                                                            <input type="hidden" name="standardId" value="@standard.Id" />
+                                                            <button type="submit" class="btn btn-danger">
+                                                                Delete assessment
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

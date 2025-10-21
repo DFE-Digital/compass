@@ -1,0 +1,1114 @@
+@model Compass.Models.Risk
+@{
+    ViewData["Title"] = "Edit risk";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Risks</a></li>
+                    <li class="breadcrumb-item active">#@Model.Id</li>
+                </ol>
+                <h1 class="m-0">
+                    Edit risk
+                    <small class="text-muted font-weight-normal ml-2">#@Model.Id</small>
+                </h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <form asp-action="Edit" method="post" id="riskEditForm">
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            
+            <div class="row">
+                <!-- Main content area -->
+                <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
+                    <!-- Title -->
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="form-group mb-0">
+                                <label asp-for="Title" class="control-label font-weight-bold">Risk title</label>
+                                <input asp-for="Title" class="form-control form-control-lg" placeholder="Enter risk title" />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-align-left"></i> Description</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group mb-0">
+                                <textarea asp-for="Description" class="form-control" rows="6" placeholder="Provide a detailed description of the risk..."></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Types -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-tags"></i> Risk types</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <small class="form-text text-muted">Add one or more risk type classifications</small>
+                                
+                                <!-- Add Risk Type Section -->
+                                <div class="row mt-2">
+                                    <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
+                                        <select id="riskTypeSelect" class="form-control">
+                                            <option value="">-- Select a risk type to add --</option>
+                                            @if (ViewBag.RiskTypes != null)
+                                            {
+                                                var selectedIds = ViewBag.SelectedRiskTypeIds as List<int> ?? new List<int>();
+                                                @foreach (var riskType in ViewBag.RiskTypes)
+                                                {
+                                                    var isSelected = selectedIds.Contains(riskType.Id);
+                                                    if (isSelected)
+                                                    {
+                                                        <option value="@riskType.Id" data-name="@riskType.Name" data-summary="@riskType.Summary" disabled>@riskType.Name</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@riskType.Id" data-name="@riskType.Name" data-summary="@riskType.Summary">@riskType.Name</option>
+                                                    }
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                                        <button type="button" id="addRiskTypeBtn" class="btn btn-outline-primary btn-sm">
+                                            Add risk type
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Selected Risk Types Table -->
+                                <div class="mt-3">
+                                    <table class="table table-sm table-bordered" id="selectedRiskTypesTable">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Risk type</th>
+                                                <th>Summary</th>
+                                                <th width="80">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="selectedRiskTypesBody">
+                                            @if (ViewBag.RiskTypes != null && ViewBag.SelectedRiskTypeIds != null)
+                                            {
+                                                var selectedIds = ViewBag.SelectedRiskTypeIds as List<int>;
+                                                @foreach (var riskType in ViewBag.RiskTypes)
+                                                {
+                                                    if (selectedIds.Contains(riskType.Id))
+                                                    {
+                                                        <tr data-risk-type-id="@riskType.Id">
+                                                            <td><strong>@riskType.Name</strong></td>
+                                                            <td>
+                                                                @if (!string.IsNullOrEmpty(riskType.Summary))
+                                                                {
+                                                                    <small class="text-muted">@riskType.Summary</small>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm removeRiskTypeBtn" data-risk-type-id="@riskType.Id" title="Remove">
+                                                                    <i class="fas fa-times"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                    <div id="noRiskTypesMessage" class="text-muted text-center py-3">
+                                        <i class="fas fa-info-circle"></i> No risk types selected yet
+                                    </div>
+                                </div>
+                                
+                                <!-- Hidden inputs for form submission -->
+                                <div id="hiddenRiskTypeInputs">
+                                    @if (ViewBag.SelectedRiskTypeIds != null)
+                                    {
+                                        var selectedIds = ViewBag.SelectedRiskTypeIds as List<int>;
+                                        @foreach (var id in selectedIds)
+                                        {
+                                            <input type="hidden" name="selectedRiskTypes" value="@id" />
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Response Strategy & Residual Risk -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-shield-alt"></i> Response strategy & residual risk</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                    <div class="form-group">
+                                        <label asp-for="Response" class="control-label">
+                                            Response strategy
+                                            <a href="#" data-toggle="modal" data-target="#responseModal" class="text-info">
+                                                <i class="fas fa-info-circle"></i>
+                                            </a>
+                                        </label>
+                                        <select asp-for="Response" class="form-control">
+                                            <option value="">-- Select response --</option>
+                                            <option value="avoid">Avoid</option>
+                                            <option value="mitigate">Mitigate</option>
+                                            <option value="transfer">Transfer</option>
+                                            <option value="accept">Accept</option>
+                                        </select>
+                                        <span asp-validation-for="Response" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                    <div class="form-group">
+                                        <label asp-for="TargetDate" class="control-label">Target date</label>
+                                        <input asp-for="TargetDate" type="date" class="form-control" />
+                                        <span asp-validation-for="TargetDate" class="text-danger"></span>
+                                        <small class="form-text text-muted">Target to reach residual levels</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                    <div class="form-group">
+                                        <label asp-for="ResidualImpact" class="control-label">
+                                            Residual impact (1-5)
+                                            <a href="#" data-toggle="modal" data-target="#residualModal" class="text-info">
+                                                <i class="fas fa-info-circle"></i>
+                                            </a>
+                                        </label>
+                                        <select asp-for="ResidualImpact" class="form-control">
+                                            <option value="">-- Select residual impact --</option>
+                                            <option value="1">1 - Very low</option>
+                                            <option value="2">2 - Low</option>
+                                            <option value="3">3 - Medium</option>
+                                            <option value="4">4 - High</option>
+                                            <option value="5">5 - Very high</option>
+                                        </select>
+                                        <span asp-validation-for="ResidualImpact" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                    <div class="form-group">
+                                        <label asp-for="ResidualLikelihood" class="control-label">Residual likelihood (1-5)</label>
+                                        <select asp-for="ResidualLikelihood" class="form-control">
+                                            <option value="">-- Select residual likelihood --</option>
+                                            <option value="1">1 - Very low</option>
+                                            <option value="2">2 - Low</option>
+                                            <option value="3">3 - Medium</option>
+                                            <option value="4">4 - High</option>
+                                            <option value="5">5 - Very high</option>
+                                        </select>
+                                        <span asp-validation-for="ResidualLikelihood" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-sticky-note"></i> Notes</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group mb-0">
+                                <textarea asp-for="Notes" class="form-control" rows="4" placeholder="Add any additional notes or context..."></textarea>
+                                <span asp-validation-for="Notes" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action buttons -->
+                    <div class="mb-3">
+                        <button type="submit" class="btn btn-primary">
+                            Update risk
+                        </button>
+                        <a asp-action="Index" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Sidebar with metadata -->
+                <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                    <!-- Status & Owner -->
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label font-weight-bold">
+                                    <i class="fas fa-flag"></i> Status
+                                </label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="new">New</option>
+                                    <option value="open">Open</option>
+                                    <option value="treating">Treating</option>
+                                    <option value="monitoring">Monitoring</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="OwnerEmail" class="control-label font-weight-bold">
+                                    Risk owner
+                                </label>
+                                <div class="position-relative">
+                                    <input type="text" 
+                                           id="OwnerUserSearch" 
+                                           class="form-control staff-autocomplete-email" 
+                                           placeholder="Start typing name or email..."
+                                           autocomplete="off"
+                                           value="@Model.OwnerEmail"
+                                           style="padding-right: 38px;" />
+                                    <input type="hidden" asp-for="OwnerEmail" id="OwnerEmail" />
+                                    <button type="button" class="btn btn-sm btn-link position-absolute" id="clearOwnerBtn" 
+                                            style="right: 5px; top: 50%; transform: translateY(-50%); color: #6c757d;"
+                                            title="Clear owner">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="OwnerEmail" class="text-danger"></span>
+                                <small class="form-text text-muted">Start typing to search for staff</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Assessment -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Risk assessment</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="ImpactRating" class="control-label">
+                                    Impact rating *
+                                    <a href="#" data-toggle="modal" data-target="#impactModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <select asp-for="ImpactRating" class="form-control" required>
+                                    <option value="1">1 - Very low</option>
+                                    <option value="2">2 - Low</option>
+                                    <option value="3">3 - Medium</option>
+                                    <option value="4">4 - High</option>
+                                    <option value="5">5 - Very high</option>
+                                </select>
+                                <span asp-validation-for="ImpactRating" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="LikelihoodRating" class="control-label">
+                                    Likelihood rating *
+                                    <a href="#" data-toggle="modal" data-target="#likelihoodModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <select asp-for="LikelihoodRating" class="form-control" required>
+                                    <option value="1">1 - Very low</option>
+                                    <option value="2">2 - Low</option>
+                                    <option value="3">3 - Medium</option>
+                                    <option value="4">4 - High</option>
+                                    <option value="5">5 - Very high</option>
+                                </select>
+                                <span asp-validation-for="LikelihoodRating" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <label class="control-label">Risk score</label>
+                                <div class="text-center py-2">
+                                    <h3 class="mb-0">
+                                        <span id="riskScoreBadge" class="badge badge-secondary">-</span>
+                                    </h3>
+                                    <small class="text-muted">Impact × Likelihood</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Classification -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-sitemap"></i> Classification</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="BusinessArea" class="control-label">Business area</label>
+                                <select asp-for="BusinessArea" class="form-control">
+                                    <option value="">-- Select --</option>
+                                    @if (ViewBag.BusinessAreas != null)
+                                    {
+                                        @foreach (var area in ViewBag.BusinessAreas)
+                                        {
+                                            <option value="@area">@area</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="ObjectiveId" class="control-label">Strategic objective</label>
+                                <select asp-for="ObjectiveId" class="form-control" asp-items="ViewBag.Objectives">
+                                    <option value="">-- Select --</option>
+                                </select>
+                                <span asp-validation-for="ObjectiveId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="FipsId" class="control-label">Product</label>
+                                <select asp-for="FipsId" class="form-control">
+                                    <option value="">-- Select --</option>
+                                    @if (ViewBag.Products != null)
+                                    {
+                                        @foreach (var product in ViewBag.Products)
+                                        {
+                                            <option value="@product.FipsId">@product.Title (@product.FipsId)</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="FipsId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="RiskTierId" class="control-label">
+                                    Risk tier
+                                    <a href="#" data-toggle="modal" data-target="#riskTierModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <select asp-for="RiskTierId" class="form-control" asp-items="ViewBag.RiskTiers">
+                                    <option value="">-- Select --</option>
+                                </select>
+                                <span asp-validation-for="RiskTierId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <label asp-for="Category" class="control-label">Category</label>
+                                <input asp-for="Category" class="form-control" placeholder="Optional" />
+                                <span asp-validation-for="Category" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dates -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-calendar"></i> Dates</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="ProximityDate" class="control-label">
+                                    Proximity date
+                                    <a href="#" data-toggle="modal" data-target="#proximityModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <input asp-for="ProximityDate" type="date" class="form-control" />
+                                <span asp-validation-for="ProximityDate" class="text-danger"></span>
+                                <small class="form-text text-muted">When risk likely to materialise</small>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <label asp-for="ClosedDate" class="control-label">Closed date</label>
+                                <input asp-for="ClosedDate" type="date" class="form-control" />
+                                <span asp-validation-for="ClosedDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<!-- Info Modals -->
+
+<!-- Risk Tier Modal -->
+<div class="modal fade" id="riskTierModal" tabindex="-1" role="dialog" aria-labelledby="riskTierModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="riskTierModalLabel">Risk tier levels</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Risk tiers classify risks by their scope and governance level. Select the appropriate tier based on where the risk should be managed and reported.</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Level</th>
+                                <th>Scope</th>
+                                <th>Description</th>
+                                <th>Examples</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Project-level</strong></td>
+                                <td>Within a discrete project or service</td>
+                                <td>Tactical risks managed day-to-day by delivery teams</td>
+                                <td>Supplier delays, resource gaps, accessibility issues, technology bugs</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Programme-level</strong></td>
+                                <td>Across a set of related projects</td>
+                                <td>Strategic/operational risks across multiple projects. Managed by programme boards and SROs</td>
+                                <td>Conflicting priorities, funding shortfalls, interdependencies, benefits not realised</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Portfolio-level</strong></td>
+                                <td>Across multiple programmes or business area</td>
+                                <td>Risks affecting strategic objectives within a portfolio</td>
+                                <td>Competing resource demand, cross-programme dependencies, change fatigue</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Department-level</strong></td>
+                                <td>Across the entire department</td>
+                                <td>High-level strategic risks affecting departmental objectives. Usually in Departmental Risk Register</td>
+                                <td>Strategic outcome failures, budgetary control, workforce capability, cyber security</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Cross-government</strong></td>
+                                <td>Across multiple departments</td>
+                                <td>Systemic risks affecting public sector capability. Managed via Government Risk Register</td>
+                                <td>Major data breaches, shared platform failures (Notify, GOV.UK), policy shifts</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="alert alert-info mt-3" role="alert">
+                    <strong>Guidance:</strong> Select the tier where this risk should be governed and reported. Risks can be escalated upward as their scope or impact increases.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="impactModal" tabindex="-1" role="dialog" aria-labelledby="impactModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="impactModalLabel">Impact rating guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Impact rating measures the <strong>severity of consequences</strong> if the risk materialises.</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Rating</th>
+                            <th>Level</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-success">1</span></td>
+                            <td>Very low</td>
+                            <td>Minimal impact, easily managed</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-info">2</span></td>
+                            <td>Low</td>
+                            <td>Minor inconvenience, limited disruption</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">3</span></td>
+                            <td>Medium</td>
+                            <td>Moderate disruption to service</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">4</span></td>
+                            <td>High</td>
+                            <td>Significant service disruption or financial loss</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-danger">5</span></td>
+                            <td>Very high</td>
+                            <td>Critical failure, major financial loss, or reputational damage</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="likelihoodModal" tabindex="-1" role="dialog" aria-labelledby="likelihoodModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="likelihoodModalLabel">Likelihood rating guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Likelihood rating measures the <strong>probability</strong> of the risk occurring.</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Rating</th>
+                            <th>Level</th>
+                            <th>Probability</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-success">1</span></td>
+                            <td>Very low</td>
+                            <td>&lt;10%</td>
+                            <td>Highly unlikely to occur</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-info">2</span></td>
+                            <td>Low</td>
+                            <td>10-30%</td>
+                            <td>Unlikely but possible</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">3</span></td>
+                            <td>Medium</td>
+                            <td>30-60%</td>
+                            <td>Reasonably likely to occur</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">4</span></td>
+                            <td>High</td>
+                            <td>60-85%</td>
+                            <td>Likely to occur</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-danger">5</span></td>
+                            <td>Very high</td>
+                            <td>&gt;85%</td>
+                            <td>Almost certain to occur</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info">
+                    <strong>Note:</strong> Risk score = Impact × Likelihood (range 1-25)
+                    <ul class="mb-0">
+                        <li>15-25: High risk (requires immediate attention)</li>
+                        <li>10-14: Medium risk (monitor and plan mitigation)</li>
+                        <li>1-9: Low risk (accept or monitor)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="proximityModal" tabindex="-1" role="dialog" aria-labelledby="proximityModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="proximityModalLabel">Proximity date guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Proximity date</strong> is the date when the risk is most likely to materialise or impact the project.</p>
+                <h5>How to determine proximity date</h5>
+                <ul>
+                    <li><strong>Event-based risks:</strong> Date of the triggering event (e.g., contract expiry, system cutover)</li>
+                    <li><strong>Continuous risks:</strong> Date when impact threshold is likely to be reached</li>
+                    <li><strong>Uncertain timing:</strong> Best estimate based on current trajectory</li>
+                </ul>
+                <div class="alert alert-warning">
+                    <i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Risks with proximity dates in the near future should be prioritised for treatment.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="responseModal" tabindex="-1" role="dialog" aria-labelledby="responseModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="responseModalLabel">Response strategy guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose the appropriate <strong>risk response strategy</strong> based on the risk characteristics:</p>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Description</th>
+                            <th>When to use</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Avoid</strong></td>
+                            <td>Eliminate the risk entirely by changing the plan</td>
+                            <td>High impact, unacceptable consequences</td>
+                            <td>Cancel a risky feature, choose different technology</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Mitigate</strong></td>
+                            <td>Reduce the impact or likelihood through actions</td>
+                            <td>Most common; risk is manageable with effort</td>
+                            <td>Add redundancy, increase testing, implement controls</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Transfer</strong></td>
+                            <td>Shift the risk to a third party</td>
+                            <td>Risk can be managed better by others</td>
+                            <td>Insurance, outsource to specialist, warranties</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Accept</strong></td>
+                            <td>Acknowledge the risk and monitor it</td>
+                            <td>Low priority, cost of mitigation exceeds impact</td>
+                            <td>Minor cosmetic issues, low probability events</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="residualModal" tabindex="-1" role="dialog" aria-labelledby="residualModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="residualModalLabel">Residual risk guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Residual risk</strong> is the expected level of risk <em>after</em> implementing mitigation actions.</p>
+                <h5>How to determine residual risk</h5>
+                <ol>
+                    <li>Identify your mitigation actions</li>
+                    <li>Estimate how much they will reduce impact and/or likelihood</li>
+                    <li>Rate the expected residual impact (1-5)</li>
+                    <li>Rate the expected residual likelihood (1-5)</li>
+                </ol>
+                <div class="alert alert-info">
+                    <strong>Example:</strong>
+                    <ul class="mb-0">
+                        <li>Current: Impact 5, Likelihood 4 (Score: 20)</li>
+                        <li>Mitigation: Implement backup system</li>
+                        <li>Residual: Impact 3, Likelihood 2 (Score: 6)</li>
+                    </ul>
+                </div>
+                <p class="mt-2"><strong>Target date</strong> is when you aim to achieve the residual risk level.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal for Removing Risk Type -->
+<div class="modal fade" id="confirmRemoveModal" tabindex="-1" role="dialog" aria-labelledby="confirmRemoveModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmRemoveModalLabel">Remove risk type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong class="risk-type-name"></strong> from the risk types?</p>
+                <p class="text-muted small">This action can be undone by adding the risk type again.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmRemoveBtn">
+                    Remove
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        // Staff autocomplete for email field
+        $(document).ready(function() {
+            console.log('Staff autocomplete for email initialized');
+            
+            var $input = $('#OwnerUserSearch');
+            var $hiddenInput = $('#OwnerEmail');
+            var timeoutId;
+            var $resultsContainer = $('<div class="autocomplete-results"></div>');
+            $input.after($resultsContainer);
+            
+            console.log('Initial email value:', $hiddenInput.val());
+            
+            // Handle input with debounce
+            $input.on('input', function() {
+                clearTimeout(timeoutId);
+                var searchTerm = $(this).val();
+                
+                if (searchTerm.length < 2) {
+                    $resultsContainer.hide().empty();
+                    return;
+                }
+                
+                timeoutId = setTimeout(function() {
+                    $.ajax({
+                        url: '/api/staff/search',
+                        data: { q: searchTerm },
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log('API response:', data);
+                            displayResults(data.results);
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Failed to search staff:', status, error);
+                        }
+                    });
+                }, 250);
+            });
+            
+            function displayResults(results) {
+                $resultsContainer.empty();
+                
+                if (!results || results.length === 0) {
+                    $resultsContainer.html('<div class="autocomplete-item no-results">No staff found</div>');
+                    $resultsContainer.show();
+                    return;
+                }
+                
+                results.forEach(function(staff) {
+                    var $item = $('<div class="autocomplete-item"></div>');
+                    $item.html(
+                        '<div class="autocomplete-name">' + staff.displayName + '</div>' +
+                        '<div class="autocomplete-details">' + staff.email + 
+                        (staff.jobTitle ? ' • ' + staff.jobTitle : '') + '</div>'
+                    );
+                    
+                    $item.on('click', function() {
+                        console.log('Staff selected:', staff.displayName, 'Email:', staff.email);
+                        $input.val(staff.email);
+                        $hiddenInput.val(staff.email);
+                        console.log('Hidden email field set to:', $hiddenInput.val());
+                        $resultsContainer.hide().empty();
+                    });
+                    
+                    $resultsContainer.append($item);
+                });
+                
+                $resultsContainer.show();
+            }
+            
+            // Hide results when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#OwnerUserSearch').length && 
+                    !$(e.target).closest('.autocomplete-results').length) {
+                    $resultsContainer.hide();
+                }
+            });
+            
+            // Keyboard navigation
+            $input.on('keydown', function(e) {
+                var $items = $resultsContainer.find('.autocomplete-item');
+                var $selected = $items.filter('.selected');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.first().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $next = $selected.next('.autocomplete-item');
+                        if ($next.length) {
+                            $next.addClass('selected');
+                        } else {
+                            $items.first().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.last().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $prev = $selected.prev('.autocomplete-item');
+                        if ($prev.length) {
+                            $prev.addClass('selected');
+                        } else {
+                            $items.last().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'Enter') {
+                    if ($selected.length) {
+                        e.preventDefault();
+                        $selected.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    $resultsContainer.hide();
+                }
+            });
+        });
+    </script>
+    
+    <script nonce="@Context.Items["Nonce"]">
+        console.log('Risk types script loading...');
+        
+        var selectedRiskTypes = @Html.Raw(Json.Serialize(ViewBag.SelectedRiskTypeIds ?? new List<int>()));
+        
+        function addRiskType() {
+            console.log('Add button clicked');
+            var select = document.getElementById('riskTypeSelect');
+            var selectedOption = select.options[select.selectedIndex];
+            
+            if (selectedOption.value) {
+                var riskTypeId = parseInt(selectedOption.value);
+                var riskTypeName = selectedOption.getAttribute('data-name');
+                var riskTypeSummary = selectedOption.getAttribute('data-summary') || '';
+                
+                console.log('Adding risk type:', riskTypeName, 'ID:', riskTypeId);
+                
+                if (!selectedRiskTypes.includes(riskTypeId)) {
+                    selectedRiskTypes.push(riskTypeId);
+                    
+                    // Add to table
+                    var tbody = document.getElementById('selectedRiskTypesBody');
+                    var row = tbody.insertRow();
+                    row.setAttribute('data-risk-type-id', riskTypeId);
+                    
+                    var nameCell = row.insertCell(0);
+                    nameCell.innerHTML = '<strong>' + riskTypeName + '</strong>';
+                    
+                    var summaryCell = row.insertCell(1);
+                    summaryCell.innerHTML = riskTypeSummary ? '<small class="text-muted">' + riskTypeSummary + '</small>' : '<span class="text-muted">-</span>';
+                    
+                    var actionCell = row.insertCell(2);
+                    var removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'btn btn-outline-danger btn-sm removeRiskTypeBtn';
+                    removeBtn.setAttribute('data-risk-type-id', riskTypeId);
+                    removeBtn.title = 'Remove';
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    actionCell.appendChild(removeBtn);
+                    
+                    // Show table, hide message
+                    document.getElementById('selectedRiskTypesTable').style.display = 'table';
+                    document.getElementById('noRiskTypesMessage').style.display = 'none';
+                    
+                    // Disable option
+                    selectedOption.disabled = true;
+                    select.selectedIndex = 0;
+                    
+                    updateHiddenInputs();
+                    console.log('Risk type added successfully');
+                }
+            }
+        }
+        
+        function removeRiskType(riskTypeId) {
+            console.log('Remove button clicked for ID:', riskTypeId);
+            
+            var riskTypeName = '';
+            var rows = document.querySelectorAll('#selectedRiskTypesBody tr');
+            for (var i = 0; i < rows.length; i++) {
+                if (parseInt(rows[i].getAttribute('data-risk-type-id')) === riskTypeId) {
+                    riskTypeName = rows[i].cells[0].textContent.trim();
+                    break;
+                }
+            }
+            
+            // Show confirmation
+            document.querySelector('#confirmRemoveModal .risk-type-name').textContent = riskTypeName;
+            document.getElementById('confirmRemoveModal').setAttribute('data-risk-type-id', riskTypeId);
+            
+            // Show modal using Bootstrap 4 (jQuery)
+            $('#confirmRemoveModal').modal('show');
+        }
+        
+        function confirmRemove() {
+            var riskTypeId = parseInt(document.getElementById('confirmRemoveModal').getAttribute('data-risk-type-id'));
+            console.log('Confirm remove for ID:', riskTypeId);
+            
+            // Remove from array
+            var index = selectedRiskTypes.indexOf(riskTypeId);
+            if (index > -1) {
+                selectedRiskTypes.splice(index, 1);
+                
+                // Remove from table
+                var row = document.querySelector('tr[data-risk-type-id="' + riskTypeId + '"]');
+                if (row) {
+                    row.remove();
+                }
+                
+                // Re-enable option
+                var option = document.querySelector('#riskTypeSelect option[value="' + riskTypeId + '"]');
+                if (option) {
+                    option.disabled = false;
+                }
+                
+                // Show/hide table
+                if (selectedRiskTypes.length === 0) {
+                    document.getElementById('selectedRiskTypesTable').style.display = 'none';
+                    document.getElementById('noRiskTypesMessage').style.display = 'block';
+                }
+                
+                updateHiddenInputs();
+                console.log('Risk type removed successfully');
+            }
+            
+            // Hide modal using Bootstrap 4 (jQuery)
+            $('#confirmRemoveModal').modal('hide');
+        }
+        
+        function updateHiddenInputs() {
+            var container = document.getElementById('hiddenRiskTypeInputs');
+            container.innerHTML = '';
+            
+            selectedRiskTypes.forEach(function(id) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'selectedRiskTypes';
+                input.value = id;
+                container.appendChild(input);
+            });
+            
+            console.log('Hidden inputs updated:', selectedRiskTypes);
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, setting up event listeners');
+            
+            // Set initial visibility based on existing risk types
+            if (selectedRiskTypes.length > 0) {
+                document.getElementById('selectedRiskTypesTable').style.display = 'table';
+                document.getElementById('noRiskTypesMessage').style.display = 'none';
+            } else {
+                document.getElementById('selectedRiskTypesTable').style.display = 'none';
+                document.getElementById('noRiskTypesMessage').style.display = 'block';
+            }
+            
+            document.getElementById('addRiskTypeBtn').addEventListener('click', addRiskType);
+            document.getElementById('confirmRemoveBtn').addEventListener('click', confirmRemove);
+            
+            // Event delegation for remove buttons
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.removeRiskTypeBtn')) {
+                    var btn = e.target.closest('.removeRiskTypeBtn');
+                    var riskTypeId = parseInt(btn.getAttribute('data-risk-type-id'));
+                    removeRiskType(riskTypeId);
+                }
+            });
+            
+            console.log('Event listeners set up');
+            
+            // Risk score calculation
+            function updateRiskScore() {
+                var impact = parseInt($('#ImpactRating').val()) || 0;
+                var likelihood = parseInt($('#LikelihoodRating').val()) || 0;
+                
+                if (impact > 0 && likelihood > 0) {
+                    var score = impact * likelihood;
+                    var badgeClass = score >= 15 ? 'badge-danger' : score >= 10 ? 'badge-warning' : 'badge-success';
+                    
+                    $('#riskScoreBadge').text(score)
+                        .removeClass('badge-secondary badge-success badge-warning badge-danger')
+                        .addClass(badgeClass);
+                } else {
+                    $('#riskScoreBadge').text('-')
+                        .removeClass('badge-success badge-warning badge-danger')
+                        .addClass('badge-secondary');
+                }
+            }
+            
+            // Update risk score on page load and when ratings change
+            updateRiskScore();
+            $('#ImpactRating, #LikelihoodRating').on('change', updateRiskScore);
+            
+            // Handle clearing the owner field
+            $('#clearOwnerBtn').on('click', function(e) {
+                e.preventDefault();
+                console.log('Clear owner button clicked');
+                $('#OwnerUserSearch').val('');
+                $('#OwnerEmail').val('');
+            });
+            
+            // Clear hidden field if text field is manually cleared
+            $('#OwnerUserSearch').on('input', function() {
+                if ($(this).val().trim() === '') {
+                    $('#OwnerEmail').val('');
+                }
+            });
+            
+            // Debug form submission
+            $('#riskEditForm').on('submit', function(e) {
+                console.log('=== FORM SUBMISSION DEBUG (EDIT) ===');
+                console.log('OwnerEmail value:', $('#OwnerEmail').val());
+                console.log('OwnerUserSearch value:', $('#OwnerUserSearch').val());
+                
+                var riskTypeInputs = $('input[name="selectedRiskTypes"]');
+                console.log('Risk type inputs found:', riskTypeInputs.length);
+                var riskTypeValues = [];
+                riskTypeInputs.each(function() {
+                    riskTypeValues.push($(this).val());
+                });
+                console.log('Risk type values:', riskTypeValues);
+                console.log('=============================');
+                // Don't prevent submission, just log
+            });
+        });
+    </script>
+}
+

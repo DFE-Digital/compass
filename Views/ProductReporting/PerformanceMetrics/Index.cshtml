@@ -1,0 +1,624 @@
+@model List<Compass.Models.ProductReturnStatusViewModel>
+@inject Compass.Services.IReturnStatusService ReturnStatusService
+@{
+    ViewData["Title"] = "Product performance metrics";
+    var currentPeriod = Model.FirstOrDefault();
+    var pageSize = 20;
+    var totalProducts = Model.Count;
+    var totalPages = (int)Math.Ceiling(totalProducts / (double)pageSize);
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .progress-metric {
+        min-width: 100px;
+        max-width: 150px;
+    }
+    .product-fips-id {
+        font-size: 0.8rem;
+    }
+    .reporting-period-text {
+        font-size: 1rem;
+    }
+    .pagination-info {
+        padding: 1rem;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    .all-products-title-text {
+        flex: 1;
+    }
+    #allProductsHeading button .fa-chevron-down {
+        transition: transform 0.3s ease;
+    }
+    #allProductsHeading button:not(.collapsed) .fa-chevron-down {
+        transform: rotate(180deg);
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Product performance metrics</li>
+                </ol>
+                <h1 class="m-0">Product performance metrics</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a href="@Url.Action("Index", "Documentation")#performance-metrics" class="btn btn-outline-info btn-sm">
+                    View documentation
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (currentPeriod != null)
+        {
+            var periodStart = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, 1);
+            var periodEnd = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, DateTime.DaysInMonth(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth));
+            var dueDate = ReturnStatusService.GetReturnDueDate(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth);
+            
+            // Calculate status counts
+            var submittedCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Submitted);
+            var lateCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Late && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
+            var inProgressCount = Model.Count(m => (m.Status == Compass.Models.ReturnStatus.Due || m.Status == Compass.Models.ReturnStatus.Late) && m.CompletedMetrics > 0);
+            var dueCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Due && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
+            
+            <div class="row mb-3">
+                <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
+                    <div class="small-box bg-primary">
+                        <div class="inner">
+                            <h3 class="reporting-period-text">@periodStart.ToString("d MMMM") to @periodEnd.ToString("d MMMM yyyy")</h3>
+                            <p>Reporting period</p>
+                            <small class="text-white"><i class="fas fa-exclamation-circle"></i> Returns due by <strong>@dueDate.ToString("d MMM yyyy")</strong></small>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3>@submittedCount</h3>
+                            <p>Submitted</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                    <div class="small-box bg-info">
+                        <div class="inner">
+                            <h3>@inProgressCount</h3>
+                            <p>In progress</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                    <div class="small-box bg-warning">
+                        <div class="inner">
+                            <h3>@dueCount</h3>
+                            <p>Due</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                    <div class="small-box bg-danger">
+                        <div class="inner">
+                            <h3>@lateCount</h3>
+                            <p>Late</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3 class="card-title">
+                    <i class="fas fa-user-check"></i> Products you can report metrics for
+                </h3>
+                <div class="card-tools">
+                    <span class="badge badge-light">@Model.Count products</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap" id="userProductsTable">
+                    <thead>
+                        <tr>
+                            <th>Product name</th>
+                            <th class="col-role">Your role</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var item in Model.OrderBy(p => p.Product.Title))
+                            {
+                                <tr>
+                                   
+                                    <td>
+                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
+                                            @item.Product.Title<br/>
+                                            <small class="text-muted product-fips-id">@item.Product.FipsId
+                                            @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                            {
+                                                <text> - </text>@item.Product.Phase
+                                            }
+                                            </small>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.UserRole))
+                                        {
+                                            @string.Join(" ", item.UserRole.Split('_').Select(word => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(word.ToLower())))
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (item.Status.HasValue)
+                                        {
+                                            @switch (item.Status.Value)
+                                            {
+                                                case Compass.Models.ReturnStatus.Upcoming:
+                                                    <span class="badge badge-secondary"><i class="fas fa-clock"></i> Upcoming</span>
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Due:
+                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                    {
+                                                        <span class="badge badge-info"><i class="fas fa-spinner"></i> In progress</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Due</span>
+                                                    }
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Late:
+                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                    {
+                                                        <span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> In progress (Late)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-danger"><i class="fas fa-times-circle"></i> Late</span>
+                                                    }
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Submitted:
+                                                    <span class="badge badge-success"><i class="fas fa-check-circle"></i> Submitted</span>
+                                                    break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="btn btn-sm btn-primary">
+                                            View returns
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">No products found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <div class="row align-items-center">
+                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                        <div class="pagination-info">
+                            Showing <span id="userShowingStart">1</span> to <span id="userShowingEnd">@Math.Min(pageSize, totalProducts)</span> of <strong id="userTotalCount">@totalProducts</strong> products
+                        </div>
+                    </div>
+                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                        <ul class="pagination pagination-sm m-0 float-right" id="userPaginationControls">
+                            <!-- Pagination buttons will be generated by JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var allProductsList = ViewBag.AllProducts as List<Compass.Models.ProductReturnStatusViewModel>;
+            var allProductsCount = allProductsList?.Count ?? 0;
+        }
+
+        @if (allProductsList != null && allProductsList.Any())
+        {
+            <div class="card mt-4">
+                <div class="card-header" id="allProductsHeading">
+                    <div class="row align-items-center">
+                        <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
+                            <h3 class="card-title mb-0">
+                                <button class="btn btn-link text-primary text-decoration-none w-100 collapsed" 
+                                        type="button" 
+                                        data-toggle="collapse" 
+                                        data-target="#allProductsCollapse" 
+                                        aria-expanded="false" 
+                                        aria-controls="allProductsCollapse"
+                                        style="box-shadow: none !important; outline: none !important; display: flex; justify-content: space-between; align-items: center;">
+                                    <span class="all-products-title-text">
+                                        <i class="fas fa-box"></i> All products
+                                    </span>
+                                    <i class="fas fa-chevron-down" style="transition: transform 0.3s ease; font-size: 1.1rem; margin-left: 1rem; opacity: 0.9;"></i>
+                                </button>
+                            </h3>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                                </div>
+                                <input type="text" id="allProductsSearchInput" class="form-control" placeholder="Search by name...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="allProductsCollapse" class="collapse">
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap" id="allProductsTable">
+                        <thead>
+                            <tr>
+                                <th>Product name</th>
+                                <th class="col-role">Service owner</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in allProductsList.OrderBy(p => p.Product.Title))
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
+                                            @item.Product.Title<br/>
+                                            <small class="text-muted product-fips-id">@item.Product.FipsId
+                                            @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                            {
+                                                <text> - </text>@item.Product.Phase
+                                            }
+                                            </small>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.UserRole))
+                                        {
+                                            @item.UserRole
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (item.Status.HasValue)
+                                        {
+                                            @switch (item.Status.Value)
+                                            {
+                                                case Compass.Models.ReturnStatus.Upcoming:
+                                                    <span class="badge badge-secondary"><i class="fas fa-clock"></i> Upcoming</span>
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Due:
+                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                    {
+                                                        <span class="badge badge-info"><i class="fas fa-spinner"></i> In progress</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Due</span>
+                                                    }
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Late:
+                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                    {
+                                                        <span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> In progress (Late)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-danger"><i class="fas fa-times-circle"></i> Late</span>
+                                                    }
+                                                    break;
+                                                case Compass.Models.ReturnStatus.Submitted:
+                                                    <span class="badge badge-success"><i class="fas fa-check-circle"></i> Submitted</span>
+                                                    break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="btn btn-sm btn-primary">
+                                            View returns
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <div class="row align-items-center">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="pagination-info">
+                                Showing <span id="allShowingStart">1</span> to <span id="allShowingEnd">@Math.Min(pageSize, allProductsCount)</span> of <strong id="allTotalCount">@allProductsCount</strong> products
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <ul class="pagination pagination-sm m-0 float-right" id="allPaginationControls">
+                                <!-- Pagination buttons will be generated by JavaScript -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var pageSize = @pageSize;
+            
+            // User products pagination
+            var userCurrentPage = 1;
+            var userAllRows = $('#userProductsTable tbody tr').toArray();
+            
+            function filterAndPaginateUser() {
+                // Show all rows (no filtering)
+                var filteredRows = userAllRows;
+                
+                // Update total count
+                var totalFiltered = filteredRows.length;
+                $('#userTotalCount').text(totalFiltered);
+                
+                // Calculate pagination
+                var totalPages = Math.ceil(totalFiltered / pageSize);
+                
+                // Reset to page 1 if current page is beyond total pages
+                if (userCurrentPage > totalPages && totalPages > 0) {
+                    userCurrentPage = 1;
+                }
+                
+                // Hide all rows first
+                $(userAllRows).hide();
+                
+                // Show only rows for current page
+                var startIndex = (userCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    $(filteredRows[i]).show();
+                }
+                
+                // Update pagination info
+                $('#userShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
+                $('#userShowingEnd').text(endIndex);
+                
+                // Generate pagination controls
+                generateUserPagination(totalPages, totalFiltered);
+            }
+            
+            function generateUserPagination(totalPages, totalFiltered) {
+                var paginationHtml = '';
+                
+                if (totalPages <= 1) {
+                    $('#userPaginationControls').html('');
+                    return;
+                }
+                
+                // Previous button
+                paginationHtml += '<li class="page-item ' + (userCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                // Page numbers
+                var startPage = Math.max(1, userCurrentPage - 2);
+                var endPage = Math.min(totalPages, userCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === userCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                // Next button
+                paginationHtml += '<li class="page-item ' + (userCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                $('#userPaginationControls').html(paginationHtml);
+                
+                // Bind click events
+                $('#userPaginationControls a').click(function(e) {
+                    e.preventDefault();
+                    var page = parseInt($(this).data('page'));
+                    if (!isNaN(page) && page > 0 && page <= totalPages) {
+                        userCurrentPage = page;
+                        filterAndPaginateUser();
+                    }
+                });
+            }
+            
+            // All products pagination
+            var allCurrentPage = 1;
+            var allAllRows = $('#allProductsTable tbody tr').toArray();
+            
+            function filterAndPaginateAllProducts() {
+                var searchValue = $('#allProductsSearchInput').val().toLowerCase();
+                
+                // Filter all rows
+                var filteredRows = allAllRows.filter(function(row) {
+                    var $row = $(row);
+                    var text = $row.text().toLowerCase();
+                    var matchesSearch = searchValue === '' || text.indexOf(searchValue) > -1;
+                    return matchesSearch;
+                });
+                
+                // Update total count
+                var totalFiltered = filteredRows.length;
+                $('#allTotalCount').text(totalFiltered);
+                
+                // Calculate pagination
+                var totalPages = Math.ceil(totalFiltered / pageSize);
+                
+                // Reset to page 1 if current page is beyond total pages
+                if (allCurrentPage > totalPages && totalPages > 0) {
+                    allCurrentPage = 1;
+                }
+                
+                // Hide all rows first
+                $(allAllRows).hide();
+                
+                // Show only rows for current page
+                var startIndex = (allCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    $(filteredRows[i]).show();
+                }
+                
+                // Update pagination info
+                $('#allShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
+                $('#allShowingEnd').text(endIndex);
+                
+                // Generate pagination controls
+                generateAllPagination(totalPages, totalFiltered);
+            }
+            
+            function generateAllPagination(totalPages, totalFiltered) {
+                var paginationHtml = '';
+                
+                if (totalPages <= 1) {
+                    $('#allPaginationControls').html('');
+                    return;
+                }
+                
+                // Previous button
+                paginationHtml += '<li class="page-item ' + (allCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                // Page numbers
+                var startPage = Math.max(1, allCurrentPage - 2);
+                var endPage = Math.min(totalPages, allCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === allCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                // Next button
+                paginationHtml += '<li class="page-item ' + (allCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                $('#allPaginationControls').html(paginationHtml);
+                
+                // Bind click events
+                $('#allPaginationControls a').click(function(e) {
+                    e.preventDefault();
+                    var page = parseInt($(this).data('page'));
+                    if (!isNaN(page) && page > 0 && page <= totalPages) {
+                        allCurrentPage = page;
+                        filterAndPaginateAllProducts();
+                    }
+                });
+            }
+            
+            $('#allProductsSearchInput').on('keyup', function() {
+                allCurrentPage = 1; // Reset to first page on search
+                filterAndPaginateAllProducts();
+            });
+            
+            // Initial pagination
+            filterAndPaginateUser();
+            if (allAllRows.length > 0) {
+                filterAndPaginateAllProducts();
+            }
+            
+            // Toggle icon rotation for "All products" collapse
+            $('#allProductsCollapse').on('show.bs.collapse', function () {
+                $('#allProductsHeading button').removeClass('collapsed');
+            });
+            
+            $('#allProductsCollapse').on('hide.bs.collapse', function () {
+                $('#allProductsHeading button').addClass('collapsed');
+            });
+            
+            // Hover effect for "All products" collapse button
+            $('#allProductsHeading button').hover(
+                function() {
+                    $(this).css('background-color', 'rgba(0, 0, 0, 0.05)');
+                },
+                function() {
+                    $(this).css('background-color', 'transparent');
+                }
+            );
+        });
+    </script>
+}
+

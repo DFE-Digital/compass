@@ -1,0 +1,270 @@
+@model List<dynamic>
+@{
+    ViewData["Title"] = "Strategic objectives";
+    var totalObjectives = Model.Count;
+    var totalRisks = Model.Sum(o => (int)o.TotalRisks);
+    var totalHighRisks = Model.Sum(o => (int)o.HighRisks);
+    var totalIssues = Model.Sum(o => (int)o.TotalIssues);
+    var totalCriticalIssues = Model.Sum(o => (int)o.CriticalIssues);
+    var totalActions = Model.Sum(o => (int)o.TotalActions);
+    var totalOverdueActions = Model.Sum(o => (int)o.OverdueActions);
+    var totalMilestones = Model.Sum(o => (int)o.TotalMilestones);
+    var totalDelayedMilestones = Model.Sum(o => (int)o.DelayedMilestones);
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Strategic objectives</li>
+                </ol>
+                <h1 class="m-0">Strategic objectives</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row">
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@totalObjectives</h3>
+                        <p>Total objectives</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-bullseye"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@totalHighRisks</h3>
+                        <p>High risks</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@totalCriticalIssues</h3>
+                        <p>Critical issues</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@totalOverdueActions</h3>
+                        <p>Overdue actions</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-secondary">
+                    <div class="inner">
+                        <h3>@totalDelayedMilestones</h3>
+                        <p>Delayed milestones</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-flag-checkered"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-3 col-md-6 col-sm-6 col-12">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@totalActions</h3>
+                        <p>Total actions</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Objectives List -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-bullseye"></i> All strategic objectives
+                </h3>
+                <div class="card-tools">
+                    <span class="badge badge-primary">@totalObjectives objectives</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover text-nowrap">
+                        <thead>
+                            <tr>
+                                <th>Objective</th>
+                                <th class="text-center">Risks</th>
+                                <th class="text-center">Issues</th>
+                                <th class="text-center">Actions</th>
+                                <th class="text-center">Milestones</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                var objective = item.Objective as Compass.Models.Objective;
+                                var totalRaid = (int)item.TotalRisks + (int)item.TotalIssues + (int)item.TotalActions + (int)item.TotalMilestones;
+                                var hasProblems = (int)item.HighRisks > 0 || (int)item.CriticalIssues > 0 || (int)item.BlockedIssues > 0 || (int)item.OverdueActions > 0 || (int)item.DelayedMilestones > 0;
+                                
+                                <tr class="@(hasProblems ? "table-warning" : "")">
+                                    <td>
+                                        <a href="@Url.Action("ObjectiveDetails", "EnterpriseReporting", new { id = objective.Id })" class="font-weight-bold">
+                                            @objective.Title
+                                        </a>
+                                        @if (!string.IsNullOrEmpty(objective.Theme))
+                                        {
+                                            <br />
+                                            <small class="text-primary">@objective.Theme</small>
+                                        }
+                                        @if (!string.IsNullOrEmpty(objective.Description))
+                                        {
+                                            <br />
+                                            <small class="text-muted">@objective.Description</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div>
+                                            <a href="@Url.Action("Index", "Risk", new { objectiveId = objective.Id })" class="badge badge-@((int)item.TotalRisks > 0 ? "primary" : "light")">
+                                                @item.TotalRisks total
+                                            </a>
+                                        </div>
+                                        @if ((int)item.HighRisks > 0)
+                                        {
+                                            <small class="badge badge-danger">@item.HighRisks high</small>
+                                        }
+                                        @if ((int)item.OpenRisks > 0)
+                                        {
+                                            <small class="badge badge-warning">@item.OpenRisks open</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div>
+                                            <a href="@Url.Action("Index", "Issue", new { objectiveId = objective.Id })" class="badge badge-@((int)item.TotalIssues > 0 ? "primary" : "light")">
+                                                @item.TotalIssues total
+                                            </a>
+                                        </div>
+                                        @if ((int)item.CriticalIssues > 0)
+                                        {
+                                            <small class="badge badge-danger">@item.CriticalIssues critical</small>
+                                        }
+                                        @if ((int)item.BlockedIssues > 0)
+                                        {
+                                            <small class="badge badge-dark">@item.BlockedIssues blocked</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div>
+                                            <a href="@Url.Action("Index", "Action", new { objectiveId = objective.Id })" class="badge badge-@((int)item.TotalActions > 0 ? "primary" : "light")">
+                                                @item.TotalActions total
+                                            </a>
+                                        </div>
+                                        @if ((int)item.DoneActions > 0)
+                                        {
+                                            <small class="badge badge-success">@item.DoneActions done</small>
+                                        }
+                                        @if ((int)item.OverdueActions > 0)
+                                        {
+                                            <small class="badge badge-danger">@item.OverdueActions overdue</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div>
+                                            <a href="@Url.Action("Index", "Milestone", new { objectiveId = objective.Id })" class="badge badge-@((int)item.TotalMilestones > 0 ? "primary" : "light")">
+                                                @item.TotalMilestones total
+                                            </a>
+                                        </div>
+                                        @if ((int)item.CompleteMilestones > 0)
+                                        {
+                                            <small class="badge badge-success">@item.CompleteMilestones complete</small>
+                                        }
+                                        @if ((int)item.DelayedMilestones > 0)
+                                        {
+                                            <small class="badge badge-danger">@item.DelayedMilestones delayed</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (hasProblems)
+                                        {
+                                            <span class="badge badge-warning">
+                                                <i class="fas fa-exclamation-triangle"></i> Needs attention
+                                            </span>
+                                        }
+                                        else if (totalRaid > 0)
+                                        {
+                                            <span class="badge badge-success">
+                                                <i class="fas fa-check-circle"></i> On track
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No activity</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <p>No strategic objectives found.</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Summary Information -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="card-title mb-0"><i class="fas fa-info-circle"></i> About this view</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>This page shows all strategic objectives and their associated RAID items. Use this view to:</p>
+                        <ul class="mb-0">
+                            <li>Review overall progress towards strategic goals</li>
+                            <li>Identify objectives that need attention (highlighted in yellow)</li>
+                            <li>Track RAID items by objective for governance meetings</li>
+                            <li>Click on any RAID badge to filter that specific type by objective</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

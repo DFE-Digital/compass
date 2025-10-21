@@ -1,0 +1,454 @@
+@using Compass.Models
+@{
+    ViewData["Title"] = "Configure permissions";
+    var token = ViewBag.Token as ApiToken;
+    var permissions = ViewBag.Permissions as Dictionary<string, (bool read, bool create, bool update, bool delete)>;
+    var resources = ViewBag.Resources as string[];
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("ApiTokens", "Admin")">API tokens</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Configure permissions</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">@token?.Name</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title mb-0 h5">Configure permissions</h2>
+            </div>
+            <div class="card-body">
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        @TempData["SuccessMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if (TempData["NewToken"] != null)
+                {
+                    <div class="alert alert-warning">
+                        <h4 class="alert-heading">Your new API token</h4>
+                        <p>Make sure to copy your API token now. You won't be able to see it again!</p>
+                        <div class="input-group mb-2">
+                            <input type="text" 
+                                   class="form-control font-monospace" 
+                                   id="tokenValue" 
+                                   value="@TempData["NewToken"]" 
+                                   readonly />
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    id="copyTokenBtn">
+                                Copy
+                            </button>
+                        </div>
+                        <p class="mb-0 small">Configure the permissions below to control what this token can access.</p>
+                    </div>
+                }
+
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @TempData["ErrorMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                <form method="post" action="@Url.Action("SavePermissions", new { id = token?.Id })">
+                    @Html.AntiForgeryToken()
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Tip:</strong> Follow the principle of least privilege. Only grant the minimum permissions necessary for the token's intended use.
+                    </div>
+
+                    <p class="text-muted mb-4">
+                        Set granular permissions for each resource. The token will only be able to perform actions that are explicitly enabled.
+                    </p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Resource</th>
+                                    <th class="text-center">Read</th>
+                                    <th class="text-center">Create</th>
+                                    <th class="text-center">Update</th>
+                                    <th class="text-center">Delete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var resource in resources ?? Array.Empty<string>())
+                                {
+                                    var hasPermissions = permissions?.ContainsKey(resource) ?? false;
+                                    var perm = hasPermissions ? permissions![resource] : (read: false, create: false, update: false, delete: false);
+
+                                    <tr>
+                                        <td><strong>@resource</strong></td>
+                                        <td class="text-center">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   name="@(resource)_read" 
+                                                   id="@(resource)_read"
+                                                   checked="@perm.read" />
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   name="@(resource)_create" 
+                                                   id="@(resource)_create"
+                                                   checked="@perm.create" />
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   name="@(resource)_update" 
+                                                   id="@(resource)_update"
+                                                   checked="@perm.update" />
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   name="@(resource)_delete" 
+                                                   id="@(resource)_delete"
+                                                   checked="@perm.delete" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <a href="@Url.Action("ApiTokens")" class="btn btn-secondary">
+                            Back to tokens
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            Save permissions
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h2 class="card-title mb-0 h5 text-white">Danger zone</h2>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <form method="post" action="@Url.Action("RecycleApiToken", new { id = token?.Id })">
+                        @Html.AntiForgeryToken()
+                        <h3 class="h6">Recycle token</h3>
+                        <p class="mb-2">Generate a new token value. The old token will be invalidated immediately.</p>
+                        <button type="submit" class="btn btn-warning btn-sm recycle-token-btn">
+                            Recycle token
+                        </button>
+                    </form>
+                </div>
+
+                <hr />
+
+                <div class="mb-3">
+                    <form method="post" action="@Url.Action("ToggleApiToken", new { id = token?.Id })">
+                        @Html.AntiForgeryToken()
+                        <h3 class="h6">@(token?.IsActive == true ? "Suspend" : "Activate") token</h3>
+                        <p class="mb-2">
+                            @if (token?.IsActive == true)
+                            {
+                                <span>Temporarily disable this token without deleting it. The token can be reactivated later.</span>
+                            }
+                            else
+                            {
+                                <span>Reactivate this token to allow API requests.</span>
+                            }
+                        </p>
+                        <button type="submit" class="btn btn-secondary btn-sm toggle-token-btn" data-action="@(token?.IsActive == true ? "Suspend" : "Activate")">
+                            <i class="fas fa-@(token?.IsActive == true ? "pause" : "play")"></i> @(token?.IsActive == true ? "Suspend" : "Activate") token
+                        </button>
+                    </form>
+                </div>
+
+                <hr />
+
+                <div>
+                    <h3 class="h6">Delete token</h3>
+                    <p class="mb-2">Permanently delete this token. This action cannot be undone.</p>
+                    <button type="button" class="btn btn-danger btn-sm" data-toggle="modal" data-target="#deleteTokenModal">
+                        Delete token
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title mb-0 h6">Token details</h2>
+            </div>
+            <div class="card-body">
+                <dl>
+                    <dt>Name</dt>
+                    <dd>@token?.Name</dd>
+
+                    @if (!string.IsNullOrEmpty(token?.Description))
+                    {
+                        <dt>Description</dt>
+                        <dd>@token.Description</dd>
+                    }
+
+                    <dt>Created</dt>
+                    <dd>@token?.CreatedAt.ToString("dd MMM yyyy")</dd>
+
+                    <dt>Created by</dt>
+                    <dd>@token?.CreatedByEmail</dd>
+
+                    <dt>Status</dt>
+                    <dd>
+                        @if (token?.IsActive == true)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                    </dd>
+
+                    @if (token?.ExpiresAt != null)
+                    {
+                        <dt>Expires</dt>
+                        <dd>@token.ExpiresAt.Value.ToString("dd MMM yyyy")</dd>
+                    }
+
+                    @if (token?.LastUsedAt != null)
+                    {
+                        <dt>Last used</dt>
+                        <dd>@token.LastUsedAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
+                    }
+                </dl>
+                <div class="mt-3">
+                    <a href="@Url.Action("ApiLogs", new { tokenId = token?.Id })" class="btn btn-outline-info btn-sm w-100">
+                        <i class="fas fa-history"></i> View request logs
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h2 class="card-title mb-0 h6">Permission levels</h2>
+            </div>
+            <div class="card-body">
+                <dl class="mb-0">
+                    <dt>Read</dt>
+                    <dd>View and list resources</dd>
+
+                    <dt>Create</dt>
+                    <dd>Create new resources</dd>
+
+                    <dt>Update</dt>
+                    <dd>Modify existing resources</dd>
+
+                    <dt>Delete</dt>
+                    <dd>Remove resources</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Token Confirmation Modal -->
+<div class="modal fade" id="deleteTokenModal" tabindex="-1" role="dialog" aria-labelledby="deleteTokenModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteTokenModalLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Delete API token
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Warning</h6>
+                    <p>This action cannot be undone. Deleting this token will:</p>
+                    <ul class="mb-0">
+                        <li>Immediately invalidate the token</li>
+                        <li>Break any applications currently using this token</li>
+                        <li>Remove all associated request logs</li>
+                    </ul>
+                </div>
+                <p><strong>Token name:</strong> @token?.Name</p>
+                <p class="mb-0">Please type <code>DELETE</code> to confirm:</p>
+                <input type="text" class="form-control mt-2" id="deleteConfirmInput" placeholder="Type DELETE to confirm" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    Cancel
+                </button>
+                <form method="post" action="@Url.Action("DeleteApiToken", new { id = token?.Id })" id="deleteTokenForm" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger" id="confirmDeleteBtn" disabled>
+                        Delete token
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Permissions Warning Modal -->
+<div class="modal fade" id="deletePermissionWarningModal" tabindex="-1" role="dialog" aria-labelledby="deletePermissionWarningLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="deletePermissionWarningLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Delete permissions enabled
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Important</h6>
+                    <p class="mb-0">You are granting delete permissions on one or more resources. This will allow the API token to permanently delete data.</p>
+                </div>
+                <p><strong>Resources with delete permission:</strong></p>
+                <ul id="deletePermissionsList"></ul>
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="acknowledgeDeletePerms">
+                    <label class="custom-control-label" for="acknowledgeDeletePerms">
+                        I understand that this token will be able to delete data
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-warning" id="confirmDeletePermsBtn" disabled>
+                    Continue with delete permissions
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+function copyToken() {
+    const tokenInput = document.getElementById('tokenValue');
+    tokenInput.select();
+    document.execCommand('copy');
+    
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = 'Copied!';
+    btn.classList.add('btn-success');
+    btn.classList.remove('btn-outline-secondary');
+    
+    setTimeout(() => {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-secondary');
+    }, 2000);
+}
+
+// Delete token confirmation
+document.addEventListener('DOMContentLoaded', function() {
+    // Copy token button
+    const copyBtn = document.getElementById('copyTokenBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', copyToken);
+    }
+
+    // Recycle token confirmation
+    document.querySelectorAll('.recycle-token-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            if (!confirm('Generate a new token? The old token will stop working immediately.')) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    // Toggle token confirmation
+    document.querySelectorAll('.toggle-token-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const action = this.getAttribute('data-action');
+            if (!confirm(action + ' this token?')) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    const deleteInput = document.getElementById('deleteConfirmInput');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    
+    if (deleteInput && confirmBtn) {
+        deleteInput.addEventListener('input', function() {
+            confirmBtn.disabled = this.value !== 'DELETE';
+        });
+    }
+
+    // Delete permissions warning
+    const permForm = document.querySelector('form[action*="SavePermissions"]');
+    const acknowledgeCheckbox = document.getElementById('acknowledgeDeletePerms');
+    const confirmDeletePermsBtn = document.getElementById('confirmDeletePermsBtn');
+    const deletePermsList = document.getElementById('deletePermissionsList');
+    
+    if (acknowledgeCheckbox && confirmDeletePermsBtn) {
+        acknowledgeCheckbox.addEventListener('change', function() {
+            confirmDeletePermsBtn.disabled = !this.checked;
+        });
+
+        confirmDeletePermsBtn.addEventListener('click', function() {
+            $('#deletePermissionWarningModal').modal('hide');
+            permForm.submit();
+        });
+    }
+
+    if (permForm) {
+        permForm.addEventListener('submit', function(e) {
+            // Check if any delete permissions are checked
+            const deleteCheckboxes = permForm.querySelectorAll('input[name$="_delete"]:checked');
+            
+            if (deleteCheckboxes.length > 0) {
+                e.preventDefault();
+                
+                // Build list of resources with delete permission
+                const resources = Array.from(deleteCheckboxes).map(cb => {
+                    const resourceName = cb.name.replace('_delete', '');
+                    return resourceName;
+                });
+                
+                // Update modal list
+                deletePermsList.innerHTML = resources.map(r => `<li><strong>${r}</strong></li>`).join('');
+                
+                // Reset checkbox
+                acknowledgeCheckbox.checked = false;
+                confirmDeletePermsBtn.disabled = true;
+                
+                // Show modal
+                $('#deletePermissionWarningModal').modal('show');
+            }
+        });
+    }
+});
+</script>
+

@@ -1,0 +1,113 @@
+@{
+    ViewData["Title"] = "Create API token";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("ApiTokens", "Admin")">API tokens</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Create token</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h1 class="card-title mb-0" style="font-size: 1.75rem;">Create API token</h1>
+            </div>
+            <div class="card-body">
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @TempData["ErrorMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                <form method="post" action="@Url.Action("CreateApiToken")">
+                    @Html.AntiForgeryToken()
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Token name <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               required 
+                               maxlength="200"
+                               placeholder="e.g. SAS-ReadOnly, PowerBI-Integration" />
+                        <div class="form-text">
+                            Give this token a descriptive name to identify its purpose
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" 
+                                  id="description" 
+                                  name="description" 
+                                  rows="3"
+                                  maxlength="1000"
+                                  placeholder="Optional description of what this token will be used for"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="expiresAt" class="form-label">Expiry date</label>
+                        <input type="date" 
+                               class="form-control" 
+                               id="expiresAt" 
+                               name="expiresAt"
+                               min="@DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd")" />
+                        <div class="form-text">
+                            Optional. Leave blank for a token that never expires
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Important:</strong> After creating the token, you'll need to copy it immediately. 
+                        For security reasons, you won't be able to view it again.
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="@Url.Action("ApiTokens")" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            Create token
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title mb-0 h6">About API tokens</h2>
+            </div>
+            <div class="card-body">
+                <p class="small">API tokens allow external applications to access COMPASS data programmatically.</p>
+                
+                <h3 class="h6 mt-3">Best practices:</h3>
+                <ul class="small">
+                    <li>Use descriptive names that indicate the token's purpose</li>
+                    <li>Set an expiry date for enhanced security</li>
+                    <li>Grant only the minimum permissions needed</li>
+                    <li>Store tokens securely (use environment variables)</li>
+                    <li>Rotate tokens regularly</li>
+                    <li>Delete unused tokens immediately</li>
+                </ul>
+
+                <h3 class="h6 mt-3">Token format:</h3>
+                <p class="small">Tokens will be prefixed with <code>cps_</code> to identify them as COMPASS tokens.</p>
+            </div>
+        </div>
+    </div>
+</div>
+

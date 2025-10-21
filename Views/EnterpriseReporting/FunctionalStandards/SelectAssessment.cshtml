@@ -1,0 +1,109 @@
+@{
+    ViewData["Title"] = "Select assessment";
+    var product = ViewBag.Product as Compass.Models.ProductDto;
+    var standard = ViewBag.Standard as Compass.Models.FunctionalStandard;
+    var existingAssessments = ViewBag.ExistingAssessments as List<Compass.Models.FunctionalStandardAssessment>;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="FunctionalStandards">Functional standards</a></li>
+                    <li class="breadcrumb-item active">Select assessment</li>
+                </ol>
+                <h1 class="m-0">@product.Title - @standard.Title</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="info-box">
+                    <span class="info-box-icon bg-info"><i class="fas fa-building"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Product</span>
+                        <span class="info-box-number">@product.Title</span>
+                        <small>@product.FipsId</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="info-box">
+                    <span class="info-box-icon bg-success"><i class="fas fa-clipboard-check"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Functional standard</span>
+                        <span class="info-box-number">@standard.Title</span>
+                        <small>Standard @standard.Id</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-plus-circle"></i> Start new assessment</h3>
+            </div>
+            <div class="card-body">
+                <p>Start a new functional standards assessment for <strong>@product.Title</strong> against <strong>@standard.Title</strong>.</p>
+                <p class="text-muted">
+                    @if (standard.Themes != null)
+                    {
+                        var totalCriteria = standard.Themes.Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0);
+                        <span>This assessment includes @totalCriteria criteria across @standard.Themes.Count themes.</span>
+                    }
+                </p>
+                <form asp-action="StartAssessment" method="get">
+                    <input type="hidden" name="fipsId" value="@product.FipsId" />
+                    <input type="hidden" name="standardId" value="@standard.Id" />
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-play"></i> Start new assessment
+                    </button>
+                    <a asp-action="FunctionalStandards" class="btn btn-default btn-lg">
+                        Back
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        @if (existingAssessments != null && existingAssessments.Any())
+        {
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h3 class="card-title"><i class="fas fa-history"></i> Previous assessments</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Assessment date</th>
+                                <th>Assessed by</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var assessment in existingAssessments)
+                            {
+                                <tr>
+                                    <td>@assessment.AssessmentDate.ToString("d MMM yyyy HH:mm")</td>
+                                    <td>@assessment.AssessedBy</td>
+                                    <td class="col-actions">
+                                        <a asp-action="ViewAssessment" asp-route-assessmentId="@assessment.Id" class="btn btn-sm btn-primary">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

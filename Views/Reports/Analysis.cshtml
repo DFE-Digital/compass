@@ -1,0 +1,510 @@
+@model IEnumerable<ProductAnalysisReport>
+@{
+    ViewData["Title"] = "Product analysis";
+    var productsNeedingAttention = Model.Where(p => p.NeedsAttention).ToList();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item">Reports</li>
+                    <li class="breadcrumb-item active">Analysis</li>
+                </ol>
+                <h1 class="m-0">Product analysis</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Executive Summary -->
+        <div class="row">
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@ViewBag.TotalProducts</h3>
+                        <p>Total products</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-server"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@ViewBag.ProductsNeedingAttention</h3>
+                        <p>Need attention</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@ViewBag.TotalHighRisks</h3>
+                        <p>High risks</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@ViewBag.TotalCriticalIssues</h3>
+                        <p>Critical issues</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-bomb"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (productsNeedingAttention.Any())
+        {
+            <!-- Products Needing Urgent Attention -->
+            <div class="card card-danger">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-exclamation-triangle"></i> Products requiring urgent attention
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var product in productsNeedingAttention.Take(6))
+                        {
+                            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                                <div class="card card-outline @(product.ProblemScore > 70 ? "card-danger" : "card-warning")">
+                                    <div class="card-header">
+                                        <h3 class="card-title">
+                                            <a asp-controller="Products" asp-action="Dashboard" asp-route-id="@product.FipsId">
+                                                @product.ProductTitle
+                                            </a>
+                                        </h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-6">Problem score:</dt>
+                                            <dd class="col-sm-6">
+                                                <span class="badge @(product.ProblemScore > 70 ? "badge-danger" : "badge-warning")">
+                                                    @product.ProblemScore/100
+                                                </span>
+                                            </dd>
+
+                                            @if (product.UserSatisfaction.HasValue)
+                                            {
+                                                <dt class="col-sm-6">User satisfaction:</dt>
+                                                <dd class="col-sm-6">
+                                                    <span class="badge @(product.UserSatisfaction < 60 ? "badge-danger" : product.UserSatisfaction < 75 ? "badge-warning" : "badge-success")">
+                                                        @product.UserSatisfaction.Value.ToString("F1")%
+                                                    </span>
+                                                </dd>
+                                            }
+
+                                            @if (product.HighRisks > 0)
+                                            {
+                                                <dt class="col-sm-6">High risks:</dt>
+                                                <dd class="col-sm-6"><span class="badge badge-danger">@product.HighRisks</span></dd>
+                                            }
+
+                                            @if (product.CriticalIssues > 0)
+                                            {
+                                                <dt class="col-sm-6">Critical issues:</dt>
+                                                <dd class="col-sm-6"><span class="badge badge-danger">@product.CriticalIssues</span></dd>
+                                            }
+
+                                            @if (product.BlockedIssues > 0)
+                                            {
+                                                <dt class="col-sm-6">Blocked issues:</dt>
+                                                <dd class="col-sm-6"><span class="badge badge-danger">@product.BlockedIssues</span></dd>
+                                            }
+
+                                            @if (product.OverdueActions > 0)
+                                            {
+                                                <dt class="col-sm-6">Overdue actions:</dt>
+                                                <dd class="col-sm-6"><span class="badge badge-warning">@product.OverdueActions</span></dd>
+                                            }
+
+                                            @if (product.DelayedMilestones > 0)
+                                            {
+                                                <dt class="col-sm-6">Delayed milestones:</dt>
+                                                <dd class="col-sm-6"><span class="badge badge-danger">@product.DelayedMilestones</span></dd>
+                                            }
+
+                                            @if (product.OldestOpenIssue.HasValue)
+                                            {
+                                                var daysOpen = (DateTime.UtcNow - product.OldestOpenIssue.Value).Days;
+                                                <dt class="col-sm-6">Oldest issue:</dt>
+                                                <dd class="col-sm-6">
+                                                    <span class="badge @(daysOpen > 90 ? "badge-danger" : daysOpen > 30 ? "badge-warning" : "badge-info")">
+                                                        @daysOpen days
+                                                    </span>
+                                                </dd>
+                                            }
+                                        </dl>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a asp-controller="Risk" asp-action="Index" class="btn btn-info">
+                                                Risks
+                                            </a>
+                                            <a asp-controller="Issue" asp-action="Index" class="btn btn-warning">
+                                                Issues
+                                            </a>
+                                            <a asp-controller="Action" asp-action="Index" class="btn btn-primary">
+                                                Actions
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- All Products Analysis -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Product analysis overview</h3>
+                <div class="card-tools">
+                    <span class="badge badge-info">Sorted by problem score (highest first)</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Problem score</th>
+                            <th>User satisfaction</th>
+                            <th>Risk indicators</th>
+                            <th>Issue indicators</th>
+                            <th>Delivery indicators</th>
+                            <th>Last report</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var product in Model)
+                            {
+                                var rowClass = product.NeedsAttention ? (product.ProblemScore > 70 ? "table-danger" : "table-warning") : "";
+                                <tr class="@rowClass">
+                                    <td>
+                                        <strong>
+                                            <a asp-controller="Products" asp-action="Dashboard" asp-route-id="@product.FipsId">
+                                                @product.ProductTitle
+                                            </a>
+                                        </strong>
+                                        <br /><small class="text-muted">@product.FipsId</small>
+                                    </td>
+                                    <td>
+                                        <div class="progress progress-xs">
+                                            <div class="progress-bar @(product.ProblemScore > 70 ? "bg-danger" : product.ProblemScore > 40 ? "bg-warning" : "bg-success")" 
+                                                 style="width: @product.ProblemScore%"></div>
+                                        </div>
+                                        <strong>@product.ProblemScore</strong>/100
+                                    </td>
+                                    <td>
+                                        @if (product.UserSatisfaction.HasValue)
+                                        {
+                                            <span class="badge @(product.UserSatisfaction < 60 ? "badge-danger" : product.UserSatisfaction < 75 ? "badge-warning" : "badge-success")">
+                                                @product.UserSatisfaction.Value.ToString("F1")%
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">No data</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalRisks > 0)
+                                        {
+                                            <span>Total: @product.TotalRisks</span>
+                                            if (product.HighRisks > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.HighRisks high</span>
+                                            }
+                                            <br /><small>Avg score: @product.AverageRiskScore.ToString("F1")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.TotalIssues > 0)
+                                        {
+                                            <span>Total: @product.TotalIssues</span>
+                                            if (product.CriticalIssues > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.CriticalIssues critical</span>
+                                            }
+                                            if (product.BlockedIssues > 0)
+                                            {
+                                                <br /><span class="badge badge-danger">@product.BlockedIssues blocked</span>
+                                            }
+                                            if (product.OldestOpenIssue.HasValue)
+                                            {
+                                                var daysOpen = (DateTime.UtcNow - product.OldestOpenIssue.Value).Days;
+                                                <br /><small>Oldest: @daysOpen days</small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.OverdueActions > 0 || product.DelayedMilestones > 0)
+                                        {
+                                            if (product.OverdueActions > 0)
+                                            {
+                                                <span class="badge badge-warning">@product.OverdueActions overdue actions</span>
+                                                <br />
+                                            }
+                                            if (product.DelayedMilestones > 0)
+                                            {
+                                                <span class="badge badge-danger">@product.DelayedMilestones delayed milestones</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success">On track</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.LastReportDate.HasValue)
+                                        {
+                                            <small>@product.LastReportDate.Value.ToString("dd/MM/yyyy")</small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">No data</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.NeedsAttention)
+                                        {
+                                            <span class="badge badge-danger">
+                                                <i class="fas fa-exclamation-triangle"></i> Needs attention
+                                            </span>
+                                        }
+                                        else if (product.ProblemScore > 20)
+                                        {
+                                            <span class="badge badge-warning">
+                                                Monitor
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-success">
+                                                Healthy
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center">No data available</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Insights and Recommendations -->
+        <div class="row">
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="card card-outline card-warning">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-lightbulb"></i> Key insights
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <ul>
+                            @if (ViewBag.ProductsNeedingAttention > 0)
+                            {
+                                <li>
+                                    <strong>@ViewBag.ProductsNeedingAttention products</strong> require urgent attention 
+                                    (@Math.Round((double)ViewBag.ProductsNeedingAttention / ViewBag.TotalProducts * 100, 1)% of portfolio)
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalHighRisks > 0)
+                            {
+                                <li>
+                                    <strong class="text-danger">@ViewBag.TotalHighRisks high-severity risks</strong> are currently active across the portfolio
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalCriticalIssues > 0)
+                            {
+                                <li>
+                                    <strong class="text-danger">@ViewBag.TotalCriticalIssues critical issues</strong> need immediate resolution
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalBlockedIssues > 0)
+                            {
+                                <li>
+                                    <strong>@ViewBag.TotalBlockedIssues issues are blocked</strong>, potentially causing delivery delays
+                                </li>
+                            }
+                            
+                            @{
+                                var productsWithLowSatisfaction = Model.Count(p => p.UserSatisfaction.HasValue && p.UserSatisfaction < 70);
+                                if (productsWithLowSatisfaction > 0)
+                                {
+                                    <li>
+                                        <strong>@productsWithLowSatisfaction products</strong> have user satisfaction below 70%
+                                    </li>
+                                }
+                            }
+                            
+                            @{
+                                var productsWithOldIssues = Model.Count(p => 
+                                    p.OldestOpenIssue.HasValue && 
+                                    (DateTime.UtcNow - p.OldestOpenIssue.Value).Days > 90);
+                                if (productsWithOldIssues > 0)
+                                {
+                                    <li>
+                                        <strong>@productsWithOldIssues products</strong> have issues open for more than 90 days
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="card card-outline card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Recommended actions
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <ul>
+                            @if (productsNeedingAttention.Any())
+                            {
+                                <li>
+                                    <strong>Priority review:</strong> Conduct detailed review of top @Math.Min(3, productsNeedingAttention.Count) problematic products
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalCriticalIssues > 0)
+                            {
+                                <li>
+                                    <strong>Critical issues:</strong> Escalate and assign resources to resolve critical issues immediately
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalBlockedIssues > 0)
+                            {
+                                <li>
+                                    <strong>Blocked items:</strong> Review and unblock @ViewBag.TotalBlockedIssues blocked issues
+                                </li>
+                            }
+                            
+                            @if (ViewBag.TotalHighRisks > 0)
+                            {
+                                <li>
+                                    <strong>Risk mitigation:</strong> Review and implement mitigation strategies for high-severity risks
+                                </li>
+                            }
+                            
+                            @{
+                                var productsWithoutData = Model.Count(p => !p.HasMetricsData);
+                                if (productsWithoutData > 0)
+                                {
+                                    <li>
+                                        <strong>Data gaps:</strong> @productsWithoutData products have no metrics data - ensure reporting compliance
+                                    </li>
+                                }
+                            }
+                            
+                            @{
+                                var lowSatProducts = Model.Where(p => p.UserSatisfaction.HasValue && p.UserSatisfaction < 70).Take(3).ToList();
+                                if (lowSatProducts.Any())
+                                {
+                                    <li>
+                                        <strong>User experience:</strong> Investigate satisfaction issues in: 
+                                        @string.Join(", ", lowSatProducts.Select(p => p.ProductTitle))
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Methodology -->
+        <div class="card card-outline card-secondary collapsed-card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-calculator"></i> Analysis methodology
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <h5>Problem score calculation</h5>
+                <p>The problem score (0-100, higher = more problems) is calculated using:</p>
+                <ul>
+                    <li>High risks (15+): +10 points each</li>
+                    <li>Medium risks (10-14): +5 points each</li>
+                    <li>Open risks: +3 points each</li>
+                    <li>Critical issues: +15 points each</li>
+                    <li>High severity issues: +8 points each</li>
+                    <li>Blocked issues: +10 points each</li>
+                    <li>Open/in-progress issues: +2 points each</li>
+                    <li>Overdue actions: +3 points each</li>
+                    <li>Delayed milestones: +8 points each</li>
+                    <li>User satisfaction penalty: If below 70%, add (70-satisfaction)/2 points</li>
+                </ul>
+
+                <h5 class="mt-3">Needs attention threshold</h5>
+                <p>Products with a problem score above 50 are flagged as needing attention.</p>
+
+                <h5 class="mt-3">Data sources</h5>
+                <ul>
+                    <li><strong>RAID data:</strong> Real-time counts from Compass database</li>
+                    <li><strong>User satisfaction:</strong> Latest submitted performance metrics</li>
+                    <li><strong>Products:</strong> Live data from FIPS CMS API</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+

@@ -1,0 +1,444 @@
+@model Compass.Models.Issue
+@{
+    ViewData["Title"] = "Create issue";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Issues</a></li>
+                    <li class="breadcrumb-item active">Create</li>
+                </ol>
+                <h1 class="m-0">Create issue</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">New issue</h3>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                    
+                    <!-- Basic Information Section -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-info-circle"></i> Basic Information</h5>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Title" class="control-label font-weight-bold">Issue Title *</label>
+                        <input asp-for="Title" class="form-control form-control-lg" placeholder="Enter a clear, descriptive title for this issue" />
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label font-weight-bold">Description *</label>
+                        <textarea asp-for="Description" class="form-control" rows="4" placeholder="Provide a detailed description of the issue, including context and impact"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <!-- Classification & Context Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-tags"></i> Classification & Context</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ObjectiveId" class="control-label">Strategic objective</label>
+                                <select asp-for="ObjectiveId" class="form-control" asp-items="ViewBag.Objectives">
+                                    <option value="">-- Select objective (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ObjectiveId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="FipsId" class="control-label">Product</label>
+                                <select asp-for="FipsId" class="form-control">
+                                    <option value="">-- Select product (optional) --</option>
+                                    @if (ViewBag.Products != null)
+                                    {
+                                        @foreach (var product in ViewBag.Products)
+                                        {
+                                            <option value="@product.FipsId">@product.Title (@product.FipsId)</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="FipsId" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BusinessArea" class="control-label">Business area</label>
+                                <select asp-for="BusinessArea" class="form-control">
+                                    <option value="">-- Select business area (optional) --</option>
+                                    @if (ViewBag.BusinessAreas != null)
+                                    {
+                                        @foreach (var area in ViewBag.BusinessAreas)
+                                        {
+                                            <option value="@area">@area</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Category" class="control-label">Category</label>
+                                <input asp-for="Category" class="form-control" placeholder="Optional free-text categorisation" />
+                                <span asp-validation-for="Category" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Issue Assessment Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-exclamation-triangle"></i> Issue Assessment</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Severity" class="control-label font-weight-bold">
+                                    Severity *
+                                    <a href="#" data-toggle="modal" data-target="#severityModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <select asp-for="Severity" class="form-control" required>
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                                <span asp-validation-for="Severity" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Priority" class="control-label">
+                                    Priority
+                                    <a href="#" data-toggle="modal" data-target="#priorityModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <select asp-for="Priority" class="form-control">
+                                    <option value="">-- Select priority --</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                                <span asp-validation-for="Priority" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="DetectedDate" class="control-label">Detected Date</label>
+                                <input asp-for="DetectedDate" type="date" class="form-control" />
+                                <span asp-validation-for="DetectedDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Management & Resolution Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-users"></i> Management & Resolution</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="OwnerUserId" class="control-label">Issue Owner</label>
+                                <input type="text" 
+                                       id="OwnerUserSearch" 
+                                       class="form-control staff-autocomplete" 
+                                       placeholder="Start typing name or email..."
+                                       autocomplete="off" />
+                                <input type="hidden" asp-for="OwnerUserId" id="OwnerUserId" />
+                                <span asp-validation-for="OwnerUserId" class="text-danger"></span>
+                                <small class="form-text text-muted">Start typing to search staff directory</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label">Status</label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="open" selected>Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="blocked">Blocked</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="TargetResolutionDate" class="control-label">Target Resolution Date</label>
+                                <input asp-for="TargetResolutionDate" type="date" class="form-control" />
+                                <span asp-validation-for="TargetResolutionDate" class="text-danger"></span>
+                                <small class="form-text text-muted">When should this issue be resolved?</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BlockedFlag" class="control-label">
+                                    <input asp-for="BlockedFlag" type="checkbox" class="form-check-input" />
+                                    Issue is blocked
+                                </label>
+                                <span asp-validation-for="BlockedFlag" class="text-danger"></span>
+                                <small class="form-text text-muted">Check if this issue cannot progress due to external dependencies</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="DetectedDate" class="control-label">Detected date</label>
+                                <input asp-for="DetectedDate" type="date" class="form-control" required />
+                                <span asp-validation-for="DetectedDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="TargetResolutionDate" class="control-label">Target resolution date</label>
+                                <input asp-for="TargetResolutionDate" type="date" class="form-control" />
+                                <span asp-validation-for="TargetResolutionDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-9 col-xl-9 col-lg-9 col-md-9 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label"></label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="open" selected>Open</option>
+                                    <option value="in_progress">In progress</option>
+                                    <option value="blocked">Blocked</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BlockedFlag" class="control-label">
+                                    Blocked?
+                                    <a href="#" data-toggle="modal" data-target="#blockedModal" class="text-info">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                </label>
+                                <div class="form-check">
+                                    <input asp-for="BlockedFlag" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="BlockedFlag">
+                                        Mark as blocked
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Workaround" class="control-label"></label>
+                        <textarea asp-for="Workaround" class="form-control" rows="2"></textarea>
+                        <span asp-validation-for="Workaround" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="ResolutionSummary" class="control-label">Resolution summary</label>
+                        <textarea asp-for="ResolutionSummary" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="ResolutionSummary" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        Create issue
+                    </button>
+                    <a asp-action="Index" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+<!-- Info Modals -->
+<div class="modal fade" id="severityModal" tabindex="-1" role="dialog" aria-labelledby="severityModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="severityModalLabel">Severity guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Severity</strong> measures the impact and urgency of the issue.</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Level</th>
+                            <th>Description</th>
+                            <th>Examples</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-danger">Critical</span></td>
+                            <td>System down, major functionality broken, severe security issue</td>
+                            <td>Complete service outage, data breach, major bug preventing use</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">High</span></td>
+                            <td>Significant functionality impaired, workaround difficult</td>
+                            <td>Key feature not working, performance severely degraded</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-info">Medium</span></td>
+                            <td>Moderate impact, workaround available</td>
+                            <td>Minor feature broken, cosmetic issues affecting usability</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-secondary">Low</span></td>
+                            <td>Minimal impact, easily worked around</td>
+                            <td>Minor cosmetic issues, spelling errors, nice-to-have features</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-warning">
+                    <strong>Response times:</strong>
+                    <ul class="mb-0">
+                        <li>Critical: Immediate action required</li>
+                        <li>High: Within 24-48 hours</li>
+                        <li>Medium: Within 1 week</li>
+                        <li>Low: Within 1 month or next release</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="priorityModal" tabindex="-1" role="dialog" aria-labelledby="priorityModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="priorityModalLabel">Priority guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Priority</strong> determines the order in which issues should be addressed.</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Level</th>
+                            <th>Description</th>
+                            <th>When to use</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-danger">High</span></td>
+                            <td>Must be resolved urgently</td>
+                            <td>Critical business impact, affecting multiple users, blocking other work</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-warning">Medium</span></td>
+                            <td>Should be resolved soon</td>
+                            <td>Affecting some users, workaround available, important but not urgent</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-info">Low</span></td>
+                            <td>Can be resolved when capacity allows</td>
+                            <td>Minor issues, cosmetic problems, enhancement requests</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info">
+                    <strong>Note:</strong> Priority is often determined by combining severity with business factors such as:
+                    <ul class="mb-0">
+                        <li>Number of users affected</li>
+                        <li>Business criticality of affected functionality</li>
+                        <li>Availability of workarounds</li>
+                        <li>Upcoming deadlines or dependencies</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="blockedModal" tabindex="-1" role="dialog" aria-labelledby="blockedModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="blockedModalLabel">Blocked flag guidance</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Mark an issue as blocked</strong> when progress cannot continue due to external dependencies.</p>
+                <h5>Common blocking scenarios</h5>
+                <ul>
+                    <li><strong>External dependencies:</strong> Waiting for third-party vendor, supplier, or partner</li>
+                    <li><strong>Resource constraints:</strong> Required specialist unavailable or budget not approved</li>
+                    <li><strong>Technical blockers:</strong> Dependent on other work being completed first</li>
+                    <li><strong>Decision pending:</strong> Waiting for stakeholder decision or approval</li>
+                    <li><strong>Access issues:</strong> Lack of access to systems, data, or environments</li>
+                </ul>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Important:</strong> Blocked issues should be escalated immediately to remove the blocker. Document the blocking reason in the workaround or notes field.
+                </div>
+                <div class="alert alert-info">
+                    <strong>Tip:</strong> When unblocking an issue, update the status to "in_progress" and remove the blocked flag.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <partial name="_StaffAutocompleteScript" />
+}
+

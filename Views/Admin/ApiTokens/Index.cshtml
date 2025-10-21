@@ -1,0 +1,139 @@
+@model List<Compass.Models.ApiToken>
+@{
+    ViewData["Title"] = "API tokens";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item active" aria-current="page">API tokens</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1>API tokens</h1>
+                <p class="text-muted mb-0">Manage API tokens for programmatic access to COMPASS data.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="@Url.Action("ApiLogs")" class="btn btn-secondary">
+                    <i class="fas fa-history"></i> View logs
+                </a>
+                <a href="@Url.Action("CreateApiToken")" class="btn btn-primary">
+                    Create token
+                </a>
+            </div>
+        </div>
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-body">
+
+                @if (!Model.Any())
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No API tokens have been created yet.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Last used</th>
+                                    <th>Expires</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var token in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("ConfigurePermissions", new { id = token.Id })">
+                                                <strong>@token.Name</strong>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(token.Description))
+                                            {
+                                                <span>@token.Description</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (token.IsActive)
+                                            {
+                                                <span class="badge bg-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            }
+                                            @if (token.ExpiresAt.HasValue && token.ExpiresAt.Value < DateTime.UtcNow)
+                                            {
+                                                <br /><span class="badge bg-danger mt-1">Expired</span>
+                                            }
+                                        </td>
+                                        <td>@token.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            @if (token.LastUsedAt.HasValue)
+                                            {
+                                                <span title="@token.LastUsedAt.Value.ToString("dd MMM yyyy HH:mm")">
+                                                    @((DateTime.UtcNow - token.LastUsedAt.Value).TotalDays < 1 ? "Today" : $"{(int)(DateTime.UtcNow - token.LastUsedAt.Value).TotalDays}d ago")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Never</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (token.ExpiresAt.HasValue)
+                                            {
+                                                <span>@token.ExpiresAt.Value.ToString("dd MMM yyyy")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Never</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+

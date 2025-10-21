@@ -1,0 +1,120 @@
+@model IEnumerable<Compass.Models.Objective>
+@{
+    ViewData["Title"] = "Strategic objectives";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item">Administration</li>
+                    <li class="breadcrumb-item active">Strategic objectives</li>
+                </ol>
+                <h1 class="m-0">Strategic objectives</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">All strategic objectives</h3>
+                <div class="card-tools">
+                    <a asp-controller="Admin" asp-action="CreateObjective" class="btn btn-primary btn-sm">
+                        Add new strategic objective
+                    </a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Theme</th>
+                            <th>Owner</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var objective in Model)
+                            {
+                                <tr style="cursor: pointer;" class="clickable-row" data-href="@Url.Action("ObjectiveDetails", "Admin", new { id = objective.Id })">
+                                    <td>
+                                        <a asp-controller="Admin" asp-action="ObjectiveDetails" asp-route-id="@objective.Id">@objective.Title</a>
+                                    </td>
+                                    <td>@(objective.Theme ?? "-")</td>
+                                    <td>@(objective.OwnerUser?.Name ?? "-")</td>
+                                    <td>
+                                        @switch (objective.Status)
+                                        {
+                                            case "active":
+                                                <span class="badge badge-success">Active</span>
+                                                break;
+                                            case "proposed":
+                                                <span class="badge badge-info">Proposed</span>
+                                                break;
+                                            case "paused":
+                                                <span class="badge badge-warning">Paused</span>
+                                                break;
+                                            case "completed":
+                                                <span class="badge badge-primary">Completed</span>
+                                                break;
+                                            case "cancelled":
+                                                <span class="badge badge-secondary">Cancelled</span>
+                                                break;
+                                            default:
+                                                <span class="badge badge-secondary">@objective.Status</span>
+                                                break;
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">No strategic objectives found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Handle clickable rows
+            $('.clickable-row').on('click', function(e) {
+                // Don't navigate if clicking on a link
+                if (e.target.tagName !== 'A') {
+                    window.location = $(this).data('href');
+                }
+            });
+        });
+    </script>
+}
+

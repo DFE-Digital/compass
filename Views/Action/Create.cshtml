@@ -1,0 +1,513 @@
+@model Compass.Models.Action
+@{
+    ViewData["Title"] = "Create action";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Actions</a></li>
+                    <li class="breadcrumb-item active">Create</li>
+                </ol>
+                <h1 class="m-0">Create action</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">New action</h3>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                    
+                    <!-- Source Relationship Section -->
+                    @if (ViewBag.SourceType != null)
+                    {
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-2"><i class="fas fa-link"></i> Creating action for @ViewBag.SourceType</h6>
+                                    <p class="mb-0"><strong>@ViewBag.SourceType:</strong> @ViewBag.SourceTitle</p>
+                                    <p class="mb-0 mt-2"><small>This action will be automatically linked to the @ViewBag.SourceType.ToLower() when saved.</small></p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    
+                    <!-- Basic Information Section -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-info-circle"></i> Basic Information</h5>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Title" class="control-label font-weight-bold">Action Title *</label>
+                        <input asp-for="Title" class="form-control form-control-lg" placeholder="Enter a clear, descriptive title for this action" />
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label font-weight-bold">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="4" placeholder="Provide a detailed description of the action, including steps and expected outcomes"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <!-- Classification & Context Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-tags"></i> Classification & Context</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ObjectiveId" class="control-label">Strategic objective</label>
+                                <select asp-for="ObjectiveId" class="form-control" asp-items="ViewBag.Objectives">
+                                    <option value="">-- Select objective (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ObjectiveId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="FipsId" class="control-label">Product</label>
+                                <select asp-for="FipsId" class="form-control">
+                                    <option value="">-- Select product (optional) --</option>
+                                    @if (ViewBag.Products != null)
+                                    {
+                                        @foreach (var product in ViewBag.Products)
+                                        {
+                                            <option value="@product.FipsId">@product.Title (@product.FipsId)</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="FipsId" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BusinessArea" class="control-label">Business area</label>
+                                <select asp-for="BusinessArea" class="form-control">
+                                    <option value="">-- Select business area (optional) --</option>
+                                    @if (ViewBag.BusinessAreas != null)
+                                    {
+                                        @foreach (var area in ViewBag.BusinessAreas)
+                                        {
+                                            <option value="@area">@area</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ActionSourceId" class="control-label">Action source</label>
+                                <select asp-for="ActionSourceId" class="form-control" asp-items="ViewBag.ActionSources" id="ActionSourceId">
+                                    <option value="">-- Select source (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ActionSourceId" class="text-danger"></span>
+                                <small class="form-text text-muted">Where did this action originate from?</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dynamic source item selection -->
+                    <div class="row d-none" id="sourceItemRow">
+                        <div class="col-12">
+                            <div class="form-group">
+                                <label id="sourceItemLabel" class="control-label">Related item</label>
+                                <select id="sourceItemSelect" class="form-control">
+                                    <option value="">-- Select item --</option>
+                                </select>
+                                <small class="form-text text-muted" id="sourceItemHelp">Select the specific item this action relates to</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Management Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-users"></i> Action Management</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="AssignedToEmail" class="control-label">Assigned to</label>
+                                <input type="text" 
+                                       id="AssignedToUserSearch" 
+                                       class="form-control staff-autocomplete-email" 
+                                       placeholder="Start typing name or email..."
+                                       autocomplete="off" />
+                                <input type="hidden" asp-for="AssignedToEmail" id="AssignedToEmail" />
+                                <span asp-validation-for="AssignedToEmail" class="text-danger"></span>
+                                <small class="form-text text-muted">Start typing to search staff directory</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ParentActionId" class="control-label">Parent action</label>
+                                <select asp-for="ParentActionId" class="form-control" asp-items="ViewBag.ParentActions">
+                                    <option value="">-- Select parent (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ParentActionId" class="text-danger"></span>
+                                <small class="form-text text-muted">For sub-tasks and dependencies</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Priority & Status Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-flag"></i> Priority & Status</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Priority" class="control-label">Priority</label>
+                                <select asp-for="Priority" class="form-control">
+                                    <option value="">-- Select priority --</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                                <span asp-validation-for="Priority" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label">Status</label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="not_started" selected>Not Started</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="blocked">Blocked</option>
+                                    <option value="done">Done</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="EvidenceUrl" class="control-label">Evidence URL</label>
+                                <input asp-for="EvidenceUrl" type="url" class="form-control" placeholder="https://..." />
+                                <span asp-validation-for="EvidenceUrl" class="text-danger"></span>
+                                <small class="form-text text-muted">Link to evidence or documentation</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="text-primary mb-3"><i class="fas fa-calendar"></i> Timeline</h5>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="StartDate" class="control-label">Start Date</label>
+                                <input asp-for="StartDate" type="date" class="form-control" />
+                                <span asp-validation-for="StartDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="DueDate" class="control-label">Due Date</label>
+                                <input asp-for="DueDate" type="date" class="form-control" />
+                                <span asp-validation-for="DueDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="CompletedDate" class="control-label">Completed Date</label>
+                                <input asp-for="CompletedDate" type="date" class="form-control" />
+                                <span asp-validation-for="CompletedDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Notes" class="control-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Notes" class="text-danger"></span>
+                    </div>
+                    
+                    <!-- Hidden fields for source relationships -->
+                    @if (ViewBag.RiskId != null)
+                    {
+                        <input type="hidden" name="riskId" value="@ViewBag.RiskId" />
+                    }
+                    @if (ViewBag.IssueId != null)
+                    {
+                        <input type="hidden" name="issueId" value="@ViewBag.IssueId" />
+                    }
+                    @if (ViewBag.MilestoneId != null)
+                    {
+                        <input type="hidden" name="milestoneId" value="@ViewBag.MilestoneId" />
+                    }
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary" id="createActionBtn">
+                        Create action
+                    </button>
+                    <a asp-action="Index" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        // Staff autocomplete for email field
+        $(document).ready(function() {
+            console.log('Staff autocomplete for email initialized');
+            
+            var $input = $('#AssignedToUserSearch');
+            var $hiddenInput = $('#AssignedToEmail');
+            var timeoutId;
+            var $resultsContainer = $('<div class="autocomplete-results"></div>');
+            $input.after($resultsContainer);
+            
+            // Handle input with debounce
+            $input.on('input', function() {
+                clearTimeout(timeoutId);
+                var searchTerm = $(this).val();
+                
+                if (searchTerm.length < 2) {
+                    $resultsContainer.hide().empty();
+                    return;
+                }
+                
+                timeoutId = setTimeout(function() {
+                    $.ajax({
+                        url: '/api/staff/search',
+                        data: { q: searchTerm },
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log('API response:', data);
+                            displayResults(data.results);
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Failed to search staff:', status, error);
+                        }
+                    });
+                }, 250);
+            });
+            
+            function displayResults(results) {
+                $resultsContainer.empty();
+                
+                if (!results || results.length === 0) {
+                    $resultsContainer.html('<div class="autocomplete-item no-results">No staff found</div>');
+                    $resultsContainer.show();
+                    return;
+                }
+                
+                results.forEach(function(staff) {
+                    var $item = $('<div class="autocomplete-item"></div>');
+                    $item.html(
+                        '<div class="autocomplete-name">' + staff.displayName + '</div>' +
+                        '<div class="autocomplete-details">' + staff.email + 
+                        (staff.jobTitle ? ' • ' + staff.jobTitle : '') + '</div>'
+                    );
+                    
+                    $item.on('click', function() {
+                        console.log('Staff selected:', staff.displayName, 'Email:', staff.email);
+                        $input.val(staff.email);
+                        $hiddenInput.val(staff.email);
+                        console.log('Hidden email field set to:', $hiddenInput.val());
+                        $resultsContainer.hide().empty();
+                    });
+                    
+                    $resultsContainer.append($item);
+                });
+                
+                $resultsContainer.show();
+            }
+            
+            // Hide results when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#AssignedToUserSearch').length && 
+                    !$(e.target).closest('.autocomplete-results').length) {
+                    $resultsContainer.hide();
+                }
+            });
+            
+            // Keyboard navigation
+            $input.on('keydown', function(e) {
+                var $items = $resultsContainer.find('.autocomplete-item');
+                var $selected = $items.filter('.selected');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.first().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $next = $selected.next('.autocomplete-item');
+                        if ($next.length) {
+                            $next.addClass('selected');
+                        } else {
+                            $items.first().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.last().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $prev = $selected.prev('.autocomplete-item');
+                        if ($prev.length) {
+                            $prev.addClass('selected');
+                        } else {
+                            $items.last().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'Enter') {
+                    if ($selected.length) {
+                        e.preventDefault();
+                        $selected.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    $resultsContainer.hide();
+                }
+            });
+        });
+    </script>
+    
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var sourceItemData = {
+                risk: [],
+                issue: [],
+                milestone: []
+            };
+            
+            // Load source items
+            function loadSourceItems() {
+                $.ajax({
+                    url: '/api/action-sources/items',
+                    type: 'GET',
+                    success: function(data) {
+                        sourceItemData.risk = data.risks || [];
+                        sourceItemData.issue = data.issues || [];
+                        sourceItemData.milestone = data.milestones || [];
+                        
+                        // Initialize if action source is already selected
+                        var currentActionSource = $('#ActionSourceId').val();
+                        if (currentActionSource) {
+                            handleActionSourceChange();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        // Silently fail - not critical
+                    }
+                });
+            }
+            
+            // Handle action source change
+            $('#ActionSourceId').on('change', handleActionSourceChange);
+            
+            function handleActionSourceChange() {
+                var selectedSourceId = $('#ActionSourceId').val();
+                var selectedSourceText = $('#ActionSourceId option:selected').text().toLowerCase();
+                
+                if (!selectedSourceId) {
+                    $('#sourceItemRow').addClass('d-none');
+                    return;
+                }
+                
+                var items = [];
+                var label = 'Related item';
+                var sourceType = '';
+                
+                if (selectedSourceText.includes('risk')) {
+                    items = sourceItemData.risk;
+                    label = 'Related risk';
+                    sourceType = 'risk';
+                } else if (selectedSourceText.includes('issue')) {
+                    items = sourceItemData.issue;
+                    label = 'Related issue';
+                    sourceType = 'issue';
+                } else if (selectedSourceText.includes('milestone')) {
+                    items = sourceItemData.milestone;
+                    label = 'Related milestone';
+                    sourceType = 'milestone';
+                }
+                
+                if (items.length > 0) {
+                    $('#sourceItemLabel').text(label);
+                    $('#sourceItemSelect').empty();
+                    $('#sourceItemSelect').append('<option value="">-- Select item (optional) --</option>');
+                    
+                    var preselectedId = null;
+                    if (sourceType === 'risk') preselectedId = '@ViewBag.RiskId';
+                    if (sourceType === 'issue') preselectedId = '@ViewBag.IssueId';
+                    if (sourceType === 'milestone') preselectedId = '@ViewBag.MilestoneId';
+                    
+                    items.forEach(function(item) {
+                        var selected = (item.id == preselectedId);
+                        var option = $('<option></option>')
+                            .attr('value', item.id)
+                            .text(item.title);
+                        if (selected) {
+                            option.attr('selected', 'selected');
+                        }
+                        $('#sourceItemSelect').append(option);
+                    });
+                    
+                    $('#sourceItemRow').removeClass('d-none');
+                } else {
+                    $('#sourceItemRow').addClass('d-none');
+                }
+            }
+            
+            // Load source items on page load
+            loadSourceItems();
+            
+            // Handle form submission - add source item relationship
+            $('form').on('submit', function(e) {
+                var selectedSourceText = $('#ActionSourceId option:selected').text().toLowerCase();
+                var sourceItemId = $('#sourceItemSelect').val();
+                
+                if (sourceItemId) {
+                    // Add appropriate hidden field based on source type
+                    if (selectedSourceText.includes('risk') && !$('input[name="riskId"]').length) {
+                        $(this).append('<input type="hidden" name="riskId" value="' + sourceItemId + '" />');
+                    } else if (selectedSourceText.includes('issue') && !$('input[name="issueId"]').length) {
+                        $(this).append('<input type="hidden" name="issueId" value="' + sourceItemId + '" />');
+                    } else if (selectedSourceText.includes('milestone') && !$('input[name="milestoneId"]').length) {
+                        $(this).append('<input type="hidden" name="milestoneId" value="' + sourceItemId + '" />');
+                    }
+                }
+            });
+        });
+    </script>
+}
+

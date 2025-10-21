@@ -1,0 +1,708 @@
+@{
+    ViewData["Title"] = "Data models";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Documentation")">Documentation</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Data models</li>
+        </ol>
+    </nav>
+}
+
+@section TableOfContents {
+    <nav class="documentation-toc">
+        <div class="toc-title">On this page</div>
+        <nav class="nav">
+            <a class="nav-link" href="#overview">Overview</a>
+            <a class="nav-link" href="#raid">RAID entities</a>
+            <a class="nav-link" href="#reporting">Reporting</a>
+            <a class="nav-link" href="#administration">Administration</a>
+            <a class="nav-link" href="#relationships">Relationships</a>
+        </nav>
+    </nav>
+}
+
+<h1 class="doc-page-title">Data models</h1>
+<p class="doc-page-lead">Technical documentation of COMPASS data structures, relationships, and entity models.</p>
+
+<h2 id="overview">Data model overview</h2>
+                
+                <p>COMPASS uses a relational data model built on Entity Framework Core. The schema is organised into several logical groups:</p>
+
+                <div class="row mt-4">
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h3 class="h6"><i class="fas fa-shield-alt text-primary"></i> RAID entities</h3>
+                                <p class="small">Core entities for risks, actions, issues, decisions, and milestones.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h3 class="h6"><i class="fas fa-chart-line text-success"></i> Reporting entities</h3>
+                                <p class="small">Performance metrics, enterprise metrics, and functional standards assessments.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h3 class="h6"><i class="fas fa-cog text-info"></i> Administration entities</h3>
+                                <p class="small">Users, settings, lookup tables, and system configuration.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h3 class="h6"><i class="fas fa-link text-warning"></i> Junction entities</h3>
+                                <p class="small">Many-to-many relationship tables linking RAID items together.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <h2 id="raid">RAID entities</h2>
+                
+                <h3 class="h5 mt-4">Risk entity</h3>
+                <p>Stores information about identified risks.</p>
+
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Id</code></td>
+                            <td>int</td>
+                            <td>Primary key, auto-incremented</td>
+                        </tr>
+                        <tr>
+                            <td><code>Title</code></td>
+                            <td>string(200)</td>
+                            <td>Risk title (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Description</code></td>
+                            <td>text</td>
+                            <td>Detailed risk description</td>
+                        </tr>
+                        <tr>
+                            <td><code>FipsId</code></td>
+                            <td>string(50)</td>
+                            <td>Associated FIPS product ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>ObjectiveId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to Objective entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>RiskTierId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to RiskTier entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>Category</code></td>
+                            <td>string(100)</td>
+                            <td>Risk category classification</td>
+                        </tr>
+                        <tr>
+                            <td><code>BusinessArea</code></td>
+                            <td>string(100)</td>
+                            <td>Associated business area</td>
+                        </tr>
+                        <tr>
+                            <td><code>OwnerEmail</code></td>
+                            <td>string(255)</td>
+                            <td>Risk owner's email address</td>
+                        </tr>
+                        <tr>
+                            <td><code>ImpactRating</code></td>
+                            <td>int</td>
+                            <td>Impact score (1-5, required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>LikelihoodRating</code></td>
+                            <td>int</td>
+                            <td>Likelihood score (1-5, required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>RiskScore</code></td>
+                            <td>int</td>
+                            <td>Calculated: Impact × Likelihood</td>
+                        </tr>
+                        <tr>
+                            <td><code>ResidualImpact</code></td>
+                            <td>int?</td>
+                            <td>Impact after mitigation (1-5)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ResidualLikelihood</code></td>
+                            <td>int?</td>
+                            <td>Likelihood after mitigation (1-5)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Response</code></td>
+                            <td>string(20)</td>
+                            <td>Risk response strategy</td>
+                        </tr>
+                        <tr>
+                            <td><code>ProximityDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When the risk might occur</td>
+                        </tr>
+                        <tr>
+                            <td><code>TargetDate</code></td>
+                            <td>DateTime?</td>
+                            <td>Target mitigation completion date</td>
+                        </tr>
+                        <tr>
+                            <td><code>Status</code></td>
+                            <td>string(20)</td>
+                            <td>Current status (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ClosedDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When the risk was closed</td>
+                        </tr>
+                        <tr>
+                            <td><code>Notes</code></td>
+                            <td>text</td>
+                            <td>Additional notes</td>
+                        </tr>
+                        <tr>
+                            <td><code>IsDeleted</code></td>
+                            <td>bool</td>
+                            <td>Soft delete flag</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Creation timestamp</td>
+                        </tr>
+                        <tr>
+                            <td><code>UpdatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Last update timestamp</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="h6 mt-3">Risk navigation properties:</h4>
+                <ul>
+                    <li><code>Objective</code> - Associated strategic objective</li>
+                    <li><code>RiskTier</code> - Associated risk tier</li>
+                    <li><code>RiskRiskTypes</code> - Collection of risk type associations</li>
+                    <li><code>RiskActions</code> - Collection of associated actions</li>
+                    <li><code>MilestoneRisks</code> - Collection of milestone associations</li>
+                </ul>
+
+                <h3 class="h5 mt-4">Issue entity</h3>
+                <p>Stores information about identified issues.</p>
+
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Id</code></td>
+                            <td>int</td>
+                            <td>Primary key, auto-incremented</td>
+                        </tr>
+                        <tr>
+                            <td><code>Title</code></td>
+                            <td>string(200)</td>
+                            <td>Issue title (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Description</code></td>
+                            <td>text</td>
+                            <td>Detailed issue description</td>
+                        </tr>
+                        <tr>
+                            <td><code>FipsId</code></td>
+                            <td>string(50)</td>
+                            <td>Associated FIPS product ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>ObjectiveId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to Objective entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>OwnerUserId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to User entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>Category</code></td>
+                            <td>string(100)</td>
+                            <td>Issue category</td>
+                        </tr>
+                        <tr>
+                            <td><code>BusinessArea</code></td>
+                            <td>string(100)</td>
+                            <td>Associated business area</td>
+                        </tr>
+                        <tr>
+                            <td><code>Severity</code></td>
+                            <td>string(10)</td>
+                            <td>Severity level (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Priority</code></td>
+                            <td>string(10)</td>
+                            <td>Priority level</td>
+                        </tr>
+                        <tr>
+                            <td><code>DetectedDate</code></td>
+                            <td>DateTime</td>
+                            <td>When issue was detected (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>TargetResolutionDate</code></td>
+                            <td>DateTime?</td>
+                            <td>Target resolution date</td>
+                        </tr>
+                        <tr>
+                            <td><code>Status</code></td>
+                            <td>string(20)</td>
+                            <td>Current status (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ResolutionSummary</code></td>
+                            <td>text</td>
+                            <td>Summary of resolution</td>
+                        </tr>
+                        <tr>
+                            <td><code>Workaround</code></td>
+                            <td>text</td>
+                            <td>Temporary workaround description</td>
+                        </tr>
+                        <tr>
+                            <td><code>BlockedFlag</code></td>
+                            <td>bool</td>
+                            <td>Whether issue is blocked</td>
+                        </tr>
+                        <tr>
+                            <td><code>ClosedDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When issue was closed</td>
+                        </tr>
+                        <tr>
+                            <td><code>IsDeleted</code></td>
+                            <td>bool</td>
+                            <td>Soft delete flag</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Creation timestamp</td>
+                        </tr>
+                        <tr>
+                            <td><code>UpdatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Last update timestamp</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="h6 mt-3">Issue navigation properties:</h4>
+                <ul>
+                    <li><code>Objective</code> - Associated strategic objective</li>
+                    <li><code>OwnerUser</code> - User who owns the issue</li>
+                    <li><code>IssueActions</code> - Collection of associated actions</li>
+                    <li><code>MilestoneIssues</code> - Collection of milestone associations</li>
+                </ul>
+
+                <h3 class="h5 mt-4">Action entity</h3>
+                <p>Stores information about actions and tasks.</p>
+
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Id</code></td>
+                            <td>int</td>
+                            <td>Primary key, auto-incremented</td>
+                        </tr>
+                        <tr>
+                            <td><code>Title</code></td>
+                            <td>string(200)</td>
+                            <td>Action title (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Description</code></td>
+                            <td>text</td>
+                            <td>Detailed action description</td>
+                        </tr>
+                        <tr>
+                            <td><code>FipsId</code></td>
+                            <td>string(50)</td>
+                            <td>Associated FIPS product ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>ObjectiveId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to Objective entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>ActionSourceId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to ActionSource entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>AssignedToUserId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to User entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>BusinessArea</code></td>
+                            <td>string(100)</td>
+                            <td>Associated business area</td>
+                        </tr>
+                        <tr>
+                            <td><code>Priority</code></td>
+                            <td>string(10)</td>
+                            <td>Priority level</td>
+                        </tr>
+                        <tr>
+                            <td><code>Status</code></td>
+                            <td>string(20)</td>
+                            <td>Current status (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>StartDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When action started</td>
+                        </tr>
+                        <tr>
+                            <td><code>DueDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When action is due</td>
+                        </tr>
+                        <tr>
+                            <td><code>CompletedDate</code></td>
+                            <td>DateTime?</td>
+                            <td>When action was completed</td>
+                        </tr>
+                        <tr>
+                            <td><code>ParentActionId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to parent Action (for sub-actions)</td>
+                        </tr>
+                        <tr>
+                            <td><code>EvidenceUrl</code></td>
+                            <td>string(500)</td>
+                            <td>URL to supporting evidence</td>
+                        </tr>
+                        <tr>
+                            <td><code>Notes</code></td>
+                            <td>text</td>
+                            <td>Additional notes</td>
+                        </tr>
+                        <tr>
+                            <td><code>IsDeleted</code></td>
+                            <td>bool</td>
+                            <td>Soft delete flag</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Creation timestamp</td>
+                        </tr>
+                        <tr>
+                            <td><code>UpdatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Last update timestamp</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="h6 mt-3">Action navigation properties:</h4>
+                <ul>
+                    <li><code>Objective</code> - Associated strategic objective</li>
+                    <li><code>ActionSource</code> - Source of the action</li>
+                    <li><code>AssignedToUser</code> - User assigned to the action</li>
+                    <li><code>ParentAction</code> - Parent action (if this is a sub-action)</li>
+                    <li><code>SubActions</code> - Collection of child actions</li>
+                    <li><code>RiskActions</code> - Collection of risk associations</li>
+                    <li><code>IssueActions</code> - Collection of issue associations</li>
+                    <li><code>MilestoneActions</code> - Collection of milestone associations</li>
+                </ul>
+
+                <h3 class="h5 mt-4">Milestone entity</h3>
+                <p>Stores information about project milestones.</p>
+
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Id</code></td>
+                            <td>int</td>
+                            <td>Primary key, auto-incremented</td>
+                        </tr>
+                        <tr>
+                            <td><code>Name</code></td>
+                            <td>string(200)</td>
+                            <td>Milestone name (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>Description</code></td>
+                            <td>text</td>
+                            <td>Detailed milestone description</td>
+                        </tr>
+                        <tr>
+                            <td><code>FipsId</code></td>
+                            <td>string(50)</td>
+                            <td>Associated FIPS product ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>ObjectiveId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to Objective entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>OwnerUserId</code></td>
+                            <td>int?</td>
+                            <td>Foreign key to User entity</td>
+                        </tr>
+                        <tr>
+                            <td><code>BusinessArea</code></td>
+                            <td>string(100)</td>
+                            <td>Associated business area</td>
+                        </tr>
+                        <tr>
+                            <td><code>BaselineDueDate</code></td>
+                            <td>DateTime?</td>
+                            <td>Original planned due date</td>
+                        </tr>
+                        <tr>
+                            <td><code>DueDate</code></td>
+                            <td>DateTime</td>
+                            <td>Current due date (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ActualDate</code></td>
+                            <td>DateTime?</td>
+                            <td>Actual completion date</td>
+                        </tr>
+                        <tr>
+                            <td><code>Status</code></td>
+                            <td>string(20)</td>
+                            <td>Current status (required)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ProgressPercent</code></td>
+                            <td>int?</td>
+                            <td>Progress percentage (0-100)</td>
+                        </tr>
+                        <tr>
+                            <td><code>ExternalRef</code></td>
+                            <td>string(100)</td>
+                            <td>External reference identifier</td>
+                        </tr>
+                        <tr>
+                            <td><code>Notes</code></td>
+                            <td>text</td>
+                            <td>Additional notes</td>
+                        </tr>
+                        <tr>
+                            <td><code>IsDeleted</code></td>
+                            <td>bool</td>
+                            <td>Soft delete flag</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Creation timestamp</td>
+                        </tr>
+                        <tr>
+                            <td><code>UpdatedAt</code></td>
+                            <td>DateTime</td>
+                            <td>Last update timestamp</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="h6 mt-3">Milestone navigation properties:</h4>
+                <ul>
+                    <li><code>Objective</code> - Associated strategic objective</li>
+                    <li><code>OwnerUser</code> - User who owns the milestone</li>
+                    <li><code>MilestoneActions</code> - Collection of associated actions</li>
+                    <li><code>MilestoneRisks</code> - Collection of associated risks</li>
+                    <li><code>MilestoneIssues</code> - Collection of associated issues</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="reporting">Reporting entities</h2>
+                
+                <h3 class="h5 mt-4">PerformanceMetric entity</h3>
+                <p>Defines performance metrics that can be tracked for products.</p>
+
+                <h3 class="h5 mt-4">ProductMetricValue entity</h3>
+                <p>Stores submitted values for performance metrics.</p>
+
+                <h3 class="h5 mt-4">EnterpriseMetric entity</h3>
+                <p>Defines and stores enterprise-level KPIs and metrics.</p>
+
+                <h3 class="h5 mt-4">FunctionalStandard entity</h3>
+                <p>Stores DDaT functional standards information.</p>
+
+                <h3 class="h5 mt-4">FunctionalStandardAssessment entity</h3>
+                <p>Records assessments of products against functional standards.</p>
+
+                <hr class="my-4">
+
+                <h2 id="administration">Administration entities</h2>
+                
+                <h3 class="h5 mt-4">User entity</h3>
+                <p>Stores user account information and preferences.</p>
+
+                <h3 class="h5 mt-4">UserPreference entity</h3>
+                <p>Stores user-specific preferences and settings.</p>
+
+                <h3 class="h5 mt-4">Objective entity</h3>
+                <p>Stores strategic objectives that products and RAID items can align to.</p>
+
+                <h3 class="h5 mt-4">Lookup tables</h3>
+                <ul>
+                    <li><strong>RiskTier:</strong> Risk tier definitions (product, programme, portfolio, enterprise)</li>
+                    <li><strong>RiskType:</strong> Risk type categories (strategic, operational, financial, etc.)</li>
+                    <li><strong>ActionSource:</strong> Sources where actions originate from</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <h2 id="relationships">Entity relationships</h2>
+                
+                <h3 class="h5 mt-4">Junction tables (many-to-many relationships)</h3>
+
+                <h4 class="h6 mt-3">RiskRiskType</h4>
+                <p>Links risks to one or more risk types.</p>
+                <ul>
+                    <li><code>RiskId</code> - Foreign key to Risk</li>
+                    <li><code>RiskTypeId</code> - Foreign key to RiskType</li>
+                </ul>
+
+                <h4 class="h6 mt-3">RiskAction</h4>
+                <p>Links risks to their mitigation actions.</p>
+                <ul>
+                    <li><code>RiskId</code> - Foreign key to Risk</li>
+                    <li><code>ActionId</code> - Foreign key to Action</li>
+                </ul>
+
+                <h4 class="h6 mt-3">IssueAction</h4>
+                <p>Links issues to their resolution actions.</p>
+                <ul>
+                    <li><code>IssueId</code> - Foreign key to Issue</li>
+                    <li><code>ActionId</code> - Foreign key to Action</li>
+                </ul>
+
+                <h4 class="h6 mt-3">MilestoneRisk</h4>
+                <p>Links milestones to associated risks.</p>
+                <ul>
+                    <li><code>MilestoneId</code> - Foreign key to Milestone</li>
+                    <li><code>RiskId</code> - Foreign key to Risk</li>
+                </ul>
+
+                <h4 class="h6 mt-3">MilestoneIssue</h4>
+                <p>Links milestones to associated issues.</p>
+                <ul>
+                    <li><code>MilestoneId</code> - Foreign key to Milestone</li>
+                    <li><code>IssueId</code> - Foreign key to Issue</li>
+                </ul>
+
+                <h4 class="h6 mt-3">MilestoneAction</h4>
+                <p>Links milestones to associated actions.</p>
+                <ul>
+                    <li><code>MilestoneId</code> - Foreign key to Milestone</li>
+                    <li><code>ActionId</code> - Foreign key to Action</li>
+                </ul>
+
+                <h3 class="h5 mt-4">Key relationships</h3>
+                
+                <div class="alert alert-info">
+                    <h4 class="h6">Product association</h4>
+                    <p class="mb-0">Most RAID entities include a <code>FipsId</code> field that links to products in the FIPS CMS system. This is a string field containing the product's unique identifier.</p>
+                </div>
+
+                <div class="alert alert-info">
+                    <h4 class="h6">Strategic alignment</h4>
+                    <p class="mb-0">Many entities include an optional <code>ObjectiveId</code> foreign key, allowing them to be linked to strategic objectives for alignment tracking.</p>
+                </div>
+
+                <div class="alert alert-info">
+                    <h4 class="h6">Soft delete pattern</h4>
+                    <p class="mb-0">All RAID entities include an <code>IsDeleted</code> boolean flag. Records are not physically deleted but marked as deleted, preserving historical data and relationships.</p>
+                </div>
+
+                <div class="alert alert-info">
+                    <h4 class="h6">Audit trail</h4>
+                    <p class="mb-0">All entities include <code>CreatedAt</code> and <code>UpdatedAt</code> DateTime fields for tracking when records were created and last modified.</p>
+                </div>
+
+                <hr class="my-4">
+
+                <h2>Common patterns</h2>
+                
+                <h3 class="h5 mt-4">Entity naming conventions</h3>
+                <ul>
+                    <li>Entities use Pascal case (e.g., <code>Risk</code>, <code>ActionSource</code>)</li>
+                    <li>Properties use Pascal case (e.g., <code>Title</code>, <code>DueDate</code>)</li>
+                    <li>Foreign keys include the entity name (e.g., <code>ObjectiveId</code>, <code>OwnerUserId</code>)</li>
+                    <li>Navigation properties match the entity name (e.g., <code>Objective</code>, <code>OwnerUser</code>)</li>
+                </ul>
+
+                <h3 class="h5 mt-4">Status field conventions</h3>
+                <p>Status fields use lowercase with underscores:</p>
+                <ul>
+                    <li>Risks: <code>new</code>, <code>open</code>, <code>treating</code>, <code>monitoring</code>, <code>closed</code></li>
+                    <li>Issues: <code>open</code>, <code>in_progress</code>, <code>blocked</code>, <code>resolved</code>, <code>closed</code></li>
+                    <li>Actions: <code>not_started</code>, <code>in_progress</code>, <code>blocked</code>, <code>done</code>, <code>cancelled</code></li>
+                    <li>Milestones: <code>not_started</code>, <code>on_track</code>, <code>at_risk</code>, <code>delayed</code>, <code>complete</code>, <code>cancelled</code></li>
+                </ul>
+
+                <div class="alert alert-success mt-4">
+                    <h3 class="h6">See also</h3>
+                    <p class="mb-2">Related documentation:</p>
+                    <ul class="mb-0">
+                        <li><a href="@Url.Action("DataDictionary", "Documentation")">Data dictionary</a> - Complete field reference</li>
+                        <li><a href="@Url.Action("Api", "Documentation")">API documentation</a> - Working with data via the API</li>
+                    </ul>
+                </div>
+

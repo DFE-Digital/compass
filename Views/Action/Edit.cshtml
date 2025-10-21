@@ -1,0 +1,375 @@
+@model Compass.Models.Action
+@{
+    ViewData["Title"] = "Edit action";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Actions</a></li>
+                    <li class="breadcrumb-item active">Edit</li>
+                </ol>
+                <h1 class="m-0">Edit action</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Edit: @Model.Title</h3>
+            </div>
+            <form asp-action="Edit" method="post">
+                <input type="hidden" asp-for="Id" />
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                    
+                    <!-- Related Items Section -->
+                    @{
+                        var relatedRisks = ViewBag.RelatedRisks as List<Compass.Models.Risk> ?? new List<Compass.Models.Risk>();
+                        var relatedIssues = ViewBag.RelatedIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
+                        var relatedMilestones = ViewBag.RelatedMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
+                        var hasRelatedItems = relatedRisks.Any() || relatedIssues.Any() || relatedMilestones.Any();
+                    }
+                    
+                    @if (hasRelatedItems)
+                    {
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-2"><i class="fas fa-link"></i> Related items</h6>
+                                    @if (relatedRisks.Any())
+                                    {
+                                        <p class="mb-1">
+                                            <strong>Risks:</strong>
+                                            @foreach (var risk in relatedRisks)
+                                            {
+                                                <a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id" class="badge badge-danger ml-1">@risk.Title</a>
+                                            }
+                                        </p>
+                                    }
+                                    @if (relatedIssues.Any())
+                                    {
+                                        <p class="mb-1">
+                                            <strong>Issues:</strong>
+                                            @foreach (var issue in relatedIssues)
+                                            {
+                                                <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id" class="badge badge-warning ml-1">@issue.Title</a>
+                                            }
+                                        </p>
+                                    }
+                                    @if (relatedMilestones.Any())
+                                    {
+                                        <p class="mb-0">
+                                            <strong>Milestones:</strong>
+                                            @foreach (var milestone in relatedMilestones)
+                                            {
+                                                <a asp-controller="Milestone" asp-action="Details" asp-route-id="@milestone.Id" class="badge badge-success ml-1">@milestone.Name</a>
+                                            }
+                                        </p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    
+                    <div class="form-group">
+                        <label asp-for="Title" class="control-label"></label>
+                        <input asp-for="Title" class="form-control" />
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ObjectiveId" class="control-label">Strategic objective</label>
+                                <select asp-for="ObjectiveId" class="form-control" asp-items="ViewBag.Objectives">
+                                    <option value="">-- Select objective (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ObjectiveId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="FipsId" class="control-label">Product</label>
+                                <select asp-for="FipsId" class="form-control">
+                                    <option value="">-- Select product (optional) --</option>
+                                    @if (ViewBag.Products != null)
+                                    {
+                                        @foreach (var product in ViewBag.Products)
+                                        {
+                                            <option value="@product.FipsId">@product.Title (@product.FipsId)</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="FipsId" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ParentActionId" class="control-label">Parent action</label>
+                                <select asp-for="ParentActionId" class="form-control" asp-items="ViewBag.ParentActions">
+                                    <option value="">-- Select parent (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ParentActionId" class="text-danger"></span>
+                                <small class="form-text text-muted">For sub-tasks</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="ActionSourceId" class="control-label">Action source</label>
+                                <select asp-for="ActionSourceId" class="form-control" asp-items="ViewBag.ActionSources">
+                                    <option value="">-- Select source (optional) --</option>
+                                </select>
+                                <span asp-validation-for="ActionSourceId" class="text-danger"></span>
+                                <small class="form-text text-muted">Where did this action originate from?</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="BusinessArea" class="control-label">Business area</label>
+                                <select asp-for="BusinessArea" class="form-control">
+                                    <option value="">-- Select business area (optional) --</option>
+                                    @if (ViewBag.BusinessAreas != null)
+                                    {
+                                        @foreach (var area in ViewBag.BusinessAreas)
+                                        {
+                                            <option value="@area">@area</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="AssignedToEmail" class="control-label">Assigned to</label>
+                                <input type="text" 
+                                       id="AssignedToUserSearch" 
+                                       class="form-control staff-autocomplete-email" 
+                                       placeholder="Start typing name or email..."
+                                       autocomplete="off"
+                                       value="@Model.AssignedToEmail" />
+                                <input type="hidden" asp-for="AssignedToEmail" id="AssignedToEmail" />
+                                <span asp-validation-for="AssignedToEmail" class="text-danger"></span>
+                                <small class="form-text text-muted">Start typing to search</small>
+                            </div>
+                        </div>
+                        <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Priority" class="control-label"></label>
+                                <select asp-for="Priority" class="form-control">
+                                    <option value="">-- Select priority --</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                                <span asp-validation-for="Priority" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label"></label>
+                                <select asp-for="Status" class="form-control">
+                                    <option value="not_started">Not started</option>
+                                    <option value="in_progress">In progress</option>
+                                    <option value="blocked">Blocked</option>
+                                    <option value="done">Done</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="StartDate" class="control-label">Start date</label>
+                                <input asp-for="StartDate" type="date" class="form-control" />
+                                <span asp-validation-for="StartDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="DueDate" class="control-label">Due date</label>
+                                <input asp-for="DueDate" type="date" class="form-control" />
+                                <span asp-validation-for="DueDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
+                            <div class="form-group">
+                                <label asp-for="CompletedDate" class="control-label">Completed date</label>
+                                <input asp-for="CompletedDate" type="date" class="form-control" />
+                                <span asp-validation-for="CompletedDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="EvidenceUrl" class="control-label">Evidence URL</label>
+                        <input asp-for="EvidenceUrl" type="url" class="form-control" />
+                        <span asp-validation-for="EvidenceUrl" class="text-danger"></span>
+                        <small class="form-text text-muted">Link to evidence or documentation</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Notes" class="control-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Notes" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        Update action
+                    </button>
+                    <a asp-action="Index" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script nonce="@Context.Items["Nonce"]">
+        // Staff autocomplete for email field
+        $(document).ready(function() {
+            console.log('Staff autocomplete for email initialized');
+            
+            var $input = $('#AssignedToUserSearch');
+            var $hiddenInput = $('#AssignedToEmail');
+            var timeoutId;
+            var $resultsContainer = $('<div class="autocomplete-results"></div>');
+            $input.after($resultsContainer);
+            
+            // Handle input with debounce
+            $input.on('input', function() {
+                clearTimeout(timeoutId);
+                var searchTerm = $(this).val();
+                
+                if (searchTerm.length < 2) {
+                    $resultsContainer.hide().empty();
+                    return;
+                }
+                
+                timeoutId = setTimeout(function() {
+                    $.ajax({
+                        url: '/api/staff/search',
+                        data: { q: searchTerm },
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log('API response:', data);
+                            displayResults(data.results);
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Failed to search staff:', status, error);
+                        }
+                    });
+                }, 250);
+            });
+            
+            function displayResults(results) {
+                $resultsContainer.empty();
+                
+                if (!results || results.length === 0) {
+                    $resultsContainer.html('<div class="autocomplete-item no-results">No staff found</div>');
+                    $resultsContainer.show();
+                    return;
+                }
+                
+                results.forEach(function(staff) {
+                    var $item = $('<div class="autocomplete-item"></div>');
+                    $item.html(
+                        '<div class="autocomplete-name">' + staff.displayName + '</div>' +
+                        '<div class="autocomplete-details">' + staff.email + 
+                        (staff.jobTitle ? ' • ' + staff.jobTitle : '') + '</div>'
+                    );
+                    
+                    $item.on('click', function() {
+                        console.log('Staff selected:', staff.displayName, 'Email:', staff.email);
+                        $input.val(staff.email);
+                        $hiddenInput.val(staff.email);
+                        console.log('Hidden email field set to:', $hiddenInput.val());
+                        $resultsContainer.hide().empty();
+                    });
+                    
+                    $resultsContainer.append($item);
+                });
+                
+                $resultsContainer.show();
+            }
+            
+            // Hide results when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#AssignedToUserSearch').length && 
+                    !$(e.target).closest('.autocomplete-results').length) {
+                    $resultsContainer.hide();
+                }
+            });
+            
+            // Keyboard navigation
+            $input.on('keydown', function(e) {
+                var $items = $resultsContainer.find('.autocomplete-item');
+                var $selected = $items.filter('.selected');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.first().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $next = $selected.next('.autocomplete-item');
+                        if ($next.length) {
+                            $next.addClass('selected');
+                        } else {
+                            $items.first().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if ($selected.length === 0) {
+                        $items.last().addClass('selected');
+                    } else {
+                        $selected.removeClass('selected');
+                        var $prev = $selected.prev('.autocomplete-item');
+                        if ($prev.length) {
+                            $prev.addClass('selected');
+                        } else {
+                            $items.last().addClass('selected');
+                        }
+                    }
+                } else if (e.key === 'Enter') {
+                    if ($selected.length) {
+                        e.preventDefault();
+                        $selected.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    $resultsContainer.hide();
+                }
+            });
+        });
+    </script>
+}
+

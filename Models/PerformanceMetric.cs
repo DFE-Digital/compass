@@ -1,0 +1,81 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+
+namespace Compass.Models;
+
+public class PerformanceMetric
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string Identifier { get; set; } = string.Empty; // perf-x format
+
+    [Required]
+    [StringLength(255)]
+    public string Title { get; set; } = string.Empty;
+
+    [Required]
+    public string Description { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? HintText { get; set; }
+
+    [Required]
+    public ValueType ValueType { get; set; }
+
+    [Required]
+    public string ValidationRules { get; set; } = "{}"; // JSON structure
+
+    [Required]
+    public int ValidFromYear { get; set; }
+    
+    [Required]
+    public int ValidFromMonth { get; set; }
+    
+    /// <summary>
+    /// Comma-separated list of phases this metric applies to (e.g., "Discovery,Alpha,Beta")
+    /// Empty string means applies to all phases
+    /// </summary>
+    public string ApplicablePhases { get; set; } = string.Empty;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public enum ValueType
+{
+    Text = 0,
+    Number = 1,
+    Decimal = 2
+}
+
+public class ValidationRules
+{
+    [JsonPropertyName("required")]
+    public bool Required { get; set; }
+    
+    [JsonPropertyName("allowNull")]
+    public bool AllowNull { get; set; }
+    
+    [JsonPropertyName("minimumValue")]
+    public decimal? MinimumValue { get; set; }
+    
+    [JsonPropertyName("maximumValue")]
+    public decimal? MaximumValue { get; set; }
+    
+    [JsonPropertyName("decimalPlaces")]
+    public int? DecimalPlaces { get; set; }
+    
+    // Legacy support for old format
+    public Range? Range { get; set; }
+}
+
+public class Range
+{
+    public decimal? Min { get; set; }
+    public decimal? Max { get; set; }
+}
+

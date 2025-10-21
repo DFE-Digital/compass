@@ -1,0 +1,473 @@
+@model List<Compass.Models.ProductMetricValue>
+@{
+    ViewData["Title"] = "Submit performance metrics";
+    var product = ViewBag.Product as Compass.Models.ProductDto;
+    var productReturn = ViewBag.ProductReturn as Compass.Models.ProductReturn;
+    var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .reporting-period-text {
+        font-size: 1rem;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+             <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="PerformanceMetrics">Products</a></li>
+                    <li class="breadcrumb-item"><a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId">@product.Title</a></li>
+                    <li class="breadcrumb-item active">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("MMMM yyyy"))</li>
+                </ol>
+                <h1 class="m-0">@product.Title</h1>
+                <p class="mb-0 text-muted">FIPS ID: @product.FipsId</p>
+            </div>
+            <div class="col-sm-6">
+               
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["WarningMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3 class="reporting-period-text">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
+                        <p>Reporting period</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box @(productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "bg-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "bg-danger" : "bg-warning")">
+                    <div class="inner">
+                        <h3>@productReturn.Status</h3>
+                        <p>Status</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-flag"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@Model.Count(m => m.IsComplete) of @Model.Count complete</h3>
+                        <p>Progress</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Performance metrics</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="col-identifier">Identifier</th>
+                            <th>Metric</th>
+                            <th class="col-value">Value</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var metricValue in Model)
+                        {
+                            <tr id="row-@metricValue.Id">
+                                <td>@metricValue.PerformanceMetric?.Identifier</td>
+                                <td>
+                                    <strong>@metricValue.PerformanceMetric?.Title</strong>
+                                    <br />
+                                    <small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
+                                </td>
+                                <td>
+                                    <span id="display-@metricValue.Id">
+                                        @if (!string.IsNullOrEmpty(metricValue.Value))
+                                        {
+                                            @metricValue.Value
+                                        }
+                                        else if (metricValue.IsComplete && string.IsNullOrEmpty(metricValue.Value))
+                                        {
+                                            <span class="text-muted">Unreported</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not entered</span>
+                                        }
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (metricValue.IsComplete)
+                                    {
+                                        <span class="badge badge-success"><i class="fas fa-check"></i> Complete</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary"><i class="fas fa-clock"></i> Pending</span>
+                                    }
+                                </td>
+                                <td class="col-actions">
+                                    @if (!isReadOnly)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary edit-metric" 
+                                                data-id="@metricValue.Id" 
+                                                data-identifier="@metricValue.PerformanceMetric?.Identifier"
+                                                data-title="@metricValue.PerformanceMetric?.Title"
+                                                data-value="@metricValue.Value"
+                                                data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
+                                                data-rules="@metricValue.PerformanceMetric?.ValidationRules"
+                                                data-hint="@metricValue.PerformanceMetric?.HintText">
+                                            Edit
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Read-only</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (!isReadOnly && Model.All(m => m.IsComplete))
+            {
+                <div class="card-footer">
+                    <form asp-action="SubmitReturn" method="post" class="submit-return-form">
+                        <input type="hidden" name="returnId" value="@productReturn.Id" />
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check-circle"></i> Submit return
+                        </button>
+                        <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
+                            Back to returns
+                        </a>
+                    </form>
+                </div>
+            }
+            else
+            {
+                <div class="card-footer">
+                    <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
+                        Back to returns
+                    </a>
+                    @if (!isReadOnly)
+                    {
+                        <span class="text-muted ml-3">
+                            <i class="fas fa-info-circle"></i> Complete all metrics to enable submission
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@Html.AntiForgeryToken()
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">Edit metric value</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <p class="mb-2 text-muted"><small><span id="modalIdentifier"></span></small></p>
+                    <label for="modalValue"><strong id="modalTitle"></strong></label>
+                    <small class="form-text text-muted mb-2 d-block" id="modalHelp"></small>
+                    <input type="text" id="modalValue" class="form-control form-control-lg" placeholder="Enter value" />
+                    <div class="invalid-feedback d-block d-none" id="modalError"></div>
+                </div>
+                <div class="form-group" id="nullCheckboxContainer" style="display: none;">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="metricNotCaptured">
+                        <label class="custom-control-label" for="metricNotCaptured">
+                            This metric is not captured
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">Check this if the metric data is not available or not captured for this period</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-success" id="saveMetricBtn">
+                    Save value
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Submit Confirmation Modal -->
+<div class="modal fade" id="submitConfirmModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm submission</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Are you sure you want to submit this return?</p>
+                <p class="mb-0 mt-2"><strong>Once submitted, it cannot be edited.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-success" id="confirmSubmitBtn">
+                    <i class="fas fa-check-circle"></i> Submit return
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var currentMetricId = null;
+
+            $('.edit-metric').click(function() {
+                currentMetricId = $(this).data('id');
+                var identifier = $(this).data('identifier');
+                var title = $(this).data('title');
+                var currentValue = $(this).data('value') || '';
+                var valueType = $(this).data('type');
+                var rules = $(this).data('rules');
+                var hintText = $(this).data('hint') || '';
+
+                $('#modalIdentifier').text(identifier);
+                $('#modalTitle').text(title);
+                $('#modalValue').val(currentValue).removeClass('is-invalid');
+                $('#modalError').text('').addClass('d-none').removeClass('d-block');
+                
+                // Parse validation rules to check for allowNull
+                var parsedRules = null;
+                if (rules) {
+                    try {
+                        parsedRules = typeof rules === 'string' ? JSON.parse(rules) : rules;
+                    } catch (e) {
+                        console.log('Could not parse validation rules');
+                    }
+                }
+                
+                // Show/hide null checkbox based on allowNull
+                if (parsedRules && parsedRules.allowNull === true) {
+                    $('#nullCheckboxContainer').show();
+                    $('#metricNotCaptured').prop('checked', currentValue === '').change();
+                } else {
+                    $('#nullCheckboxContainer').hide();
+                    $('#metricNotCaptured').prop('checked', false);
+                }
+
+                // Set help text based on hint text or type
+                var helpText = hintText;
+                if (!helpText) {
+                    if (valueType == 1) helpText = 'Enter a whole number';
+                    else if (valueType == 2) helpText = 'Enter a decimal number';
+                    else helpText = 'Enter text';
+                }
+
+                $('#modalHelp').text(helpText);
+                $('#editModal').modal('show');
+            });
+            
+            // Handle checkbox change event
+            $('#metricNotCaptured').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#modalValue').val('').prop('disabled', true).removeClass('is-invalid');
+                    $('#modalError').text('').addClass('d-none').removeClass('d-block');
+                } else {
+                    $('#modalValue').prop('disabled', false);
+                }
+            });
+
+            $('#saveMetricBtn').click(function() {
+                var isNotCaptured = $('#metricNotCaptured').is(':checked');
+                var value = isNotCaptured ? '' : $('#modalValue').val().trim();
+                var saveUrl = '/ProductReporting/SaveMetricValue';
+                
+                // Get validation rules
+                var rulesJson = $('.edit-metric[data-id="' + currentMetricId + '"]').data('rules');
+                var rules = null;
+                if (rulesJson) {
+                    try {
+                        rules = typeof rulesJson === 'string' ? JSON.parse(rulesJson) : rulesJson;
+                    } catch (e) {
+                        console.log('Could not parse validation rules');
+                    }
+                }
+                
+                var valueType = $('.edit-metric[data-id="' + currentMetricId + '"]').data('type');
+                
+                // If "not captured" checkbox is checked and allowNull is true, skip validation entirely
+                if (isNotCaptured && rules && rules.allowNull === true) {
+                    // Don't validate, just save empty value
+                    console.log('Skipping validation - metric marked as not captured with allowNull=true');
+                } else {
+                    // Client-side validation for all other cases
+                    var validationError = validateValue(value, valueType, rules);
+                    if (validationError) {
+                        $('#modalValue').addClass('is-invalid');
+                        $('#modalError').text(validationError).removeClass('d-none').addClass('d-block');
+                        return;
+                    }
+                }
+                
+                console.log('Saving to URL:', saveUrl);
+                
+                // Save metric value to the server
+                $.ajax({
+                    url: saveUrl,
+                    type: 'POST',
+                    data: {
+                        id: currentMetricId,
+                        value: value,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var displayText = value;
+                            if (!value && isNotCaptured) {
+                                displayText = '<span class="text-muted">Unreported</span>';
+                            } else if (!value) {
+                                displayText = '<span class="text-muted">Not entered</span>';
+                            }
+                            $('#display-' + currentMetricId).html(displayText);
+                            
+                            // Update status badge - mark as Complete if not captured
+                            var statusCell = $('#row-' + currentMetricId).find('td:eq(3)');
+                            if (value || isNotCaptured) {
+                                statusCell.html('<span class="badge badge-success"><i class="fas fa-check"></i> Complete</span>');
+                            } else {
+                                statusCell.html('<span class="badge badge-secondary"><i class="fas fa-clock"></i> Pending</span>');
+                            }
+                            
+                            $('#editModal').modal('hide');
+                            
+                            // Reload page to update submit button visibility
+                            location.reload();
+                        } else {
+                            $('#modalValue').addClass('is-invalid');
+                            $('#modalError').text(response.message).removeClass('d-none').addClass('d-block');
+                        }
+                    },
+                    error: function() {
+                        $('#modalValue').addClass('is-invalid');
+                        $('#modalError').text('An error occurred while saving').removeClass('d-none').addClass('d-block');
+                    }
+                });
+            });
+            
+            // Validation function
+            function validateValue(value, valueType, rules) {
+                // Check if empty
+                var isEmpty = !value || value.trim() === '';
+                
+                // Check required - but ignore if allowNull is true
+                if (rules && rules.required && isEmpty && !rules.allowNull) {
+                    return 'This field is required';
+                }
+                
+                // If empty and not required (or allowNull is true), it's valid
+                if (isEmpty) {
+                    return null;
+                }
+                
+                // Validate by type
+                if (valueType == 1) { // Number
+                    if (!/^-?\d+$/.test(value)) {
+                        return 'Value must be a whole number';
+                    }
+                    var numValue = parseInt(value);
+                    if (rules && rules.minimumValue !== undefined && numValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && numValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                } else if (valueType == 2) { // Decimal
+                    if (!/^-?\d*\.?\d+$/.test(value)) {
+                        return 'Value must be a decimal number';
+                    }
+                    var decValue = parseFloat(value);
+                    if (rules && rules.minimumValue !== undefined && decValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && decValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                    if (rules && rules.decimalPlaces !== undefined) {
+                        var decimalPart = value.split('.')[1];
+                        if (decimalPart && decimalPart.length > rules.decimalPlaces) {
+                            return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+                        }
+                    }
+                }
+                
+                return null;
+            }
+
+            // Submit return confirmation
+            $('.submit-return-form').on('submit', function(e) {
+                e.preventDefault();
+                var form = $(this);
+                
+                // Show confirmation modal
+                $('#submitConfirmModal').modal('show');
+                
+                // Handle confirm button click
+                $('#confirmSubmitBtn').off('click').on('click', function() {
+                    $('#submitConfirmModal').modal('hide');
+                    form.off('submit').submit();
+                });
+            });
+        });
+    </script>
+}
+

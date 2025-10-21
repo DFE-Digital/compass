@@ -1,0 +1,113 @@
+@model IEnumerable<Compass.Models.Criterion>
+@{
+    ViewData["Title"] = "Criteria";
+    var practiceArea = ViewBag.PracticeArea as Compass.Models.PracticeArea;
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .criteria-table {
+        width: 100%;
+    }
+    .criteria-table td {
+        word-wrap: break-word;
+        white-space: normal;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Functional standards</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Themes" asp-route-id="@practiceArea.FunctionalStandardId">Themes</a></li>
+                    <li class="breadcrumb-item"><a asp-action="PracticeAreas" asp-route-standardId="@practiceArea.FunctionalStandardId" asp-route-themeId="@practiceArea.ThemeId">Practice areas</a></li>
+                    <li class="breadcrumb-item active">Criteria</li>
+                </ol>
+                <h1 class="m-0">Criteria</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        <div class="callout callout-info">
+            <h5>@practiceArea.Theme?.FunctionalStandard?.Title - Practice area @practiceArea.PracticeAreaId: @practiceArea.Title</h5>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Criteria</h3>
+                <div class="card-tools">
+                    <a asp-action="CreateCriterion" asp-route-standardId="@practiceArea.FunctionalStandardId" asp-route-themeId="@practiceArea.ThemeId" asp-route-practiceAreaId="@practiceArea.PracticeAreaId" class="btn btn-primary btn-sm">
+                        Add criterion
+                    </a>
+                    <a asp-action="PracticeAreas" asp-route-standardId="@practiceArea.FunctionalStandardId" asp-route-themeId="@practiceArea.ThemeId" class="btn btn-default btn-sm">
+                        Back
+                    </a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover criteria-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Criteria</th>
+                            <th>Rating</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var criterion in Model)
+                            {
+                                <tr>
+                                    <td>@criterion.CriteriaCode</td>
+                                    <td>@criterion.Criteria</td>
+                                    <td>
+                                        @switch (criterion.Rating)
+                                        {
+                                            case Compass.Models.CriteriaRating.Good:
+                                                <span class="badge badge-success">Good</span>
+                                                break;
+                                            case Compass.Models.CriteriaRating.Better:
+                                                <span class="badge badge-info">Better</span>
+                                                break;
+                                            case Compass.Models.CriteriaRating.Best:
+                                                <span class="badge badge-primary">Best</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="EditCriterion" asp-route-id="@criterion.Id" class="btn btn-sm btn-primary">
+                                            Edit
+                                        </a>
+                                       
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">No criteria found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
