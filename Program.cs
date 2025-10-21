@@ -271,6 +271,6 @@ static async Task RunDataMigration(WebApplicationBuilder builder)
     }
     
     Console.WriteLine("\nStarting migration...\n");
-    await DataMigrationUtility.MigrateDataAsync(sourceDb, targetDb);
+    await Compass.DataMigrationUtility.MigrateDataAsync(sourceDb, targetDb);
 }
 

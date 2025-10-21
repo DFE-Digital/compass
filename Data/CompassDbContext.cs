@@ -9,6 +9,13 @@ public class CompassDbContext : DbContext
     {
     }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // Suppress pending model changes warning for now
+        optionsBuilder.ConfigureWarnings(warnings => 
+            warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
+
     // User management
     public DbSet<User> Users { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }

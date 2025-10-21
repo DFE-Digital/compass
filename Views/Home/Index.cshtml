@@ -370,12 +370,13 @@
                         </div>
                     </div>
 
-                    <!-- Milestones Progress Bar -->
+                    <!--  Milestones Progress Bar -->
                     @if (Model.TotalMilestones > 0)
                     {
-                        var completeMilestones = Model.MyMilestones.Count(m => m.Status == "complete");
-                        var completionPercent = (int)((double)completeMilestones / Model.TotalMilestones * 100);
-                        
+                        int completeMilestones;
+                        int completionPercent;
+                        completeMilestones = Model.MyMilestones.Count(m => m.Status == "complete");
+                        completionPercent = (int)((double)completeMilestones / Model.TotalMilestones * 100);
                         <div class="card">
                             <div class="card-body">
                                 <div class="row align-items-center">
@@ -415,41 +416,39 @@
                     }
 
                     <!-- Priority Items requiring attention -->
-                    @{
-                        var priorityItems = new List<(string Type, string Title, string Url, DateTime? Date, string Severity, bool IsOverdue)>();
-                        
-                        // Add overdue/urgent items
-                        foreach (var issue in Model.MyIssues.Where(i => i.Status != "resolved" && i.Status != "closed").Take(5))
+                    var priorityItems = new List<(string Type, string Title, string Url, DateTime? Date, string Severity, bool IsOverdue)>();
+                    
+                    // Add overdue/urgent items
+                    foreach (var issue in Model.MyIssues.Where(i => i.Status != "resolved" && i.Status != "closed").Take(5))
+                    {
+                        var isOverdue = IsOverdue(issue.TargetResolutionDate, issue.Status, new[] { "resolved", "closed" });
+                        if (isOverdue || issue.Severity == "critical" || issue.Severity == "high")
                         {
-                            var isOverdue = IsOverdue(issue.TargetResolutionDate, issue.Status, new[] { "resolved", "closed" });
-                            if (isOverdue || issue.Severity == "critical" || issue.Severity == "high")
-                            {
-                                priorityItems.Add(("Issue", issue.Title, $"/Issue/Edit/{issue.Id}", issue.TargetResolutionDate, issue.Severity, isOverdue));
-                            }
+                            priorityItems.Add(("Issue", issue.Title, $"/Issue/Edit/{issue.Id}", issue.TargetResolutionDate, issue.Severity, isOverdue));
                         }
-                        
-                        foreach (var action in Model.MyActions.Where(a => a.Status != "done" && a.Status != "cancelled").Take(5))
-                        {
-                            var isOverdue = IsOverdue(action.DueDate, action.Status, new[] { "done", "cancelled" });
-                            if (isOverdue || action.Priority == "high")
-                            {
-                                priorityItems.Add(("Action", action.Title, $"/Action/Edit/{action.Id}", action.DueDate, action.Priority ?? "medium", isOverdue));
-                            }
-                        }
-                        
-                        foreach (var risk in Model.MyRisks.Where(r => r.Status != "closed" && r.RiskScore >= 10).Take(5))
-                        {
-                            var isOverdue = IsOverdue(risk.TargetDate, risk.Status, new[] { "closed" });
-                            var severity = risk.RiskScore >= 15 ? "critical" : "high";
-                            priorityItems.Add(("Risk", risk.Title, $"/Risk/Edit/{risk.Id}", risk.TargetDate, severity, isOverdue));
-                        }
-                        
-                        priorityItems = priorityItems
-                            .OrderByDescending(item => item.IsOverdue)
-                            .ThenBy(item => item.Date ?? DateTime.MaxValue)
-                            .Take(10)
-                            .ToList();
                     }
+                    
+                    foreach (var action in Model.MyActions.Where(a => a.Status != "done" && a.Status != "cancelled").Take(5))
+                    {
+                        var isOverdue = IsOverdue(action.DueDate, action.Status, new[] { "done", "cancelled" });
+                        if (isOverdue || action.Priority == "high")
+                        {
+                            priorityItems.Add(("Action", action.Title, $"/Action/Edit/{action.Id}", action.DueDate, action.Priority ?? "medium", isOverdue));
+                        }
+                    }
+                    
+                    foreach (var risk in Model.MyRisks.Where(r => r.Status != "closed" && r.RiskScore >= 10).Take(5))
+                    {
+                        var isOverdue = IsOverdue(risk.TargetDate, risk.Status, new[] { "closed" });
+                        var severity = risk.RiskScore >= 15 ? "critical" : "high";
+                        priorityItems.Add(("Risk", risk.Title, $"/Risk/Edit/{risk.Id}", risk.TargetDate, severity, isOverdue));
+                    }
+                    
+                    priorityItems = priorityItems
+                        .OrderByDescending(item => item.IsOverdue)
+                        .ThenBy(item => item.Date ?? DateTime.MaxValue)
+                        .Take(10)
+                        .ToList();
 
                     @if (priorityItems.Any())
                     {
