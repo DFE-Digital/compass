@@ -401,7 +401,8 @@ public class ReportsController : Controller
         public string Value { get; set; } = string.Empty;
     }
 
-    // GET: Reports/RisksAndIssues
+    // DISABLED: Reports/RisksAndIssues view removed
+    /*
     public async Task<IActionResult> RisksAndIssues()
     {
         try
@@ -487,8 +488,10 @@ public class ReportsController : Controller
             return View(new List<ProductRaidReport>());
         }
     }
+    */
 
-    // GET: Reports/Analysis
+    // DISABLED: Reports/Analysis view removed
+    /*
     public async Task<IActionResult> Analysis()
     {
         try
@@ -604,6 +607,7 @@ public class ReportsController : Controller
             return View(new List<ProductAnalysisReport>());
         }
     }
+    */
 
     private int CalculateHealthScore(int openRisks, int highRisks, int openIssues, 
         int criticalIssues, int blockedIssues, int overdueActions, int overdueMilestones)

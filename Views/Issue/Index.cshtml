@@ -20,13 +20,6 @@
     var assignedToMeCount = ViewBag.AssignedToMeCount as int? ?? 0;
     var myProductsCount = ViewBag.MyProductsCount as int? ?? 0;
     var organisationWideCount = ViewBag.OrganisationWideCount as int? ?? 0;
-    
-    var hasFilters = !string.IsNullOrEmpty(currentDimension) || 
-                     !string.IsNullOrEmpty(currentBusinessArea) || 
-                     !string.IsNullOrEmpty(currentStatus) || 
-                     currentProducts.Any() ||
-                     !string.IsNullOrEmpty(currentSeverity) ||
-                     !string.IsNullOrEmpty(currentPriority);
 }
 
 <div class="content-header">
@@ -84,22 +77,25 @@
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
                 <!-- View Scope Options -->
                 <div class="card">
-                    <div class="card-body p-2">
-                        <div class="nav flex-column nav-pills">
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "assigned_to_me" ? "active" : "")">
+                    <div class="card-header">
+                        <h3 class="card-title">View</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "assigned_to_me" ? "active" : "")">
                                 Assigned to me
-                                <span class="badge badge-primary float-right">@assignedToMeCount</span>
+                                <span class="badge badge-light float-right">@assignedToMeCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "my_products" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "my_products" ? "active" : "")">
                                 My products
-                                <span class="badge badge-info float-right">@myProductsCount</span>
+                                <span class="badge badge-light float-right">@myProductsCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "organisation_wide" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "organisation_wide" ? "active" : "")">
                                 Organisation-wide
-                                <span class="badge badge-secondary float-right">@organisationWideCount</span>
+                                <span class="badge badge-light float-right">@organisationWideCount</span>
                             </a>
                         </div>
                     </div>
@@ -111,20 +107,12 @@
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
-                        @if (hasFilters)
-                        {
-                            <div class="alert alert-info alert-sm p-2 mb-3">
-                                <strong>Active filters</strong>
-                            </div>
-                        }
-                        
                         <form method="get" id="filterForm">
                             @if (ViewBag.ObjectiveId != null)
                             {
                                 <input type="hidden" name="objectiveId" value="@ViewBag.ObjectiveId" />
                             }
                             <input type="hidden" name="viewScope" value="@currentViewScope" />
-                            <input type="hidden" name="tab" id="tabInput" value="@currentTab" />
                             
                             <div class="form-group">
                                 <label>Business area</label>
@@ -189,52 +177,46 @@
                 </div>
             </div>
 
-            <!-- Right Column: Tabs and Table -->
+            <!-- Right Column: Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                <!-- Tabs -->
-                <ul class="nav nav-tabs" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "active" ? "active" : "")" href="#" data-tab="active">
-                            Active <span class="badge badge-danger">@openCount</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "closed" ? "active" : "")" href="#" data-tab="closed">
-                            Resolved/Closed <span class="badge badge-secondary">@closedCount</span>
-                        </a>
-                    </li>
-                </ul>
-
-                <!-- Table Content -->
-                <div class="card mb-0" style="border-top: none; border-top-left-radius: 0;">
+                <!-- Active Issues -->
+                @{
+                    var activeIssues = Model?.Where(i => i.Status != "resolved" && i.Status != "closed").ToList() ?? new List<Compass.Models.Issue>();
+                    var closedIssues = Model?.Where(i => i.Status == "resolved" || i.Status == "closed").ToList() ?? new List<Compass.Models.Issue>();
+                }
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Active issues</h3>
+                    </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
+                        <table class="table table-hover mb-0 sortable-table">
                             <thead>
                                 <tr>
-                                    <th>Title</th>
-                                    <th>Owner</th>
-                                    <th>Severity</th>
-                                    <th>Status</th>
-                                    <th>Target resolution</th>
+                                    <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner">Owner</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Severity" tabindex="0" role="button" aria-label="Sort by Severity">Severity</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                    <th style="width: 120px;" class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date">Due date</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (Model != null && Model.Any())
+                                @if (activeIssues.Any())
                                 {
-                                    @foreach (var issue in Model)
+                                    @foreach (var issue in activeIssues)
                                     {
-                                        <tr>
+                                        var isOverdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate < DateTime.Now;
+                                        var productName = products.FirstOrDefault(p => p.FipsId == issue.FipsId)?.Title ?? issue.FipsId;
+                                        <tr class="@(isOverdue ? "table-danger" : "")">
                                             <td>
                                                 <a asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
+                                                @if (!string.IsNullOrEmpty(productName))
+                                                {
+                                                    <br><small class="text-muted">@productName</small>
+                                                }
                                                 @if (issue.BlockedFlag)
                                                 {
-                                                    <span class="badge badge-danger ml-1">BLOCKED</span>
-                                                }
-                                                @if (!string.IsNullOrEmpty(issue.FipsId))
-                                                {
-                                                    var product = products.FirstOrDefault(p => p.FipsId == issue.FipsId);
-                                                    var productName = product?.Title ?? issue.FipsId;
-                                                    <br /><small class="text-muted">@productName</small>
+                                                    <br><span class="text-danger small">Blocked</span>
                                                 }
                                             </td>
                                             <td>@(issue.OwnerUser?.Name ?? "-")</td>
@@ -257,10 +239,6 @@
                                                         <span class="badge badge-secondary">@issue.Severity</span>
                                                         break;
                                                 }
-                                                @if (!string.IsNullOrEmpty(issue.Priority))
-                                                {
-                                                    <br /><small class="text-muted">P: @issue.Priority</small>
-                                                }
                                             </td>
                                             <td>
                                                 @switch (issue.Status)
@@ -269,36 +247,134 @@
                                                         <span class="badge badge-danger">Open</span>
                                                         break;
                                                     case "in_progress":
-                                                        <span class="badge badge-warning">In progress</span>
+                                                        <span class="badge badge-primary">In progress</span>
                                                         break;
                                                     case "blocked":
                                                         <span class="badge badge-danger">Blocked</span>
-                                                        break;
-                                                    case "resolved":
-                                                        <span class="badge badge-success">Resolved</span>
-                                                        break;
-                                                    case "closed":
-                                                        <span class="badge badge-secondary">Closed</span>
                                                         break;
                                                     default:
                                                         <span class="badge badge-secondary">@issue.Status</span>
                                                         break;
                                                 }
                                             </td>
-                                            <td><small>@(issue.TargetResolutionDate?.ToString("d MMM yyyy") ?? "-")</small></td>
+                                            <td>
+                                                @if (issue.TargetResolutionDate.HasValue)
+                                                {
+                                                    <span class="@(isOverdue ? "text-danger" : "")">
+                                                        @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
                                         </tr>
                                     }
                                 }
                                 else
                                 {
                                     <tr>
-                                        <td colspan="5" class="text-center">No issues found</td>
+                                        <td colspan="5" class="text-center text-muted py-3">No active issues found</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                <!-- Resolved/Closed Issues -->
+                @if (closedIssues.Any())
+                {
+                    <div class="card mt-3">
+                        <div class="card-header" data-toggle="collapse" data-target="#closedIssuesCollapse" style="cursor: pointer;">
+                            <h3 class="card-title">
+                                Resolved/Closed issues
+                                <span class="badge badge-secondary ml-2">@closedIssues.Count</span>
+                            </h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="closedIssuesCollapse" class="collapse">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th style="width: 120px;">Owner</th>
+                                            <th style="width: 100px;">Severity</th>
+                                            <th style="width: 120px;">Status</th>
+                                            <th style="width: 120px;">Resolved date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in closedIssues)
+                                        {
+                                            var productName = products.FirstOrDefault(p => p.FipsId == issue.FipsId)?.Title ?? issue.FipsId;
+                                            <tr>
+                                                <td>
+                                                    <a asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
+                                                    @if (!string.IsNullOrEmpty(productName))
+                                                    {
+                                                        <br><small class="text-muted">@productName</small>
+                                                    }
+                                                </td>
+                                                <td>@(issue.OwnerUser?.Name ?? "-")</td>
+                                                <td>
+                                                    @switch (issue.Severity)
+                                                    {
+                                                        case "critical":
+                                                            <span class="badge badge-danger">Critical</span>
+                                                            break;
+                                                        case "high":
+                                                            <span class="badge badge-warning">High</span>
+                                                            break;
+                                                        case "medium":
+                                                            <span class="badge badge-info">Medium</span>
+                                                            break;
+                                                        case "low":
+                                                            <span class="badge badge-secondary">Low</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge badge-secondary">@issue.Severity</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @switch (issue.Status)
+                                                    {
+                                                        case "resolved":
+                                                            <span class="badge badge-success">Resolved</span>
+                                                            break;
+                                                        case "closed":
+                                                            <span class="badge badge-secondary">Closed</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge badge-secondary">@issue.Status</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.TargetResolutionDate.HasValue)
+                                                    {
+                                                        @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -306,11 +382,6 @@
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        function switchTab(tab) {
-            document.getElementById('tabInput').value = tab;
-            document.getElementById('filterForm').submit();
-        }
-
         $(document).ready(function() {
             // Initialize Select2
             $('.select2-multiple').select2({
@@ -320,13 +391,6 @@
 
             $('.select2-multiple').on('change', function() {
                 $('#filterForm').submit();
-            });
-
-            // Handle tab clicks
-            $('.nav-tabs a[data-tab]').on('click', function(e) {
-                e.preventDefault();
-                var tab = $(this).data('tab');
-                switchTab(tab);
             });
 
             // Handle export placeholder click
@@ -339,6 +403,78 @@
             $('.auto-submit').on('change', function() {
                 $(this).closest('form').submit();
             });
+
+            // Rotate chevron icon on collapse
+            $('#closedIssuesCollapse').on('show.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-down').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            }).on('hide.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-up').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            });
+
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
         });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'DueDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(9999, 11, 31) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(9999, 11, 31) : new Date(bDate);
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
     </script>
 }

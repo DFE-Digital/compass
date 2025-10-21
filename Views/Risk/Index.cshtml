@@ -5,15 +5,17 @@
     var currentTab = ViewBag.CurrentTab as string ?? "active";
     var currentViewScope = ViewBag.CurrentViewScope as string ?? "assigned_to_me";
     var currentDimension = ViewBag.CurrentDimension as string;
-    var currentBusinessArea = ViewBag.CurrentBusinessArea as string;
-    var currentStatus = ViewBag.CurrentStatus as string;
+    var currentBusinessAreas = ViewBag.CurrentBusinessAreas as string[] ?? Array.Empty<string>();
+    var currentStatuses = ViewBag.CurrentStatuses as string[] ?? Array.Empty<string>();
     var currentProducts = ViewBag.CurrentProducts as string[] ?? Array.Empty<string>();
-    var minRiskScore = ViewBag.MinRiskScore as int?;
-    var maxRiskScore = ViewBag.MaxRiskScore as int?;
-    var currentImpact = ViewBag.CurrentImpact as int?;
-    var currentLikelihood = ViewBag.CurrentLikelihood as int?;
+    var currentRiskTypeIds = ViewBag.CurrentRiskTypeIds as int[] ?? Array.Empty<int>();
+    var currentRiskTierIds = ViewBag.CurrentRiskTierIds as int[] ?? Array.Empty<int>();
+    var currentImpacts = ViewBag.CurrentImpacts as int[] ?? Array.Empty<int>();
+    var currentLikelihoods = ViewBag.CurrentLikelihoods as int[] ?? Array.Empty<int>();
     var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
     var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var riskTypes = ViewBag.RiskTypes as List<Compass.Models.RiskType> ?? new List<Compass.Models.RiskType>();
+    var riskTiers = ViewBag.RiskTiers as List<Compass.Models.RiskTier> ?? new List<Compass.Models.RiskTier>();
     var userBusinessAreas = ViewBag.UserBusinessAreas as List<string> ?? new List<string>();
     var newCount = ViewBag.NewCount as int? ?? 0;
     var openCount = ViewBag.OpenCount as int? ?? 0;
@@ -22,16 +24,6 @@
     var assignedToMeCount = ViewBag.AssignedToMeCount as int? ?? 0;
     var myProductsCount = ViewBag.MyProductsCount as int? ?? 0;
     var organisationWideCount = ViewBag.OrganisationWideCount as int? ?? 0;
-    
-    // Check if any filters are applied
-    var hasFilters = !string.IsNullOrEmpty(currentDimension) || 
-                     !string.IsNullOrEmpty(currentBusinessArea) || 
-                     (!string.IsNullOrEmpty(currentStatus) && currentStatus != "closed") || 
-                     currentProducts.Any() ||
-                     minRiskScore.HasValue ||
-                     maxRiskScore.HasValue ||
-                     currentImpact.HasValue ||
-                     currentLikelihood.HasValue;
 }
 
 <div class="content-header">
@@ -89,22 +81,25 @@
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
                 <!-- View Scope Options -->
                 <div class="card">
-                    <div class="card-body p-2">
-                        <div class="nav flex-column nav-pills">
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "assigned_to_me" ? "active" : "")">
+                    <div class="card-header">
+                        <h3 class="card-title">View</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "assigned_to_me" ? "active" : "")">
                                 Assigned to me
-                                <span class="badge badge-primary float-right">@assignedToMeCount</span>
+                                <span class="badge badge-light float-right">@assignedToMeCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "my_products" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "my_products" ? "active" : "")">
                                 My products
-                                <span class="badge badge-info float-right">@myProductsCount</span>
+                                <span class="badge badge-light float-right">@myProductsCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "organisation_wide" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "organisation_wide" ? "active" : "")">
                                 Organisation-wide
-                                <span class="badge badge-secondary float-right">@organisationWideCount</span>
+                                <span class="badge badge-light float-right">@organisationWideCount</span>
                             </a>
                         </div>
                     </div>
@@ -116,178 +111,214 @@
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
-                        @if (hasFilters)
-                        {
-                            <div class="alert alert-info alert-sm p-2 mb-3">
-                                <strong>Active filters</strong>
-                            </div>
-                        }
-                        
                         <form method="get" id="filterForm">
                             @if (ViewBag.ObjectiveId != null)
                             {
                                 <input type="hidden" name="objectiveId" value="@ViewBag.ObjectiveId" />
                             }
                             <input type="hidden" name="viewScope" value="@currentViewScope" />
-                            <input type="hidden" name="tab" id="tabInput" value="@currentTab" />
                             
-                            <!-- Business Area Filter -->
+                            <!-- Business Area -->
                             <div class="form-group">
                                 <label>Business area</label>
-                                <select name="businessArea" class="form-control form-control-sm auto-submit">
-                                    <option value="">All</option>
-                                    @foreach (var ba in businessAreas)
-                                    {
-                                        <option value="@ba" selected="@(currentBusinessArea == ba)">@ba</option>
-                                    }
-                                </select>
+                                @foreach (var ba in businessAreas)
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" 
+                                               class="form-check-input auto-submit-checkbox" 
+                                               name="businessAreas" 
+                                               value="@ba" 
+                                               id="ba_@ba.Replace(" ", "_")" 
+                                               checked="@(currentBusinessAreas.Contains(ba))" />
+                                        <label class="form-check-label" for="ba_@ba.Replace(" ", "_")">@ba</label>
+                                    </div>
+                                }
                             </div>
 
-                            <!-- Status Filter -->
+                            <!-- Status -->
                             <div class="form-group">
                                 <label>Status</label>
-                                <select name="status" class="form-control form-control-sm" onchange="this.form.submit()">
-                                    <option value="">All statuses</option>
-                                    <option value="new" selected="@(currentStatus == "new")">New</option>
-                                    <option value="open" selected="@(currentStatus == "open")">Open</option>
-                                    <option value="treating" selected="@(currentStatus == "treating")">Treating</option>
-                                    <option value="monitoring" selected="@(currentStatus == "monitoring")">Monitoring</option>
-                                </select>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="statuses" value="new" id="status_new" checked="@(currentStatuses.Contains("new"))" />
+                                    <label class="form-check-label" for="status_new">New</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="statuses" value="open" id="status_open" checked="@(currentStatuses.Contains("open"))" />
+                                    <label class="form-check-label" for="status_open">Open</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="statuses" value="treating" id="status_treating" checked="@(currentStatuses.Contains("treating"))" />
+                                    <label class="form-check-label" for="status_treating">Treating</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="statuses" value="monitoring" id="status_monitoring" checked="@(currentStatuses.Contains("monitoring"))" />
+                                    <label class="form-check-label" for="status_monitoring">Monitoring</label>
+                                </div>
                             </div>
 
-                            <!-- Products Filter -->
+                            <!-- Products -->
                             <div class="form-group">
                                 <label>Products</label>
-                                <select name="products" class="form-control form-control-sm select2-multiple" multiple="multiple" data-placeholder="All products">
-                                    @foreach (var product in products)
+                                @foreach (var product in products)
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" 
+                                               class="form-check-input auto-submit-checkbox" 
+                                               name="products" 
+                                               value="@product.FipsId" 
+                                               id="product_@product.FipsId" 
+                                               checked="@(currentProducts.Contains(product.FipsId))" />
+                                        <label class="form-check-label" for="product_@product.FipsId">@product.Title</label>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Risk Types -->
+                            @if (riskTypes.Any())
+                            {
+                                <div class="form-group">
+                                    <label>Risk type</label>
+                                    @foreach (var riskType in riskTypes)
                                     {
-                                        <option value="@product.FipsId" selected="@(((IEnumerable<string>)currentProducts).Contains(product.FipsId))">@product.Title</option>
+                                        <div class="form-check">
+                                            <input type="checkbox" 
+                                                   class="form-check-input auto-submit-checkbox" 
+                                                   name="riskTypeIds" 
+                                                   value="@riskType.Id" 
+                                                   id="riskType_@riskType.Id" 
+                                                   checked="@(currentRiskTypeIds.Contains(riskType.Id))" />
+                                            <label class="form-check-label" for="riskType_@riskType.Id">@riskType.Name</label>
+                                        </div>
                                     }
-                                </select>
-                            </div>
+                                </div>
+                            }
 
-                            <!-- Min Risk Score -->
-                            <div class="form-group">
-                                <label>Min risk score</label>
-                                <input type="number" name="minRiskScore" class="form-control form-control-sm" min="1" max="25" value="@minRiskScore" placeholder="1-25" />
-                            </div>
-
-                            <!-- Max Risk Score -->
-                            <div class="form-group">
-                                <label>Max risk score</label>
-                                <input type="number" name="maxRiskScore" class="form-control form-control-sm" min="1" max="25" value="@maxRiskScore" placeholder="1-25" />
-                            </div>
+                            <!-- Risk Tiers -->
+                            @if (riskTiers.Any())
+                            {
+                                <div class="form-group">
+                                    <label>Risk tier</label>
+                                    @foreach (var riskTier in riskTiers)
+                                    {
+                                        <div class="form-check">
+                                            <input type="checkbox" 
+                                                   class="form-check-input auto-submit-checkbox" 
+                                                   name="riskTierIds" 
+                                                   value="@riskTier.Id" 
+                                                   id="riskTier_@riskTier.Id" 
+                                                   checked="@(currentRiskTierIds.Contains(riskTier.Id))" />
+                                            <label class="form-check-label" for="riskTier_@riskTier.Id">@riskTier.Name</label>
+                                        </div>
+                                    }
+                                </div>
+                            }
 
                             <!-- Impact -->
                             <div class="form-group">
                                 <label>Impact</label>
-                                <select name="impact" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    <option value="1" selected="@(currentImpact == 1)">1 - Very low</option>
-                                    <option value="2" selected="@(currentImpact == 2)">2 - Low</option>
-                                    <option value="3" selected="@(currentImpact == 3)">3 - Medium</option>
-                                    <option value="4" selected="@(currentImpact == 4)">4 - High</option>
-                                    <option value="5" selected="@(currentImpact == 5)">5 - Very high</option>
-                                </select>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="impacts" value="1" id="impact_1" checked="@(currentImpacts.Contains(1))" />
+                                    <label class="form-check-label" for="impact_1">1 - Very low</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="impacts" value="2" id="impact_2" checked="@(currentImpacts.Contains(2))" />
+                                    <label class="form-check-label" for="impact_2">2 - Low</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="impacts" value="3" id="impact_3" checked="@(currentImpacts.Contains(3))" />
+                                    <label class="form-check-label" for="impact_3">3 - Medium</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="impacts" value="4" id="impact_4" checked="@(currentImpacts.Contains(4))" />
+                                    <label class="form-check-label" for="impact_4">4 - High</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="impacts" value="5" id="impact_5" checked="@(currentImpacts.Contains(5))" />
+                                    <label class="form-check-label" for="impact_5">5 - Very high</label>
+                                </div>
                             </div>
 
                             <!-- Likelihood -->
                             <div class="form-group">
                                 <label>Likelihood</label>
-                                <select name="likelihood" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    <option value="1" selected="@(currentLikelihood == 1)">1 - Rare</option>
-                                    <option value="2" selected="@(currentLikelihood == 2)">2 - Unlikely</option>
-                                    <option value="3" selected="@(currentLikelihood == 3)">3 - Possible</option>
-                                    <option value="4" selected="@(currentLikelihood == 4)">4 - Likely</option>
-                                    <option value="5" selected="@(currentLikelihood == 5)">5 - Almost certain</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = currentViewScope, tab = currentTab })" class="btn btn-default btn-sm btn-block">Clear filters</a>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="likelihoods" value="1" id="likelihood_1" checked="@(currentLikelihoods.Contains(1))" />
+                                    <label class="form-check-label" for="likelihood_1">1 - Rare</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="likelihoods" value="2" id="likelihood_2" checked="@(currentLikelihoods.Contains(2))" />
+                                    <label class="form-check-label" for="likelihood_2">2 - Unlikely</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="likelihoods" value="3" id="likelihood_3" checked="@(currentLikelihoods.Contains(3))" />
+                                    <label class="form-check-label" for="likelihood_3">3 - Possible</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="likelihoods" value="4" id="likelihood_4" checked="@(currentLikelihoods.Contains(4))" />
+                                    <label class="form-check-label" for="likelihood_4">4 - Likely</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input auto-submit-checkbox" name="likelihoods" value="5" id="likelihood_5" checked="@(currentLikelihoods.Contains(5))" />
+                                    <label class="form-check-label" for="likelihood_5">5 - Almost certain</label>
+                                </div>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Tabs and Table -->
+            <!-- Right Column: Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                <!-- Tabs -->
-                <ul class="nav nav-tabs" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "active" ? "active" : "")" href="#" data-tab="active">
-                            Active <span class="badge badge-primary">@openCount</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "closed" ? "active" : "")" href="#" data-tab="closed">
-                            Closed <span class="badge badge-secondary">@closedCount</span>
-                        </a>
-                    </li>
-                </ul>
-
-                <!-- Table Content -->
-                <div class="card mb-0" style="border-top: none; border-top-left-radius: 0;">
+                <!-- Active Risks -->
+                @{
+                    var activeRisks = Model?.Where(r => r.Status != "closed").ToList() ?? new List<Compass.Models.Risk>();
+                    var closedRisks = Model?.Where(r => r.Status == "closed").ToList() ?? new List<Compass.Models.Risk>();
+                }
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Active risks</h3>
+                    </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0 sortable-table">
                             <thead>
                                 <tr>
-                                    <th>Title</th>
-                                    <th>Business area</th>
-                                    <th>Risk score</th>
-                                    <th>Impact</th>
-                                    <th>Likelihood</th>
-                                    <th>Status</th>
+                                    <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                    <th style="width: 100px;" class="text-center sortable" data-column="Score" tabindex="0" role="button" aria-label="Sort by Score">Score</th>
+                                    <th style="width: 100px;" class="text-center sortable" data-column="Impact" tabindex="0" role="button" aria-label="Sort by Impact">Impact</th>
+                                    <th style="width: 100px;" class="text-center sortable" data-column="Likelihood" tabindex="0" role="button" aria-label="Sort by Likelihood">Likelihood</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                    <th style="width: 120px;" class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date">Due date</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (Model != null && Model.Any())
+                                @if (activeRisks.Any())
                                 {
-                                    @foreach (var risk in Model)
+                                    @foreach (var risk in activeRisks)
                                     {
-                                        var borderColor = risk.RiskScore >= 15 ? "border-danger" : risk.RiskScore >= 10 ? "border-warning" : "";
-                                        <tr class="@borderColor">
+                                        var isOverdue = risk.TargetDate.HasValue && risk.TargetDate < DateTime.Now;
+                                        var productName = products.FirstOrDefault(p => p.FipsId == risk.FipsId)?.Title ?? risk.FipsId;
+                                        <tr class="@(isOverdue ? "table-danger" : "")">
                                             <td>
                                                 <a asp-action="Details" asp-route-id="@risk.Id">@risk.Title</a>
-                                                @if (!string.IsNullOrEmpty(risk.FipsId))
+                                                @if (!string.IsNullOrEmpty(productName))
                                                 {
-                                                    var product = products.FirstOrDefault(p => p.FipsId == risk.FipsId);
-                                                    var productName = product?.Title ?? risk.FipsId;
-                                                    <br /><small class="text-muted">@productName</small>
+                                                    <br><small class="text-muted">@productName</small>
                                                 }
                                             </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(risk.BusinessArea))
-                                                {
-                                                    <span class="badge badge-light">@risk.BusinessArea</span>
-                                                }
-                                            </td>
-                                            <td>
+                                            <td class="text-center">
                                                 @{
-                                                    var badgeClass = risk.RiskScore >= 15 ? "badge-danger" : risk.RiskScore >= 10 ? "badge-warning" : risk.RiskScore >= 5 ? "badge-info" : "badge-success";
+                                                    var scoreBadgeClass = risk.RiskScore >= 15 ? "badge-danger" : risk.RiskScore >= 10 ? "badge-warning" : risk.RiskScore >= 5 ? "badge-info" : "badge-success";
                                                 }
-                                                <span class="badge @badgeClass" style="font-size: 14px; padding: 8px 12px;">@risk.RiskScore</span>
+                                                <span class="badge @scoreBadgeClass">@risk.RiskScore</span>
                                             </td>
-                                            <td>
-                                                @{
-                                                    var impactClass = risk.ImpactRating >= 4 ? "badge-danger" : risk.ImpactRating >= 3 ? "badge-warning" : risk.ImpactRating >= 2 ? "badge-info" : "badge-success";
-                                                }
-                                                <span class="badge @impactClass" style="font-size: 14px; padding: 8px 12px;">@risk.ImpactRating</span>
-                                            </td>
-                                            <td>
-                                                @{
-                                                    var likelihoodClass = risk.LikelihoodRating >= 4 ? "badge-danger" : risk.LikelihoodRating >= 3 ? "badge-warning" : risk.LikelihoodRating >= 2 ? "badge-info" : "badge-success";
-                                                }
-                                                <span class="badge @likelihoodClass" style="font-size: 14px; padding: 8px 12px;">@risk.LikelihoodRating</span>
-                                            </td>
+                                            <td class="text-center">@risk.ImpactRating</td>
+                                            <td class="text-center">@risk.LikelihoodRating</td>
                                             <td>
                                                 @switch (risk.Status)
                                                 {
                                                     case "new":
-                                                        <span class="badge badge-warning">New</span>
+                                                        <span class="badge badge-info">New</span>
                                                         break;
                                                     case "open":
                                                         <span class="badge badge-danger">Open</span>
@@ -296,14 +327,23 @@
                                                         <span class="badge badge-warning">Treating</span>
                                                         break;
                                                     case "monitoring":
-                                                        <span class="badge badge-info">Monitoring</span>
-                                                        break;
-                                                    case "closed":
-                                                        <span class="badge badge-secondary">Closed</span>
+                                                        <span class="badge badge-primary">Monitoring</span>
                                                         break;
                                                     default:
                                                         <span class="badge badge-secondary">@risk.Status</span>
                                                         break;
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (risk.TargetDate.HasValue)
+                                                {
+                                                    <span class="@(isOverdue ? "text-danger" : "")">
+                                                        @risk.TargetDate.Value.ToString("dd MMM yyyy")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
                                                 }
                                             </td>
                                         </tr>
@@ -312,13 +352,81 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="6" class="text-center py-4 text-muted">No risks found</td>
+                                        <td colspan="6" class="text-center text-muted py-3">No active risks found</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                <!-- Closed Risks -->
+                @if (closedRisks.Any())
+                {
+                    <div class="card mt-3">
+                        <div class="card-header" data-toggle="collapse" data-target="#closedRisksCollapse" style="cursor: pointer;">
+                            <h3 class="card-title">
+                                Closed risks
+                                <span class="badge badge-secondary ml-2">@closedRisks.Count</span>
+                            </h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="closedRisksCollapse" class="collapse">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th style="width: 100px;" class="text-center">Score</th>
+                                            <th style="width: 100px;" class="text-center">Impact</th>
+                                            <th style="width: 100px;" class="text-center">Likelihood</th>
+                                            <th style="width: 120px;">Status</th>
+                                            <th style="width: 120px;">Closed date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var risk in closedRisks)
+                                        {
+                                            var productName = products.FirstOrDefault(p => p.FipsId == risk.FipsId)?.Title ?? risk.FipsId;
+                                            <tr>
+                                                <td>
+                                                    <a asp-action="Details" asp-route-id="@risk.Id">@risk.Title</a>
+                                                    @if (!string.IsNullOrEmpty(productName))
+                                                    {
+                                                        <br><small class="text-muted">@productName</small>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @{
+                                                        var scoreBadgeClass = risk.RiskScore >= 15 ? "badge-danger" : risk.RiskScore >= 10 ? "badge-warning" : risk.RiskScore >= 5 ? "badge-info" : "badge-success";
+                                                    }
+                                                    <span class="badge @scoreBadgeClass">@risk.RiskScore</span>
+                                                </td>
+                                                <td class="text-center">@risk.ImpactRating</td>
+                                                <td class="text-center">@risk.LikelihoodRating</td>
+                                                <td><span class="badge badge-secondary">Closed</span></td>
+                                                <td>
+                                                    @if (risk.TargetDate.HasValue)
+                                                    {
+                                                        @risk.TargetDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -326,40 +434,92 @@
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        function switchTab(tab) {
-            document.getElementById('tabInput').value = tab;
-            document.getElementById('filterForm').submit();
-        }
-
         $(document).ready(function() {
-            // Initialize Select2 for multiple product selection
-            $('.select2-multiple').select2({
-                theme: 'bootstrap4',
-                width: '100%'
-            });
-
-            // Submit form when products change
-            $('.select2-multiple').on('change', function() {
-                $('#filterForm').submit();
-            });
-
-            // Handle tab clicks
-            $('.nav-tabs a[data-tab]').on('click', function(e) {
-                e.preventDefault();
-                var tab = $(this).data('tab');
-                switchTab(tab);
-            });
-
             // Handle export placeholder click
             $('.export-placeholder').on('click', function(e) {
                 e.preventDefault();
                 alert('Export feature coming soon');
             });
 
-            // Auto-submit form on filter change
-            $('.auto-submit').on('change', function() {
+            // Auto-submit form on checkbox change
+            $('.auto-submit-checkbox').on('change', function() {
                 $(this).closest('form').submit();
             });
+
+            // Rotate chevron icon on collapse
+            $('#closedRisksCollapse').on('show.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-down').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            }).on('hide.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-up').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            });
+
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
         });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'DueDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(9999, 11, 31) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(9999, 11, 31) : new Date(bDate);
+                    } else if (column === 'Score' || column === 'Impact' || column === 'Likelihood') {
+                        aVal = parseInt($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseInt($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
     </script>
 }

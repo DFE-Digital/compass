@@ -13,10 +13,19 @@
                 </ol>
                 <h1 class="m-0">Performance metrics</h1>
             </div>
-            <div class="col-sm-6 text-right">
-                <a href="@Url.Action("Index", "Documentation")#performance-metrics" class="btn btn-outline-info btn-sm">
-                    View documentation
-                </a>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="Create">
+                                Add new metric
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -42,11 +51,6 @@
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Performance metrics</h3>
-                <div class="card-tools">
-                    <a asp-action="Create" class="btn btn-primary btn-sm">
-                        Add new metric
-                    </a>
-                </div>
             </div>
             <div class="card-body table-responsive p-0">
                 <table class="table table-hover text-nowrap">
@@ -56,7 +60,6 @@
                             <th>Title</th>
                             <th>Value type</th>
                             <th>Valid from</th>
-                            <th class="col-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -64,9 +67,17 @@
                         {
                             @foreach (var metric in Model)
                             {
-                                <tr>
+                                <tr class="@(metric.IsDisabled ? "text-muted" : "")">
                                     <td>@metric.Identifier</td>
-                                    <td>@metric.Title</td>
+                                    <td>
+                                        <a asp-action="Edit" asp-route-id="@metric.Id" class="font-weight-bold">
+                                            @metric.Title
+                                        </a>
+                                        @if (metric.IsDisabled)
+                                        {
+                                            <span class="badge badge-secondary ml-2">Disabled</span>
+                                        }
+                                    </td>
                                     <td>
                                         @switch (metric.ValueType)
                                         {
@@ -79,24 +90,19 @@
                                             case Compass.Models.ValueType.Decimal:
                                                 <span class="badge badge-warning">Decimal</span>
                                                 break;
+                                            case Compass.Models.ValueType.Percentage:
+                                                <span class="badge badge-primary">Percentage</span>
+                                                break;
                                         }
                                     </td>
                                     <td>@(new DateTime(metric.ValidFromYear, metric.ValidFromMonth, 1).ToString("MMMM yyyy"))</td>
-                                    <td class="col-actions">
-                                        <a asp-action="Edit" asp-route-id="@metric.Id" class="btn btn-sm btn-primary">
-                                            Edit
-                                        </a>
-                                        <a asp-action="Delete" asp-route-id="@metric.Id" class="btn btn-sm btn-danger">
-                                            Delete
-                                        </a>
-                                    </td>
                                 </tr>
                             }
                         }
                         else
                         {
                             <tr>
-                                <td colspan="5" class="text-center">No performance metrics found</td>
+                                <td colspan="4" class="text-center">No performance metrics found</td>
                             </tr>
                         }
                     </tbody>

@@ -49,56 +49,57 @@ public class DataMigrationUtility
             // Migrate in order of dependencies
             
             // 1. Independent lookup tables first
-            await MigrateRiskTiers(sourceDb, targetDb);
-            await MigrateRiskTypes(sourceDb, targetDb);
-            await MigrateActionSources(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTiers", db => db.RiskTiers);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTypes", db => db.RiskTypes);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ActionSources", db => db.ActionSources);
             
             // 2. Users
-            await MigrateUsers(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Users", db => db.Users);
+            // UserPreferences uses UserId as PK, not auto-increment
             await MigrateUserPreferences(sourceDb, targetDb);
             
             // 3. API Tokens
-            await MigrateApiTokens(sourceDb, targetDb);
-            await MigrateApiTokenPermissions(sourceDb, targetDb);
-            await MigrateApiRequestLogs(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ApiTokens", db => db.ApiTokens);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ApiTokenPermissions", db => db.ApiTokenPermissions);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ApiRequestLogs", db => db.ApiRequestLogs);
             
             // 4. Performance Metrics
-            await MigratePerformanceMetrics(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "PerformanceMetrics", db => db.PerformanceMetrics);
             
-            // 5. Functional Standards hierarchy
+            // 5. Functional Standards hierarchy (FunctionalStandards uses non-auto ID)
             await MigrateFunctionalStandards(sourceDb, targetDb);
-            await MigrateFunctionalStandardThemes(sourceDb, targetDb);
-            await MigratePracticeAreas(sourceDb, targetDb);
-            await MigrateCriteria(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "FunctionalStandardThemes", db => db.FunctionalStandardThemes);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "PracticeAreas", db => db.PracticeAreas);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Criteria", db => db.Criteria);
             
             // 6. Product Reporting
-            await MigrateProductReturns(sourceDb, targetDb);
-            await MigrateProductMetricValues(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ProductReturns", db => db.ProductReturns);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "ProductMetricValues", db => db.ProductMetricValues);
             
             // 7. Functional Standard Assessments
-            await MigrateFunctionalStandardAssessments(sourceDb, targetDb);
-            await MigrateAssessmentCriteriaResponses(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "FunctionalStandardAssessments", db => db.FunctionalStandardAssessments);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "AssessmentCriteriaResponses", db => db.AssessmentCriteriaResponses);
             
             // 8. Enterprise Metrics
-            await MigrateEnterpriseMetrics(sourceDb, targetDb);
-            await MigrateEnterpriseReturns(sourceDb, targetDb);
-            await MigrateEnterpriseMetricValues(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "EnterpriseMetrics", db => db.EnterpriseMetrics);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "EnterpriseReturns", db => db.EnterpriseReturns);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "EnterpriseMetricValues", db => db.EnterpriseMetricValues);
             
             // 9. RAID items - Objectives first, then dependent items
-            await MigrateObjectives(sourceDb, targetDb);
-            await MigrateRisks(sourceDb, targetDb);
-            await MigrateIssues(sourceDb, targetDb);
-            await MigrateMilestones(sourceDb, targetDb);
-            await MigrateActions(sourceDb, targetDb);
-            await MigrateComments(sourceDb, targetDb);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Objectives", db => db.Objectives);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Risks", db => db.Risks);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Issues", db => db.Issues);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Milestones", db => db.Milestones);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Actions", db => db.Actions);
+            await MigrateTableWithIdentity(sourceDb, targetDb, "Comments", db => db.Comments);
             
-            // 10. Junction tables
-            await MigrateRiskActions(sourceDb, targetDb);
-            await MigrateRiskRiskTypes(sourceDb, targetDb);
-            await MigrateIssueActions(sourceDb, targetDb);
-            await MigrateMilestoneActions(sourceDb, targetDb);
-            await MigrateMilestoneRisks(sourceDb, targetDb);
-            await MigrateMilestoneIssues(sourceDb, targetDb);
+            // 10. Junction tables (composite keys, no identity)
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.RiskActions, "RiskActions");
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.RiskRiskTypes, "RiskRiskTypes");
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.IssueActions, "IssueActions");
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.MilestoneActions, "MilestoneActions");
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.MilestoneRisks, "MilestoneRisks");
+            await MigrateJunctionTable(sourceDb, targetDb, db => db.MilestoneIssues, "MilestoneIssues");
             
             Console.WriteLine("\n✓ Data migration completed successfully!");
         }
@@ -110,101 +111,52 @@ public class DataMigrationUtility
         }
     }
 
-    private static async Task MigrateRiskTiers(CompassDbContext sourceDb, CompassDbContext targetDb)
+    private static async Task MigrateTableWithIdentity<T>(
+        CompassDbContext sourceDb,
+        CompassDbContext targetDb,
+        string tableName,
+        Func<CompassDbContext, DbSet<T>> getDbSet) where T : class
     {
-        var items = await sourceDb.RiskTiers.AsNoTracking().ToListAsync();
+        var sourceSet = getDbSet(sourceDb);
+        var targetSet = getDbSet(targetDb);
+        
+        var items = await sourceSet.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            Console.WriteLine($"Migrating {items.Count} RiskTiers...");
-            await targetDb.RiskTiers.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
+            Console.WriteLine($"Migrating {items.Count} {tableName}...");
+            
+            // Use a transaction to ensure IDENTITY_INSERT stays enabled during the operation
+            using var transaction = await targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await targetDb.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] ON");
+                await targetSet.AddRangeAsync(items);
+                await targetDb.SaveChangesAsync();
+                await targetDb.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] OFF");
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
-
-    private static async Task MigrateRiskTypes(CompassDbContext sourceDb, CompassDbContext targetDb)
+    
+    private static async Task MigrateJunctionTable<T>(
+        CompassDbContext sourceDb,
+        CompassDbContext targetDb,
+        Func<CompassDbContext, DbSet<T>> getDbSet,
+        string tableName) where T : class
     {
-        var items = await sourceDb.RiskTypes.AsNoTracking().ToListAsync();
+        var sourceSet = getDbSet(sourceDb);
+        var targetSet = getDbSet(targetDb);
+        
+        var items = await sourceSet.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            Console.WriteLine($"Migrating {items.Count} RiskTypes...");
-            await targetDb.RiskTypes.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateActionSources(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ActionSources.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ActionSources...");
-            await targetDb.ActionSources.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateUsers(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Users.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Users...");
-            await targetDb.Users.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateUserPreferences(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.UserPreferences.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} UserPreferences...");
-            await targetDb.UserPreferences.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateApiTokens(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ApiTokens.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ApiTokens...");
-            await targetDb.ApiTokens.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateApiTokenPermissions(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ApiTokenPermissions.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ApiTokenPermissions...");
-            await targetDb.ApiTokenPermissions.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateApiRequestLogs(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ApiRequestLogs.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ApiRequestLogs...");
-            await targetDb.ApiRequestLogs.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigratePerformanceMetrics(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.PerformanceMetrics.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} PerformanceMetrics...");
-            await targetDb.PerformanceMetrics.AddRangeAsync(items);
+            Console.WriteLine($"Migrating {items.Count} {tableName}...");
+            await targetSet.AddRangeAsync(items);
             await targetDb.SaveChangesAsync();
         }
     }
@@ -215,251 +167,32 @@ public class DataMigrationUtility
         if (items.Any())
         {
             Console.WriteLine($"Migrating {items.Count} FunctionalStandards...");
+            // FunctionalStandards uses user-defined IDs, not identity
             await targetDb.FunctionalStandards.AddRangeAsync(items);
             await targetDb.SaveChangesAsync();
         }
     }
 
-    private static async Task MigrateFunctionalStandardThemes(CompassDbContext sourceDb, CompassDbContext targetDb)
+    private static async Task MigrateUserPreferences(CompassDbContext sourceDb, CompassDbContext targetDb)
     {
-        var items = await sourceDb.FunctionalStandardThemes.AsNoTracking().ToListAsync();
+        var items = await sourceDb.UserPreferences.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            Console.WriteLine($"Migrating {items.Count} FunctionalStandardThemes...");
-            await targetDb.FunctionalStandardThemes.AddRangeAsync(items);
+            Console.WriteLine($"Migrating {items.Count} UserPreferences...");
+            // UserPreferences uses UserId as PK, not auto-increment
+            await targetDb.UserPreferences.AddRangeAsync(items);
             await targetDb.SaveChangesAsync();
         }
     }
-
-    private static async Task MigratePracticeAreas(CompassDbContext sourceDb, CompassDbContext targetDb)
+    
+    private static async Task EnableIdentityInsert(CompassDbContext context, string tableName)
     {
-        var items = await sourceDb.PracticeAreas.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} PracticeAreas...");
-            await targetDb.PracticeAreas.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
+        await context.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] ON");
     }
-
-    private static async Task MigrateCriteria(CompassDbContext sourceDb, CompassDbContext targetDb)
+    
+    private static async Task DisableIdentityInsert(CompassDbContext context, string tableName)
     {
-        var items = await sourceDb.Criteria.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Criteria...");
-            await targetDb.Criteria.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateProductReturns(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ProductReturns.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ProductReturns...");
-            await targetDb.ProductReturns.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateProductMetricValues(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.ProductMetricValues.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} ProductMetricValues...");
-            await targetDb.ProductMetricValues.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateFunctionalStandardAssessments(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.FunctionalStandardAssessments.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} FunctionalStandardAssessments...");
-            await targetDb.FunctionalStandardAssessments.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateAssessmentCriteriaResponses(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.AssessmentCriteriaResponses.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} AssessmentCriteriaResponses...");
-            await targetDb.AssessmentCriteriaResponses.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateEnterpriseMetrics(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.EnterpriseMetrics.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} EnterpriseMetrics...");
-            await targetDb.EnterpriseMetrics.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateEnterpriseReturns(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.EnterpriseReturns.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} EnterpriseReturns...");
-            await targetDb.EnterpriseReturns.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateEnterpriseMetricValues(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.EnterpriseMetricValues.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} EnterpriseMetricValues...");
-            await targetDb.EnterpriseMetricValues.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateObjectives(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Objectives.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Objectives...");
-            await targetDb.Objectives.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateRisks(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Risks.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Risks...");
-            await targetDb.Risks.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateIssues(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Issues.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Issues...");
-            await targetDb.Issues.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateMilestones(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Milestones.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Milestones...");
-            await targetDb.Milestones.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateActions(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Actions.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Actions...");
-            await targetDb.Actions.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateComments(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.Comments.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} Comments...");
-            await targetDb.Comments.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateRiskActions(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.RiskActions.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} RiskActions...");
-            await targetDb.RiskActions.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateRiskRiskTypes(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.RiskRiskTypes.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} RiskRiskTypes...");
-            await targetDb.RiskRiskTypes.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateIssueActions(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.IssueActions.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} IssueActions...");
-            await targetDb.IssueActions.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateMilestoneActions(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.MilestoneActions.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} MilestoneActions...");
-            await targetDb.MilestoneActions.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateMilestoneRisks(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.MilestoneRisks.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} MilestoneRisks...");
-            await targetDb.MilestoneRisks.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
-    }
-
-    private static async Task MigrateMilestoneIssues(CompassDbContext sourceDb, CompassDbContext targetDb)
-    {
-        var items = await sourceDb.MilestoneIssues.AsNoTracking().ToListAsync();
-        if (items.Any())
-        {
-            Console.WriteLine($"Migrating {items.Count} MilestoneIssues...");
-            await targetDb.MilestoneIssues.AddRangeAsync(items);
-            await targetDb.SaveChangesAsync();
-        }
+        await context.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] OFF");
     }
 }
 

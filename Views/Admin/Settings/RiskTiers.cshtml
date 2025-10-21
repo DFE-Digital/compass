@@ -7,15 +7,27 @@
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-12">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
-                        <li class="breadcrumb-item"><a href="@Url.Action("Users", "Admin")">Administration</a></li>
-                        <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Risk tiers</li>
-                    </ol>
-                </nav>
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Settings">Settings</a></li>
+                    <li class="breadcrumb-item active">Risk tiers</li>
+                </ol>
+                <h1 class="m-0">Risk tiers</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="CreateRiskTier">
+                                Create new risk tier
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -23,6 +35,21 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
         <div class="row">
             <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
                 <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
@@ -31,103 +58,65 @@
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h3 class="card-title mb-0">Risk tiers</h3>
-                            <a asp-action="CreateRiskTier" class="btn btn-primary">
-                                <i class="fas fa-plus" aria-hidden="true"></i> Create new
-                            </a>
-                        </div>
+                        <h3 class="card-title">Risk tiers</h3>
                     </div>
-            <div class="card-body">
-                @if (TempData["SuccessMessage"] != null)
-                {
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        @TempData["SuccessMessage"]
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                }
-
-                @if (TempData["ErrorMessage"] != null)
-                {
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        @TempData["ErrorMessage"]
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                }
-
-                <p class="text-muted">
-                    Manage the risk tier levels used to classify risks by scope and governance level.
-                </p>
-
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">Order</th>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Summary</th>
-                                <th>Status</th>
-                                <th style="width: 200px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.Any())
-                            {
-                                @foreach (var item in Model)
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">Order</th>
+                                    <th style="width: 15%;">Code</th>
+                                    <th style="width: 25%;">Name</th>
+                                    <th style="width: 40%;">Summary</th>
+                                    <th style="width: 10%;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Any())
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr class="@(!item.IsActive ? "text-muted" : "")">
+                                            <td class="text-center"><span class="badge badge-secondary">@item.SortOrder</span></td>
+                                            <td>@item.Code</td>
+                                            <td>
+                                                <a asp-action="EditRiskTier" asp-route-id="@item.Id" class="font-weight-bold">
+                                                    @item.Name
+                                                </a>
+                                                @if (!item.IsActive)
+                                                {
+                                                    <span class="badge badge-secondary ml-2">Disabled</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.Summary))
+                                                {
+                                                    <small class="text-muted">@item.Summary</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.IsActive)
+                                                {
+                                                    <span class="badge badge-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Inactive</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
                                 {
                                     <tr>
-                                        <td class="text-center"><span class="badge badge-secondary">@item.SortOrder</span></td>
-                                        <td><code>@item.Code</code></td>
-                                        <td><strong>@item.Name</strong></td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(item.Summary))
-                                            {
-                                                <small class="text-muted">@item.Summary</small>
-                                            }
-                                            else
-                                            {
-                                                <span>-</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @if (item.IsActive)
-                                            {
-                                                <span class="badge badge-success">Active</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge badge-secondary">Inactive</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <a asp-action="EditRiskTier" asp-route-id="@item.Id" class="btn btn-outline-primary" title="Edit">
-                                                    <i class="fas fa-edit" aria-hidden="true"></i> Edit
-                                                </a>
-                                                <a asp-action="DeleteRiskTier" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Delete">
-                                                    <i class="fas fa-trash" aria-hidden="true"></i> Delete
-                                                </a>
-                                            </div>
-                                        </td>
+                                        <td colspan="5" class="text-center text-muted">No risk tiers found.</td>
                                     </tr>
                                 }
-                            }
-                            else
-                            {
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">No risk tiers found.</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-        </div>
             </div>
         </div>
     </div>

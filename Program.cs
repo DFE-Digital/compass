@@ -12,6 +12,29 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Check for database cleanup command
+if (args.Length > 0 && args[0] == "--clean-database")
+{
+    var cleanConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrEmpty(cleanConnectionString))
+    {
+        Console.WriteLine("Error: DefaultConnection string not found in configuration.");
+        return;
+    }
+    await Compass.CleanDatabase.RunAsync(cleanConnectionString);
+    return;
+}
+
+// Check for data seeding command
+if (args.Length > 0 && args[0] == "--seed-from-sqlite")
+{
+    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2 
+        ? args[2] 
+        : "Development";
+    await Compass.SeedFromSQLite.RunAsync(environment);
+    return;
+}
+
 // Check for data migration command
 if (args.Length > 0 && args[0] == "--migrate-data")
 {
@@ -37,22 +60,23 @@ builder.Services.AddControllersWithViews()
 
 builder.Services.AddAuthorization();
 
-// Configure database
+// Configure database - Use Azure SQL for all environments
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-if (builder.Environment.IsDevelopment())
+if (string.IsNullOrEmpty(connectionString))
 {
-    // Use SQLite for development
-    var sqliteConnectionString = builder.Configuration.GetConnectionString("CompassDb") ?? "Data Source=compass.db";
-    builder.Services.AddDbContext<CompassDbContext>(options =>
-        options.UseSqlite(sqliteConnectionString));
+    throw new InvalidOperationException("Database connection string 'DefaultConnection' not found.");
 }
-else
-{
-    // Use Azure SQL for test and production
-    builder.Services.AddDbContext<CompassDbContext>(options =>
-        options.UseSqlServer(connectionString));
-}
+
+builder.Services.AddDbContext<CompassDbContext>(options =>
+    options.UseSqlServer(connectionString, sqlServerOptions =>
+    {
+        sqlServerOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+        sqlServerOptions.CommandTimeout(60);
+    }));
 
 // Register HTTP clients for API services
 builder.Services.AddHttpClient<ICmsApiService, CmsApiService>();
@@ -196,14 +220,15 @@ using (var scope = app.Services.CreateScope())
     
     try
     {
-        // Ensure database is created
-        await context.Database.EnsureCreatedAsync();
+        // Apply any pending migrations
+        await context.Database.MigrateAsync();
         
         Console.WriteLine("Compass database initialized successfully");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Compass database initialization error: {ex.Message}");
+        throw;
     }
 }
 

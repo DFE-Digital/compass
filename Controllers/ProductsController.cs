@@ -162,7 +162,7 @@ public class ProductsController : Controller
     }
 
     // GET: Products/Dashboard/FIPS-001
-    public async Task<IActionResult> Dashboard(string id)
+    public async Task<IActionResult> Dashboard(string id, string view = "overview")
     {
         if (string.IsNullOrEmpty(id))
         {
@@ -319,6 +319,7 @@ public class ProductsController : Controller
             ViewData["ActiveNav"] = "products";
             ViewData["ProductBusinessArea"] = businessArea;
             ViewData["ProductPhase"] = product.Phase;
+            ViewBag.CurrentView = view;
             
             return View(viewModel);
         }

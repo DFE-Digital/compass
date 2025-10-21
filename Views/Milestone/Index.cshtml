@@ -75,22 +75,25 @@
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
                 <!-- View Scope Options -->
                 <div class="card">
-                    <div class="card-body p-2">
-                        <div class="nav flex-column nav-pills">
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "assigned_to_me" ? "active" : "")">
+                    <div class="card-header">
+                        <h3 class="card-title">View</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "assigned_to_me" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "assigned_to_me" ? "active" : "")">
                                 Assigned to me
-                                <span class="badge badge-primary float-right">@assignedToMeCount</span>
+                                <span class="badge badge-light float-right">@assignedToMeCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "my_products" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "my_products" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "my_products" ? "active" : "")">
                                 My products
-                                <span class="badge badge-info float-right">@myProductsCount</span>
+                                <span class="badge badge-light float-right">@myProductsCount</span>
                             </a>
-                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide", tab = currentTab })" 
-                               class="nav-link @(currentViewScope == "organisation_wide" ? "active" : "")">
+                            <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = "organisation_wide" })" 
+                               class="list-group-item list-group-item-action @(currentViewScope == "organisation_wide" ? "active" : "")">
                                 Organisation-wide
-                                <span class="badge badge-secondary float-right">@organisationWideCount</span>
+                                <span class="badge badge-light float-right">@organisationWideCount</span>
                             </a>
                         </div>
                     </div>
@@ -108,7 +111,6 @@
                                 <input type="hidden" name="objectiveId" value="@ViewBag.ObjectiveId" />
                             }
                             <input type="hidden" name="viewScope" value="@currentViewScope" />
-                            <input type="hidden" name="tab" id="tabInput" value="@currentTab" />
                             
                             <div class="form-group">
                                 <label>Business area</label>
@@ -146,83 +148,67 @@
 
                             <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = currentViewScope, tab = currentTab })" class="btn btn-default btn-sm btn-block">Clear filters</a>
+                                <a href="@Url.Action("Index", new { objectiveId = ViewBag.ObjectiveId, viewScope = currentViewScope })" class="btn btn-default btn-sm btn-block">Clear filters</a>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Tabs and Table -->
+            <!-- Right Column: Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                <!-- Tabs -->
-                <ul class="nav nav-tabs" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "active" ? "active" : "")" href="#" data-tab="active">
-                            Active <span class="badge badge-success">@openCount</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link @(currentTab == "closed" ? "active" : "")" href="#" data-tab="closed">
-                            Completed <span class="badge badge-secondary">@closedCount</span>
-                        </a>
-                    </li>
-                </ul>
-
-                <!-- Table Content -->
-                <div class="card mb-0" style="border-top: none; border-top-left-radius: 0;">
+                <!-- Active Milestones -->
+                @{
+                    var activeMilestones = Model?.Where(m => m.Status != "complete" && m.Status != "cancelled").ToList() ?? new List<Compass.Models.Milestone>();
+                    var completedMilestones = Model?.Where(m => m.Status == "complete" || m.Status == "cancelled").ToList() ?? new List<Compass.Models.Milestone>();
+                }
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Active milestones</h3>
+                    </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
+                        <table class="table table-hover mb-0 sortable-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Owner</th>
-                                    <th>Due date</th>
-                                    <th>Progress</th>
-                                    <th>Status</th>
+                                    <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner">Owner</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">Progress</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                    <th style="width: 120px;" class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date">Due date</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (Model != null && Model.Any())
+                                @if (activeMilestones.Any())
                                 {
-                                    @foreach (var milestone in Model)
+                                    @foreach (var milestone in activeMilestones)
                                     {
-                                        var isOverdue = milestone.DueDate < DateTime.Now && milestone.Status != "complete";
-                                        <tr class="@(isOverdue ? "border-danger" : "")">
+                                        var isOverdue = milestone.DueDate < DateTime.Now;
+                                        var productName = products.FirstOrDefault(p => p.FipsId == milestone.FipsId)?.Title ?? milestone.FipsId;
+                                        <tr class="@(isOverdue ? "table-danger" : "")">
                                             <td>
                                                 <a asp-action="Details" asp-route-id="@milestone.Id">@milestone.Name</a>
-                                                @if (!string.IsNullOrEmpty(milestone.FipsId))
+                                                @if (!string.IsNullOrEmpty(productName))
                                                 {
-                                                    var product = products.FirstOrDefault(p => p.FipsId == milestone.FipsId);
-                                                    var productName = product?.Title ?? milestone.FipsId;
-                                                    <br /><small class="text-muted">@productName</small>
+                                                    <br><small class="text-muted">@productName</small>
                                                 }
                                             </td>
-                                            <td><small>@(milestone.OwnerEmail ?? "-")</small></td>
-                                            <td>
-                                                <small>@milestone.DueDate.ToString("d MMM yyyy")</small>
-                                                @if (milestone.ActualDate.HasValue)
-                                                {
-                                                    <br /><small class="text-muted">Actual: @milestone.ActualDate.Value.ToString("d MMM yyyy")</small>
-                                                }
-                                            </td>
+                                            <td>@(milestone.OwnerEmail ?? "-")</td>
                                             <td>
                                                 @if (milestone.ProgressPercent.HasValue)
                                                 {
-                                                    <small><span class="badge @(milestone.ProgressPercent >= 75 ? "badge-success" : milestone.ProgressPercent >= 50 ? "badge-info" : milestone.ProgressPercent >= 25 ? "badge-warning" : "badge-secondary")">
-                                                        @milestone.ProgressPercent%
-                                                    </span></small>
+                                                    <text>@milestone.ProgressPercent%</text>
                                                 }
                                                 else
                                                 {
-                                                    <small><span class="text-muted">-</span></small>
+                                                    <span class="text-muted">-</span>
                                                 }
                                             </td>
                                             <td>
                                                 @switch (milestone.Status)
                                                 {
-                                                    case "complete":
-                                                        <span class="badge badge-success">Complete</span>
+                                                    case "not_started":
+                                                        <span class="badge badge-secondary">Not started</span>
                                                         break;
                                                     case "on_track":
                                                         <span class="badge badge-success">On track</span>
@@ -233,16 +219,15 @@
                                                     case "delayed":
                                                         <span class="badge badge-danger">Delayed</span>
                                                         break;
-                                                    case "not_started":
-                                                        <span class="badge badge-secondary">Not started</span>
-                                                        break;
-                                                    case "cancelled":
-                                                        <span class="badge badge-dark">Cancelled</span>
-                                                        break;
                                                     default:
                                                         <span class="badge badge-secondary">@milestone.Status</span>
                                                         break;
                                                 }
+                                            </td>
+                                            <td>
+                                                <span class="@(isOverdue ? "text-danger" : "")">
+                                                    @milestone.DueDate.ToString("dd MMM yyyy")
+                                                </span>
                                             </td>
                                         </tr>
                                     }
@@ -250,13 +235,96 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="5" class="text-center">No milestones found</td>
+                                        <td colspan="5" class="text-center text-muted py-3">No active milestones found</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                <!-- Completed Milestones -->
+                @if (completedMilestones.Any())
+                {
+                    <div class="card mt-3">
+                        <div class="card-header" data-toggle="collapse" data-target="#completedMilestonesCollapse" style="cursor: pointer;">
+                            <h3 class="card-title">
+                                Completed milestones
+                                <span class="badge badge-secondary ml-2">@completedMilestones.Count</span>
+                            </h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="completedMilestonesCollapse" class="collapse">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th style="width: 120px;">Owner</th>
+                                            <th style="width: 100px;">Progress</th>
+                                            <th style="width: 120px;">Status</th>
+                                            <th style="width: 120px;">Completed date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var milestone in completedMilestones)
+                                        {
+                                            var productName = products.FirstOrDefault(p => p.FipsId == milestone.FipsId)?.Title ?? milestone.FipsId;
+                                            <tr>
+                                                <td>
+                                                    <a asp-action="Details" asp-route-id="@milestone.Id">@milestone.Name</a>
+                                                    @if (!string.IsNullOrEmpty(productName))
+                                                    {
+                                                        <br><small class="text-muted">@productName</small>
+                                                    }
+                                                </td>
+                                                <td>@(milestone.OwnerEmail ?? "-")</td>
+                                                <td>
+                                                    @if (milestone.ProgressPercent.HasValue)
+                                                    {
+                                                        <text>@milestone.ProgressPercent%</text>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @switch (milestone.Status)
+                                                    {
+                                                        case "complete":
+                                                            <span class="badge badge-success">Complete</span>
+                                                            break;
+                                                        case "cancelled":
+                                                            <span class="badge badge-dark">Cancelled</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge badge-secondary">@milestone.Status</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (milestone.ActualDate.HasValue)
+                                                    {
+                                                        @milestone.ActualDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        @milestone.DueDate.ToString("dd MMM yyyy")
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -264,11 +332,6 @@
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        function switchTab(tab) {
-            document.getElementById('tabInput').value = tab;
-            document.getElementById('filterForm').submit();
-        }
-
         $(document).ready(function() {
             // Initialize Select2
             $('.select2-multiple').select2({
@@ -278,13 +341,6 @@
 
             $('.select2-multiple').on('change', function() {
                 $('#filterForm').submit();
-            });
-
-            // Handle tab clicks
-            $('.nav-tabs a[data-tab]').on('click', function(e) {
-                e.preventDefault();
-                var tab = $(this).data('tab');
-                switchTab(tab);
             });
 
             // Handle export placeholder click
@@ -297,6 +353,81 @@
             $('.auto-submit').on('change', function() {
                 $(this).closest('form').submit();
             });
+
+            // Rotate chevron icon on collapse
+            $('#completedMilestonesCollapse').on('show.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-down').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            }).on('hide.bs.collapse', function() {
+                $(this).prev('.card-header').find('.fa-chevron-up').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            });
+
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
         });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'DueDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(9999, 11, 31) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(9999, 11, 31) : new Date(bDate);
+                    } else if (column === 'Progress') {
+                        aVal = parseInt($(a).find('td').eq(colIndex).text().replace('%', '').trim()) || 0;
+                        bVal = parseInt($(b).find('td').eq(colIndex).text().replace('%', '').trim()) || 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
     </script>
 }

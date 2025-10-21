@@ -310,6 +310,7 @@
                 if (!helpText) {
                     if (valueType == 1) helpText = 'Enter a whole number';
                     else if (valueType == 2) helpText = 'Enter a decimal number';
+                    else if (valueType == 3) helpText = 'Enter a percentage (0-100)';
                     else helpText = 'Enter text';
                 }
 
@@ -440,6 +441,26 @@
                         return 'Value must be at least ' + rules.minimumValue;
                     }
                     if (rules && rules.maximumValue !== undefined && decValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                    if (rules && rules.decimalPlaces !== undefined) {
+                        var decimalPart = value.split('.')[1];
+                        if (decimalPart && decimalPart.length > rules.decimalPlaces) {
+                            return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+                        }
+                    }
+                } else if (valueType == 3) { // Percentage
+                    if (!/^\d*\.?\d+$/.test(value)) {
+                        return 'Value must be a valid percentage';
+                    }
+                    var percValue = parseFloat(value);
+                    if (percValue < 0 || percValue > 100) {
+                        return 'Percentage must be between 0 and 100';
+                    }
+                    if (rules && rules.minimumValue !== undefined && percValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && percValue > rules.maximumValue) {
                         return 'Value must be at most ' + rules.maximumValue;
                     }
                     if (rules && rules.decimalPlaces !== undefined) {

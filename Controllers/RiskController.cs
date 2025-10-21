@@ -26,13 +26,13 @@ public class RiskController : Controller
     public async Task<IActionResult> Index(
         int? objectiveId,
         string? dimension,
-        string? businessArea,
-        string? status,
+        string[]? businessAreas,
+        string[]? statuses,
         string[]? products,
-        int? minRiskScore,
-        int? maxRiskScore,
-        int? impact,
-        int? likelihood,
+        int[]? riskTypeIds,
+        int[]? riskTierIds,
+        int[]? impacts,
+        int[]? likelihoods,
         string tab = "active",
         string viewScope = "assigned_to_me")
     {
@@ -55,6 +55,9 @@ public class RiskController : Controller
 
         var query = _context.Risks
             .Include(r => r.Objective)
+            .Include(r => r.RiskTier)
+            .Include(r => r.RiskRiskTypes)
+                .ThenInclude(rrt => rrt.RiskType)
             .Where(r => !r.IsDeleted);
 
         if (objectiveId.HasValue)
@@ -97,14 +100,14 @@ public class RiskController : Controller
         }
 
         // Apply standard filters
-        if (!string.IsNullOrEmpty(businessArea))
+        if (businessAreas != null && businessAreas.Any())
         {
-            query = query.Where(r => r.BusinessArea == businessArea);
+            query = query.Where(r => r.BusinessArea != null && businessAreas.Contains(r.BusinessArea));
         }
 
-        if (!string.IsNullOrEmpty(status))
+        if (statuses != null && statuses.Any())
         {
-            query = query.Where(r => r.Status == status);
+            query = query.Where(r => statuses.Contains(r.Status));
         }
 
         if (products != null && products.Any())
@@ -113,24 +116,24 @@ public class RiskController : Controller
         }
 
         // Apply risk-specific filters
-        if (minRiskScore.HasValue)
+        if (riskTypeIds != null && riskTypeIds.Any())
         {
-            query = query.Where(r => r.RiskScore >= minRiskScore.Value);
+            query = query.Where(r => r.RiskRiskTypes.Any(rrt => riskTypeIds.Contains(rrt.RiskTypeId)));
         }
 
-        if (maxRiskScore.HasValue)
+        if (riskTierIds != null && riskTierIds.Any())
         {
-            query = query.Where(r => r.RiskScore <= maxRiskScore.Value);
+            query = query.Where(r => r.RiskTierId.HasValue && riskTierIds.Contains(r.RiskTierId.Value));
         }
 
-        if (impact.HasValue)
+        if (impacts != null && impacts.Any())
         {
-            query = query.Where(r => r.ImpactRating == impact.Value);
+            query = query.Where(r => impacts.Contains(r.ImpactRating));
         }
 
-        if (likelihood.HasValue)
+        if (likelihoods != null && likelihoods.Any())
         {
-            query = query.Where(r => r.LikelihoodRating == likelihood.Value);
+            query = query.Where(r => likelihoods.Contains(r.LikelihoodRating));
         }
 
         var risks = await query
@@ -179,17 +182,24 @@ public class RiskController : Controller
         ViewBag.CurrentTab = tab;
         ViewBag.CurrentViewScope = viewScope;
         ViewBag.CurrentDimension = dimension;
-        ViewBag.CurrentBusinessArea = businessArea;
-        ViewBag.CurrentStatus = status;
+        ViewBag.CurrentBusinessAreas = businessAreas ?? Array.Empty<string>();
+        ViewBag.CurrentStatuses = statuses ?? Array.Empty<string>();
         ViewBag.CurrentProducts = products ?? Array.Empty<string>();
-        ViewBag.MinRiskScore = minRiskScore;
-        ViewBag.MaxRiskScore = maxRiskScore;
-        ViewBag.CurrentImpact = impact;
-        ViewBag.CurrentLikelihood = likelihood;
+        ViewBag.CurrentRiskTypeIds = riskTypeIds ?? Array.Empty<int>();
+        ViewBag.CurrentRiskTierIds = riskTierIds ?? Array.Empty<int>();
+        ViewBag.CurrentImpacts = impacts ?? Array.Empty<int>();
+        ViewBag.CurrentLikelihoods = likelihoods ?? Array.Empty<int>();
         
-        // Get data for filter dropdowns
-        var businessAreas = await _productsApiService.GetBusinessAreasAsync();
-        ViewBag.BusinessAreas = businessAreas;
+        // Get data for filter options
+        var allBusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+        ViewBag.BusinessAreas = allBusinessAreas;
+        
+        // Get all risk types and tiers
+        var allRiskTypes = await _context.RiskTypes.Where(rt => rt.IsActive).OrderBy(rt => rt.Name).ToListAsync();
+        ViewBag.RiskTypes = allRiskTypes;
+        
+        var allRiskTiers = await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync();
+        ViewBag.RiskTiers = allRiskTiers;
         
         // Get distinct products (FipsId) that are actually used in risks
         var fipsIdsInUse = await _context.Risks

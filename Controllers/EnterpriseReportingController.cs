@@ -26,13 +26,18 @@ public class EnterpriseReportingController : Controller
     }
 
     // GET: EnterpriseReporting/Objectives
-    public async Task<IActionResult> Objectives()
+    public async Task<IActionResult> Objectives(
+        string[]? themes,
+        string[]? riskLevels,
+        string[]? issueLevels,
+        string[]? milestoneStatuses,
+        string sortColumn = "Title",
+        string sortDirection = "asc")
     {
         try
         {
             var objectives = await _context.Objectives
                 .Where(o => !o.IsDeleted)
-                .OrderBy(o => o.Title)
                 .ToListAsync();
             
             var objectiveViewModels = new List<dynamic>();
@@ -57,6 +62,8 @@ public class EnterpriseReportingController : Controller
                 
                 // Calculate statistics
                 var highRisks = risks.Count(r => r.RiskScore >= 15);
+                var mediumRisks = risks.Count(r => r.RiskScore >= 10 && r.RiskScore < 15);
+                var lowRisks = risks.Count(r => r.RiskScore < 10);
                 var openRisks = risks.Count(r => r.Status == "open" || r.Status == "treating");
                 
                 var criticalIssues = issues.Count(i => i.Severity == "critical");
@@ -73,6 +80,8 @@ public class EnterpriseReportingController : Controller
                 var delayedMilestones = milestones.Count(m => 
                     m.Status == "delayed" || 
                     (m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled"));
+                var atRiskMilestones = milestones.Count(m => m.Status == "at_risk");
+                var onTrackMilestones = milestones.Count(m => m.Status == "on_track");
                 var completeMilestones = milestones.Count(m => m.Status == "complete");
                 
                 objectiveViewModels.Add(new
@@ -80,6 +89,8 @@ public class EnterpriseReportingController : Controller
                     Objective = objective,
                     TotalRisks = risks.Count,
                     HighRisks = highRisks,
+                    MediumRisks = mediumRisks,
+                    LowRisks = lowRisks,
                     OpenRisks = openRisks,
                     TotalIssues = issues.Count,
                     CriticalIssues = criticalIssues,
@@ -90,9 +101,92 @@ public class EnterpriseReportingController : Controller
                     DoneActions = doneActions,
                     TotalMilestones = milestones.Count,
                     DelayedMilestones = delayedMilestones,
+                    AtRiskMilestones = atRiskMilestones,
+                    OnTrackMilestones = onTrackMilestones,
                     CompleteMilestones = completeMilestones
                 });
             }
+            
+            // Apply filters
+            if (themes != null && themes.Any())
+            {
+                objectiveViewModels = objectiveViewModels
+                    .Where(o => themes.Contains(((Objective)o.Objective).Theme))
+                    .ToList();
+            }
+            
+            if (riskLevels != null && riskLevels.Any())
+            {
+                objectiveViewModels = objectiveViewModels
+                    .Where(o => 
+                        (riskLevels.Contains("high") && (int)o.HighRisks > 0) ||
+                        (riskLevels.Contains("medium") && (int)o.MediumRisks > 0) ||
+                        (riskLevels.Contains("low") && (int)o.LowRisks > 0) ||
+                        (riskLevels.Contains("open") && (int)o.OpenRisks > 0))
+                    .ToList();
+            }
+            
+            if (issueLevels != null && issueLevels.Any())
+            {
+                objectiveViewModels = objectiveViewModels
+                    .Where(o => 
+                        (issueLevels.Contains("critical") && (int)o.CriticalIssues > 0) ||
+                        (issueLevels.Contains("blocked") && (int)o.BlockedIssues > 0) ||
+                        (issueLevels.Contains("open") && (int)o.OpenIssues > 0))
+                    .ToList();
+            }
+            
+            if (milestoneStatuses != null && milestoneStatuses.Any())
+            {
+                objectiveViewModels = objectiveViewModels
+                    .Where(o => 
+                        (milestoneStatuses.Contains("delayed") && (int)o.DelayedMilestones > 0) ||
+                        (milestoneStatuses.Contains("at_risk") && (int)o.AtRiskMilestones > 0) ||
+                        (milestoneStatuses.Contains("on_track") && (int)o.OnTrackMilestones > 0) ||
+                        (milestoneStatuses.Contains("complete") && (int)o.CompleteMilestones > 0))
+                    .ToList();
+            }
+            
+            // Apply sorting
+            objectiveViewModels = sortColumn switch
+            {
+                "Title" => sortDirection == "asc" 
+                    ? objectiveViewModels.OrderBy(o => ((Objective)o.Objective).Title).ToList()
+                    : objectiveViewModels.OrderByDescending(o => ((Objective)o.Objective).Title).ToList(),
+                "Theme" => sortDirection == "asc"
+                    ? objectiveViewModels.OrderBy(o => ((Objective)o.Objective).Theme ?? "").ToList()
+                    : objectiveViewModels.OrderByDescending(o => ((Objective)o.Objective).Theme ?? "").ToList(),
+                "TotalRisks" => sortDirection == "asc"
+                    ? objectiveViewModels.OrderBy(o => (int)o.TotalRisks).ToList()
+                    : objectiveViewModels.OrderByDescending(o => (int)o.TotalRisks).ToList(),
+                "TotalIssues" => sortDirection == "asc"
+                    ? objectiveViewModels.OrderBy(o => (int)o.TotalIssues).ToList()
+                    : objectiveViewModels.OrderByDescending(o => (int)o.TotalIssues).ToList(),
+                "TotalActions" => sortDirection == "asc"
+                    ? objectiveViewModels.OrderBy(o => (int)o.TotalActions).ToList()
+                    : objectiveViewModels.OrderByDescending(o => (int)o.TotalActions).ToList(),
+                "TotalMilestones" => sortDirection == "asc"
+                    ? objectiveViewModels.OrderBy(o => (int)o.TotalMilestones).ToList()
+                    : objectiveViewModels.OrderByDescending(o => (int)o.TotalMilestones).ToList(),
+                _ => objectiveViewModels.OrderBy(o => ((Objective)o.Objective).Title).ToList()
+            };
+            
+            // Get all available themes (before filtering) for filter options
+            var allAvailableThemes = objectives
+                .Select(o => o.Theme)
+                .Where(t => !string.IsNullOrEmpty(t))
+                .Distinct()
+                .OrderBy(t => t)
+                .ToArray();
+            
+            // Pass filter and sort state to view
+            ViewBag.AllThemes = allAvailableThemes;
+            ViewBag.CurrentThemes = themes ?? Array.Empty<string>();
+            ViewBag.CurrentRiskLevels = riskLevels ?? Array.Empty<string>();
+            ViewBag.CurrentIssueLevels = issueLevels ?? Array.Empty<string>();
+            ViewBag.CurrentMilestoneStatuses = milestoneStatuses ?? Array.Empty<string>();
+            ViewBag.SortColumn = sortColumn;
+            ViewBag.SortDirection = sortDirection;
             
             return View(objectiveViewModels);
         }
@@ -105,7 +199,7 @@ public class EnterpriseReportingController : Controller
     }
 
     // GET: EnterpriseReporting/ObjectiveDetails/5
-    public async Task<IActionResult> ObjectiveDetails(int id)
+    public async Task<IActionResult> ObjectiveDetails(int id, string view = "overview")
     {
         try
         {
@@ -183,6 +277,7 @@ public class EnterpriseReportingController : Controller
             ViewBag.AssociatedProducts = associatedProducts;
             ViewBag.Products = products;
             ViewBag.RelatedObjectives = relatedObjectives;
+            ViewBag.CurrentView = view;
             
             return View();
         }
@@ -197,8 +292,11 @@ public class EnterpriseReportingController : Controller
     // GET: EnterpriseReporting/FunctionalStandards
     public async Task<IActionResult> FunctionalStandards()
     {
-        // Get all functional standards with their assessment counts
+        // Get all functional standards with their assessment counts and criteria counts
         var standards = await _context.FunctionalStandards
+            .Include(fs => fs.Themes)
+                .ThenInclude(t => t.PracticeAreas)
+                    .ThenInclude(pa => pa.Criteria)
             .OrderBy(fs => fs.Id)
             .ToListAsync();
         
@@ -206,17 +304,22 @@ public class EnterpriseReportingController : Controller
         var standardViewModels = new List<dynamic>();
         foreach (var standard in standards)
         {
-            var assessmentCount = await _context.FunctionalStandardAssessments
-                .CountAsync(fsa => fsa.FunctionalStandardId == standard.Id);
+            var inProgressAssessments = await _context.FunctionalStandardAssessments
+                .CountAsync(fsa => fsa.FunctionalStandardId == standard.Id && !fsa.SubmittedAt.HasValue);
             
-            var hasInProgressAssessments = await _context.FunctionalStandardAssessments
-                .AnyAsync(fsa => fsa.FunctionalStandardId == standard.Id && !fsa.SubmittedAt.HasValue);
+            var completedAssessments = await _context.FunctionalStandardAssessments
+                .CountAsync(fsa => fsa.FunctionalStandardId == standard.Id && fsa.SubmittedAt.HasValue);
+            
+            // Calculate total criteria count
+            var criteriaCount = standard.Themes?
+                .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
             
             standardViewModels.Add(new 
             { 
-                Standard = standard, 
-                AssessmentCount = assessmentCount,
-                HasInProgressAssessments = hasInProgressAssessments
+                Standard = standard,
+                CriteriaCount = criteriaCount,
+                InProgressAssessments = inProgressAssessments,
+                CompletedAssessments = completedAssessments
             });
         }
         

@@ -15,6 +15,13 @@ public class CompassDbContext : DbContext
         optionsBuilder.ConfigureWarnings(warnings => 
             warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     }
+    
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Configure default string length for SQL Server (to avoid nvarchar(max) for indexed columns)
+        configurationBuilder.Properties<string>()
+            .HaveMaxLength(450); // SQL Server index key size limit
+    }
 
     // User management
     public DbSet<User> Users { get; set; }

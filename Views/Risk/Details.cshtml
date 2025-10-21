@@ -16,35 +16,10 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item"><a asp-action="Index">Risks</a></li>
-                    <li class="breadcrumb-item active">Risk</li>
+                    <li class="breadcrumb-item active">Risk details</li>
                 </ol>
-                <h1 class="m-0">
-                    @Model.Title 
-                    <span class="text-muted font-weight-normal ml-2">#@Model.Id</span>
-                    @if (isOverdue)
-                    {
-                        <span class="badge badge-danger ml-2"><i class="fas fa-clock"></i> OVERDUE</span>
-                    }
-                </h1>
-                @if (!string.IsNullOrEmpty(Model.FipsId))
-                {
-                    var product = products.FirstOrDefault(p => p.FipsId == Model.FipsId);
-                    var productUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}";
-                    <div class="mt-2">
-                        @if (product != null)
-                        {
-                            <a href="@productUrl" target="_blank" class="text-primary h5">
-                                @product.Title (@Model.FipsId) <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75rem;"></i>
-                            </a>
-                        }
-                        else
-                        {
-                            <a href="@productUrl" target="_blank" class="text-primary h5">
-                                @Model.FipsId <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75rem;"></i>
-                            </a>
-                        }
-                    </div>
-                }
+                <h1 class="m-0">@Model.Title</h1>
+                <p class="text-muted">Risk #@Model.Id</p>
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
@@ -53,16 +28,10 @@
                             Actions
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">
-                                Edit risk
-                            </a>
-                            <a class="dropdown-item" asp-controller="Action" asp-action="Create" asp-route-riskId="@Model.Id">
-                                Add mitigation action
-                            </a>
+                            <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">Edit risk</a>
+                            <a class="dropdown-item" asp-controller="Action" asp-action="Create" asp-route-riskId="@Model.Id">Add mitigation action</a>
                             <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" asp-action="Delete" asp-route-id="@Model.Id">
-                                Delete risk
-                            </a>
+                            <a class="dropdown-item" asp-action="Delete" asp-route-id="@Model.Id">Delete risk</a>
                         </div>
                     </div>
                 </div>
@@ -73,72 +42,35 @@
 
 <section class="content">
     <div class="container-fluid">
-        <!-- Key Information Cards -->
-        <div class="row mb-3">
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-@(Model.RiskScore >= 15 ? "danger" : Model.RiskScore >= 10 ? "warning" : "success")">
-                    <div class="inner">
-                        <h3>@Model.RiskScore</h3>
-                        <p>Risk score</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-primary">
-                    <div class="inner">
-                        <h3>@switch (Model.Status)
-                        {
-                            case "new":
-                                <text>New</text>
-                                break;
-                            case "open":
-                                <text>Open</text>
-                                break;
-                            case "treating":
-                                <text>Treating</text>
-                                break;
-                            case "monitoring":
-                                <text>Monitoring</text>
-                                break;
-                            case "closed":
-                                <text>Closed</text>
-                                break;
-                            default:
-                                <text>@Model.Status</text>
-                                break;
-                        }</h3>
-                        <p>Status</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-flag"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>@(Model.ProximityDate?.ToString("d MMM") ?? "-")</h3>
-                        <p>Proximity date</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-calendar"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="row">
-            <!-- Main content area -->
+            <!-- Main content -->
             <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12 col-sm-12 col-12">
+                <!-- Product link -->
+                @if (!string.IsNullOrEmpty(Model.FipsId))
+                {
+                    var product = products.FirstOrDefault(p => p.FipsId == Model.FipsId);
+                    var productUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}";
+                    <div class="card">
+                        <div class="card-body">
+                            <strong>Product:</strong>
+                            @if (product != null)
+                            {
+                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@product.Title (@Model.FipsId)</a>
+                            }
+                            else
+                            {
+                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@Model.FipsId</a>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Description -->
                 @if (!string.IsNullOrEmpty(Model.Description))
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-align-left"></i> Description</h5>
+                            <h3 class="card-title">Description</h3>
                         </div>
                         <div class="card-body">
                             <p class="mb-0">@Model.Description</p>
@@ -151,17 +83,17 @@
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-tags"></i> Risk types</h5>
+                            <h3 class="card-title">Risk types</h3>
                         </div>
                         <div class="card-body">
                             <ul class="list-unstyled mb-0">
                                 @foreach (var rrt in Model.RiskRiskTypes)
                                 {
-                                    <li class="mb-3">
+                                    <li class="mb-2">
                                         <strong>@rrt.RiskType.Name</strong>
                                         @if (!string.IsNullOrEmpty(rrt.RiskType.Summary))
                                         {
-                                            <br /><small class="text-muted">@rrt.RiskType.Summary</small>
+                                            <br><small class="text-muted">@rrt.RiskType.Summary</small>
                                         }
                                     </li>
                                 }
@@ -175,27 +107,27 @@
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-shield-alt"></i> Response strategy & residual risk</h5>
+                            <h3 class="card-title">Response strategy</h3>
                         </div>
                         <div class="card-body">
-                            <dl class="row mb-0">
-                                <dt class="col-sm-4">Response strategy</dt>
-                                <dd class="col-sm-8">
+                            <dl class="mb-0">
+                                <dt>Strategy</dt>
+                                <dd class="mb-3">
                                     @if (!string.IsNullOrEmpty(Model.Response))
                                     {
-                                        <span class="badge badge-info">@Model.Response.ToUpper()</span>
+                                        <span class="badge badge-info">@Model.Response</span>
                                     }
                                     else
                                     {
-                                        <span>-</span>
+                                        <span class="text-muted">Not set</span>
                                     }
                                 </dd>
 
-                                <dt class="col-sm-4">Target date</dt>
-                                <dd class="col-sm-8">@(Model.TargetDate?.ToString("d MMMM yyyy") ?? "-")</dd>
+                                <dt>Target date</dt>
+                                <dd class="mb-3">@(Model.TargetDate?.ToString("dd MMM yyyy") ?? "-")</dd>
 
-                                <dt class="col-sm-4">Residual risk</dt>
-                                <dd class="col-sm-8">
+                                <dt>Residual risk</dt>
+                                <dd class="mb-0">
                                     @if (Model.ResidualImpact.HasValue && Model.ResidualLikelihood.HasValue)
                                     {
                                         var residualScore = Model.ResidualImpact.Value * Model.ResidualLikelihood.Value;
@@ -206,7 +138,7 @@
                                     }
                                     else
                                     {
-                                        <span>-</span>
+                                        <span class="text-muted">Not calculated</span>
                                     }
                                 </dd>
                             </dl>
@@ -219,7 +151,7 @@
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-sticky-note"></i> Notes</h5>
+                            <h3 class="card-title">Notes</h3>
                         </div>
                         <div class="card-body">
                             <p class="mb-0">@Model.Notes</p>
@@ -232,269 +164,83 @@
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">Related mitigation actions</h5>
+                            <h3 class="card-title">Related mitigation actions</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
-                            <table class="table table-hover table-striped mb-0">
+                            <table class="table table-hover mb-0">
                                 <thead>
                                     <tr>
                                         <th>Title</th>
-                                        <th>Assigned to</th>
-                                        <th>Status</th>
-                                        <th>Due date</th>
+                                        <th style="width: 150px;">Assigned to</th>
+                                        <th style="width: 120px;">Status</th>
+                                        <th style="width: 120px;">Due date</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                @foreach (var ra in Model.RiskActions)
-                                {
-                                    var actionOverdue = ra.Action.DueDate.HasValue && 
-                                                      ra.Action.DueDate.Value.Date < DateTime.Today &&
-                                                      ra.Action.Status != "done" && ra.Action.Status != "cancelled";
-                                    <tr>
-                                        <td>
-                                            <a asp-controller="Action" asp-action="Details" asp-route-id="@ra.Action.Id">
-                                                @ra.Action.Title
-                                            </a>
-                                        </td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(ra.Action.AssignedToEmail))
-                                            {
-                                                <a href="mailto:@ra.Action.AssignedToEmail">@ra.Action.AssignedToEmail</a>
-                                            }
-                                            else
-                                            {
-                                                <span>-</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @switch (ra.Action.Status)
-                                            {
-                                                case "done":
-                                                    <span class="badge badge-success">Done</span>
-                                                    break;
-                                                case "in_progress":
-                                                    <span class="badge badge-primary">In progress</span>
-                                                    break;
-                                                case "blocked":
-                                                    <span class="badge badge-danger">Blocked</span>
-                                                    break;
-                                                case "not_started":
-                                                    <span class="badge badge-secondary">Not started</span>
-                                                    break;
-                                                case "cancelled":
-                                                    <span class="badge badge-dark">Cancelled</span>
-                                                    break;
-                                                default:
-                                                    <span class="badge badge-secondary">@ra.Action.Status</span>
-                                                    break;
-                                            }
-                                        </td>
-                                        <td>
-                                            @if (ra.Action.DueDate.HasValue)
-                                            {
-                                                <span class="@(actionOverdue ? "text-danger font-weight-bold" : "")">
-                                                    @ra.Action.DueDate.Value.ToString("d MMM yyyy")
-                                                </span>
-                                                @if (actionOverdue)
+                                    @foreach (var ra in Model.RiskActions)
+                                    {
+                                        var actionOverdue = ra.Action.DueDate.HasValue && 
+                                                          ra.Action.DueDate.Value.Date < DateTime.Today &&
+                                                          ra.Action.Status != "done" && ra.Action.Status != "cancelled";
+                                        <tr class="@(actionOverdue ? "table-danger" : "")">
+                                            <td><a asp-controller="Action" asp-action="Details" asp-route-id="@ra.Action.Id">@ra.Action.Title</a></td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(ra.Action.AssignedToEmail))
                                                 {
-                                                    <br /><small class="text-danger">Overdue</small>
+                                                    <small><a href="mailto:@ra.Action.AssignedToEmail">@ra.Action.AssignedToEmail</a></small>
                                                 }
-                                            }
-                                            else
-                                            {
-                                                <span>-</span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (ra.Action.Status)
+                                                {
+                                                    case "done":
+                                                        <span class="badge badge-success">Done</span>
+                                                        break;
+                                                    case "in_progress":
+                                                        <span class="badge badge-primary">In progress</span>
+                                                        break;
+                                                    case "blocked":
+                                                        <span class="badge badge-danger">Blocked</span>
+                                                        break;
+                                                    case "not_started":
+                                                        <span class="badge badge-secondary">Not started</span>
+                                                        break;
+                                                    case "cancelled":
+                                                        <span class="badge badge-dark">Cancelled</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@ra.Action.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (ra.Action.DueDate.HasValue)
+                                                {
+                                                    <span class="@(actionOverdue ? "text-danger" : "")">
+                                                        @ra.Action.DueDate.Value.ToString("dd MMM yyyy")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 }
-            </div>
-
-            <!-- Sidebar with metadata -->
-            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12 col-12">
-                <!-- Status & Owner -->
-                <div class="card">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="font-weight-bold d-block mb-1">
-                                <i class="fas fa-flag"></i> Status
-                            </label>
-                            @switch (Model.Status)
-                            {
-                                case "new":
-                                    <span class="badge badge-secondary">New</span>
-                                    break;
-                                case "open":
-                                    <span class="badge badge-danger">Open</span>
-                                    break;
-                                case "treating":
-                                    <span class="badge badge-warning">Treating</span>
-                                    break;
-                                case "monitoring":
-                                    <span class="badge badge-info">Monitoring</span>
-                                    break;
-                                case "closed":
-                                    <span class="badge badge-secondary">Closed</span>
-                                    break;
-                                default:
-                                    <span class="badge badge-secondary">@Model.Status</span>
-                                    break;
-                            }
-                        </div>
-
-                        <div class="mb-0">
-                            <label class="font-weight-bold d-block mb-1">
-                                Risk owner
-                            </label>
-                            <div>
-                                @if (!string.IsNullOrEmpty(Model.OwnerEmail))
-                                {
-                                    <a href="mailto:@Model.OwnerEmail">@Model.OwnerEmail</a>
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Risk Assessment -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">Risk assessment</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-center mb-3">
-                            <label class="font-weight-bold d-block mb-2">Risk score</label>
-                            <h2 class="mb-1">
-                                <span class="badge @(Model.RiskScore >= 15 ? "badge-danger" : Model.RiskScore >= 10 ? "badge-warning" : "badge-success")">
-                                    @Model.RiskScore
-                                </span>
-                            </h2>
-                            <small class="text-muted">Impact: @Model.ImpactRating × Likelihood: @Model.LikelihoodRating</small>
-                        </div>
-
-                        <hr />
-
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-6">Impact rating:</dt>
-                            <dd class="col-sm-6">@Model.ImpactRating / 5</dd>
-
-                            <dt class="col-sm-6">Likelihood rating:</dt>
-                            <dd class="col-sm-6">@Model.LikelihoodRating / 5</dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Classification -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="fas fa-sitemap"></i> Classification</h6>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-5">Business area:</dt>
-                            <dd class="col-sm-7">
-                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                {
-                                    <a asp-action="Index" asp-route-businessArea="@Model.BusinessArea" title="View all risks in @Model.BusinessArea">
-                                        @Model.BusinessArea
-                                        <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75rem;"></i>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </dd>
-
-                            <dt class="col-sm-5">Strategic objective:</dt>
-                            <dd class="col-sm-7">
-                                @if (Model.Objective != null)
-                                {
-                                    <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id" title="View all risks for this objective">
-                                        @Model.Objective.Title
-                                        <i class="fas fa-external-link-alt ml-1" style="font-size: 0.75rem;"></i>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </dd>
-
-                            <dt class="col-sm-5">Risk tier:</dt>
-                            <dd class="col-sm-7">
-                                @if (Model.RiskTier != null)
-                                {
-                                    <div>
-                                        <strong>@Model.RiskTier.Name</strong>
-                                        @if (!string.IsNullOrEmpty(Model.RiskTier.Summary))
-                                        {
-                                            <br /><small class="text-muted">@Model.RiskTier.Summary</small>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </dd>
-
-                            <dt class="col-sm-5">Category:</dt>
-                            <dd class="col-sm-7">@(Model.Category ?? "-")</dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Dates -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="fas fa-calendar"></i> Dates</h6>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-5">Proximity date:</dt>
-                            <dd class="col-sm-7">
-                                @if (Model.ProximityDate.HasValue)
-                                {
-                                    <span class="@(isOverdue ? "text-danger font-weight-bold" : "")">
-                                        @Model.ProximityDate.Value.ToString("d MMMM yyyy")
-                                    </span>
-                                    @if (isOverdue)
-                                    {
-                                        var daysOverdue = (DateTime.Today - Model.ProximityDate.Value.Date).Days;
-                                        <br /><small class="text-danger font-weight-bold">@daysOverdue days overdue</small>
-                                    }
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </dd>
-
-                            <dt class="col-sm-5">Closed date:</dt>
-                            <dd class="col-sm-7">@(Model.ClosedDate?.ToString("d MMMM yyyy") ?? "-")</dd>
-
-                            <dt class="col-sm-5">Created:</dt>
-                            <dd class="col-sm-7">@Model.CreatedAt.ToString("d MMMM yyyy HH:mm")</dd>
-
-                            <dt class="col-sm-5">Last updated:</dt>
-                            <dd class="col-sm-7">@Model.UpdatedAt.ToString("d MMMM yyyy HH:mm")</dd>
-                        </dl>
-                    </div>
-                </div>
 
                 <!-- Comments Section -->
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="fas fa-comments"></i> Comments</h5>
+                        <h3 class="card-title">Comments</h3>
                     </div>
                     <div class="card-body">
                         <div id="commentsContainer">
@@ -503,190 +249,163 @@
                         
                         <hr />
                         
-                        <div class="form-group">
-                            <label for="newComment" class="font-weight-bold">Add a comment</label>
+                        <div class="form-group mb-0">
+                            <label for="newComment">Add a comment</label>
                             <textarea id="newComment" class="form-control" rows="3" placeholder="Enter your comment..."></textarea>
+                            <button type="button" class="btn btn-primary mt-2" id="addCommentBtn">Add comment</button>
                         </div>
-                        <button type="button" class="btn btn-primary" id="addCommentBtn">
-                            <i class="fas fa-plus"></i> Add comment
-                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Sidebar with metadata -->
+            <!-- Sidebar -->
             <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12 col-12">
-                <!-- Status & Owner -->
+                <!-- Risk Assessment -->
                 <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Risk assessment</h3>
+                    </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <label class="font-weight-bold d-block mb-1">
-                                <i class="fas fa-flag"></i> Status
-                            </label>
-                            @switch (Model.Status)
-                            {
-                                case "new":
-                                    <span class="badge badge-secondary">New</span>
-                                    break;
-                                case "open":
-                                    <span class="badge badge-danger">Open</span>
-                                    break;
-                                case "treating":
-                                    <span class="badge badge-warning">Treating</span>
-                                    break;
-                                case "monitoring":
-                                    <span class="badge badge-info">Monitoring</span>
-                                    break;
-                                case "closed":
-                                    <span class="badge badge-secondary">Closed</span>
-                                    break;
-                                default:
-                                    <span class="badge badge-secondary">@Model.Status</span>
-                                    break;
-                            }
-                        </div>
+                        <dl class="mb-0">
+                            <dt>Risk score</dt>
+                            <dd class="mb-3">
+                                <span class="badge @(Model.RiskScore >= 15 ? "badge-danger" : Model.RiskScore >= 10 ? "badge-warning" : "badge-success")">@Model.RiskScore</span>
+                                <small class="text-muted ml-2">Impact: @Model.ImpactRating × Likelihood: @Model.LikelihoodRating</small>
+                            </dd>
 
-                        <div class="mb-0">
-                            <label class="font-weight-bold d-block mb-1">
-                                Risk owner
-                            </label>
-                            <div>
+                            <dt>Impact rating</dt>
+                            <dd class="mb-3">@Model.ImpactRating / 5</dd>
+
+                            <dt>Likelihood rating</dt>
+                            <dd class="mb-0">@Model.LikelihoodRating / 5</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Details -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Details</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt>Status</dt>
+                            <dd class="mb-3">
+                                @switch (Model.Status)
+                                {
+                                    case "new":
+                                        <span class="badge badge-info">New</span>
+                                        break;
+                                    case "open":
+                                        <span class="badge badge-danger">Open</span>
+                                        break;
+                                    case "treating":
+                                        <span class="badge badge-warning">Treating</span>
+                                        break;
+                                    case "monitoring":
+                                        <span class="badge badge-primary">Monitoring</span>
+                                        break;
+                                    case "closed":
+                                        <span class="badge badge-secondary">Closed</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-secondary">@Model.Status</span>
+                                        break;
+                                }
+                            </dd>
+
+                            <dt>Risk owner</dt>
+                            <dd class="mb-3">
                                 @if (!string.IsNullOrEmpty(Model.OwnerEmail))
                                 {
                                     <a href="mailto:@Model.OwnerEmail">@Model.OwnerEmail</a>
                                 }
                                 else
                                 {
-                                    <span>-</span>
+                                    <span class="text-muted">Unassigned</span>
                                 }
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                            </dd>
 
-                <!-- Risk Assessment -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">Risk assessment</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-center mb-3">
-                            <label class="font-weight-bold d-block mb-2">Risk score</label>
-                            <h2 class="mb-1">
-                                <span class="badge @(Model.RiskScore >= 15 ? "badge-danger" : Model.RiskScore >= 10 ? "badge-warning" : "badge-success")">
-                                    @Model.RiskScore
-                                </span>
-                            </h2>
-                            <small class="text-muted">Impact: @Model.ImpactRating × Likelihood: @Model.LikelihoodRating</small>
-                        </div>
-
-                        <hr />
-
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-6">Impact rating:</dt>
-                            <dd class="col-sm-6">@Model.ImpactRating / 5</dd>
-
-                            <dt class="col-sm-6">Likelihood rating:</dt>
-                            <dd class="col-sm-6">@Model.LikelihoodRating / 5</dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Classification -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="fas fa-sitemap"></i> Classification</h6>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-5">Business area:</dt>
-                            <dd class="col-sm-7">
+                            <dt>Business area</dt>
+                            <dd class="mb-3">
                                 @if (!string.IsNullOrEmpty(Model.BusinessArea))
                                 {
-                                    <a asp-action="Index" asp-route-businessArea="@Model.BusinessArea" title="View all risks in @Model.BusinessArea">
-                                        @Model.BusinessArea
-                                        <i class="fas fa-external-link-alt ml-1"></i>
-                                    </a>
+                                    <a asp-action="Index" asp-route-businessArea="@Model.BusinessArea">@Model.BusinessArea</a>
                                 }
                                 else
                                 {
-                                    <span>-</span>
+                                    <span class="text-muted">Not set</span>
                                 }
                             </dd>
 
-                            <dt class="col-sm-5">Strategic objective:</dt>
-                            <dd class="col-sm-7">
+                            <dt>Strategic objective</dt>
+                            <dd class="mb-3">
                                 @if (Model.Objective != null)
                                 {
-                                    <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id" title="View all risks for this objective">
-                                        @Model.Objective.Title
-                                        <i class="fas fa-external-link-alt ml-1"></i>
-                                    </a>
+                                    <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id">@Model.Objective.Title</a>
                                 }
                                 else
                                 {
-                                    <span>-</span>
+                                    <span class="text-muted">Not linked</span>
                                 }
                             </dd>
 
-                            <dt class="col-sm-5">Risk tier:</dt>
-                            <dd class="col-sm-7">
+                            <dt>Risk tier</dt>
+                            <dd class="mb-3">
                                 @if (Model.RiskTier != null)
                                 {
-                                    <div>
-                                        <strong>@Model.RiskTier.Name</strong>
-                                        @if (!string.IsNullOrEmpty(Model.RiskTier.Summary))
-                                        {
-                                            <br /><small class="text-muted">@Model.RiskTier.Summary</small>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <span>-</span>
-                                }
-                            </dd>
-
-                            <dt class="col-sm-5">Category:</dt>
-                            <dd class="col-sm-7">@(Model.Category ?? "-")</dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Dates -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="fas fa-calendar"></i> Dates</h6>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row small mb-0">
-                            <dt class="col-sm-5">Proximity date:</dt>
-                            <dd class="col-sm-7">
-                                @if (Model.ProximityDate.HasValue)
-                                {
-                                    <span class="@(isOverdue ? "text-danger font-weight-bold" : "")">
-                                        @Model.ProximityDate.Value.ToString("d MMMM yyyy")
-                                    </span>
-                                    @if (isOverdue)
+                                    <div>@Model.RiskTier.Name</div>
+                                    @if (!string.IsNullOrEmpty(Model.RiskTier.Summary))
                                     {
-                                        var daysOverdue = (DateTime.Today - Model.ProximityDate.Value.Date).Days;
-                                        <br /><small class="text-danger font-weight-bold">@daysOverdue days overdue</small>
+                                        <small class="text-muted">@Model.RiskTier.Summary</small>
                                     }
                                 }
                                 else
                                 {
-                                    <span>-</span>
+                                    <span class="text-muted">Not set</span>
                                 }
                             </dd>
 
-                            <dt class="col-sm-5">Closed date:</dt>
-                            <dd class="col-sm-7">@(Model.ClosedDate?.ToString("d MMMM yyyy") ?? "-")</dd>
+                            <dt>Category</dt>
+                            <dd class="mb-0">@(Model.Category ?? "-")</dd>
+                        </dl>
+                    </div>
+                </div>
 
-                            <dt class="col-sm-5">Created:</dt>
-                            <dd class="col-sm-7">@Model.CreatedAt.ToString("d MMMM yyyy HH:mm")</dd>
+                <!-- Timeline -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Timeline</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt>Proximity date</dt>
+                            <dd class="mb-3">
+                                @if (Model.ProximityDate.HasValue)
+                                {
+                                    <span class="@(isOverdue ? "text-danger" : "")">
+                                        @Model.ProximityDate.Value.ToString("dd MMM yyyy")
+                                    </span>
+                                    @if (isOverdue)
+                                    {
+                                        var daysOverdue = (DateTime.Today - Model.ProximityDate.Value.Date).Days;
+                                        <br><span class="text-danger small">@daysOverdue days overdue</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </dd>
 
-                            <dt class="col-sm-5">Last updated:</dt>
-                            <dd class="col-sm-7">@Model.UpdatedAt.ToString("d MMMM yyyy HH:mm")</dd>
+                            <dt>Closed</dt>
+                            <dd class="mb-3">@(Model.ClosedDate?.ToString("dd MMM yyyy") ?? "-")</dd>
+
+                            <dt>Created</dt>
+                            <dd class="mb-3">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+
+                            <dt>Last updated</dt>
+                            <dd class="mb-0">@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
                         </dl>
                     </div>
                 </div>
@@ -733,7 +452,7 @@
                     });
                     
                     html += '<div class="border-bottom pb-3 mb-3">';
-                    html += '<div class="d-flex justify-content-between align-items-start mb-2">';
+                    html += '<div class="d-flex justify-content-between mb-2">';
                     html += '<strong>' + (comment.createdByUser ? comment.createdByUser.name : 'Unknown') + '</strong>';
                     html += '<small class="text-muted">' + dateStr + '</small>';
                     html += '</div>';
@@ -776,4 +495,3 @@
         });
     </script>
 }
-

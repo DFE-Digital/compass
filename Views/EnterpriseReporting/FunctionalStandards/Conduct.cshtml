@@ -59,33 +59,10 @@
         font-size: 1rem;
         padding: 0.5rem 1rem;
     }
-    .accordion .btn-link {
-        box-shadow: none !important;
-        outline: none !important;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .accordion .btn-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    .accordion .btn-link .fa-chevron-down {
-        transition: transform 0.3s ease;
-        font-size: 1.1rem;
-        margin-left: 1rem;
-        opacity: 0.9;
-    }
-    .accordion .btn-link:not(.collapsed) .fa-chevron-down {
-        transform: rotate(180deg);
-    }
-    .theme-title-text {
-        flex: 1;
-    }
     .theme-progress-badge {
         font-size: 0.9rem;
         padding: 0.4rem 0.8rem;
         font-weight: 600;
-        border: 2px solid rgba(255, 255, 255, 0.3);
     }
 </style>
 
@@ -98,7 +75,21 @@
                     <li class="breadcrumb-item"><a asp-action="FunctionalStandards">Functional standards</a></li>
                     <li class="breadcrumb-item active">Assessment</li>
                 </ol>
-                <h1 class="m-0">@(isReadOnly ? "View" : "Conduct") assessment</h1>
+                <h1 class="m-0">@Model.AssessmentName</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#deleteAssessmentModal">
+                                Delete assessment
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -114,86 +105,15 @@
             </div>
         }
         
-        @{
-            var totalCriteriaCountTop = Model.FunctionalStandard?.Themes?
-                .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
-            var completedCriteriaCountTop = Model.CriteriaResponses.Count(r => r.Attainment.HasValue);
-            var percentageComplete = totalCriteriaCountTop > 0 ? (int)Math.Round((double)completedCriteriaCountTop / totalCriteriaCountTop * 100) : 0;
-            
-            string overallBadgeColor;
-            if (completedCriteriaCountTop == 0)
-            {
-                overallBadgeColor = "danger";
-            }
-            else if (completedCriteriaCountTop == totalCriteriaCountTop && totalCriteriaCountTop > 0)
-            {
-                overallBadgeColor = "success";
-            }
-            else
-            {
-                overallBadgeColor = "warning";
-            }
-        }
-        
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="small-box bg-success">
-                    <div class="inner">
-                        <h3>@Model.FunctionalStandard?.Title</h3>
-                        <p>Standard</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-book"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-primary">
-                    <div class="inner">
-                        <h3>@Model.AssessmentName</h3>
-                        <p>Assessment</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-clipboard-check"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>@Model.AssessmentDate.ToString("d MMM yyyy")</h3>
-                        <p>Assessment started</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-calendar"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                <div class="small-box bg-@overallBadgeColor" id="overallProgressBox">
-                    <div class="inner">
-                        <h3 id="overallProgressNumber">@completedCriteriaCountTop / @totalCriteriaCountTop (@percentageComplete%)</h3>
-                        <p>Overall progress</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-tasks"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         @if (Model.FunctionalStandard?.Themes != null)
         {
             <div class="row mb-3">
                 <div class="col-12">
                     <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBtn">
-                        <i class="fas fa-expand-alt"></i> Expand all themes
+                        Expand all themes
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="collapseAllBtn">
-                        <i class="fas fa-compress-alt"></i> Collapse all themes
+                        Collapse all themes
                     </button>
                 </div>
             </div>
@@ -228,21 +148,19 @@
                 }
                 
                 <div class="card theme-card">
-                    <div class="card-header bg-primary d-flex align-items-center justify-content-between" id="themeHeading@(themeIndex)">
-                        <button class="btn btn-link text-white text-decoration-none collapsed text-left d-flex align-items-center" 
+                    <div class="card-header d-flex align-items-center justify-content-between" id="themeHeading@(themeIndex)">
+                        <button class="btn btn-link collapsed text-left" 
                                 type="button" 
                                 data-toggle="collapse" 
                                 data-target="#themeCollapse@(themeIndex)" 
                                 aria-expanded="false" 
                                 aria-controls="themeCollapse@(themeIndex)">
-                            <h3 class="card-title mb-0 mr-2">
-                                <span class="theme-title-text">
-                                    Theme @theme.ThemeId: @theme.Title
-                                </span>
+                            <h3 class="card-title mb-0 d-inline">
+                                Theme @theme.ThemeId: @theme.Title
                             </h3>
                             <i class="fas fa-chevron-down"></i>
                         </button>
-                        <span class="badge badge-@themeBadgeColor theme-progress-badge ml-auto" data-theme-id="@theme.ThemeId">
+                        <span class="badge badge-@themeBadgeColor theme-progress-badge ml-3" data-theme-id="@theme.ThemeId">
                             @themeCompletedCount of @themeTotalCriteria completed
                         </span>
                     </div>
@@ -307,7 +225,7 @@
                                         {
                                             <div class="rating-section">
                                                 <div class="rating-section-header rating-@(rating.ToString().ToLower())">
-                                                    <i class="fas fa-star"></i> @rating criteria
+                                                    @rating criteria
                                                 </div>
                                                 
                                                 @foreach (var criterion in criteriaForRating)
@@ -354,12 +272,12 @@
                                                                                     <span class="badge badge-success">Fully met</span>
                                                                                     break;
                                                                             }
-                                                                        </div>
-                                                                        @if (!string.IsNullOrEmpty(response.Notes))
-                                                                        {
-                                                                            <div class="mt-2"><small class="text-muted"><i class="fas fa-sticky-note"></i> @response.Notes</small></div>
-                                                                        }
-                                                                    }
+                                                        </div>
+                                                        @if (!string.IsNullOrEmpty(response.Notes))
+                                                        {
+                                                            <div class="mt-2"><small class="text-muted">@response.Notes</small></div>
+                                                        }
+                                                    }
                                                                 }
                                                             </div>
                                                         </div>
@@ -398,7 +316,7 @@
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="assessmentId" value="@Model.Id" />
                             <button type="submit" class="btn btn-success btn-lg">
-                                <i class="fas fa-check-circle"></i> Submit assessment
+                                Submit assessment
                             </button>
                         </form>
                     }
@@ -409,7 +327,7 @@
                 @if (Model.SubmittedAt.HasValue)
                 {
                     <span class="badge badge-success ml-3 submitted-badge">
-                        <i class="fas fa-check-circle"></i> Submitted @Model.SubmittedAt.Value.ToString("d MMM yyyy HH:mm")
+                        Submitted @Model.SubmittedAt.Value.ToString("d MMM yyyy HH:mm")
                     </span>
                 }
             </div>
@@ -418,6 +336,35 @@
 </section>
 
 @Html.AntiForgeryToken()
+
+<!-- Delete Assessment Modal -->
+<div class="modal fade" id="deleteAssessmentModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger">
+                <h5 class="modal-title">Delete assessment</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-left">
+                <p>Are you sure you want to delete the assessment <strong>@Model.AssessmentName</strong>?</p>
+                <p class="text-danger">This action cannot be undone. All assessment responses will be permanently deleted.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <form asp-action="DeleteAssessment" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="assessmentId" value="@Model.Id" />
+                    <input type="hidden" name="standardId" value="@Model.FunctionalStandardId" />
+                    <button type="submit" class="btn btn-danger">
+                        Delete assessment
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
@@ -520,9 +467,6 @@
                 
                 // Update theme progress badge
                 updateThemeProgress(element);
-                
-                // Update overall progress
-                updateOverallProgress();
             }
             
             function updateThemeProgress(element) {
@@ -550,34 +494,6 @@
                     themeBadge.addClass('badge-success');
                 } else {
                     themeBadge.addClass('badge-warning');
-                }
-            }
-            
-            function updateOverallProgress() {
-                // Count all completed criteria across all themes
-                var totalCompleted = $('.attainment-select').filter(function() {
-                    return $(this).val() !== '';
-                }).length;
-                
-                // Count all criteria
-                var totalCriteria = $('.attainment-select').length;
-                
-                // Calculate percentage
-                var percentage = totalCriteria > 0 ? Math.round((totalCompleted / totalCriteria) * 100) : 0;
-                
-                // Update the overall progress number
-                $('#overallProgressNumber').text(totalCompleted + ' / ' + totalCriteria + ' (' + percentage + '%)');
-                
-                // Update overall info box color
-                var overallBox = $('#overallProgressBox');
-                overallBox.removeClass('bg-danger bg-warning bg-success');
-                
-                if (totalCompleted === 0) {
-                    overallBox.addClass('bg-danger');
-                } else if (totalCompleted === totalCriteria && totalCriteria > 0) {
-                    overallBox.addClass('bg-success');
-                } else {
-                    overallBox.addClass('bg-warning');
                 }
             }
             

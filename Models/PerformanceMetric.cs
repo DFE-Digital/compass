@@ -39,6 +39,11 @@ public class PerformanceMetric
     /// Empty string means applies to all phases
     /// </summary>
     public string ApplicablePhases { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Indicates if this metric is disabled and should not appear in new returns
+    /// </summary>
+    public bool IsDisabled { get; set; } = false;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
@@ -49,7 +54,8 @@ public enum ValueType
 {
     Text = 0,
     Number = 1,
-    Decimal = 2
+    Decimal = 2,
+    Percentage = 3
 }
 
 public class ValidationRules
