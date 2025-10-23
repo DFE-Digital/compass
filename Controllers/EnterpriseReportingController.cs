@@ -257,6 +257,15 @@ public class EnterpriseReportingController : Controller
             foreach (var m in milestones.Where(m => !string.IsNullOrEmpty(m.FipsId)))
                 associatedFipsIds.Add(m.FipsId!);
             
+            // Get projects associated with this objective
+            var projects = await _context.ProjectObjectives
+                .Include(po => po.Project)
+                .Where(po => po.ObjectiveId == objective.Id)
+                .Select(po => po.Project)
+                .Where(p => !p.IsDeleted)
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+            
             var associatedProducts = products.Where(p => associatedFipsIds.Contains(p.FipsId)).ToList();
             
             // Get other objectives in the same theme
@@ -274,6 +283,7 @@ public class EnterpriseReportingController : Controller
             ViewBag.Issues = issues;
             ViewBag.Actions = actions;
             ViewBag.Milestones = milestones;
+            ViewBag.Projects = projects;
             ViewBag.AssociatedProducts = associatedProducts;
             ViewBag.Products = products;
             ViewBag.RelatedObjectives = relatedObjectives;

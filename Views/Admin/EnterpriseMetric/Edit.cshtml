@@ -55,10 +55,11 @@
 
                             <div class="form-group">
                                 <label asp-for="ValueType">Value type</label>
-                                <select asp-for="ValueType" class="form-control custom-select">
+                                <select asp-for="ValueType" class="form-control custom-select" id="valueTypeSelect">
                                     <option value="@((int)Compass.Models.ValueType.Text)">Text</option>
                                     <option value="@((int)Compass.Models.ValueType.Number)">Number</option>
                                     <option value="@((int)Compass.Models.ValueType.Decimal)">Decimal</option>
+                                    <option value="@((int)Compass.Models.ValueType.Percentage)">Percentage</option>
                                 </select>
                             </div>
 
@@ -97,9 +98,53 @@
 
                             <div class="form-group">
                                 <label>Validation rules</label>
-                                <textarea name="validationRulesJson" class="form-control" rows="6">@Model.ValidationRules</textarea>
+                                <textarea name="validationRulesJson" id="validationRulesJson" class="form-control" rows="6">@Model.ValidationRules</textarea>
                                 <small class="form-text text-muted">JSON format for validation rules</small>
                             </div>
+
+                            <details class="mt-3 mb-3">
+                                <summary class="mb-2" style="cursor: pointer;">
+                                    <strong>What rules you can add</strong>
+                                </summary>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <p class="small mb-2">Available validation rules (all optional except where noted):</p>
+                                        <dl class="row small mb-0">
+                                            <dt class="col-sm-4"><code>required</code></dt>
+                                            <dd class="col-sm-8">Boolean. If true, the field must be filled in. Default: <code>true</code></dd>
+                                            
+                                            <dt class="col-sm-4"><code>allowNull</code></dt>
+                                            <dd class="col-sm-8">Boolean. If true, allows "not captured" option. Default: <code>false</code></dd>
+                                            
+                                            <dt class="col-sm-4"><code>minimumValue</code></dt>
+                                            <dd class="col-sm-8">Number. Minimum allowed value (for Number, Decimal, Percentage types)</dd>
+                                            
+                                            <dt class="col-sm-4"><code>maximumValue</code></dt>
+                                            <dd class="col-sm-8">Number. Maximum allowed value (for Number, Decimal, Percentage types)</dd>
+                                            
+                                            <dt class="col-sm-4"><code>decimalPlaces</code></dt>
+                                            <dd class="col-sm-8">Number. Maximum decimal places allowed (for Decimal and Percentage types)</dd>
+                                        </dl>
+                                        
+                                        <hr class="my-2" />
+                                        
+                                        <p class="small mb-2"><strong>Examples:</strong></p>
+                                        <dl class="row small mb-0">
+                                            <dt class="col-sm-4">Number (0-100M)</dt>
+                                            <dd class="col-sm-8"><code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100000000}</code></dd>
+                                            
+                                            <dt class="col-sm-4">Percentage (0-100)</dt>
+                                            <dd class="col-sm-8"><code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100}</code></dd>
+                                            
+                                            <dt class="col-sm-4">Decimal (0-100, 2dp)</dt>
+                                            <dd class="col-sm-8"><code>{"required": true, "allowNull": false, "minimumValue": 0, "maximumValue": 100, "decimalPlaces": 2}</code></dd>
+                                            
+                                            <dt class="col-sm-4">Optional text</dt>
+                                            <dd class="col-sm-8"><code>{"required": false, "allowNull": true}</code></dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="card-footer">
@@ -119,5 +164,39 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#valueTypeSelect').on('change', function() {
+                var valueType = $(this).val();
+                var rulesTextarea = $('#validationRulesJson');
+                var currentRules = {};
+                
+                try {
+                    currentRules = JSON.parse(rulesTextarea.val());
+                } catch (e) {
+                    currentRules = {"required": true, "allowNull": false};
+                }
+                
+                // Set default min/max based on type
+                if (valueType == '@((int)Compass.Models.ValueType.Number)') {
+                    currentRules.minimumValue = 0;
+                    currentRules.maximumValue = 100000000;
+                    delete currentRules.decimalPlaces;
+                } else if (valueType == '@((int)Compass.Models.ValueType.Decimal)') {
+                    currentRules.minimumValue = 0;
+                    currentRules.maximumValue = 100000000;
+                } else if (valueType == '@((int)Compass.Models.ValueType.Percentage)') {
+                    currentRules.minimumValue = 0;
+                    currentRules.maximumValue = 100;
+                } else {
+                    delete currentRules.minimumValue;
+                    delete currentRules.maximumValue;
+                    delete currentRules.decimalPlaces;
+                }
+                
+                rulesTextarea.val(JSON.stringify(currentRules, null, 2));
+            });
+        });
+    </script>
 }
 

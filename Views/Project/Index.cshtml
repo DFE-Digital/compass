@@ -1,0 +1,152 @@
+@model IEnumerable<Compass.Models.Project>
+
+@{
+    ViewData["Title"] = "Projects";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Projects</li>
+                </ol>
+                <h1 class="m-0">Projects</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="Create">
+                                Create new project
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Projects</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%;">Title</th>
+                                    <th style="width: 10%;">RAG Status</th>
+                                    <th style="width: 10%;">Phase</th>
+                                    <th style="width: 10%;">Flagship</th>
+                                    <th style="width: 15%;">Target Delivery</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Any())
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@item.Id" class="font-weight-bold">
+                                                    @item.Title
+                                                </a>
+                                                <br>
+                                                <small class="text-muted">@item.ProjectCode</small>
+                                                @if (item.IsFlagship)
+                                                {
+                                                    <span class="badge badge-warning ml-2">Flagship</span>
+                                                }
+                                                <div class="mt-1">
+                                                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
+                                                        Delete
+                                                    </a>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (item.RagStatus == "Green")
+                                                {
+                                                    <span class="badge badge-success">Green</span>
+                                                }
+                                                else if (item.RagStatus == "Amber-Green")
+                                                {
+                                                    <span class="badge badge-warning">Amber-Green</span>
+                                                }
+                                                else if (item.RagStatus == "Amber-Red")
+                                                {
+                                                    <span class="badge badge-warning">Amber-Red</span>
+                                                }
+                                                else if (item.RagStatus == "Red")
+                                                {
+                                                    <span class="badge badge-danger">Red</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">@item.RagStatus</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.Phase))
+                                                {
+                                                    <span class="badge badge-info">@item.Phase</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not set</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.IsFlagship)
+                                                {
+                                                    <span class="badge badge-warning">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">No</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @item.TargetDeliveryDate.ToString("dd MMM yyyy")
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">No projects found.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

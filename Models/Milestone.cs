@@ -14,6 +14,11 @@ public class Milestone
     [ForeignKey(nameof(ObjectiveId))]
     public Objective? Objective { get; set; }
 
+    public int? ProjectId { get; set; }
+
+    [ForeignKey(nameof(ProjectId))]
+    public Project? Project { get; set; }
+
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
@@ -65,5 +70,7 @@ public class Milestone
     public ICollection<MilestoneAction> MilestoneActions { get; set; } = new List<MilestoneAction>();
     public ICollection<MilestoneRisk> MilestoneRisks { get; set; } = new List<MilestoneRisk>();
     public ICollection<MilestoneIssue> MilestoneIssues { get; set; } = new List<MilestoneIssue>();
+    public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+    public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 }
 

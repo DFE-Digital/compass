@@ -62,6 +62,21 @@ public class CompassDbContext : DbContext
     public DbSet<Models.Action> Actions { get; set; }
     public DbSet<Comment> Comments { get; set; }
     
+    // Project Management
+    public DbSet<Project> Projects { get; set; }
+    public DbSet<Mission> Missions { get; set; }
+    public DbSet<FundingSource> FundingSources { get; set; }
+    public DbSet<ProjectRagHistory> ProjectRagHistories { get; set; }
+    public DbSet<ProjectSuccess> ProjectSuccesses { get; set; }
+    public DbSet<ProjectOutcome> ProjectOutcomes { get; set; }
+    public DbSet<ProjectMission> ProjectMissions { get; set; }
+    public DbSet<ProjectFundingAllocation> ProjectFundingAllocations { get; set; }
+    public DbSet<ProjectContact> ProjectContacts { get; set; }
+    public DbSet<ProjectObjective> ProjectObjectives { get; set; }
+    public DbSet<Dependency> Dependencies { get; set; }
+    public DbSet<ProjectProduct> ProjectProducts { get; set; }
+    public DbSet<ProjectDraft> ProjectDrafts { get; set; }
+    
     // RAID Lookups
     public DbSet<RiskType> RiskTypes { get; set; }
     public DbSet<RiskTier> RiskTiers { get; set; }
@@ -503,6 +518,263 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiRequestLog>()
             .HasIndex(arl => arl.IsSuccess);
+
+        // ========================================
+        // PROJECT MANAGEMENT CONFIGURATION
+        // ========================================
+
+        // Mission configuration
+        modelBuilder.Entity<Mission>()
+            .HasIndex(m => m.Status);
+
+        modelBuilder.Entity<Mission>()
+            .HasIndex(m => m.OwnerUserId);
+
+        // Project configuration
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.RagStatus);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.Status);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.IsFlagship);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.StartDate);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.TargetDeliveryDate);
+
+        // Configure decimal precision for FTE fields
+        modelBuilder.Entity<Project>()
+            .Property(p => p.TotalPermFte)
+            .HasPrecision(10, 2);
+
+        modelBuilder.Entity<Project>()
+            .Property(p => p.TotalMspFte)
+            .HasPrecision(10, 2);
+
+        // ProjectRagHistory configuration
+        modelBuilder.Entity<ProjectRagHistory>()
+            .HasOne(prh => prh.Project)
+            .WithMany(p => p.RagHistory)
+            .HasForeignKey(prh => prh.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectRagHistory>()
+            .HasIndex(prh => prh.ProjectId);
+
+        modelBuilder.Entity<ProjectRagHistory>()
+            .HasIndex(prh => prh.ChangedAt);
+
+        // ProjectSuccess configuration
+        modelBuilder.Entity<ProjectSuccess>()
+            .HasOne(ps => ps.Project)
+            .WithMany(p => p.Successes)
+            .HasForeignKey(ps => ps.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectSuccess>()
+            .HasIndex(ps => ps.ProjectId);
+
+        modelBuilder.Entity<ProjectSuccess>()
+            .HasIndex(ps => ps.RecordedAt);
+
+        // ProjectOutcome configuration
+        modelBuilder.Entity<ProjectOutcome>()
+            .HasOne(po => po.Project)
+            .WithMany(p => p.Outcomes)
+            .HasForeignKey(po => po.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectOutcome>()
+            .HasIndex(po => po.ProjectId);
+
+        modelBuilder.Entity<ProjectOutcome>()
+            .HasIndex(po => po.SortOrder);
+
+        modelBuilder.Entity<ProjectOutcome>()
+            .HasIndex(po => po.ConfidenceLevel);
+
+        // ProjectMission configuration
+        modelBuilder.Entity<ProjectMission>()
+            .HasOne(pm => pm.Project)
+            .WithMany(p => p.ProjectMissions)
+            .HasForeignKey(pm => pm.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectMission>()
+            .HasOne(pm => pm.Mission)
+            .WithMany()
+            .HasForeignKey(pm => pm.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectMission>()
+            .HasIndex(pm => pm.ProjectId);
+
+        modelBuilder.Entity<ProjectMission>()
+            .HasIndex(pm => pm.MissionId);
+
+        // ProjectFundingAllocation configuration
+        modelBuilder.Entity<ProjectFundingAllocation>()
+            .HasOne(pfa => pfa.Project)
+            .WithMany(p => p.FundingAllocations)
+            .HasForeignKey(pfa => pfa.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectFundingAllocation>()
+            .HasOne(pfa => pfa.FundingSource)
+            .WithMany()
+            .HasForeignKey(pfa => pfa.FundingSourceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectFundingAllocation>()
+            .HasIndex(pfa => pfa.ProjectId);
+
+        modelBuilder.Entity<ProjectFundingAllocation>()
+            .HasIndex(pfa => pfa.FundingSourceId);
+
+        // ProjectContact configuration
+        modelBuilder.Entity<ProjectContact>()
+            .HasOne(pc => pc.Project)
+            .WithMany(p => p.ProjectContacts)
+            .HasForeignKey(pc => pc.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectContact>()
+            .HasIndex(pc => pc.ProjectId);
+
+        modelBuilder.Entity<ProjectContact>()
+            .HasIndex(pc => pc.SortOrder);
+
+        modelBuilder.Entity<ProjectContact>()
+            .HasIndex(pc => pc.Role);
+
+        // ProjectObjective configuration
+        modelBuilder.Entity<ProjectObjective>()
+            .HasOne(po => po.Project)
+            .WithMany(p => p.ProjectObjectives)
+            .HasForeignKey(po => po.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectObjective>()
+            .HasOne(po => po.Objective)
+            .WithMany()
+            .HasForeignKey(po => po.ObjectiveId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectObjective>()
+            .HasIndex(po => po.ProjectId);
+
+        modelBuilder.Entity<ProjectObjective>()
+            .HasIndex(po => po.ObjectiveId);
+
+        // Dependency configuration
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => new { d.SourceEntityType, d.SourceEntityId });
+
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => new { d.TargetEntityType, d.TargetEntityId });
+
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => d.Status);
+
+        modelBuilder.Entity<Dependency>()
+            .HasIndex(d => d.DependencyType);
+
+        // ProjectProduct configuration
+        modelBuilder.Entity<ProjectProduct>()
+            .HasOne(pp => pp.Project)
+            .WithMany(p => p.ProjectProducts)
+            .HasForeignKey(pp => pp.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectProduct>()
+            .HasIndex(pp => pp.ProjectId);
+
+        modelBuilder.Entity<ProjectProduct>()
+            .HasIndex(pp => pp.ProductFipsId);
+
+        // ProjectDraft configuration
+        modelBuilder.Entity<ProjectDraft>()
+            .HasIndex(pd => pd.SessionId);
+
+        modelBuilder.Entity<ProjectDraft>()
+            .HasIndex(pd => pd.UserEmail);
+
+        modelBuilder.Entity<ProjectDraft>()
+            .HasIndex(pd => pd.IsConfirmed);
+
+        modelBuilder.Entity<ProjectDraft>()
+            .HasIndex(pd => pd.CreatedAt);
+
+        // Configure decimal precision for FTE fields
+        modelBuilder.Entity<ProjectDraft>()
+            .Property(pd => pd.TotalPermFte)
+            .HasPrecision(10, 2);
+
+        modelBuilder.Entity<ProjectDraft>()
+            .Property(pd => pd.TotalMspFte)
+            .HasPrecision(10, 2);
+
+        // FundingSource configuration
+        modelBuilder.Entity<FundingSource>()
+            .HasIndex(fs => fs.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<FundingSource>()
+            .HasIndex(fs => fs.IsActive);
+
+        modelBuilder.Entity<FundingSource>()
+            .HasIndex(fs => fs.SortOrder);
+
+        // Update existing models to include Project relationships
+        modelBuilder.Entity<Milestone>()
+            .HasOne(m => m.Project)
+            .WithMany(p => p.Milestones)
+            .HasForeignKey(m => m.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Milestone>()
+            .HasIndex(m => m.ProjectId);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.Project)
+            .WithMany(p => p.Risks)
+            .HasForeignKey(r => r.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Risk>()
+            .HasIndex(r => r.ProjectId);
+
+        modelBuilder.Entity<Issue>()
+            .HasOne(i => i.Project)
+            .WithMany(p => p.Issues)
+            .HasForeignKey(i => i.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Issue>()
+            .HasIndex(i => i.ProjectId);
+
+        modelBuilder.Entity<Models.Action>()
+            .HasOne(a => a.Project)
+            .WithMany(p => p.Actions)
+            .HasForeignKey(a => a.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Models.Action>()
+            .HasIndex(a => a.ProjectId);
+
+        // Update Objective to include Mission relationship
+        modelBuilder.Entity<Objective>()
+            .HasOne(o => o.Mission)
+            .WithMany(m => m.Objectives)
+            .HasForeignKey(o => o.MissionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Objective>()
+            .HasIndex(o => o.MissionId);
     }
 }
 
