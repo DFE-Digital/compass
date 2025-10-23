@@ -14,6 +14,11 @@ public class Action
     [ForeignKey(nameof(ObjectiveId))]
     public Objective? Objective { get; set; }
 
+    public int? ProjectId { get; set; }
+
+    [ForeignKey(nameof(ProjectId))]
+    public Project? Project { get; set; }
+
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
@@ -70,5 +75,7 @@ public class Action
     public ICollection<RiskAction> RiskActions { get; set; } = new List<RiskAction>();
     public ICollection<IssueAction> IssueActions { get; set; } = new List<IssueAction>();
     public ICollection<MilestoneAction> MilestoneActions { get; set; } = new List<MilestoneAction>();
+    public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+    public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 }
 

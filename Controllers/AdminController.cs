@@ -1183,5 +1183,294 @@ public class AdminController : Controller
 
         return View("~/Views/Admin/ApiTokens/Logs.cshtml", logs);
     }
+
+    // ========================================
+    // MISSIONS MANAGEMENT
+    // ========================================
+
+    // GET: Admin/Missions
+    public async Task<IActionResult> Missions()
+    {
+        var missions = await _context.Missions
+            .Include(m => m.OwnerUser)
+            .Where(m => !m.IsDeleted)
+            .OrderByDescending(m => m.CreatedAt)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Mission/Index.cshtml", missions);
+    }
+
+    // GET: Admin/CreateMission
+    public async Task<IActionResult> CreateMission()
+    {
+        ViewBag.OwnerUsers = await _context.Users
+            .OrderBy(u => u.Name)
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Mission/Create.cshtml");
+    }
+
+    // POST: Admin/CreateMission
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateMission([Bind("Title,Description,Theme,OwnerUserId,StartDate,EndDate,Status")] Mission mission)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                mission.CreatedAt = DateTime.UtcNow;
+                mission.UpdatedAt = DateTime.UtcNow;
+                _context.Add(mission);
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Mission '{mission.Title}' has been created successfully.";
+                return RedirectToAction(nameof(Missions));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating mission");
+                TempData["ErrorMessage"] = "An error occurred while creating the mission. Please try again.";
+            }
+        }
+
+        ViewBag.OwnerUsers = await _context.Users
+            .OrderBy(u => u.Name)
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Mission/Create.cshtml", mission);
+    }
+
+    // GET: Admin/EditMission/5
+    public async Task<IActionResult> EditMission(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var mission = await _context.Missions.FindAsync(id);
+        if (mission == null || mission.IsDeleted)
+        {
+            return NotFound();
+        }
+
+        ViewBag.OwnerUsers = await _context.Users
+            .OrderBy(u => u.Name)
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+
+        return View("~/Views/Admin/Mission/Edit.cshtml", mission);
+    }
+
+    // POST: Admin/EditMission/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditMission(int id, [Bind("Id,Title,Description,Theme,OwnerUserId,StartDate,EndDate,Status,CreatedAt")] Mission mission)
+    {
+        if (id != mission.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                mission.UpdatedAt = DateTime.UtcNow;
+                _context.Update(mission);
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Mission '{mission.Title}' has been updated successfully.";
+                return RedirectToAction(nameof(Missions));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating mission");
+                TempData["ErrorMessage"] = "An error occurred while updating the mission. Please try again.";
+            }
+        }
+
+        ViewBag.OwnerUsers = await _context.Users
+            .OrderBy(u => u.Name)
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+
+        return View("~/Views/Admin/Mission/Edit.cshtml", mission);
+    }
+
+    // POST: Admin/DeleteMission/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteMission(int id)
+    {
+        try
+        {
+            var mission = await _context.Missions.FindAsync(id);
+            if (mission != null)
+            {
+                mission.IsDeleted = true;
+                mission.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Mission '{mission.Title}' has been deleted successfully.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting mission");
+            TempData["ErrorMessage"] = "An error occurred while deleting the mission. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Missions));
+    }
+
+    // ========================================
+    // FUNDING SOURCES MANAGEMENT
+    // ========================================
+
+    // GET: Admin/FundingSources
+    public async Task<IActionResult> FundingSources()
+    {
+        var fundingSources = await _context.FundingSources
+            .OrderBy(fs => fs.SortOrder)
+            .ThenBy(fs => fs.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/FundingSource/Index.cshtml", fundingSources);
+    }
+
+    // GET: Admin/CreateFundingSource
+    public IActionResult CreateFundingSource()
+    {
+        return View("~/Views/Admin/FundingSource/Create.cshtml");
+    }
+
+    // POST: Admin/CreateFundingSource
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateFundingSource([Bind("Code,Name,Description,SortOrder,IsActive")] FundingSource fundingSource)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if code already exists
+                if (await _context.FundingSources.AnyAsync(fs => fs.Code == fundingSource.Code))
+                {
+                    ModelState.AddModelError("Code", "A funding source with this code already exists.");
+                }
+                else
+                {
+                    fundingSource.CreatedAt = DateTime.UtcNow;
+                    fundingSource.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(fundingSource);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Funding source '{fundingSource.Name}' has been created successfully.";
+                    return RedirectToAction(nameof(FundingSources));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating funding source");
+                TempData["ErrorMessage"] = "An error occurred while creating the funding source. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/FundingSource/Create.cshtml", fundingSource);
+    }
+
+    // GET: Admin/EditFundingSource/5
+    public async Task<IActionResult> EditFundingSource(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var fundingSource = await _context.FundingSources.FindAsync(id);
+        if (fundingSource == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/FundingSource/Edit.cshtml", fundingSource);
+    }
+
+    // POST: Admin/EditFundingSource/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditFundingSource(int id, [Bind("Id,Code,Name,Description,SortOrder,IsActive,CreatedAt")] FundingSource fundingSource)
+    {
+        if (id != fundingSource.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if code already exists (excluding current record)
+                if (await _context.FundingSources.AnyAsync(fs => fs.Code == fundingSource.Code && fs.Id != id))
+                {
+                    ModelState.AddModelError("Code", "A funding source with this code already exists.");
+                }
+                else
+                {
+                    fundingSource.UpdatedAt = DateTime.UtcNow;
+                    _context.Update(fundingSource);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Funding source '{fundingSource.Name}' has been updated successfully.";
+                    return RedirectToAction(nameof(FundingSources));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating funding source");
+                TempData["ErrorMessage"] = "An error occurred while updating the funding source. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/FundingSource/Edit.cshtml", fundingSource);
+    }
+
+    // POST: Admin/DeleteFundingSource/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteFundingSource(int id)
+    {
+        try
+        {
+            var fundingSource = await _context.FundingSources.FindAsync(id);
+            if (fundingSource != null)
+            {
+                // Check if any projects are using this funding source
+                var projectsUsingSource = await _context.ProjectFundingAllocations.AnyAsync(pfa => pfa.FundingSourceId == id);
+                if (projectsUsingSource)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete funding source '{fundingSource.Name}' because it is being used by one or more projects.";
+                }
+                else
+                {
+                    _context.FundingSources.Remove(fundingSource);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Funding source '{fundingSource.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting funding source");
+            TempData["ErrorMessage"] = "An error occurred while deleting the funding source. Please try again.";
+        }
+
+        return RedirectToAction(nameof(FundingSources));
+    }
 }
 

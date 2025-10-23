@@ -23,6 +23,11 @@ public class Objective
     [ForeignKey(nameof(OwnerUserId))]
     public User? OwnerUser { get; set; }
 
+    public int? MissionId { get; set; }
+
+    [ForeignKey(nameof(MissionId))]
+    public Mission? Mission { get; set; }
+
     public DateTime? StartDate { get; set; }
 
     public DateTime? EndDate { get; set; }

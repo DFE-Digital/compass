@@ -14,6 +14,11 @@ public class Issue
     [ForeignKey(nameof(ObjectiveId))]
     public Objective? Objective { get; set; }
 
+    public int? ProjectId { get; set; }
+
+    [ForeignKey(nameof(ProjectId))]
+    public Project? Project { get; set; }
+
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
@@ -69,5 +74,7 @@ public class Issue
     // Navigation properties
     public ICollection<IssueAction> IssueActions { get; set; } = new List<IssueAction>();
     public ICollection<MilestoneIssue> MilestoneIssues { get; set; } = new List<MilestoneIssue>();
+    public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+    public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 }
 

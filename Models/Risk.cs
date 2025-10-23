@@ -14,6 +14,11 @@ public class Risk
     [ForeignKey(nameof(ObjectiveId))]
     public Objective? Objective { get; set; }
 
+    public int? ProjectId { get; set; }
+
+    [ForeignKey(nameof(ProjectId))]
+    public Project? Project { get; set; }
+
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
@@ -79,6 +84,8 @@ public class Risk
     // Navigation properties
     public ICollection<RiskAction> RiskActions { get; set; } = new List<RiskAction>();
     public ICollection<MilestoneRisk> MilestoneRisks { get; set; } = new List<MilestoneRisk>();
+    public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+    public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
     public ICollection<RiskRiskType> RiskRiskTypes { get; set; } = new List<RiskRiskType>();
 }
 

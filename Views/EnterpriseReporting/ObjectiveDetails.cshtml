@@ -6,6 +6,7 @@
     var issues = ViewBag.Issues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
     var objectiveActions = ViewBag.Actions as List<Compass.Models.Action> ?? new List<Compass.Models.Action>();
     var milestones = ViewBag.Milestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
+    var projects = ViewBag.Projects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     var associatedProducts = ViewBag.AssociatedProducts as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
     var allProducts = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
     var relatedObjectives = ViewBag.RelatedObjectives as List<Compass.Models.Objective> ?? new List<Compass.Models.Objective>();
@@ -101,6 +102,15 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link @(currentView == "projects" ? "active" : "")" href="?view=projects">
+                    Projects
+                    @if (projects.Any())
+                    {
+                        <span class="badge badge-light ml-1">@projects.Count</span>
+                    }
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link @(currentView == "products" ? "active" : "")" href="?view=products">
                     Products
                     @if (associatedProducts.Any())
@@ -151,6 +161,15 @@
                                     <h3 class="mb-1">@milestones.Count</h3>
                                     <p class="text-muted mb-0">Milestones</p>
                                     <a href="?view=milestones" class="btn btn-sm btn-outline-primary mt-2">View</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h3 class="mb-1">@projects.Count</h3>
+                                    <p class="text-muted mb-0">Projects</p>
+                                    <a href="?view=projects" class="btn btn-sm btn-outline-primary mt-2">View</a>
                                 </div>
                             </div>
                         </div>
@@ -519,6 +538,78 @@
                             {
                                 <div class="text-center text-muted py-4">
                                     <p class="mb-0">No milestones recorded for this objective</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Projects View -->
+                @if (currentView == "projects")
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Associated Projects</h3>
+                            <div class="card-tools">
+                                <a asp-controller="Project" asp-action="Create" class="btn btn-sm btn-success">Add Project</a>
+                            </div>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            @if (projects.Any())
+                            {
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project Code</th>
+                                            <th>Title</th>
+                                            <th style="width: 100px;">RAG Status</th>
+                                            <th style="width: 120px;">Status</th>
+                                            <th style="width: 120px;">Target Delivery</th>
+                                            <th style="width: 100px;">Flagship</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in projects)
+                                        {
+                                            <tr>
+                                                <td><span class="font-weight-bold text-primary">@project.ProjectCode</span></td>
+                                                <td><a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
+                                                <td>
+                                                    <span class="badge @(project.RagStatus == "Red" ? "badge-danger" : project.RagStatus == "Amber-Red" ? "badge-warning" : project.RagStatus == "Amber-Green" ? "badge-info" : "badge-success")">
+                                                        @project.RagStatus
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @switch (project.Status)
+                                                    {
+                                                        case "Active":
+                                                            <span class="badge badge-success">@project.Status</span>
+                                                            break;
+                                                        case "Paused":
+                                                            <span class="badge badge-warning">@project.Status</span>
+                                                            break;
+                                                        case "Completed":
+                                                            <span class="badge badge-primary">@project.Status</span>
+                                                            break;
+                                                        case "Cancelled":
+                                                            <span class="badge badge-danger">@project.Status</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge badge-secondary">@project.Status</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>@project.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
+                                                <td>@(project.IsFlagship ? "Yes" : "No")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-4">
+                                    <p class="mb-0">No projects associated with this objective</p>
                                 </div>
                             }
                         </div>
