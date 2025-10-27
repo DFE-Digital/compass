@@ -1,0 +1,293 @@
+@model List<Compass.Models.Project>
+
+@{
+    ViewData["Title"] = $"DDT Reports - {ViewBag.BusinessArea}";
+    var currentSection = ViewBag.CurrentSection as string ?? "summary";
+    var weekStart = (DateTime)ViewBag.WeekStart;
+    var weekEnd = (DateTime)ViewBag.WeekEnd;
+    var businessArea = ViewBag.BusinessArea as string;
+    
+    // Aggregate all flagged successes across projects within the report timeframe
+    var allDdtSuccesses = Model
+        .SelectMany(p => p.Successes
+            .Where(s => s.IsReportedToSlt && 
+                       s.RecordedAt >= weekStart && 
+                       s.RecordedAt <= weekEnd)
+            .Select(s => new { Project = p, Success = s }))
+        .OrderByDescending(x => x.Success.RecordedAt)
+        .ToList();
+    
+    // Calculate date ranges for milestone filtering
+    var twoWeeksFromEnd = weekEnd.AddDays(14);
+    
+    // Milestones due this week (not deleted, with due date in current week)
+    var milestonesDueThisWeek = Model
+        .SelectMany(p => p.Milestones
+            .Where(m => !m.IsDeleted && 
+                       m.DueDate >= weekStart && 
+                       m.DueDate <= weekEnd &&
+                       m.Status != "complete")
+            .Select(m => new { Project = p, Milestone = m }))
+        .OrderBy(x => x.Milestone.DueDate)
+        .ToList();
+    
+    // Upcoming milestones in next 2 weeks (not deleted, with due date in next 2 weeks)
+    var upcomingMilestones = Model
+        .SelectMany(p => p.Milestones
+            .Where(m => !m.IsDeleted && 
+                       m.DueDate > weekEnd && 
+                       m.DueDate <= twoWeeksFromEnd &&
+                       m.Status != "complete")
+            .Select(m => new { Project = p, Milestone = m }))
+        .OrderBy(x => x.Milestone.DueDate)
+        .ToList();
+    
+    // All active milestones (for counts in summary)
+    var allActiveMilestones = milestonesDueThisWeek.Concat(upcomingMilestones).ToList();
+    
+    // Get projects with non-green RAG status
+    var atRiskProjects = Model.Where(p => p.RagStatus != "Green").ToList();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active">@businessArea</li>
+                </ol>
+            </div>
+        </div>
+        <div class="row mb-2 align-items-center">
+            <div class="col-sm-6">
+                <h1 class="m-0">@businessArea - DDT Report</h1>
+                <p class="text-muted mb-0">@weekStart.ToString("dd MMM yyyy") - @weekEnd.ToString("dd MMM yyyy")</p>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a asp-action="BusinessArea" asp-route-area="@businessArea" asp-route-weekStart="@weekStart.AddDays(-7).ToString("yyyy-MM-dd")" asp-route-section="@currentSection" class="btn btn-outline-secondary">
+                    <i class="fas fa-chevron-left"></i> Previous Week
+                </a>
+                @if (weekStart < DateTime.Today)
+                {
+                    <a asp-action="BusinessArea" asp-route-area="@businessArea" asp-route-weekStart="@weekStart.AddDays(7).ToString("yyyy-MM-dd")" asp-route-section="@currentSection" class="btn btn-outline-secondary ml-2">
+                        Next Week <i class="fas fa-chevron-right"></i>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (!Model.Any())
+        {
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                    <h4>No Active Projects</h4>
+                    <p class="text-muted">There are no active projects in the @businessArea business area.</p>
+                    <a asp-action="Index" class="btn btn-primary mt-3">
+                        <i class="fas fa-arrow-left mr-2"></i> Back to DDT Reports
+                    </a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Executive Summary -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Executive Summary - @businessArea</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Active Projects</h5>
+                            <p class="mb-3">
+                                <strong>@Model.Count active projects</strong><br>
+                                <span class="text-muted">@atRiskProjects.Count requiring attention</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>This Week</h5>
+                            <p class="mb-0">
+                                <strong>@milestonesDueThisWeek.Count milestones due this week</strong><br>
+                                <strong>@upcomingMilestones.Count upcoming milestones (next 2 weeks)</strong><br>
+                                <strong>@allDdtSuccesses.Count successes reported</strong>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Green RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Green")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Amber RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-danger"><i class="fas fa-times-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Red RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Red")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-info"><i class="fas fa-flag-checkered"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Active Milestones</span>
+                            <span class="info-box-number">@allActiveMilestones.Count</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects Requiring Attention -->
+            @if (atRiskProjects.Any())
+            {
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Projects Requiring Attention</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th>RAG Status</th>
+                                    <th>Justification</th>
+                                    <th>Path to Green</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in atRiskProjects)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                <strong>@project.Title</strong>
+                                            </a><br>
+                                            <small class="text-muted">@project.ProjectCode</small>
+                                        </td>
+                                        <td>
+                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(project.RagJustification))
+                                            {
+                                                @project.RagJustification.Substring(0, Math.Min(150, project.RagJustification.Length))@(project.RagJustification.Length > 150 ? "..." : "")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">No justification provided</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(project.PathToGreen))
+                                            {
+                                                @project.PathToGreen.Substring(0, Math.Min(100, project.PathToGreen.Length))@(project.PathToGreen.Length > 100 ? "..." : "")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-warning">Not documented</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- All Projects in Business Area -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">All Projects in @businessArea</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover text-nowrap">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>RAG Status</th>
+                                <th>Phase</th>
+                                <th>Target Delivery</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var project in Model.OrderBy(p => p.Title))
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                            <strong>@project.Title</strong>
+                                        </a><br>
+                                        <small class="text-muted">@project.ProjectCode</small>
+                                    </td>
+                                    <td>
+                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                    </td>
+                                    <td>@project.Phase</td>
+                                    <td>@project.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+

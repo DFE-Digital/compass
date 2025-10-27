@@ -402,6 +402,8 @@ public class AdminController : Controller
         ViewBag.RiskTiers = await _context.RiskTiers.OrderBy(rt => rt.SortOrder).ThenBy(rt => rt.Name).ToListAsync();
         ViewBag.ActionSources = await _context.ActionSources.OrderBy(a_s => a_s.SortOrder).ThenBy(a_s => a_s.Name).ToListAsync();
         ViewBag.WcagCriteria = await _context.WcagCriteria.OrderBy(w => w.Criterion).ToListAsync();
+        ViewBag.BusinessAreas = await _context.BusinessAreaLookups.OrderBy(ba => ba.SortOrder).ThenBy(ba => ba.Name).ToListAsync();
+        ViewBag.Phases = await _context.PhaseLookups.OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
         
         return View("~/Views/Admin/Settings/Index.cshtml");
     }
@@ -1680,6 +1682,258 @@ public class AdminController : Controller
             .ToListAsync();
 
         return Json(new { results = criteria });
+    }
+
+    // ========================================
+    // SETTINGS - Business Areas
+    // ========================================
+
+    // GET: Admin/BusinessAreas - Redirects to Settings page with business areas tab
+    public IActionResult BusinessAreas()
+    {
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/CreateBusinessArea
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateBusinessArea([Bind("Name,Description,SortOrder,IsActive")] BusinessAreaLookup businessArea)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.BusinessAreaLookups.AnyAsync(ba => ba.Name == businessArea.Name))
+                {
+                    TempData["ErrorMessage"] = "A business area with this name already exists.";
+                }
+                else
+                {
+                    businessArea.CreatedAt = DateTime.UtcNow;
+                    businessArea.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(businessArea);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business area '{businessArea.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating business area");
+                TempData["ErrorMessage"] = "An error occurred while creating the business area. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/EditBusinessArea
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditBusinessArea(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] BusinessAreaLookup businessArea)
+    {
+        if (id != businessArea.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists for a different record
+                if (await _context.BusinessAreaLookups.AnyAsync(ba => ba.Name == businessArea.Name && ba.Id != id))
+                {
+                    TempData["ErrorMessage"] = "A business area with this name already exists.";
+                }
+                else
+                {
+                    var existingBusinessArea = await _context.BusinessAreaLookups.FindAsync(id);
+                    if (existingBusinessArea == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existingBusinessArea.Name = businessArea.Name;
+                    existingBusinessArea.Description = businessArea.Description;
+                    existingBusinessArea.SortOrder = businessArea.SortOrder;
+                    existingBusinessArea.IsActive = businessArea.IsActive;
+                    existingBusinessArea.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business area '{businessArea.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating business area");
+                TempData["ErrorMessage"] = "An error occurred while updating the business area. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/DeleteBusinessArea
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteBusinessArea(int id)
+    {
+        try
+        {
+            var businessArea = await _context.BusinessAreaLookups.FindAsync(id);
+            if (businessArea != null)
+            {
+                // Check if any projects are using this business area
+                var projectCount = await _context.Projects.CountAsync(p => p.BusinessArea == businessArea.Name && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete business area '{businessArea.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.BusinessAreaLookups.Remove(businessArea);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business area '{businessArea.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting business area");
+            TempData["ErrorMessage"] = "An error occurred while deleting the business area. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // ========================================
+    // SETTINGS - Phases
+    // ========================================
+
+    // GET: Admin/Phases - Redirects to Settings page with phases tab
+    public IActionResult Phases()
+    {
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/CreatePhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreatePhase([Bind("Name,Description,SortOrder,IsActive")] PhaseLookup phase)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.PhaseLookups.AnyAsync(p => p.Name == phase.Name))
+                {
+                    TempData["ErrorMessage"] = "A phase with this name already exists.";
+                }
+                else
+                {
+                    phase.CreatedAt = DateTime.UtcNow;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(phase);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Phase '{phase.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating phase");
+                TempData["ErrorMessage"] = "An error occurred while creating the phase. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/EditPhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditPhase(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] PhaseLookup phase)
+    {
+        if (id != phase.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists for a different record
+                if (await _context.PhaseLookups.AnyAsync(p => p.Name == phase.Name && p.Id != id))
+                {
+                    TempData["ErrorMessage"] = "A phase with this name already exists.";
+                }
+                else
+                {
+                    var existingPhase = await _context.PhaseLookups.FindAsync(id);
+                    if (existingPhase == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existingPhase.Name = phase.Name;
+                    existingPhase.Description = phase.Description;
+                    existingPhase.SortOrder = phase.SortOrder;
+                    existingPhase.IsActive = phase.IsActive;
+                    existingPhase.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Phase '{phase.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating phase");
+                TempData["ErrorMessage"] = "An error occurred while updating the phase. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Settings));
+    }
+
+    // POST: Admin/DeletePhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeletePhase(int id)
+    {
+        try
+        {
+            var phase = await _context.PhaseLookups.FindAsync(id);
+            if (phase != null)
+            {
+                // Check if any projects are using this phase
+                var projectCount = await _context.Projects.CountAsync(p => p.Phase == phase.Name && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete phase '{phase.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.PhaseLookups.Remove(phase);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Phase '{phase.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting phase");
+            TempData["ErrorMessage"] = "An error occurred while deleting the phase. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Settings));
     }
 }
 

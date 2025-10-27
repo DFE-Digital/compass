@@ -2,6 +2,33 @@
 
 <div class="row">
     <div class="col-12">
+        <!-- Flagship Project -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Flagship Project Status</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#manageFlagshipModal">Manage</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.IsFlagship)
+                {
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-flag"></i> <strong>This is a Flagship Project</strong>
+                        <p class="mb-0 mt-2">Flagship projects are high-priority initiatives that are reported separately in DDT reports and can contain multiple deliverables.</p>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">This is a standard project. Mark as flagship to enable deliverables management and DDT flagship reporting.</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <!-- Multi-Department Cooperation -->
         <div class="card mb-4">
             <div class="card-header">
@@ -77,7 +104,7 @@
                     <p class="text-muted">No strategic objectives description provided.</p>
                 }
 
-                @if (Model.ProjectObjectives.Any())
+                @if (Model.ProjectObjectives != null && Model.ProjectObjectives.Any())
                 {
                     <hr>
                     <strong>Linked Objectives:</strong>
@@ -123,7 +150,7 @@
                     <p class="text-muted">No mission pillars description provided.</p>
                 }
 
-                @if (Model.ProjectMissions.Any())
+                @if (Model.ProjectMissions != null && Model.ProjectMissions.Any())
                 {
                     <hr>
                     <strong>Linked Missions:</strong>
@@ -172,7 +199,9 @@
                         <p class="small text-muted">Select the strategic objectives this project directly supports.</p>
                         
                         @{
-                            var selectedObjectiveIds = Model.ProjectObjectives.Select(po => po.ObjectiveId).ToList();
+                            var selectedObjectiveIds = Model.ProjectObjectives != null 
+                                ? Model.ProjectObjectives.Select(po => po.ObjectiveId).ToList() 
+                                : new List<int>();
                             var objectives = ViewBag.Objectives as IEnumerable<Compass.Models.Objective>;
                             
                             if (objectives != null && objectives.Any())
@@ -243,7 +272,9 @@
                         <p class="small text-muted">Select the missions this project directly supports.</p>
                         
                         @{
-                            var selectedMissionIds = Model.ProjectMissions.Select(pm => pm.MissionId).ToList();
+                            var selectedMissionIds = Model.ProjectMissions != null 
+                                ? Model.ProjectMissions.Select(pm => pm.MissionId).ToList() 
+                                : new List<int>();
                             var missions = ViewBag.Missions as IEnumerable<Compass.Models.Mission>;
                             
                             if (missions != null && missions.Any())
@@ -325,6 +356,43 @@
                             <input type="hidden" name="otherDepartments" id="otherDepartmentsInput" value="@Model.OtherDepartments" />
                         </div>
                     </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Flagship Status Modal -->
+<div class="modal fade" id="manageFlagshipModal" tabindex="-1" role="dialog" aria-labelledby="manageFlagshipModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manageFlagshipModalLabel">Manage Flagship Project Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateFlagshipStatus" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isFlagshipCheck" name="isFlagship" value="true" @(Model.IsFlagship ? "checked" : "") />
+                            <label class="form-check-label" for="isFlagshipCheck">Mark as Flagship Project</label>
+                        </div>
+                        <small class="form-text text-muted">Flagship projects are high-priority initiatives that appear in dedicated DDT reports and can manage multiple deliverables.</small>
+                    </div>
+                    
+                    @if (Model.IsFlagship)
+                    {
+                        <div class="alert alert-info mt-3">
+                            <strong>Note:</strong> This project currently has deliverables linked to it. Removing flagship status will not remove these relationships, but the deliverables tab will no longer be accessible.
+                        </div>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>

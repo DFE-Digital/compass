@@ -99,6 +99,10 @@ public class CompassDbContext : DbContext
     public DbSet<RiskTier> RiskTiers { get; set; }
     public DbSet<ActionSource> ActionSources { get; set; }
     
+    // Project Lookups
+    public DbSet<BusinessAreaLookup> BusinessAreaLookups { get; set; }
+    public DbSet<PhaseLookup> PhaseLookups { get; set; }
+    
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
     public DbSet<RiskRiskType> RiskRiskTypes { get; set; }
@@ -490,6 +494,27 @@ public class CompassDbContext : DbContext
         
         modelBuilder.Entity<ActionSource>()
             .HasIndex(a_s => a_s.SortOrder);
+
+        // Project Lookups
+        modelBuilder.Entity<BusinessAreaLookup>()
+            .HasIndex(ba => ba.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<BusinessAreaLookup>()
+            .HasIndex(ba => ba.IsActive);
+
+        modelBuilder.Entity<BusinessAreaLookup>()
+            .HasIndex(ba => ba.SortOrder);
+
+        modelBuilder.Entity<PhaseLookup>()
+            .HasIndex(p => p.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<PhaseLookup>()
+            .HasIndex(p => p.IsActive);
+
+        modelBuilder.Entity<PhaseLookup>()
+            .HasIndex(p => p.SortOrder);
 
         // User preferences
         modelBuilder.Entity<UserPreference>()
