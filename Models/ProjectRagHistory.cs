@@ -21,6 +21,8 @@ public class ProjectRagHistory
 
     public string? Justification { get; set; }
 
+    public string? PathToGreen { get; set; }
+
     [Required]
     [MaxLength(255)]
     public string ChangedByEmail { get; set; } = string.Empty;

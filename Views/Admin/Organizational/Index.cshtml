@@ -1,0 +1,229 @@
+@model IEnumerable<Compass.Models.OrganizationalGroup>
+@{
+    ViewData["Title"] = "Organizational Structure";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Organizational Structure</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1>Organizational Structure</h1>
+                <p class="text-muted mb-0">Manage organizational groups and their roles (Director Generals, Directors, Deputy Directors).</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="@Url.Action("Create", "Organizational")" class="btn btn-primary">
+                    Add Group
+                </a>
+            </div>
+        </div>
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Organizational Groups</h3>
+                <div class="card-tools">
+                    @if (Model.Any())
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBtn">Expand All</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary d-none" id="collapseAllBtn">Collapse All</button>
+                    }
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
+                {
+                    <div class="org-tree">
+                        @foreach (var group in Model.Where(g => g.ParentGroupId == null).OrderBy(g => g.SortOrder).ThenBy(g => g.Name))
+                        {
+                            @await Html.PartialAsync("~/Views/Admin/Organizational/_OrganizationalGroupNode.cshtml", group)
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        No organizational groups have been created yet.
+                        <a href="@Url.Action("Create", "Organizational")" class="alert-link">Create the first group</a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style nonce="@Context.Items["Nonce"]">
+    .org-tree {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .tree-node {
+        margin-bottom: 5px;
+    }
+    
+    .tree-node-content {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border-left: 3px solid #007bff;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .tree-node-content:hover {
+        background-color: #e9ecef;
+    }
+    
+    .tree-node.level-0 .tree-node-content {
+        background-color: #e3f2fd;
+        border-left-color: #1976d2;
+        font-weight: 600;
+    }
+    
+    .tree-node.level-1 .tree-node-content {
+        background-color: #f1f8e9;
+        border-left-color: #689f38;
+    }
+    
+    .tree-node.level-2 .tree-node-content {
+        background-color: #fff3e0;
+        border-left-color: #f57c00;
+    }
+    
+    .tree-node.level-3 .tree-node-content {
+        background-color: #fce4ec;
+        border-left-color: #c2185b;
+    }
+    
+    .tree-toggle {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        margin-right: 8px;
+        font-size: 14px;
+        color: #495057;
+        width: 20px;
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    
+    .tree-toggle:hover {
+        color: #007bff;
+    }
+    
+    .tree-toggle.collapsed {
+        transform: rotate(-90deg);
+    }
+    
+    .tree-node-info {
+        flex: 1;
+    }
+    
+    .tree-node-name {
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+    
+    .tree-node-meta {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .tree-node-actions {
+        margin-left: auto;
+    }
+    
+    .tree-children {
+        margin-left: 30px;
+        margin-top: 5px;
+        border-left: 1px dashed #dee2e6;
+        padding-left: 10px;
+    }
+    
+    .tree-children.collapsed {
+        display: none;
+    }
+    
+    .role-badge {
+        font-size: 0.75rem;
+        margin-right: 4px;
+        padding: 2px 6px;
+    }
+</style>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initOrgTree() {
+            // Handle toggle clicks
+            $(document).on('click', '.tree-toggle', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var nodeId = $(this).data('node-id');
+                var children = $('#children-' + nodeId);
+                
+                if (children.hasClass('collapsed')) {
+                    children.removeClass('collapsed');
+                    $(this).removeClass('collapsed');
+                    $(this).text('▼');
+                } else {
+                    children.addClass('collapsed');
+                    $(this).addClass('collapsed');
+                    $(this).text('▶');
+                }
+            });
+
+            // Expand all
+            $('#expandAllBtn').on('click', function() {
+                $('.tree-children').removeClass('collapsed');
+                $('.tree-toggle').removeClass('collapsed').text('▼');
+                $(this).addClass('d-none');
+                $('#collapseAllBtn').removeClass('d-none');
+            });
+
+            // Collapse all
+            $('#collapseAllBtn').on('click', function() {
+                $('.tree-children').addClass('collapsed');
+                $('.tree-toggle').addClass('collapsed').text('▶');
+                $(this).addClass('d-none');
+                $('#expandAllBtn').removeClass('d-none');
+            });
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initOrgTree);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initOrgTree);
+                }
+            });
+        }
+    })();
+</script>

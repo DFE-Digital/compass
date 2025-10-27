@@ -1,0 +1,115 @@
+@{
+    ViewData["Title"] = "SLT Reports";
+    
+    // Calculate current week
+    var today = DateTime.Today;
+    var dayOfWeek = (int)today.DayOfWeek;
+    var diff = dayOfWeek == 0 ? -6 : 1 - dayOfWeek;
+    var currentWeekStart = today.AddDays(diff);
+    
+    // Generate list of previous 12 weeks
+    var weeks = new List<DateTime>();
+    for (int i = 0; i < 12; i++)
+    {
+        weeks.Add(currentWeekStart.AddDays(-7 * i));
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">SLT Reports</li>
+                </ol>
+                <h1 class="m-0">SLT Weekly Reports</h1>
+                <p class="text-muted">Select a week to view the report</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-12">
+                <!-- Current Week Report -->
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title mb-0">Current Week Report</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h5 class="mb-1">Week of @currentWeekStart.ToString("dd MMM yyyy")</h5>
+                                <p class="text-muted mb-0">@currentWeekStart.ToString("dd MMM yyyy") - @currentWeekStart.AddDays(6).ToString("dd MMM yyyy")</p>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <a asp-action="ViewReport" asp-route-weekStart="@currentWeekStart.ToString("yyyy-MM-dd")" class="btn btn-primary">
+                                    View Current Week Report <i class="fas fa-arrow-right ml-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Previous Weeks -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Previous Weeks</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Week Starting</th>
+                                    <th>Date Range</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var week in weeks.Skip(1))
+                                {
+                                    var weekEnd = week.AddDays(6);
+                                    <tr>
+                                        <td>
+                                            <strong>@week.ToString("dd MMM yyyy")</strong>
+                                        </td>
+                                        <td>
+                                            @week.ToString("dd MMM") - @weekEnd.ToString("dd MMM yyyy")
+                                        </td>
+                                        <td>
+                                            <a asp-action="ViewReport" asp-route-weekStart="@week.ToString("yyyy-MM-dd")" class="btn btn-sm btn-outline-primary">
+                                                View Report <i class="fas fa-external-link-alt ml-1"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer">
+                        <p class="text-muted mb-0">Showing last 12 weeks of reports</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

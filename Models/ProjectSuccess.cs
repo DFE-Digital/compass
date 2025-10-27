@@ -27,4 +27,6 @@ public class ProjectSuccess
 
     [Required]
     public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
+
+    public bool IsReportedToSlt { get; set; } = false;
 }

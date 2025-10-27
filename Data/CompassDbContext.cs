@@ -32,7 +32,7 @@ public class CompassDbContext : DbContext
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
     public DbSet<ApiRequestLog> ApiRequestLogs { get; set; }
     
-    // Performance metrics
+    // Operational reports
     public DbSet<PerformanceMetric> PerformanceMetrics { get; set; }
     
     // Functional standards
@@ -41,13 +41,28 @@ public class CompassDbContext : DbContext
     public DbSet<PracticeArea> PracticeAreas { get; set; }
     public DbSet<Criterion> Criteria { get; set; }
     
-    // Product reporting
+    // Delivery reporting
     public DbSet<ProductReturn> ProductReturns { get; set; }
     public DbSet<ProductMetricValue> ProductMetricValues { get; set; }
     
     // Enterprise reporting - Functional Standard Assessments
     public DbSet<FunctionalStandardAssessment> FunctionalStandardAssessments { get; set; }
     public DbSet<AssessmentCriteriaResponse> AssessmentCriteriaResponses { get; set; }
+    
+    // Organizational structure
+    public DbSet<OrganizationalGroup> OrganizationalGroups { get; set; }
+    public DbSet<OrganizationalRole> OrganizationalRoles { get; set; }
+    public DbSet<GovernmentDepartment> GovernmentDepartments { get; set; }
+    
+    // Accessibility Management (Apps)
+    public DbSet<ProductAccessibility> ProductAccessibilities { get; set; }
+    public DbSet<ContactMethod> ContactMethods { get; set; }
+    public DbSet<AuditHistory> AuditHistories { get; set; }
+    public DbSet<AccessibilityIssue> AccessibilityIssues { get; set; }
+    public DbSet<IssueComment> IssueComments { get; set; }
+    public DbSet<IssueHistory> IssueHistories { get; set; }
+    public DbSet<WcagCriterion> WcagCriteria { get; set; }
+    public DbSet<IssueWcagCriterion> IssueWcagCriteria { get; set; }
     
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
@@ -71,6 +86,8 @@ public class CompassDbContext : DbContext
     public DbSet<ProjectOutcome> ProjectOutcomes { get; set; }
     public DbSet<ProjectMission> ProjectMissions { get; set; }
     public DbSet<ProjectFundingAllocation> ProjectFundingAllocations { get; set; }
+    public DbSet<ProjectResourceFunding> ProjectResourceFundings { get; set; }
+    public DbSet<ProjectResourceFundingHistory> ProjectResourceFundingHistories { get; set; }
     public DbSet<ProjectContact> ProjectContacts { get; set; }
     public DbSet<ProjectObjective> ProjectObjectives { get; set; }
     public DbSet<Dependency> Dependencies { get; set; }
@@ -89,6 +106,7 @@ public class CompassDbContext : DbContext
     public DbSet<MilestoneAction> MilestoneActions { get; set; }
     public DbSet<MilestoneRisk> MilestoneRisks { get; set; }
     public DbSet<MilestoneIssue> MilestoneIssues { get; set; }
+    public DbSet<MilestoneUpdate> MilestoneUpdates { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

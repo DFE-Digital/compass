@@ -8,24 +8,11 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active">Projects</li>
-                </ol>
                 <h1 class="m-0">Projects</h1>
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Create">
-                                Create new project
-                            </a>
-                        </div>
-                    </div>
+                    <a asp-action="Create" class="btn btn-primary">Create New Project</a>
                 </div>
             </div>
         </div>
@@ -50,103 +37,443 @@
         }
 
         <div class="row">
-            <div class="col-12">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Filters -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Projects</h3>
+                        <h3 class="card-title">Filters</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
-                            <thead>
-                                <tr>
-                                    <th style="width: 30%;">Title</th>
-                                    <th style="width: 10%;">RAG Status</th>
-                                    <th style="width: 10%;">Phase</th>
-                                    <th style="width: 10%;">Flagship</th>
-                                    <th style="width: 15%;">Target Delivery</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (Model.Any())
+                    <div class="card-body">
+                        <form method="get" id="filterForm">
+                            <div class="form-group">
+                                <label>Search</label>
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search projects..." value="@ViewBag.CurrentSearch" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>RAG Status</label>
+                                <select name="ragStatus" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentRagStatus == "Green")
+                                    {
+                                        <option value="Green" selected>Green</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Green">Green</option>
+                                    }
+                                    @if (ViewBag.CurrentRagStatus == "Amber-Green")
+                                    {
+                                        <option value="Amber-Green" selected>Amber-Green</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Amber-Green">Amber-Green</option>
+                                    }
+                                    @if (ViewBag.CurrentRagStatus == "Amber")
+                                    {
+                                        <option value="Amber" selected>Amber</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Amber">Amber</option>
+                                    }
+                                    @if (ViewBag.CurrentRagStatus == "Amber-Red")
+                                    {
+                                        <option value="Amber-Red" selected>Amber-Red</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Amber-Red">Amber-Red</option>
+                                    }
+                                    @if (ViewBag.CurrentRagStatus == "Red")
+                                    {
+                                        <option value="Red" selected>Red</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Red">Red</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Business Area</label>
+                                <select name="businessArea" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.BusinessAreas != null)
+                                    {
+                                        @foreach (var ba in ViewBag.BusinessAreas)
+                                        {
+                                            @if (ViewBag.CurrentBusinessArea == ba)
+                                            {
+                                                <option value="@ba" selected>@ba</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@ba">@ba</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Phase</label>
+                                <select name="phase" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.Phases != null)
+                                    {
+                                        @foreach (var phase in ViewBag.Phases)
+                                        {
+                                            @if (ViewBag.CurrentPhase == phase)
+                                            {
+                                                <option value="@phase" selected>@phase</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@phase">@phase</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Flagship</label>
+                                <select name="flagship" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentFlagship == "true")
+                                    {
+                                        <option value="true" selected>Yes</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="true">Yes</option>
+                                    }
+                                    @if (ViewBag.CurrentFlagship == "false")
+                                    {
+                                        <option value="false" selected>No</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="false">No</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a asp-action="Index" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                            </div>
+                        </form>
+                        
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
+                        {
+                            <div class="mt-3 pt-3 border-top">
+                                <strong class="d-block mb-2">Active Filters:</strong>
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
-                                    @foreach (var item in Model)
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Search: @ViewBag.CurrentSearch</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">RAG: @ViewBag.CurrentRagStatus</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Area: @ViewBag.CurrentBusinessArea</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            phase = ViewBag.CurrentPhase, 
+                                            flagship = ViewBag.CurrentFlagship 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Phase: @ViewBag.CurrentPhase</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            flagship = ViewBag.CurrentFlagship 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No")</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Projects Tables -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @{
+                    var userProjects = ViewBag.UserProjects as List<Compass.Models.Project>;
+                }
+                
+                @if (userProjects != null && userProjects.Any())
+                {
+                    <!-- Your Projects Section -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Your Projects</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap sortable-table user-projects-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-project-code sortable" data-column="Code" tabindex="0" role="button" aria-label="Sort by Code">Code <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in userProjects)
                                     {
                                         <tr>
+                                            <td>@project.ProjectCode</td>
+                                            <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
+                                            <td>@project.BusinessArea</td>
                                             <td>
-                                                <a asp-action="Details" asp-route-id="@item.Id" class="font-weight-bold">
-                                                    @item.Title
-                                                </a>
-                                                <br>
-                                                <small class="text-muted">@item.ProjectCode</small>
-                                                @if (item.IsFlagship)
-                                                {
-                                                    <span class="badge badge-warning ml-2">Flagship</span>
-                                                }
-                                                <div class="mt-1">
-                                                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
-                                                        Delete
-                                                    </a>
-                                                </div>
+                                                <span class="@GetRagBadgeClass(project.RagStatus)">
+                                                    @project.RagStatus
+                                                </span>
                                             </td>
+                                            <td>@project.Phase</td>
+                                            <td>@project.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
                                             <td>
-                                                @if (item.RagStatus == "Green")
+                                                @if (project.IsFlagship)
                                                 {
-                                                    <span class="badge badge-success">Green</span>
-                                                }
-                                                else if (item.RagStatus == "Amber-Green")
-                                                {
-                                                    <span class="badge badge-warning">Amber-Green</span>
-                                                }
-                                                else if (item.RagStatus == "Amber-Red")
-                                                {
-                                                    <span class="badge badge-warning">Amber-Red</span>
-                                                }
-                                                else if (item.RagStatus == "Red")
-                                                {
-                                                    <span class="badge badge-danger">Red</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">@item.RagStatus</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(item.Phase))
-                                                {
-                                                    <span class="badge badge-info">@item.Phase</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (item.IsFlagship)
-                                                {
-                                                    <span class="badge badge-warning">Yes</span>
+                                                    <span class="badge badge-primary">Yes</span>
                                                 }
                                                 else
                                                 {
                                                     <span class="badge badge-secondary">No</span>
                                                 }
                                             </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                
+
+                <!-- All Projects Section -->
+                <div class="card collapsed-card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">All Projects</h3>
+                         <div class="card-tools">
+                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse"><i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        @if (Model.Any())
+                        {
+                            <table class="table table-hover text-nowrap sortable-table projects-index-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-project-code sortable" data-column="Code" tabindex="0" role="button" aria-label="Sort by Code">Code <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in Model)
+                                    {
+                                        <tr>
+                                            <td>@project.ProjectCode</td>
+                                            <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
+                                            <td>@project.BusinessArea</td>
                                             <td>
-                                                @item.TargetDeliveryDate.ToString("dd MMM yyyy")
+                                                <span class="@GetRagBadgeClass(project.RagStatus)">
+                                                    @project.RagStatus
+                                                </span>
+                                            </td>
+                                            <td>@project.Phase</td>
+                                            <td>@project.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                @if (project.IsFlagship)
+                                                {
+                                                    <span class="badge badge-primary">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">No</span>
+                                                }
                                             </td>
                                         </tr>
                                     }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="5" class="text-center text-muted">No projects found.</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <p class="text-muted">No projects found matching your criteria.</p>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fa;
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'TargetDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = new Date(aDate);
+                        bVal = new Date(bDate);
+                    } else if (column === 'Flagship') {
+                        aVal = $(a).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
+                        bVal = $(b).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('i').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}

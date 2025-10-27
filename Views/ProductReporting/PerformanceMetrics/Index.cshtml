@@ -8,42 +8,15 @@
     var totalPages = (int)Math.Ceiling(totalProducts / (double)pageSize);
 }
 
-<style nonce="@Context.Items["Nonce"]">
-    .progress-metric {
-        min-width: 100px;
-        max-width: 150px;
-    }
-    .product-fips-id {
-        font-size: 0.8rem;
-    }
-    .reporting-period-text {
-        font-size: 1rem;
-    }
-    .pagination-info {
-        padding: 1rem;
-        background: #f8f9fa;
-        border-top: 1px solid #dee2e6;
-    }
-    .all-products-title-text {
-        flex: 1;
-    }
-    #allProductsHeading button .fa-chevron-down {
-        transition: transform 0.3s ease;
-    }
-    #allProductsHeading button:not(.collapsed) .fa-chevron-down {
-        transform: rotate(180deg);
-    }
-</style>
-
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active">Product performance metrics</li>
+                    <li class="breadcrumb-item active">Performance reporting</li>
                 </ol>
-                <h1 class="m-0">Product performance metrics</h1>
+                <h1 class="m-0">Performance reporting</h1>
             </div>
             <div class="col-sm-6 text-right">
                 <a href="@Url.Action("Index", "Documentation")#performance-metrics" class="btn btn-outline-info btn-sm">
@@ -69,28 +42,28 @@
             var dueCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Due && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
         }
 
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Products you can report metrics for</h3>
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="h4 mb-3">Product reporting dashboard</h2>
+                <p class="text-muted mb-4">Manage and submit performance metrics for products you have access to.</p>
             </div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-hover text-nowrap sortable-table" id="userProductsTable">
-                    <thead>
-                        <tr>
-                            <th style="width: 50%;" class="sortable" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">
-                                Product name
-                                <i class="fas fa-sort sort-icon"></i>
-                            </th>
-                            <th style="width: 25%;" class="sortable" data-column="UserRole" tabindex="0" role="button" aria-label="Sort by Your role">
-                                Your role
-                                <i class="fas fa-sort sort-icon"></i>
-                            </th>
-                            <th style="width: 25%;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
-                                Status
-                                <i class="fas fa-sort sort-icon"></i>
-                            </th>
-                        </tr>
-                    </thead>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Products You Can Report Metrics For</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap sortable-table" id="userProductsTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name</th>
+                                <th class="sortable col-user-role" data-column="UserRole" tabindex="0" role="button" aria-label="Sort by Your role">Your role</th>
+                                <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                            </tr>
+                        </thead>
                     <tbody>
                         @if (Model != null && Model.Any())
                         {
@@ -165,20 +138,22 @@
                                 <td colspan="3" class="text-center">No products found</td>
                             </tr>
                         }
-                    </tbody>
-                </table>
-            </div>
-            <div class="card-footer">
-                <div class="row align-items-center">
-                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                        <div class="pagination-info">
-                            Showing <span id="userShowingStart">1</span> to <span id="userShowingEnd">@Math.Min(pageSize, totalProducts)</span> of <strong id="userTotalCount">@totalProducts</strong> products
-                        </div>
+                        </tbody>
+                    </table>
                     </div>
-                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                        <ul class="pagination pagination-sm m-0 float-right" id="userPaginationControls">
-                            <!-- Pagination buttons will be generated by JavaScript -->
-                        </ul>
+                    <div class="card-footer">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <div class="text-muted">
+                                    Showing <span id="userShowingStart">1</span> to <span id="userShowingEnd">@Math.Min(pageSize, totalProducts)</span> of <strong id="userTotalCount">@totalProducts</strong> products
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="pagination pagination-sm m-0 float-right" id="userPaginationControls">
+                                    <!-- Pagination buttons will be generated by JavaScript -->
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -191,136 +166,111 @@
 
         @if (allProductsList != null && allProductsList.Any())
         {
-            <div class="card mt-4">
-                <div class="card-header" id="allProductsHeading">
-                    <div class="row align-items-center">
-                        <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-8 col-sm-12 col-12">
-                            <h3 class="card-title mb-0">
-                                <button class="btn btn-link text-decoration-none w-100 collapsed" 
-                                        type="button" 
-                                        data-toggle="collapse" 
-                                        data-target="#allProductsCollapse" 
-                                        aria-expanded="false" 
-                                        aria-controls="allProductsCollapse"
-                                        style="box-shadow: none !important; outline: none !important; display: flex; justify-content: space-between; align-items: center; padding: 0; color: inherit; font-weight: inherit;">
-                                    <span class="all-products-title-text">
-                                        All products
-                                    </span>
-                                    <i class="fas fa-chevron-down" style="transition: transform 0.3s ease; font-size: 1.1rem; margin-left: 1rem; opacity: 0.9;"></i>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">All Products Reporting Status</h3>
+                            <div class="card-tools">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#allProductsCollapse" aria-expanded="false" aria-controls="allProductsCollapse" id="toggleAllProductsBtn">
+                                    Show All
                                 </button>
-                            </h3>
+                            </div>
                         </div>
-                        <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-4 col-sm-12 col-12">
-                            <div class="input-group input-group-sm">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                        <div class="collapse" id="allProductsCollapse">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table" id="allProductsTable">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name</th>
+                                        <th class="sortable col-service-owner" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service owner">Service owner</th>
+                                        <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                    </tr>
+                                </thead>
+                            <tbody>
+                                @foreach (var item in allProductsList.OrderBy(p => p.Product.Title))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
+                                                @item.Product.Title<br/>
+                                                <small class="text-muted product-fips-id">@item.Product.FipsId
+                                                @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                                {
+                                                    <text> - </text>@item.Product.Phase
+                                                }
+                                                </small>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(item.UserRole))
+                                            {
+                                                @item.UserRole
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (item.Status.HasValue)
+                                            {
+                                                @switch (item.Status.Value)
+                                                {
+                                                    case Compass.Models.ReturnStatus.Upcoming:
+                                                        <span class="badge badge-secondary">Upcoming</span>
+                                                        break;
+                                                    case Compass.Models.ReturnStatus.Due:
+                                                        @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                        {
+                                                            <span class="badge badge-info">In progress</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-warning">Due</span>
+                                                        }
+                                                        break;
+                                                    case Compass.Models.ReturnStatus.Late:
+                                                        @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                        {
+                                                            <span class="badge badge-warning">In progress (Late)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-danger">Late</span>
+                                                        }
+                                                        break;
+                                                    case Compass.Models.ReturnStatus.Submitted:
+                                                        <span class="badge badge-success">Submitted</span>
+                                                        break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                            </div>
+                            <div class="card-footer">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <div class="text-muted">
+                                            Showing <span id="allShowingStart">1</span> to <span id="allShowingEnd">@Math.Min(pageSize, allProductsCount)</span> of <strong id="allTotalCount">@allProductsCount</strong> products
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <ul class="pagination pagination-sm m-0 float-right" id="allPaginationControls">
+                                            <!-- Pagination buttons will be generated by JavaScript -->
+                                        </ul>
+                                    </div>
                                 </div>
-                                <input type="text" id="allProductsSearchInput" class="form-control" placeholder="Search by name...">
                             </div>
                         </div>
                     </div>
-                </div>
-                <div id="allProductsCollapse" class="collapse">
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap sortable-table" id="allProductsTable">
-                        <thead>
-                            <tr>
-                                <th style="width: 50%;" class="sortable" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">
-                                    Product name
-                                    <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th style="width: 25%;" class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service owner">
-                                    Service owner
-                                    <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th style="width: 25%;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
-                                    Status
-                                    <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in allProductsList.OrderBy(p => p.Product.Title))
-                            {
-                                <tr>
-                                    <td>
-                                        <a asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
-                                            @item.Product.Title<br/>
-                                            <small class="text-muted product-fips-id">@item.Product.FipsId
-                                            @if (!string.IsNullOrEmpty(item.Product.Phase))
-                                            {
-                                                <text> - </text>@item.Product.Phase
-                                            }
-                                            </small>
-                                        </a>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.UserRole))
-                                        {
-                                            @item.UserRole
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (item.Status.HasValue)
-                                        {
-                                            @switch (item.Status.Value)
-                                            {
-                                                case Compass.Models.ReturnStatus.Upcoming:
-                                                    <span class="badge badge-secondary">Upcoming</span>
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Due:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
-                                                    {
-                                                        <span class="badge badge-info">In progress</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-warning">Due</span>
-                                                    }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Late:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
-                                                    {
-                                                        <span class="badge badge-warning">In progress (Late)</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-danger">Late</span>
-                                                    }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Submitted:
-                                                    <span class="badge badge-success">Submitted</span>
-                                                    break;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-                <div class="card-footer">
-                    <div class="row align-items-center">
-                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                            <div class="pagination-info">
-                                Showing <span id="allShowingStart">1</span> to <span id="allShowingEnd">@Math.Min(pageSize, allProductsCount)</span> of <strong id="allTotalCount">@allProductsCount</strong> products
-                            </div>
-                        </div>
-                        <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                            <ul class="pagination pagination-sm m-0 float-right" id="allPaginationControls">
-                                <!-- Pagination buttons will be generated by JavaScript -->
-                            </ul>
-                        </div>
-                    </div>
-                </div>
                 </div>
             </div>
         }
@@ -431,15 +381,8 @@
             var allAllRows = $('#allProductsTable tbody tr').toArray();
             
             function filterAndPaginateAllProducts() {
-                var searchValue = $('#allProductsSearchInput').val().toLowerCase();
-                
                 // Filter all rows
-                var filteredRows = allAllRows.filter(function(row) {
-                    var $row = $(row);
-                    var text = $row.text().toLowerCase();
-                    var matchesSearch = searchValue === '' || text.indexOf(searchValue) > -1;
-                    return matchesSearch;
-                });
+                var filteredRows = allAllRows;
                 
                 // Update total count
                 var totalFiltered = filteredRows.length;
@@ -527,11 +470,6 @@
                 });
             }
             
-            $('#allProductsSearchInput').on('keyup', function() {
-                allCurrentPage = 1; // Reset to first page on search
-                filterAndPaginateAllProducts();
-            });
-            
             // Sorting functionality
             var userSortColumn = 'ProductName';
             var userSortDirection = 'asc';
@@ -567,20 +505,23 @@
             }
             
             function updateSortIcons(tableId, column, direction) {
-                $('#' + tableId + ' .sortable').each(function() {
-                    var icon = $(this).find('.sort-icon');
-                    icon.removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
-                });
+                // Remove active class from all headers
+                $('#' + tableId + ' .sortable').removeClass('sort-asc sort-desc');
                 
+                // Add appropriate class to active header
                 var activeHeader = $('#' + tableId + ' .sortable[data-column="' + column + '"]');
-                var icon = activeHeader.find('.sort-icon');
-                icon.removeClass('fa-sort');
                 if (direction === 'asc') {
-                    icon.addClass('fa-sort-up');
+                    activeHeader.addClass('sort-asc');
                 } else {
-                    icon.addClass('fa-sort-down');
+                    activeHeader.addClass('sort-desc');
                 }
             }
+
+            // Handle toggle button text
+            $('#toggleAllProductsBtn').on('click', function() {
+                var isCollapsed = $('#allProductsCollapse').hasClass('show');
+                $(this).text(isCollapsed ? 'Show All' : 'Hide All');
+            });
             
             // User products table sorting
             $('#userProductsTable .sortable').on('click keydown', function(e) {
@@ -627,26 +568,6 @@
                 updateSortIcons('allProductsTable', allSortColumn, allSortDirection);
                 filterAndPaginateAllProducts();
             }
-            
-            // Toggle icon rotation for "All products" collapse
-            $('#allProductsCollapse').on('show.bs.collapse', function () {
-                $('#allProductsHeading button').removeClass('collapsed');
-            });
-            
-            $('#allProductsCollapse').on('hide.bs.collapse', function () {
-                $('#allProductsHeading button').addClass('collapsed');
-            });
-            
-            // Hover effect for "All products" collapse button
-            $('#allProductsHeading button').hover(
-                function() {
-                    $(this).css('background-color', 'rgba(0, 0, 0, 0.05)');
-                },
-                function() {
-                    $(this).css('background-color', 'transparent');
-                }
-            );
         });
     </script>
 }
-

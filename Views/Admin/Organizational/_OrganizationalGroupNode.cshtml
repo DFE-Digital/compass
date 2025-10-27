@@ -1,0 +1,58 @@
+@model Compass.Models.OrganizationalGroup
+
+<div class="tree-node level-@Model.Level">
+    <div class="tree-node-content">
+        @if (Model.ChildGroups.Any())
+        {
+            <button class="tree-toggle collapsed" data-node-id="@Model.Id" aria-label="Expand">▶</button>
+        }
+        else
+        {
+            <span style="width: 20px; display: inline-block; margin-right: 8px;"></span>
+        }
+        
+        <div class="tree-node-info">
+            <div class="tree-node-name">
+                <a href="@Url.Action("Details", "Organizational", new { id = Model.Id })">@Model.Name</a>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <small class="text-muted ml-2">— @Model.Description</small>
+                }
+            </div>
+            <div class="tree-node-meta">
+                @if (Model.Roles.Any())
+                {
+                    <span class="mr-3">
+                        @foreach (var role in Model.Roles.OrderBy(r => r.RoleType))
+                        {
+                            <span class="badge badge-info role-badge">@role.RoleType: @role.Name</span>
+                        }
+                    </span>
+                }
+                @if (Model.ChildGroups.Any())
+                {
+                    <span class="text-muted">@Model.ChildGroups.Count child group(s)</span>
+                }
+            </div>
+        </div>
+        
+        <div class="tree-node-actions">
+            <div class="btn-group btn-group-sm">
+                <a href="@Url.Action("Details", "Organizational", new { id = Model.Id })" class="btn btn-outline-info btn-sm">View</a>
+                <a href="@Url.Action("Edit", "Organizational", new { id = Model.Id })" class="btn btn-outline-primary btn-sm">Edit</a>
+                <a href="@Url.Action("CreateRole", "Organizational", new { groupId = Model.Id })" class="btn btn-outline-success btn-sm">Add Role</a>
+            </div>
+        </div>
+    </div>
+    
+    @if (Model.ChildGroups.Any())
+    {
+        <div class="tree-children collapsed" id="children-@Model.Id">
+            @foreach (var child in Model.ChildGroups.OrderBy(c => c.SortOrder).ThenBy(c => c.Name))
+            {
+                @await Html.PartialAsync("~/Views/Admin/Organizational/_OrganizationalGroupNode.cshtml", child)
+            }
+        </div>
+    }
+</div>
+

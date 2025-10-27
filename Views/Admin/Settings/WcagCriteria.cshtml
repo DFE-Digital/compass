@@ -1,0 +1,131 @@
+@model IEnumerable<Compass.Models.WcagCriterion>
+
+@{
+    ViewData["Title"] = "WCAG Criteria";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Settings">Settings</a></li>
+                    <li class="breadcrumb-item active">WCAG Criteria</li>
+                </ol>
+                <h1 class="m-0">WCAG Criteria</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="CreateWcagCriterion">
+                                Create new WCAG criterion
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
+                <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
+            </div>
+
+            <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">WCAG Criteria</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">Criterion</th>
+                                    <th style="width: 35%;">Title</th>
+                                    <th style="width: 10%;">Level</th>
+                                    <th style="width: 10%;">Version</th>
+                                    <th style="width: 25%;">URL</th>
+                                    <th style="width: 10%;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Any())
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr class="@(!item.IsActive ? "text-muted" : "")">
+                                            <td><code>@item.Criterion</code></td>
+                                            <td>
+                                                <a asp-action="EditWcagCriterion" asp-route-id="@item.Id" class="font-weight-bold">
+                                                    @item.Title
+                                                </a>
+                                                @if (!item.IsActive)
+                                                {
+                                                    <span class="badge badge-secondary ml-2">Disabled</span>
+                                                }
+                                            </td>
+                                            <td><span class="badge badge-@(item.Level == "AAA" ? "primary" : item.Level == "AA" ? "info" : "secondary")">@item.Level</span></td>
+                                            <td>WCAG @item.Version</td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.Url))
+                                                {
+                                                    <a href="@item.Url" target="_blank" rel="noopener noreferrer" class="small">View</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.IsActive)
+                                                {
+                                                    <span class="badge badge-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Inactive</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">No WCAG criteria found.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+

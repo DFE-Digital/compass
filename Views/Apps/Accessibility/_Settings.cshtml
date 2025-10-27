@@ -1,0 +1,464 @@
+@model Compass.Models.ProductAccessibility
+
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Product Settings</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 settings-table">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Contact methods for requesting information in another format</strong></td>
+                            <td class="summary-value">
+                                @if (Model.ContactMethods.Where(c => c.IsActive).Any())
+                                {
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach (var contact in Model.ContactMethods.Where(c => c.IsActive).OrderBy(cm => cm.SortOrder))
+                                        {
+                                            <li class="mb-1">
+                                                <strong>@contact.ContactType:</strong> 
+                                                @if (contact.ContactType == "Email")
+                                                {
+                                                    <a href="mailto:@contact.ContactDetail">@contact.ContactDetail</a>
+                                                }
+                                                else if (contact.ContactType == "Phone")
+                                                {
+                                                    <a href="tel:@contact.ContactDetail">@contact.ContactDetail</a>
+                                                }
+                                                else if (contact.ContactType.Contains("Web") || contact.ContactType.Contains("Portal"))
+                                                {
+                                                    <a href="@contact.ContactDetail" target="_blank" rel="noopener noreferrer">@contact.ContactDetail</a>
+                                                }
+                                                else
+                                                {
+                                                    @contact.ContactDetail
+                                                }
+                                                @if (!string.IsNullOrEmpty(contact.Description))
+                                                {
+                                                    <br><small class="text-muted">@contact.Description</small>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No contact methods configured</span>
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="contactmethods">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Response time SLA (in working days)</strong></td>
+                            <td class="summary-value">@Model.SlaResponseDays working days</td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="sla">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Complaint email</strong></td>
+                            <td class="summary-value"><a href="mailto:@Model.ComplaintsEmail">@Model.ComplaintsEmail</a></td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="complaints">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Product declared WCAG Version</strong></td>
+                            <td class="summary-value">WCAG @Model.WcagVersion</td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="wcag">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Level of conformance</strong></td>
+                            <td class="summary-value">Level @Model.WcagLevel</td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="wcag">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Installation status</strong></td>
+                            <td class="summary-value">
+                                @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
+                                {
+                                    <span class="badge badge-success">Verified</span><br>
+                                    <small class="text-muted">Verified on @Model.VerifiedAt.Value.ToString("dd MMM yyyy") by @Model.VerifiedBy</small>
+                                    @if (User.IsInRole("AccessibilityAdministrator"))
+                                    {
+                                        <br>
+                                        <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Update verification</a>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">Not verified</span>
+                                    @if (User.IsInRole("AccessibilityAdministrator"))
+                                    {
+                                        <br>
+                                        <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Verify installation</a>
+                                    }
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                @* Statement verification is managed via the modal *@
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Verify Statement Installation Modal (Accessibility Administrators only) -->
+@if (User.IsInRole("AccessibilityAdministrator"))
+{
+    <div class="modal fade" id="verifyStatementModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Verify Statement Installation</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="VerifyStatement" method="post">
+                    <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                    <div class="modal-body">
+                        <p>Please confirm that you have checked the product website and verified that the accessibility statement is correctly installed in the footer with the URL:</p>
+                        
+                        <div class="alert alert-info">
+                            <strong>Statement URL:</strong><br>
+                            <code>https://accessibility-statements.education.gov.uk/s/@Model.FipsId</code>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Verification Status *</label>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="verifyInstalled" name="statementInstalled" value="true" required @(Model.StatementInstalled ? "checked" : "") />
+                                <label class="form-check-label" for="verifyInstalled">
+                                    Installed and Verified
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="verifyNotInstalled" name="statementInstalled" value="false" required @(!Model.StatementInstalled ? "checked" : "") />
+                                <label class="form-check-label" for="verifyNotInstalled">
+                                    Not Installed
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Verification</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Manage Contact Methods Modal -->
+<div class="modal fade" id="manageContactMethodsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage Contact Methods</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addContactMethodModal" data-dismiss="modal">Add Contact Method</button>
+                </div>
+                
+                @if (Model.ContactMethods.Where(c => c.IsActive).Any())
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Contact Detail</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var contact in Model.ContactMethods.Where(c => c.IsActive).OrderBy(cm => cm.SortOrder))
+                            {
+                                <tr>
+                                    <td><span class="badge badge-info">@contact.ContactType</span></td>
+                                    <td>
+                                        @if (contact.ContactType == "Email")
+                                        {
+                                            <a href="mailto:@contact.ContactDetail">@contact.ContactDetail</a>
+                                        }
+                                        else if (contact.ContactType == "Phone")
+                                        {
+                                            <a href="tel:@contact.ContactDetail">@contact.ContactDetail</a>
+                                        }
+                                        else if (contact.ContactType.Contains("Web") || contact.ContactType.Contains("Portal"))
+                                        {
+                                            <a href="@contact.ContactDetail" target="_blank" rel="noopener noreferrer">@contact.ContactDetail</a>
+                                        }
+                                        else
+                                        {
+                                            @contact.ContactDetail
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(contact.Description))
+                                        {
+                                            @contact.Description
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <form asp-action="DeleteContactMethod" method="post" class="d-inline">
+                                            <input type="hidden" name="id" value="@contact.Id" />
+                                            <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this contact method?')">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="text-muted">No contact methods configured.</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update SLA Modal -->
+<div class="modal fade" id="updateSlaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change SLA Response Time</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSla" method="post">
+                <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="slaResponseDays">SLA Response Time (working days) *</label>
+                        <input type="number" class="form-control" id="slaResponseDays" name="slaResponseDays" value="@Model.SlaResponseDays" min="1" max="365" required />
+                        <small class="form-text text-muted">Number of working days to respond to accessibility queries</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Complaints Email Modal -->
+<div class="modal fade" id="updateComplaintsEmailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change Complaints Email</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateComplaintsEmail" method="post">
+                <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="complaintsEmail">Complaints Email *</label>
+                        <input type="email" class="form-control" id="complaintsEmail" name="complaintsEmail" value="@Model.ComplaintsEmail" required />
+                        <small class="form-text text-muted">Email address for accessibility complaints</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update WCAG Compliance Modal -->
+<div class="modal fade" id="updateWcagComplianceModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change WCAG Compliance Settings</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateWcagCompliance" method="post">
+                <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="wcagVersion">WCAG Version *</label>
+                        <select class="form-control" id="wcagVersion" name="wcagVersion" required>
+                            @if (Model.WcagVersion == "2.1")
+                            {
+                                <option value="2.1" selected>WCAG 2.1</option>
+                            }
+                            else
+                            {
+                                <option value="2.1">WCAG 2.1</option>
+                            }
+                            @if (Model.WcagVersion == "2.2")
+                            {
+                                <option value="2.2" selected>WCAG 2.2</option>
+                            }
+                            else
+                            {
+                                <option value="2.2">WCAG 2.2</option>
+                            }
+                            @if (Model.WcagVersion == "3.0")
+                            {
+                                <option value="3.0" selected>WCAG 3.0</option>
+                            }
+                            else
+                            {
+                                <option value="3.0">WCAG 3.0</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">Which version of WCAG this product conforms to</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="wcagLevel">Compliance Level *</label>
+                        <select class="form-control" id="wcagLevel" name="wcagLevel" required>
+                            @if (Model.WcagLevel == "AA")
+                            {
+                                <option value="AA" selected>Level AA</option>
+                            }
+                            else
+                            {
+                                <option value="AA">Level AA</option>
+                            }
+                            @if (Model.WcagLevel == "AAA")
+                            {
+                                <option value="AAA" selected>Level AAA</option>
+                            }
+                            else
+                            {
+                                <option value="AAA">Level AAA</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">Level A is the minimum requirement and not available as an option</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Contact Method Modal -->
+<div class="modal fade" id="addContactMethodModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Contact Method</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="AddContactMethod" method="post">
+                <input type="hidden" name="productAccessibilityId" value="@Model.Id" />
+                <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="type">Contact Type *</label>
+                        <select class="form-control" id="type" name="type" required>
+                            <option value="">Select type...</option>
+                            <option value="Email">Email</option>
+                            <option value="Phone">Phone</option>
+                            <option value="Web Form">Web Form</option>
+                            <option value="Support Portal">Support Portal</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="detail">Contact Detail *</label>
+                        <input type="text" class="form-control" id="detail" name="detail" placeholder="Email address, phone number, URL, etc." required />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2" placeholder="Optional description or notes"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="sortOrder">Display Order</label>
+                        <input type="number" class="form-control" id="sortOrder" name="sortOrder" value="0" min="0" />
+                        <small class="form-text text-muted">Lower numbers appear first</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Contact Method</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    function initSettingsPage() {
+        // Handle change link clicks
+        $(document).on('click', '.change-link', function(e) {
+            e.preventDefault();
+            var field = $(this).attr('data-field');
+            
+            if (field === 'contactmethods') {
+                $('#manageContactMethodsModal').modal('show');
+            } else if (field === 'sla') {
+                $('#updateSlaModal').modal('show');
+            } else if (field === 'complaints') {
+                $('#updateComplaintsEmailModal').modal('show');
+            } else if (field === 'wcag') {
+                $('#updateWcagComplianceModal').modal('show');
+            }
+        });
+    }
+
+    if (typeof jQuery !== 'undefined') {
+        $(document).ready(initSettingsPage);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof jQuery !== 'undefined') {
+                $(document).ready(initSettingsPage);
+            }
+        });
+    }
+})();
+</script>
+

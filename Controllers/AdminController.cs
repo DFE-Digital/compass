@@ -401,6 +401,7 @@ public class AdminController : Controller
         ViewBag.RiskTypes = await _context.RiskTypes.OrderBy(rt => rt.Name).ToListAsync();
         ViewBag.RiskTiers = await _context.RiskTiers.OrderBy(rt => rt.SortOrder).ThenBy(rt => rt.Name).ToListAsync();
         ViewBag.ActionSources = await _context.ActionSources.OrderBy(a_s => a_s.SortOrder).ThenBy(a_s => a_s.Name).ToListAsync();
+        ViewBag.WcagCriteria = await _context.WcagCriteria.OrderBy(w => w.Criterion).ToListAsync();
         
         return View("~/Views/Admin/Settings/Index.cshtml");
     }
@@ -1036,7 +1037,7 @@ public class AdminController : Controller
 
         var permissions = await _apiTokenService.GetPermissionsAsync(id);
 
-        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards" };
+        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues" };
         
         ViewBag.Token = token;
         ViewBag.Permissions = permissions;
@@ -1053,7 +1054,7 @@ public class AdminController : Controller
         {
             var permissionsDict = new Dictionary<string, (bool read, bool create, bool update, bool delete)>();
 
-            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards" })
+            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues" })
             {
                 var read = permissions.ContainsKey($"{resource}_read") && permissions[$"{resource}_read"] == "on";
                 var create = permissions.ContainsKey($"{resource}_create") && permissions[$"{resource}_create"] == "on";
@@ -1471,6 +1472,214 @@ public class AdminController : Controller
         }
 
         return RedirectToAction(nameof(FundingSources));
+    }
+
+    // ========================================
+    // SETTINGS - WCAG Criteria
+    // ========================================
+
+    // GET: Admin/WcagCriteria
+    public async Task<IActionResult> WcagCriteria()
+    {
+        var wcagCriteria = await _context.WcagCriteria
+            .OrderBy(w => w.Criterion)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/WcagCriteria.cshtml", wcagCriteria);
+    }
+
+    // GET: Admin/CreateWcagCriterion
+    public IActionResult CreateWcagCriterion()
+    {
+        return View("~/Views/Admin/Settings/CreateWcagCriterion.cshtml");
+    }
+
+    // POST: Admin/CreateWcagCriterion
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateWcagCriterion([Bind("Criterion,Title,Description,Url,Level,Version,SortOrder,IsActive")] WcagCriterion wcagCriterion)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.WcagCriteria.AnyAsync(w => w.Criterion == wcagCriterion.Criterion && w.Version == wcagCriterion.Version))
+                {
+                    ModelState.AddModelError("Criterion", "A WCAG criterion with this reference and version already exists.");
+                }
+                else
+                {
+                    wcagCriterion.CreatedAt = DateTime.UtcNow;
+                    wcagCriterion.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(wcagCriterion);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"WCAG criterion '{wcagCriterion.Criterion} - {wcagCriterion.Title}' has been created successfully.";
+                    return RedirectToAction(nameof(WcagCriteria));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating WCAG criterion");
+                ModelState.AddModelError("", "An error occurred while creating the WCAG criterion. Please try again.");
+            }
+        }
+        
+        return View("~/Views/Admin/Settings/CreateWcagCriterion.cshtml", wcagCriterion);
+    }
+
+    // GET: Admin/EditWcagCriterion/5
+    public async Task<IActionResult> EditWcagCriterion(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var wcagCriterion = await _context.WcagCriteria.FindAsync(id);
+        if (wcagCriterion == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/Settings/EditWcagCriterion.cshtml", wcagCriterion);
+    }
+
+    // POST: Admin/EditWcagCriterion/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditWcagCriterion(int id, [Bind("Id,Criterion,Title,Description,Url,Level,Version,SortOrder,IsActive")] WcagCriterion wcagCriterion)
+    {
+        if (id != wcagCriterion.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.WcagCriteria.AnyAsync(w => w.Criterion == wcagCriterion.Criterion && w.Version == wcagCriterion.Version && w.Id != id))
+                {
+                    ModelState.AddModelError("Criterion", "A WCAG criterion with this reference and version already exists.");
+                }
+                else
+                {
+                    var existingCriterion = await _context.WcagCriteria.FindAsync(id);
+                    if (existingCriterion == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existingCriterion.Criterion = wcagCriterion.Criterion;
+                    existingCriterion.Title = wcagCriterion.Title;
+                    existingCriterion.Description = wcagCriterion.Description;
+                    existingCriterion.Url = wcagCriterion.Url;
+                    existingCriterion.Level = wcagCriterion.Level;
+                    existingCriterion.Version = wcagCriterion.Version;
+                    existingCriterion.SortOrder = wcagCriterion.SortOrder;
+                    existingCriterion.IsActive = wcagCriterion.IsActive;
+                    existingCriterion.UpdatedAt = DateTime.UtcNow;
+                    
+                    _context.Update(existingCriterion);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"WCAG criterion '{wcagCriterion.Criterion} - {wcagCriterion.Title}' has been updated successfully.";
+                    return RedirectToAction(nameof(WcagCriteria));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating WCAG criterion");
+                TempData["ErrorMessage"] = "An error occurred while updating the WCAG criterion. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/Settings/EditWcagCriterion.cshtml", wcagCriterion);
+    }
+
+    // GET: Admin/DeleteWcagCriterion/5
+    public async Task<IActionResult> DeleteWcagCriterion(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var wcagCriterion = await _context.WcagCriteria.FindAsync(id);
+        if (wcagCriterion == null)
+        {
+            return NotFound();
+        }
+
+        // Check if any issues are using this criterion
+        var issueCount = await _context.IssueWcagCriteria.CountAsync(iwc => iwc.WcagCriterionId == id);
+        ViewBag.IssueCount = issueCount;
+
+        return View("~/Views/Admin/Settings/DeleteWcagCriterion.cshtml", wcagCriterion);
+    }
+
+    // POST: Admin/DeleteWcagCriterion/5
+    [HttpPost, ActionName("DeleteWcagCriterion")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteWcagCriterionConfirmed(int id)
+    {
+        try
+        {
+            var wcagCriterion = await _context.WcagCriteria.FindAsync(id);
+            if (wcagCriterion != null)
+            {
+                // Check if any issues are using this criterion
+                var issuesUsingCriterion = await _context.IssueWcagCriteria.AnyAsync(iwc => iwc.WcagCriterionId == id);
+                if (issuesUsingCriterion)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete WCAG criterion '{wcagCriterion.Criterion} - {wcagCriterion.Title}' because it is being used by one or more accessibility issues.";
+                }
+                else
+                {
+                    _context.WcagCriteria.Remove(wcagCriterion);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"WCAG criterion '{wcagCriterion.Criterion} - {wcagCriterion.Title}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting WCAG criterion");
+            TempData["ErrorMessage"] = "An error occurred while deleting the WCAG criterion. Please try again.";
+        }
+
+        return RedirectToAction(nameof(WcagCriteria));
+    }
+
+    // GET: Admin/SearchWcagCriteria (for autocomplete)
+    [HttpGet]
+    public async Task<IActionResult> SearchWcagCriteria(string q)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return Json(new { results = new object[0] });
+        }
+
+        var criteria = await _context.WcagCriteria
+            .Where(w => w.IsActive && 
+                       (w.Criterion.Contains(q) || 
+                        w.Title.Contains(q)))
+            .OrderBy(w => w.Criterion)
+            .Take(20)
+            .Select(w => new
+            {
+                id = w.Id,
+                criterion = w.Criterion,
+                title = w.Title,
+                level = w.Level,
+                version = w.Version,
+                text = $"{w.Criterion} - {w.Title} (Level {w.Level})"
+            })
+            .ToListAsync();
+
+        return Json(new { results = criteria });
     }
 }
 

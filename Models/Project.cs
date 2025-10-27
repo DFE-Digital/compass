@@ -18,6 +18,10 @@ public class Project
 
     public string? Aim { get; set; }
 
+    public string? StrategicObjectives { get; set; }
+
+    public string? MissionPillars { get; set; }
+
     [Required]
     public DateTime StartDate { get; set; }
 
@@ -38,11 +42,21 @@ public class Project
 
     public string? RagJustification { get; set; }
 
+    public string? PathToGreen { get; set; }
+
     [MaxLength(50)]
     public string? Phase { get; set; } // Discovery, Alpha, Private beta, Public beta, Live
 
     [MaxLength(100)]
     public string? BusinessArea { get; set; }
+
+    // Organizational structure fields
+    public int? PrimaryOrganizationalGroupId { get; set; }
+    public OrganizationalGroup? PrimaryOrganizationalGroup { get; set; }
+    
+    public bool IsMultiDepartmentProject { get; set; } = false;
+    
+    public string? OtherDepartments { get; set; } // JSON array of government department IDs
 
     public decimal? TotalPermFte { get; set; }
 
@@ -50,6 +64,8 @@ public class Project
 
     [MaxLength(20)]
     public string? Status { get; set; } = "Active"; // Active, Paused, Completed, Cancelled
+
+    public string? StatusChangeReason { get; set; }
 
     public bool IsDeleted { get; set; } = false;
 
@@ -65,6 +81,8 @@ public class Project
     public ICollection<ProjectOutcome> Outcomes { get; set; } = new List<ProjectOutcome>();
     public ICollection<ProjectMission> ProjectMissions { get; set; } = new List<ProjectMission>();
     public ICollection<ProjectFundingAllocation> FundingAllocations { get; set; } = new List<ProjectFundingAllocation>();
+    public ICollection<ProjectResourceFunding> ResourceFunding { get; set; } = new List<ProjectResourceFunding>();
+    public ICollection<ProjectResourceFundingHistory> FundingHistory { get; set; } = new List<ProjectResourceFundingHistory>();
     public ICollection<ProjectContact> ProjectContacts { get; set; } = new List<ProjectContact>();
     public ICollection<ProjectObjective> ProjectObjectives { get; set; } = new List<ProjectObjective>();
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();

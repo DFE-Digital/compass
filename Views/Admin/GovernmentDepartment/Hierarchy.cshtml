@@ -1,0 +1,242 @@
+@model IEnumerable<Compass.Models.GovernmentDepartment>
+@{
+    ViewData["Title"] = "Government Departments Hierarchy";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">Government Departments</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Hierarchy</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1>Government Departments Hierarchy</h1>
+                <p class="text-muted mb-0">View the hierarchical structure of government departments.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="@Url.Action("Index", "GovernmentDepartment")" class="btn btn-secondary">
+                    Back to List
+                </a>
+                <button type="button" id="syncBtn" class="btn btn-primary">
+                    Sync from GOV.UK
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Department Hierarchy</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
+                {
+                    <div class="hierarchy-tree">
+                        @foreach (var dept in Model.OrderBy(d => d.Title))
+                        {
+                            @await Html.PartialAsync("~/Views/Admin/GovernmentDepartment/_GovernmentDepartmentNode.cshtml", dept)
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        No government departments found. 
+                        <button type="button" id="syncBtn" class="btn btn-primary">Sync from GOV.UK API</button> to populate the database.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Progress Modal -->
+<div class="modal fade" id="syncModal" tabindex="-1" role="dialog" aria-labelledby="syncModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="syncModalLabel">
+                    <i class="fas fa-sync fa-spin mr-2"></i>
+                    Synchronising Government Departments
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-spinner fa-spin text-primary" style="font-size: 3rem;"></i>
+                </div>
+                <p class="mb-2" id="syncStatus">Connecting to GOV.UK API...</p>
+                <p class="text-muted small mb-0" id="syncDetails">Initialising synchronisation process...</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 25px;">
+                        <div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            <span id="syncProgressText">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3" id="syncResults" style="display: none;">
+                    <div class="alert alert-success mb-0">
+                        <strong id="syncResultsSummary"></strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="syncFooter" style="display: none;">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initDepartmentSync() {
+            $(document).on('click', '#syncBtn', function() {
+                // Reset modal state
+                $('#syncStatus').text('Connecting to GOV.UK API...');
+                $('#syncDetails').text('Initialising synchronisation process...');
+                $('#syncProgressBar').css('width', '0%').attr('aria-valuenow', 0);
+                $('#syncProgressText').text('0%');
+                $('#syncResults').hide();
+                $('#syncFooter').hide();
+                
+                // Show the sync modal
+                $('#syncModal').modal('show');
+                
+                // Simulate progressive updates while syncing
+                var progressInterval;
+                var currentProgress = 0;
+                
+                function simulateProgress() {
+                    if (currentProgress < 90) {
+                        currentProgress += Math.random() * 10;
+                        if (currentProgress > 90) currentProgress = 90;
+                        
+                        var statusMessages = [
+                            { threshold: 10, status: 'Fetching departments from GOV.UK...', detail: 'Processing ministerial departments' },
+                            { threshold: 30, status: 'Processing department data...', detail: 'Updating database records' },
+                            { threshold: 50, status: 'Building department hierarchy...', detail: 'Establishing parent-child relationships' },
+                            { threshold: 70, status: 'Syncing child departments...', detail: 'Processing sub-departments and agencies' },
+                            { threshold: 85, status: 'Finalising synchronisation...', detail: 'Updating metadata and timestamps' }
+                        ];
+                        
+                        for (var i = statusMessages.length - 1; i >= 0; i--) {
+                            if (currentProgress >= statusMessages[i].threshold) {
+                                updateSyncProgress(Math.round(currentProgress), statusMessages[i].status, statusMessages[i].detail);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Perform sync via AJAX
+                $.ajax({
+                    url: '@Url.Action("Sync", "GovernmentDepartment")',
+                    method: 'POST',
+                    beforeSend: function() {
+                        updateSyncProgress(5, 'Connecting to GOV.UK API...', 'Initialising synchronisation');
+                        progressInterval = setInterval(simulateProgress, 500);
+                    },
+                    success: function(response) {
+                        clearInterval(progressInterval);
+                        
+                        if (response.success) {
+                            updateSyncProgress(100, 'Synchronisation complete!', 'All departments processed successfully');
+                            
+                            var summary = 'Added: ' + response.added + ', Updated: ' + response.updated;
+                            if (response.errors > 0) {
+                                summary += ', Errors: ' + response.errors;
+                            }
+                            
+                            $('#syncResultsSummary').html(
+                                '<i class="fas fa-check-circle mr-2"></i>' + summary
+                            );
+                            $('#syncResults').show();
+                            $('#syncFooter').show();
+                            
+                            // Auto-reload after 2 seconds
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            showSyncError(response.message || 'Synchronisation failed');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        clearInterval(progressInterval);
+                        showSyncError('An error occurred during synchronisation: ' + error);
+                    }
+                });
+            });
+        }
+        
+        function updateSyncProgress(percent, statusText, detailsText) {
+            $('#syncProgressBar').css('width', percent + '%').attr('aria-valuenow', percent);
+            $('#syncProgressText').text(percent + '%');
+            if (statusText) $('#syncStatus').text(statusText);
+            if (detailsText) $('#syncDetails').text(detailsText);
+        }
+        
+        function showSyncError(message) {
+            $('#syncStatus').html('<i class="fas fa-exclamation-triangle text-danger mr-2"></i>Error');
+            $('#syncDetails').text(message);
+            $('#syncProgressBar').removeClass('progress-bar-animated bg-primary').addClass('bg-danger').css('width', '100%');
+            $('#syncFooter').show();
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initDepartmentSync);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initDepartmentSync);
+                }
+            });
+        }
+    })();
+</script>
+
+<style nonce="@Context.Items["Nonce"]">
+    .hierarchy-tree {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .dept-node {
+        margin-left: 20px;
+        margin-bottom: 10px;
+        padding: 10px;
+        border-left: 3px solid #007bff;
+        background-color: #f8f9fa;
+    }
+    
+    .dept-node.level-0 {
+        margin-left: 0;
+        background-color: #e3f2fd;
+        border-left-color: #1976d2;
+    }
+    
+    .dept-node.level-1 {
+        background-color: #f1f8e9;
+        border-left-color: #689f38;
+    }
+    
+    .dept-node.level-2 {
+        background-color: #fff3e0;
+        border-left-color: #f57c00;
+    }
+    
+    .dept-title {
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    
+    .dept-meta {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+</style>

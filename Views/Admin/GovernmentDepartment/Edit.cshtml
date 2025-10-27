@@ -1,0 +1,121 @@
+@model Compass.Models.GovernmentDepartment
+@{
+    ViewData["Title"] = "Edit Government Department";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">Government Departments</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit @Model.Title</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Edit Government Department</h3>
+            </div>
+            <form asp-action="Edit" asp-controller="GovernmentDepartment" method="post">
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="GovukId" />
+                <input type="hidden" asp-for="CreatedAt" />
+                <input type="hidden" asp-for="LastSyncedAt" />
+                
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                    
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> This department is synchronized from the GOV.UK API. Manual edits may be overwritten during the next sync.
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Title" class="control-label">Title</label>
+                        <input asp-for="Title" class="form-control" />
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Abbreviation" class="control-label">Abbreviation</label>
+                        <input asp-for="Abbreviation" class="form-control" />
+                        <span asp-validation-for="Abbreviation" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Format" class="control-label">Format</label>
+                        <input asp-for="Format" class="form-control" readonly />
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="ParentDepartmentId" class="control-label">Parent Department</label>
+                        <select asp-for="ParentDepartmentId" class="form-control">
+                            <option value="">-- No parent (root level) --</option>
+                            @foreach (var parent in ViewBag.ParentDepartments)
+                            {
+                                <option value="@parent.Id">@parent.Title</option>
+                            }
+                        </select>
+                        <span asp-validation-for="ParentDepartmentId" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        Save Changes
+                    </button>
+                    <a href="@Url.Action("Details", "GovernmentDepartment", new { id = Model.Id })" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Sync Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="mb-0">
+                    <dt>GOV.UK ID</dt>
+                    <dd><code>@Model.GovukId</code></dd>
+
+                    <dt>Status</dt>
+                    <dd>
+                        @if (Model.IsActive)
+                        {
+                            <span class="badge badge-success">Live</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Inactive</span>
+                        }
+                    </dd>
+
+                    <dt>Last Synced</dt>
+                    <dd>@Model.LastSyncedAt.ToString("dd MMM yyyy HH:mm")</dd>
+
+                    @if (!string.IsNullOrEmpty(Model.WebUrl))
+                    {
+                        <dt>Website</dt>
+                        <dd><a href="@Model.WebUrl" target="_blank" rel="noopener noreferrer">View on GOV.UK</a></dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

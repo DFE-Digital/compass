@@ -1,0 +1,272 @@
+@model Compass.Models.ProductAccessibility
+
+@{
+    var openIssues = Model.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
+    var resolvedIssues = Model.Issues.Count(i => i.Status == "resolved" && !i.IsDeleted);
+    var totalIssues = Model.Issues.Count(i => !i.IsDeleted);
+    var levelAAIssues = Model.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
+    
+    var complianceStatus = "Compliant";
+    var complianceBadge = "badge-success";
+    var complianceBgClass = "bg-success";
+    
+    if (levelAAIssues > 0)
+    {
+        complianceStatus = "Non-compliant";
+        complianceBadge = "badge-danger";
+        complianceBgClass = "bg-danger";
+    }
+    else if (openIssues > 0)
+    {
+        complianceStatus = "Partially compliant";
+        complianceBadge = "badge-warning";
+        complianceBgClass = "bg-warning";
+    }
+    
+    var statementStatus = (Model.StatementInstalled && Model.VerifiedAt.HasValue) ? "Verified" : "Not Verified";
+    var statementBgClass = (Model.StatementInstalled && Model.VerifiedAt.HasValue) ? "bg-success" : "bg-warning";
+}
+
+<!-- Summary Cards -->
+<div class="row">
+    <div class="col-lg-4 col-12">
+        @{
+            var issuesBgClass = openIssues == 0 ? "bg-success" : (openIssues < 5 ? "bg-warning" : "bg-danger");
+            var issuesIcon = openIssues == 0 ? "fa-check-circle" : (openIssues < 5 ? "fa-exclamation-triangle" : "fa-times-circle");
+        }
+        <div class="small-box @issuesBgClass">
+            <div class="inner">
+                <h3>@openIssues</h3>
+                <p>Open Issues</p>
+            </div>
+            <div class="icon">
+                <i class="fas @issuesIcon"></i>
+            </div>
+            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" class="small-box-footer">View issues <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-4 col-12">
+        <div class="small-box @complianceBgClass">
+            <div class="inner">
+                <h3 class="small-box-text-heading">@complianceStatus</h3>
+                <p>Compliance Status</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-clipboard-check"></i>
+            </div>
+            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "settings" })" class="small-box-footer">View settings <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-4 col-12">
+        <div class="small-box @statementBgClass">
+            <div class="inner">
+                <h3 class="small-box-text-heading">@statementStatus</h3>
+                <p>Statement Status</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-file-contract"></i>
+            </div>
+            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })" class="small-box-footer">View statement <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-lg-8">
+        <!-- Product Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Product Summary</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 project-overview-summary">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Compliance Status</strong></td>
+                            <td class="summary-value">
+                                <span class="badge @complianceBadge">@complianceStatus</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>WCAG Compliance Level</strong></td>
+                            <td class="summary-value">WCAG @Model.WcagVersion Level @Model.WcagLevel</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Enrolled</strong></td>
+                            <td class="summary-value">@Model.EnrolledAt.ToString("dd MMM yyyy") by @Model.EnrolledBy</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Installation status</strong></td>
+                            <td class="summary-value">
+                                @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
+                                {
+                                    <span class="badge badge-success">Verified</span><br>
+                                    <small class="text-muted">Verified on @Model.VerifiedAt.Value.ToString("dd MMM yyyy") by @Model.VerifiedBy</small>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">Not verified</span>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Changes to Issues -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Recent Changes to Issues</h3>
+                <div class="card-tools">
+                    <a asp-action="Details" asp-route-fipsId="@Model.FipsId" asp-route-tab="issues">View all issues</a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @{
+                    // Get all issue activities (created, updated, resolved)
+                    var recentActivities = new List<dynamic>();
+                    
+                    // Added issues
+                    foreach (var issue in Model.Issues.Where(i => !i.IsDeleted))
+                    {
+                        recentActivities.Add(new {
+                            Date = issue.CreatedAt,
+                            Type = "Added",
+                            TypeClass = "badge-info",
+                            WcagCriteria = issue.WcagCriteria,
+                            WcagLevel = issue.WcagLevel,
+                            Status = issue.Status,
+                            Description = $"Issue added for WCAG {issue.WcagCriteria}",
+                            User = issue.CreatedBy
+                        });
+                    }
+                    
+                    // Resolved issues
+                    foreach (var issue in Model.Issues.Where(i => !i.IsDeleted && i.Status == "resolved" && i.ActualResolutionDate.HasValue))
+                    {
+                        recentActivities.Add(new {
+                            Date = issue.ActualResolutionDate.Value,
+                            Type = "Resolved",
+                            TypeClass = "badge-success",
+                            WcagCriteria = issue.WcagCriteria,
+                            WcagLevel = issue.WcagLevel,
+                            Status = issue.Status,
+                            Description = $"Issue resolved for WCAG {issue.WcagCriteria}",
+                            User = issue.UpdatedBy
+                        });
+                    }
+                    
+                    // Updated issues from history
+                    foreach (var issue in Model.Issues.Where(i => !i.IsDeleted))
+                    {
+                        foreach (var history in issue.History.OrderByDescending(h => h.ChangedAt).Take(1))
+                        {
+                            recentActivities.Add(new {
+                                Date = history.ChangedAt,
+                                Type = "Edited",
+                                TypeClass = "badge-warning",
+                                WcagCriteria = issue.WcagCriteria,
+                                WcagLevel = issue.WcagLevel,
+                                Status = issue.Status,
+                                Description = $"Issue edited: {history.FieldChanged} changed",
+                                User = history.ChangedBy
+                            });
+                        }
+                    }
+                    
+                    var sortedActivities = recentActivities.OrderByDescending(a => a.Date).Take(10).ToList();
+                }
+                
+                @if (sortedActivities.Any())
+                {
+                    <table class="table table-hover text-nowrap">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Change Type</th>
+                                <th>WCAG Criteria</th>
+                                <th>Level</th>
+                                <th>Description</th>
+                                <th>By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var activity in sortedActivities)
+                            {
+                                <tr>
+                                    <td>@activity.Date.ToString("dd MMM yyyy")</td>
+                                    <td><span class="badge @activity.TypeClass">@activity.Type</span></td>
+                                    <td><strong>@activity.WcagCriteria</strong></td>
+                                    <td><span class="badge badge-@(activity.WcagLevel == "AAA" ? "primary" : activity.WcagLevel == "AA" ? "info" : "secondary")">@activity.WcagLevel</span></td>
+                                    <td>@activity.Description</td>
+                                    <td><small class="text-muted">@(activity.User ?? "System")</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center p-4">
+                        <p class="text-muted">No recent issue changes.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column -->
+    <div class="col-lg-4">
+        <!-- Critical Issues Alert -->
+        @if (levelAAIssues > 0)
+        {
+            <div class="card bg-danger mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-white">Critical Issues</h3>
+                </div>
+                <div class="card-body text-white">
+                    <h4 class="mb-2">@levelAAIssues Level A/AA Issue@(levelAAIssues != 1 ? "s" : "")</h4>
+                    <p class="mb-0">These must be resolved for WCAG @Model.WcagVersion Level @Model.WcagLevel compliance.</p>
+                </div>
+                <div class="card-footer bg-danger border-0">
+                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" class="text-white">View all issues <i class="fas fa-arrow-circle-right"></i></a>
+                </div>
+            </div>
+        }
+        
+        <!-- Recent Audits -->
+        @if (Model.AuditHistories.Any(a => !a.IsDeleted))
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Audits</h3>
+                    <div class="card-tools">
+                        <a asp-action="Details" asp-route-fipsId="@Model.FipsId" asp-route-tab="audits">View all audits</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @foreach (var audit in Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3))
+                    {
+                        <div class="mb-3 pb-3 @(audit != Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3).Last() ? "border-bottom" : "")">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong class="d-block">@audit.AuditDate.ToString("dd MMM yyyy")</strong>
+                                    <span class="badge badge-@(audit.AuditType == "External" ? "primary" : "secondary")">@audit.AuditType</span>
+                                    <small class="text-muted d-block mt-1">@audit.AuditedBy</small>
+                                    @if (audit.Cost.HasValue)
+                                    {
+                                        <small class="text-muted">Cost: £@audit.Cost.Value.ToString("N2")</small>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+

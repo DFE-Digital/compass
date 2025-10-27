@@ -1,0 +1,818 @@
+@model Compass.Models.ProductAccessibility
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Accessibility Issues</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#addIssueModal">Add issue</a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.Issues.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>WCAG Criteria</th>
+                                <th>Level</th>
+                                <th>Status</th>
+                                <th>Identified</th>
+                                <th>Resolving</th>
+                                <th>Planned Resolution</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var issue in Model.Issues.OrderBy(i => i.IssueType).ThenBy(i => i.CreatedAt))
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="#" class="view-issue-link" data-issue-id="@issue.Id">
+                                            @if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks.Any())
+                                            {
+                                                @foreach (var link in issue.WcagCriteriaLinks.Take(2))
+                                                {
+                                                    <strong>@link.WcagCriterion.Criterion</strong><text> </text>
+                                                }
+                                                @if (issue.WcagCriteriaLinks.Count > 2)
+                                                {
+                                                    <text>+@(issue.WcagCriteriaLinks.Count - 2) more</text>
+                                                }
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.IssueTitle))
+                                            {
+                                                <strong>@issue.IssueTitle</strong>
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.WcagCriteria))
+                                            {
+                                                <strong>@issue.WcagCriteria</strong>
+                                            }
+                                            else
+                                            {
+                                                <strong>@issue.IssueType Issue</strong>
+                                            }
+                                        </a>
+                                        <br><small class="text-muted">@issue.IssueType</small>
+                                    </td>
+                                    <td>
+                                        @if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks.Any())
+                                        {
+                                            @foreach (var link in issue.WcagCriteriaLinks.Take(1))
+                                            {
+                                                <span class="badge badge-@(link.WcagCriterion.Level == "AAA" ? "primary" : link.WcagCriterion.Level == "AA" ? "info" : "secondary")">
+                                                    Level @link.WcagCriterion.Level
+                                                </span>
+                                            }
+                                            @if (issue.WcagCriteriaLinks.Count > 1)
+                                            {
+                                                <br><small class="text-muted">+@(issue.WcagCriteriaLinks.Count - 1)</small>
+                                            }
+                                        }
+                                        else if (!string.IsNullOrEmpty(issue.WcagLevel))
+                                        {
+                                            <span class="badge badge-@(issue.WcagLevel == "AAA" ? "primary" : issue.WcagLevel == "AA" ? "info" : "secondary")">
+                                                Level @issue.WcagLevel
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-@(issue.Status == "open" ? "danger" : issue.Status == "in_progress" ? "warning" : issue.Status == "resolved" ? "success" : "secondary")">
+                                            @issue.Status.Replace("_", " ")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @issue.IdentifiedDate.ToString("dd MMM yyyy")<br>
+                                        <small class="text-muted">via @issue.IdentifiedVia</small>
+                                    </td>
+                                    <td>
+                                        @if (issue.IsResolving)
+                                        {
+                                            <span class="badge badge-success">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">No</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (issue.PlannedResolutionDate.HasValue)
+                                        {
+                                            @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-info view-issue-btn" data-issue-id="@issue.Id">
+                                                View
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center p-4">
+                        <p class="text-muted">No accessibility issues recorded.</p>
+                        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addIssueModal">
+                            Add first issue
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Issue Modal -->
+<div class="modal fade" id="addIssueModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Accessibility Issue</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="AddIssue" method="post" id="addIssueForm">
+                <input type="hidden" name="productAccessibilityId" value="@Model.Id" />
+                <input type="hidden" id="selectedWcagCriteriaIds" name="wcagCriteriaIds" value="" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Issue Type *</label>
+                        <div class="form-check">
+                            <input type="radio" class="form-check-input" id="issueTypeWcag" name="issueType" value="WCAG" checked />
+                            <label class="form-check-label" for="issueTypeWcag">
+                                WCAG Issue
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="radio" class="form-check-input" id="issueTypeBestPractice" name="issueType" value="Best Practice" />
+                            <label class="form-check-label" for="issueTypeBestPractice">
+                                Best Practice
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="radio" class="form-check-input" id="issueTypeUsability" name="issueType" value="Usability" />
+                            <label class="form-check-label" for="issueTypeUsability">
+                                Usability Issue
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="wcagCriteriaSection">
+                        <div class="form-group">
+                            <label for="wcagCriteriaSearch">Search WCAG Criteria *</label>
+                            <div class="autocomplete-wrapper position-relative">
+                                <input type="text" class="form-control" id="wcagCriteriaSearch" placeholder="Search by criterion number or title..." autocomplete="off" />
+                                <div id="wcagCriteriaResults" class="autocomplete-results d-none"></div>
+                            </div>
+                            <small class="form-text text-muted">Search and select all applicable WCAG criteria</small>
+                        </div>
+                        
+                        <div id="selectedWcagCriteria" class="mb-3">
+                            <!-- Selected criteria will appear here as badges -->
+                        </div>
+                    </div>
+
+                    <div id="otherIssueSection" class="d-none">
+                        <div class="form-group">
+                            <label for="issueTitle">Issue Title *</label>
+                            <input type="text" class="form-control" id="issueTitle" name="issueTitle" placeholder="Brief title for this issue" />
+                            <small class="form-text text-muted">A descriptive title for this Best Practice or Usability issue</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="identifiedDate">When Identified *</label>
+                                <input type="date" class="form-control" id="identifiedDate" name="identifiedDate" required />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="identifiedVia">How Identified *</label>
+                                <select class="form-control" id="identifiedVia" name="identifiedVia" required>
+                                    <option value="">Select...</option>
+                                    <option value="Audit">Audit</option>
+                                    <option value="Testing">Testing</option>
+                                    <option value="Feedback">Feedback</option>
+                                    <option value="Complaint">Complaint</option>
+                                    <option value="GDS">GDS</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="issueDescription">Issue Description</label>
+                        <textarea class="form-control preserve-formatting" id="issueDescription" name="issueDescription" rows="3" placeholder="Describe the accessibility issue..."></textarea>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isResolving" name="isResolving" value="true" checked />
+                            <label class="form-check-label" for="isResolving">
+                                We plan to resolve this issue
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="resolvingSection">
+                        <div class="form-group">
+                            <label for="plannedResolutionDate">Planned Resolution Date *</label>
+                            <input type="date" class="form-control" id="plannedResolutionDate" name="plannedResolutionDate" required />
+                        </div>
+                    </div>
+
+                    <div id="nonResolvingSection" class="d-none">
+                        <div class="form-group">
+                            <label for="nonResolutionReason">Reason for Not Resolving *</label>
+                            <textarea class="form-control preserve-formatting" id="nonResolutionReason" name="nonResolutionReason" rows="3" placeholder="Explain why this issue will not be resolved..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Issue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View/Edit Issue Modal -->
+<div class="modal fade" id="viewIssueModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewIssueModalTitle">Issue Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="viewIssueContent">
+                <!-- Content loaded via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    function initIssuesPage() {
+        // WCAG Criteria Autocomplete
+        var selectedCriteria = [];
+        var searchTimeout = null;
+
+        // Handle issue type change
+        $(document).on('change', 'input[name="issueType"]', function() {
+        var issueType = $(this).val();
+        if (issueType === 'WCAG') {
+            $('#wcagCriteriaSection').removeClass('d-none');
+            $('#otherIssueSection').addClass('d-none');
+            $('#wcagCriteriaSearch').prop('required', true);
+            $('#issueTitle').prop('required', false);
+        } else {
+            $('#wcagCriteriaSection').addClass('d-none');
+            $('#otherIssueSection').removeClass('d-none');
+            $('#wcagCriteriaSearch').prop('required', false);
+            $('#issueTitle').prop('required', true);
+            selectedCriteria = [];
+            updateSelectedCriteria();
+        }
+    });
+
+    // Initialize modal when opened
+    $(document).on('show.bs.modal', '#addIssueModal', function() {
+        // Reset form
+        $('#addIssueForm')[0].reset();
+        selectedCriteria = [];
+        updateSelectedCriteria();
+        $('#wcagCriteriaSearch').val('');
+        $('#wcagCriteriaResults').addClass('d-none');
+        
+        // Set defaults
+        $('#issueTypeWcag').prop('checked', true).trigger('change');
+        $('#isResolving').prop('checked', true);
+        
+        // Trigger initial state for resolution sections
+        toggleResolutionSections($('#isResolving').is(':checked'));
+    });
+
+    // Search WCAG criteria
+    $(document).on('input', '#wcagCriteriaSearch', function() {
+        clearTimeout(searchTimeout);
+        var query = $(this).val().trim();
+        
+        if (query.length < 1) {
+            $('#wcagCriteriaResults').addClass('d-none');
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            $.ajax({
+                url: '@Url.Action("SearchWcagCriteria", "Admin")',
+                data: { q: query },
+                success: function(data) {
+                    displayCriteriaResults(data.results);
+                }
+            });
+        }, 300);
+    });
+
+    function displayCriteriaResults(results) {
+        if (!results || results.length === 0) {
+            $('#wcagCriteriaResults').addClass('d-none');
+            return;
+        }
+
+        var html = '<div class="list-group">';
+        results.forEach(function(item) {
+            var isSelected = selectedCriteria.some(c => c.id === item.id);
+            var disabledClass = isSelected ? 'disabled' : '';
+            var disabledText = isSelected ? ' (Already added)' : '';
+            html += '<button type="button" class="list-group-item list-group-item-action autocomplete-item ' + disabledClass + '" data-id="' + item.id + '" data-criterion="' + item.criterion + '" data-title="' + item.title + '" data-level="' + item.level + '" data-version="' + item.version + '">';
+            html += '<strong>' + item.criterion + '</strong> - ' + item.title + ' <span class="badge badge-' + (item.level === 'AAA' ? 'primary' : item.level === 'AA' ? 'info' : 'secondary') + '">Level ' + item.level + '</span>' + disabledText;
+            html += '</button>';
+        });
+        html += '</div>';
+        
+        $('#wcagCriteriaResults').html(html).removeClass('d-none');
+    }
+
+    // Select criterion from autocomplete
+    $(document).on('click', '.autocomplete-item:not(.disabled)', function() {
+        var criterion = {
+            id: $(this).data('id'),
+            criterion: $(this).data('criterion'),
+            title: $(this).data('title'),
+            level: $(this).data('level'),
+            version: $(this).data('version')
+        };
+        
+        selectedCriteria.push(criterion);
+        updateSelectedCriteria();
+        $('#wcagCriteriaSearch').val('').focus();
+        $('#wcagCriteriaResults').addClass('d-none');
+    });
+
+    // Remove selected criterion
+    $(document).on('click', '.remove-criterion-btn', function(e) {
+        e.preventDefault();
+        var id = $(this).data('id');
+        selectedCriteria = selectedCriteria.filter(c => c.id !== id);
+        updateSelectedCriteria();
+    });
+
+    function updateSelectedCriteria() {
+        if (selectedCriteria.length === 0) {
+            $('#selectedWcagCriteria').html('<p class="text-muted small">No criteria selected</p>');
+            $('#selectedWcagCriteriaIds').val('');
+        } else {
+            var html = '<div class="mb-2"><strong>Selected Criteria:</strong></div>';
+            selectedCriteria.forEach(function(c) {
+                var badgeClass = c.level === 'AAA' ? 'badge-primary' : (c.level === 'AA' ? 'badge-info' : 'badge-secondary');
+                html += '<span class="badge ' + badgeClass + ' mr-2 mb-2 p-2">';
+                html += c.criterion + ' - ' + c.title + ' (Level ' + c.level + ')';
+                html += ' <button type="button" class="btn btn-sm btn-link text-white p-0 ml-2 remove-criterion-btn text-decoration-none" data-id="' + c.id + '">&times;</button>';
+                html += '</span>';
+            });
+            $('#selectedWcagCriteria').html(html);
+            $('#selectedWcagCriteriaIds').val(selectedCriteria.map(c => c.id).join(','));
+        }
+    }
+
+    // Hide results when clicking outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.autocomplete-wrapper').length) {
+            $('#wcagCriteriaResults').addClass('d-none');
+        }
+    });
+
+    // Toggle resolution sections
+    function toggleResolutionSections(isResolving) {
+        if (isResolving) {
+            $('#resolvingSection').removeClass('d-none');
+            $('#nonResolvingSection').addClass('d-none');
+            $('#plannedResolutionDate').prop('required', true);
+            $('#nonResolutionReason').prop('required', false);
+        } else {
+            $('#resolvingSection').addClass('d-none');
+            $('#nonResolvingSection').removeClass('d-none');
+            $('#plannedResolutionDate').prop('required', false);
+            $('#nonResolutionReason').prop('required', true);
+        }
+    }
+
+    // Show/hide resolution sections based on checkbox
+    $(document).on('change', '#isResolving', function() {
+        toggleResolutionSections($(this).is(':checked'));
+    });
+
+    // View issue details
+    $(document).on('click', '.view-issue-btn, .view-issue-link', function(e) {
+        e.preventDefault();
+        const issueId = $(this).data('issue-id');
+        loadIssueDetails(issueId);
+    });
+
+    function loadIssueDetails(issueId) {
+        const issue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Issues.Select(i => new {
+            id = i.Id,
+            issueType = i.IssueType,
+            issueTitle = i.IssueTitle,
+            wcagCriteria = i.WcagCriteria,
+            wcagLevel = i.WcagLevel,
+            wcagVersion = i.WcagVersion,
+            wcagCriteriaLinks = i.WcagCriteriaLinks.Select(link => new {
+                id = link.WcagCriterionId,
+                criterion = link.WcagCriterion.Criterion,
+                title = link.WcagCriterion.Title,
+                level = link.WcagCriterion.Level,
+                version = link.WcagCriterion.Version,
+                url = link.WcagCriterion.Url
+            }).ToList(),
+            identifiedDate = i.IdentifiedDate.ToString("yyyy-MM-dd"),
+            identifiedVia = i.IdentifiedVia,
+            issueDescription = i.IssueDescription,
+            isResolving = i.IsResolving,
+            plannedResolutionDate = i.PlannedResolutionDate?.ToString("yyyy-MM-dd"),
+            nonResolutionReason = i.NonResolutionReason,
+            actualResolutionDate = i.ActualResolutionDate?.ToString("yyyy-MM-dd"),
+            resolutionNotes = i.ResolutionNotes,
+            verificationNotes = i.VerificationNotes,
+            status = i.Status,
+            createdAt = i.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+            createdBy = i.CreatedBy,
+            comments = i.Comments.Select(c => new {
+                id = c.Id,
+                text = c.CommentText,
+                createdAt = c.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                createdBy = c.CreatedBy
+            }).ToList(),
+            history = i.History.OrderByDescending(h => h.ChangedAt).Select(h => new {
+                fieldChanged = h.FieldChanged,
+                oldValue = h.OldValue,
+                newValue = h.NewValue,
+                changeNote = h.ChangeNote,
+                changedAt = h.ChangedAt.ToString("yyyy-MM-dd HH:mm"),
+                changedBy = h.ChangedBy
+            }).ToList()
+        })));
+        
+        const issueData = issue.find(i => i.id === issueId);
+        
+        if (!issueData) {
+            $('#viewIssueContent').html('<p class="text-danger">Issue not found</p>');
+            return;
+        }
+
+        // Build title based on issue type
+        var titleHtml = '';
+        if (issueData.issueType === 'WCAG' && issueData.wcagCriteriaLinks && issueData.wcagCriteriaLinks.length > 0) {
+            titleHtml = '<h5>WCAG Issue: ';
+            issueData.wcagCriteriaLinks.forEach(function(link, idx) {
+                if (idx > 0) titleHtml += ', ';
+                titleHtml += link.criterion + ' - ' + link.title;
+            });
+            titleHtml += '</h5>';
+        } else if (issueData.issueTitle) {
+            titleHtml = '<h5>' + issueData.issueType + ' Issue: ' + issueData.issueTitle + '</h5>';
+        } else if (issueData.wcagCriteria) {
+            titleHtml = '<h5>WCAG ' + issueData.wcagCriteria + ' (Level ' + issueData.wcagLevel + ', WCAG ' + issueData.wcagVersion + ')</h5>';
+        } else {
+            titleHtml = '<h5>' + issueData.issueType + ' Issue</h5>';
+        }
+
+        let html = `
+            <div class="row">
+                <div class="col-md-8">
+                    ${titleHtml}
+                    <dl class="row mt-3">
+                        <dt class="col-sm-3">Issue Type</dt>
+                        <dd class="col-sm-9"><span class="badge badge-info">${issueData.issueType}</span></dd>
+
+                        ${issueData.wcagCriteriaLinks && issueData.wcagCriteriaLinks.length > 0 ? `
+                            <dt class="col-sm-3">WCAG Criteria</dt>
+                            <dd class="col-sm-9">
+                                ${issueData.wcagCriteriaLinks.map(link => 
+                                    '<span class="badge badge-' + (link.level === 'AAA' ? 'primary' : link.level === 'AA' ? 'info' : 'secondary') + ' mr-1 mb-1">' + 
+                                    link.criterion + ' - ' + link.title + ' (Level ' + link.level + ')' + 
+                                    (link.url ? ' <a href="' + link.url + '" target="_blank" rel="noopener noreferrer" class="text-white">ℹ</a>' : '') +
+                                    '</span>'
+                                ).join(' ')}
+                            </dd>
+                        ` : ''}
+
+                        <dt class="col-sm-3">Identified</dt>
+                        <dd class="col-sm-9">${issueData.identifiedDate} via ${issueData.identifiedVia}</dd>
+
+                        <dt class="col-sm-3">Description</dt>
+                        <dd class="col-sm-9">${issueData.issueDescription || '<span class="text-muted">—</span>'}</dd>
+
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9"><span class="badge badge-${issueData.status == 'resolved' ? 'success' : issueData.status == 'in_progress' ? 'warning' : 'danger'}">${issueData.status.replace('_', ' ')}</span></dd>
+
+                        <dt class="col-sm-3">Resolving</dt>
+                        <dd class="col-sm-9">${issueData.isResolving ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-secondary">No</span>'}</dd>
+
+                        ${issueData.isResolving && issueData.plannedResolutionDate ? `
+                            <dt class="col-sm-3">Planned Resolution</dt>
+                            <dd class="col-sm-9">${issueData.plannedResolutionDate}</dd>
+                        ` : ''}
+
+                        ${!issueData.isResolving && issueData.nonResolutionReason ? `
+                            <dt class="col-sm-3">Reason Not Resolving</dt>
+                            <dd class="col-sm-9">${issueData.nonResolutionReason}</dd>
+                        ` : ''}
+
+                        ${issueData.actualResolutionDate ? `
+                            <dt class="col-sm-3">Closure Date</dt>
+                            <dd class="col-sm-9">${issueData.actualResolutionDate}</dd>
+                        ` : ''}
+
+                        ${issueData.resolutionNotes ? `
+                            <dt class="col-sm-3">How it was resolved</dt>
+                            <dd class="col-sm-9">${issueData.resolutionNotes}</dd>
+                        ` : ''}
+
+                        ${issueData.verificationNotes ? `
+                            <dt class="col-sm-3">How it was tested</dt>
+                            <dd class="col-sm-9">${issueData.verificationNotes}</dd>
+                        ` : ''}
+                    </dl>
+
+                    <hr>
+
+                    <h6>Comments (${issueData.comments.length})</h6>
+                    ${issueData.comments.length > 0 ? `
+                        <div class="mt-3">
+                            ${issueData.comments.map(c => `
+                                <div class="border-bottom pb-2 mb-2">
+                                    <p class="mb-1">${c.text}</p>
+                                    <small class="text-muted">${c.createdAt} by ${c.createdBy || 'Unknown'}</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-muted">No comments yet</p>'}
+
+                    <form asp-action="AddComment" method="post" class="mt-3">
+                        <input type="hidden" name="issueId" value="${issueData.id}" />
+                        <div class="input-group">
+                            <input type="text" class="form-control" name="commentText" placeholder="Add a comment..." required />
+                            <div class="input-group-append">
+                                <button type="submit" class="btn btn-primary">Add</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="col-md-4">
+                    <h6>Change History</h6>
+                    ${issueData.history.length > 0 ? `
+                        <div class="timeline mt-3">
+                            ${issueData.history.map(h => `
+                                <div class="border-left pl-3 pb-3 mb-3">
+                                    <strong>${h.fieldChanged}</strong><br>
+                                    ${h.oldValue ? `<small class="text-muted">From: ${h.oldValue}</small><br>` : ''}
+                                    ${h.newValue ? `<small class="text-success">To: ${h.newValue}</small><br>` : ''}
+                                    ${h.changeNote ? `<p class="mb-1 mt-1">${h.changeNote}</p>` : ''}
+                                    <small class="text-muted">${h.changedAt} by ${h.changedBy || 'Unknown'}</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-muted">No change history</p>'}
+
+                    <hr>
+
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-primary btn-block edit-issue-btn" data-issue-id="${issueData.id}">
+                            Edit Issue
+                        </button>
+                        <form asp-action="DeleteIssue" method="post" class="w-100">
+                            <input type="hidden" name="id" value="${issueData.id}" />
+                            <button type="submit" class="btn btn-danger btn-block mt-2" onclick="return confirm('Are you sure you want to delete this issue?')">
+                                Delete Issue
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('#viewIssueContent').html(html);
+        $('#viewIssueModal').modal('show');
+    }
+
+    // Edit issue (opens edit form in modal)
+    $(document).on('click', '.edit-issue-btn', function() {
+        const issueId = $(this).data('issue-id');
+        $('#viewIssueModal').modal('hide');
+        loadEditIssueForm(issueId);
+    });
+
+    function loadEditIssueForm(issueId) {
+        const issue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Issues.Select(i => new {
+            id = i.Id,
+            issueType = i.IssueType,
+            issueTitle = i.IssueTitle,
+            wcagCriteria = i.WcagCriteria,
+            wcagLevel = i.WcagLevel,
+            wcagVersion = i.WcagVersion,
+            wcagCriteriaLinks = i.WcagCriteriaLinks.Select(link => new {
+                id = link.WcagCriterionId,
+                criterion = link.WcagCriterion.Criterion,
+                title = link.WcagCriterion.Title,
+                level = link.WcagCriterion.Level,
+                version = link.WcagCriterion.Version
+            }).ToList(),
+            identifiedDate = i.IdentifiedDate.ToString("yyyy-MM-dd"),
+            identifiedVia = i.IdentifiedVia,
+            issueDescription = i.IssueDescription,
+            isResolving = i.IsResolving,
+            plannedResolutionDate = i.PlannedResolutionDate?.ToString("yyyy-MM-dd"),
+            nonResolutionReason = i.NonResolutionReason,
+            actualResolutionDate = i.ActualResolutionDate?.ToString("yyyy-MM-dd"),
+            resolutionNotes = i.ResolutionNotes,
+            verificationNotes = i.VerificationNotes,
+            status = i.Status
+        })));
+        
+        const issueData = issue.find(i => i.id === issueId);
+        
+        if (!issueData) return;
+
+        // Build edit title
+        var editTitleText = '';
+        if (issueData.issueType === 'WCAG' && issueData.wcagCriteriaLinks && issueData.wcagCriteriaLinks.length > 0) {
+            editTitleText = 'Edit WCAG Issue: ' + issueData.wcagCriteriaLinks.map(l => l.criterion).join(', ');
+        } else if (issueData.issueTitle) {
+            editTitleText = 'Edit ' + issueData.issueType + ' Issue: ' + issueData.issueTitle;
+        } else if (issueData.wcagCriteria) {
+            editTitleText = 'Edit Issue: WCAG ' + issueData.wcagCriteria;
+        } else {
+            editTitleText = 'Edit ' + issueData.issueType + ' Issue';
+        }
+
+        let html = `
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="${issueData.id}" />
+                
+                ${issueData.wcagCriteriaLinks && issueData.wcagCriteriaLinks.length > 0 ? `
+                    <div class="alert alert-info">
+                        <strong>WCAG Criteria:</strong><br>
+                        ${issueData.wcagCriteriaLinks.map(link => 
+                            '<span class="badge badge-' + (link.level === 'AAA' ? 'primary' : link.level === 'AA' ? 'info' : 'secondary') + ' mr-1">' + 
+                            link.criterion + ' - ' + link.title + ' (Level ' + link.level + ')' + 
+                            '</span>'
+                        ).join(' ')}
+                    </div>
+                ` : ''}
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>When Identified *</label>
+                            <input type="date" class="form-control" name="identifiedDate" value="${issueData.identifiedDate}" required />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>How Identified *</label>
+                            <select class="form-control" name="identifiedVia" required>
+                                <option value="Audit" ${issueData.identifiedVia == 'Audit' ? 'selected' : ''}>Audit</option>
+                                <option value="Testing" ${issueData.identifiedVia == 'Testing' ? 'selected' : ''}>Testing</option>
+                                <option value="Feedback" ${issueData.identifiedVia == 'Feedback' ? 'selected' : ''}>Feedback</option>
+                                <option value="Complaint" ${issueData.identifiedVia == 'Complaint' ? 'selected' : ''}>Complaint</option>
+                                <option value="GDS" ${issueData.identifiedVia == 'GDS' ? 'selected' : ''}>GDS</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Status *</label>
+                            <select class="form-control" name="status" required>
+                                <option value="open" ${issueData.status == 'open' ? 'selected' : ''}>Open</option>
+                                <option value="in_progress" ${issueData.status == 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                <option value="resolved" ${issueData.status == 'resolved' ? 'selected' : ''}>Resolved</option>
+                                <option value="wont_fix" ${issueData.status == 'wont_fix' ? 'selected' : ''}>Won't Fix</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Issue Description</label>
+                    <textarea class="form-control preserve-formatting" name="issueDescription" rows="3">${issueData.issueDescription || ''}</textarea>
+                </div>
+
+                <hr>
+
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="editIsResolving" name="isResolving" value="true" ${issueData.isResolving ? 'checked' : ''} />
+                        <label class="form-check-label" for="editIsResolving">
+                            We plan to resolve this issue
+                        </label>
+                    </div>
+                </div>
+
+                <div id="editResolvingSection" class="${issueData.isResolving ? '' : 'd-none'}">
+                    <div class="form-group">
+                        <label>Planned Resolution Date *</label>
+                        <input type="date" class="form-control" id="editPlannedResolutionDate" name="plannedResolutionDate" value="${issueData.plannedResolutionDate || ''}" ${issueData.isResolving ? 'required' : ''} />
+                    </div>
+                    
+                    <hr>
+                    <h6>Resolution Details</h6>
+                    <p class="text-muted small">Complete these fields once the issue has been resolved</p>
+                    
+                    <div class="form-group">
+                        <label>Closure Date</label>
+                        <input type="date" class="form-control" name="actualResolutionDate" value="${issueData.actualResolutionDate || ''}" />
+                        <small class="form-text text-muted">The date this issue was actually closed/resolved</small>
+                    </div>
+                    <div class="form-group">
+                        <label>How it was resolved</label>
+                        <textarea class="form-control preserve-formatting" name="resolutionNotes" rows="3" placeholder="Describe how the issue was fixed...">${issueData.resolutionNotes || ''}</textarea>
+                        <small class="form-text text-muted">Explain the fix that was implemented</small>
+                    </div>
+                    <div class="form-group">
+                        <label>How it was tested and confirmed fixed</label>
+                        <textarea class="form-control preserve-formatting" name="verificationNotes" rows="3" placeholder="Describe how the fix was tested and verified...">${issueData.verificationNotes || ''}</textarea>
+                        <small class="form-text text-muted">Explain how you verified the issue is resolved (testing methods, tools used, etc.)</small>
+                    </div>
+                </div>
+
+                <div id="editNonResolvingSection" class="${!issueData.isResolving ? '' : 'd-none'}">
+                    <div class="form-group">
+                        <label>Reason for Not Resolving *</label>
+                        <textarea class="form-control preserve-formatting" id="editNonResolutionReason" name="nonResolutionReason" rows="3" ${!issueData.isResolving ? 'required' : ''}>${issueData.nonResolutionReason || ''}</textarea>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Change Note (optional)</label>
+                    <input type="text" class="form-control" name="changeNote" placeholder="Note about this update..." />
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        `;
+
+        $('#viewIssueContent').html(html);
+        $('#viewIssueModalTitle').text(editTitleText);
+        $('#viewIssueModal').modal('show');
+    }
+
+        // Handle edit form's resolution checkbox
+        $(document).on('change', '#editIsResolving', function() {
+            if ($(this).is(':checked')) {
+                $('#editResolvingSection').removeClass('d-none');
+                $('#editNonResolvingSection').addClass('d-none');
+                $('#editPlannedResolutionDate').prop('required', true);
+                $('#editNonResolutionReason').prop('required', false);
+            } else {
+                $('#editResolvingSection').addClass('d-none');
+                $('#editNonResolvingSection').removeClass('d-none');
+                $('#editPlannedResolutionDate').prop('required', false);
+                $('#editNonResolutionReason').prop('required', true);
+            }
+        });
+    }
+
+    // Initialize when jQuery is ready
+    if (typeof jQuery !== 'undefined') {
+        $(document).ready(initIssuesPage);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof jQuery !== 'undefined') {
+                $(document).ready(initIssuesPage);
+            }
+        });
+    }
+})();
+</script>
+

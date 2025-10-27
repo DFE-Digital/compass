@@ -1,0 +1,491 @@
+@model IEnumerable<Compass.Models.GovernmentDepartment>
+@{
+    ViewData["Title"] = "Government Departments";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Government Departments</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <!-- Left Column: Filters -->
+    <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Filters</h3>
+            </div>
+            <div class="card-body">
+                <form method="get" id="filterForm">
+                    <div class="form-group">
+                        <label>Search</label>
+                        <input type="text" name="search" class="form-control form-control-sm" placeholder="Search departments..." value="@ViewBag.CurrentSearch" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Format</label>
+                        <select name="format" class="form-control form-control-sm">
+                            <option value="">All</option>
+                            @if (ViewBag.Formats != null)
+                            {
+                                @foreach (var fmt in ViewBag.Formats)
+                                {
+                                    <option value="@fmt" selected="@(ViewBag.CurrentFormat == fmt)">@fmt</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" class="form-control form-control-sm">
+                            <option value="">All</option>
+                            <option value="live" selected="@(ViewBag.CurrentStatus == "live")">Live</option>
+                            <option value="exempt" selected="@(ViewBag.CurrentStatus == "exempt")">Exempt</option>
+                            <option value="closed" selected="@(ViewBag.CurrentStatus == "closed")">Closed</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                        <a asp-action="Index" asp-controller="GovernmentDepartment" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                    </div>
+                </form>
+                
+                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || !string.IsNullOrEmpty(ViewBag.CurrentFormat?.ToString()) || !string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString()))
+                {
+                    <div class="mt-3 pt-3 border-top">
+                        <strong class="d-block mb-2">Active Filters:</strong>
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span><strong>Search:</strong> @ViewBag.CurrentSearch</span>
+                                <a href="@Url.Action("Index", "GovernmentDepartment", new { format = ViewBag.CurrentFormat, status = ViewBag.CurrentStatus })" class="text-danger" title="Remove filter">×</a>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentFormat?.ToString()))
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span><strong>Format:</strong> @ViewBag.CurrentFormat</span>
+                                <a href="@Url.Action("Index", "GovernmentDepartment", new { search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus })" class="text-danger" title="Remove filter">×</a>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString()))
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span><strong>Status:</strong> @ViewBag.CurrentStatus</span>
+                                <a href="@Url.Action("Index", "GovernmentDepartment", new { search = ViewBag.CurrentSearch, format = ViewBag.CurrentFormat })" class="text-danger" title="Remove filter">×</a>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Departments -->
+    <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1>Government Departments</h1>
+                <p class="text-muted mb-0">Manage government departments data synchronized from GOV.UK API.</p>
+            </div>
+            <div class="d-flex gap-3">
+                <a href="@Url.Action("Hierarchy", "GovernmentDepartment")" class="btn btn-primary">
+                    View Hierarchy
+                </a>
+                <button type="button" class="btn btn-primary" id="syncBtn">
+                    Sync from GOV.UK
+                </button>
+            </div>
+        </div>
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Government Departments</h3>
+                <div class="card-tools">
+                    <small class="text-muted">
+                        @{
+                            var startIndex = ((ViewBag.CurrentPage - 1) * ViewBag.PageSize) + 1;
+                            var endIndex = Math.Min(ViewBag.CurrentPage * ViewBag.PageSize, ViewBag.TotalCount);
+                        }
+                        @if (ViewBag.TotalCount > 0)
+                        {
+                            <span>@startIndex to @endIndex departments of @ViewBag.TotalCount</span>
+                        }
+                        else
+                        {
+                            <span>0 departments</span>
+                        }
+                    </small>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover sortable-table govt-departments-table">
+                        <thead>
+                            <tr>
+                                <th class="col-dept-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                <th class="col-dept-abbr sortable" data-column="Abbreviation" tabindex="0" role="button" aria-label="Sort by Abbreviation">Abbreviation</th>
+                                <th class="col-dept-format sortable" data-column="Format" tabindex="0" role="button" aria-label="Sort by Format">Format</th>
+                                <th class="col-dept-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                <th class="col-dept-children sortable" data-column="Children" tabindex="0" role="button" aria-label="Sort by Children">Children</th>
+                                <th class="col-dept-synced sortable" data-column="LastSynced" tabindex="0" role="button" aria-label="Sort by Last Synced">Last Synced</th>
+                                <th class="col-dept-actions">Actions</th>
+                            </tr>
+                        </thead>
+                            <tbody>
+                                @foreach (var dept in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@dept.Title</strong>
+                                            @if (!string.IsNullOrEmpty(dept.Description))
+                                            {
+                                                <br><small class="text-muted">@dept.Description</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(dept.Abbreviation))
+                                            {
+                                                <span class="badge badge-info">@dept.Abbreviation</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@dept.Format</small>
+                                        </td>
+                                        <td>
+                                            @if (dept.IsActive)
+                                            {
+                                                @if (dept.GovukStatus == "live")
+                                                {
+                                                    <span class="badge badge-success">Live</span>
+                                                }
+                                                else if (dept.GovukStatus == "exempt")
+                                                {
+                                                    <span class="badge badge-info">Exempt</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-primary">@dept.GovukStatus</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-secondary">Closed</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (dept.ChildDepartments.Any())
+                                            {
+                                                <span class="badge badge-primary">@dept.ChildDepartments.Count</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@dept.LastSyncedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="@Url.Action("Details", "GovernmentDepartment", new { id = dept.Id })" class="btn btn-outline-info btn-sm">
+                                                    View
+                                                </a>
+                                                <a href="@Url.Action("Edit", "GovernmentDepartment", new { id = dept.Id })" class="btn btn-outline-primary btn-sm">
+                                                    Edit
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center p-4">
+                        <p class="text-muted">No government departments found.</p>
+                        <button type="button" id="syncBtn" class="btn btn-primary">Sync from GOV.UK API</button>
+                        <p class="text-muted small mt-2">Click to populate the database with government departments.</p>
+                    </div>
+                }
+            </div>
+            @if (Model.Any() && ViewBag.TotalPages > 1)
+            {
+                <div class="card-footer">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center mb-0">
+                            @if (ViewBag.CurrentPage > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Index", "GovernmentDepartment", new { page = ViewBag.CurrentPage - 1, search = ViewBag.CurrentSearch, format = ViewBag.CurrentFormat, status = ViewBag.CurrentStatus })">Previous</a>
+                                </li>
+                            }
+
+                            @for (int i = Math.Max(1, ViewBag.CurrentPage - 2); i <= Math.Min(ViewBag.TotalPages, ViewBag.CurrentPage + 2); i++)
+                            {
+                                <li class="page-item @(i == ViewBag.CurrentPage ? "active" : "")">
+                                    <a class="page-link" href="@Url.Action("Index", "GovernmentDepartment", new { page = i, search = ViewBag.CurrentSearch, format = ViewBag.CurrentFormat, status = ViewBag.CurrentStatus })">@i</a>
+                                </li>
+                            }
+
+                            @if (ViewBag.CurrentPage < ViewBag.TotalPages)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Index", "GovernmentDepartment", new { page = ViewBag.CurrentPage + 1, search = ViewBag.CurrentSearch, format = ViewBag.CurrentFormat, status = ViewBag.CurrentStatus })">Next</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            }
+        </div>
+    </div>
+    </div>
+</div>
+
+<!-- Sync Progress Modal -->
+<div class="modal fade" id="syncModal" tabindex="-1" role="dialog" aria-labelledby="syncModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="syncModalLabel">
+                    <i class="fas fa-sync fa-spin mr-2"></i>
+                    Synchronising Government Departments
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-spinner fa-spin text-primary" style="font-size: 3rem;"></i>
+                </div>
+                <p class="mb-2" id="syncStatus">Connecting to GOV.UK API...</p>
+                <p class="text-muted small mb-0" id="syncDetails">Initialising synchronisation process...</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 25px;">
+                        <div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            <span id="syncProgressText">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3" id="syncResults" style="display: none;">
+                    <div class="alert alert-success mb-0">
+                        <strong id="syncResultsSummary"></strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="syncFooter" style="display: none;">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initDepartmentSync() {
+            $(document).on('click', '#syncBtn', function() {
+                // Reset modal state
+                $('#syncStatus').text('Connecting to GOV.UK API...');
+                $('#syncDetails').text('Initialising synchronisation process...');
+                $('#syncProgressBar').css('width', '0%').attr('aria-valuenow', 0);
+                $('#syncProgressText').text('0%');
+                $('#syncResults').hide();
+                $('#syncFooter').hide();
+                
+                // Show the sync modal
+                $('#syncModal').modal('show');
+                
+                // Simulate progressive updates while syncing
+                var progressInterval;
+                var currentProgress = 0;
+                
+                function simulateProgress() {
+                    if (currentProgress < 90) {
+                        currentProgress += Math.random() * 10;
+                        if (currentProgress > 90) currentProgress = 90;
+                        
+                        var statusMessages = [
+                            { threshold: 10, status: 'Fetching departments from GOV.UK...', detail: 'Processing ministerial departments' },
+                            { threshold: 30, status: 'Processing department data...', detail: 'Updating database records' },
+                            { threshold: 50, status: 'Building department hierarchy...', detail: 'Establishing parent-child relationships' },
+                            { threshold: 70, status: 'Syncing child departments...', detail: 'Processing sub-departments and agencies' },
+                            { threshold: 85, status: 'Finalising synchronisation...', detail: 'Updating metadata and timestamps' }
+                        ];
+                        
+                        for (var i = statusMessages.length - 1; i >= 0; i--) {
+                            if (currentProgress >= statusMessages[i].threshold) {
+                                updateSyncProgress(Math.round(currentProgress), statusMessages[i].status, statusMessages[i].detail);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Perform sync via AJAX
+                $.ajax({
+                    url: '@Url.Action("Sync", "GovernmentDepartment")',
+                    method: 'POST',
+                    beforeSend: function() {
+                        updateSyncProgress(5, 'Connecting to GOV.UK API...', 'Initialising synchronisation');
+                        progressInterval = setInterval(simulateProgress, 500);
+                    },
+                    success: function(response) {
+                        clearInterval(progressInterval);
+                        
+                        if (response.success) {
+                            updateSyncProgress(100, 'Synchronisation complete!', 'All departments processed successfully');
+                            
+                            var summary = 'Added: ' + response.added + ', Updated: ' + response.updated;
+                            if (response.errors > 0) {
+                                summary += ', Errors: ' + response.errors;
+                            }
+                            
+                            $('#syncResultsSummary').html(
+                                '<i class="fas fa-check-circle mr-2"></i>' + summary
+                            );
+                            $('#syncResults').show();
+                            $('#syncFooter').show();
+                            
+                            // Auto-reload after 2 seconds
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            showSyncError(response.message || 'Synchronisation failed');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        clearInterval(progressInterval);
+                        showSyncError('An error occurred during synchronisation: ' + error);
+                    }
+                });
+            });
+        }
+        
+        function updateSyncProgress(percent, statusText, detailsText) {
+            $('#syncProgressBar').css('width', percent + '%').attr('aria-valuenow', percent);
+            $('#syncProgressText').text(percent + '%');
+            if (statusText) $('#syncStatus').text(statusText);
+            if (detailsText) $('#syncDetails').text(detailsText);
+        }
+        
+        function showSyncError(message) {
+            $('#syncStatus').html('<i class="fas fa-exclamation-triangle text-danger mr-2"></i>Error');
+            $('#syncDetails').text(message);
+            $('#syncProgressBar').removeClass('progress-bar-animated bg-primary').addClass('bg-danger').css('width', '100%');
+            $('#syncFooter').show();
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initDepartmentSync);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initDepartmentSync);
+                }
+            });
+        }
+    })();
+</script>
+
+<script nonce="@Context.Items["Nonce"]">
+    $(document).ready(function() {
+        // Initialize sortable table
+        var currentSort = { column: null, direction: 'asc' };
+
+        $('.sortable').on('click keypress', function(e) {
+            if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                return;
+            }
+            
+            var column = $(this).data('column');
+            var direction = 'asc';
+            
+            if (currentSort.column === column && currentSort.direction === 'asc') {
+                direction = 'desc';
+            }
+            
+            sortTable(column, direction);
+            currentSort = { column: column, direction: direction };
+        });
+
+        function sortTable(column, direction) {
+            var tbody = $('.govt-departments-table tbody');
+            var rows = tbody.find('tr').toArray();
+            
+            rows.sort(function(a, b) {
+                var aVal, bVal;
+                var colIndex = $('.govt-departments-table thead th[data-column="' + column + '"]').index();
+                
+                if (column === 'Children') {
+                    // Extract number from badge or text
+                    var aText = $(a).find('td').eq(colIndex).text().trim();
+                    var bText = $(b).find('td').eq(colIndex).text().trim();
+                    aVal = aText === '—' ? 0 : parseInt(aText) || 0;
+                    bVal = bText === '—' ? 0 : parseInt(bText) || 0;
+                } else if (column === 'LastSynced') {
+                    // Parse date
+                    var aDate = $(a).find('td').eq(colIndex).text().trim();
+                    var bDate = $(b).find('td').eq(colIndex).text().trim();
+                    aVal = new Date(aDate);
+                    bVal = new Date(bDate);
+                } else {
+                    aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                    bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                } else {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                }
+            });
+            
+            tbody.empty();
+            rows.forEach(function(row) {
+                tbody.append(row);
+            });
+            
+            updateSortIcons(column, direction);
+        }
+
+        function updateSortIcons(column, direction) {
+            // Remove all existing sort indicators
+            $('.sortable').each(function() {
+                $(this).removeClass('sort-asc sort-desc');
+            });
+            
+            // Add indicator to current column
+            var header = $('.sortable[data-column="' + column + '"]');
+            header.addClass(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
+</script>

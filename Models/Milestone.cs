@@ -72,5 +72,6 @@ public class Milestone
     public ICollection<MilestoneIssue> MilestoneIssues { get; set; } = new List<MilestoneIssue>();
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
+    public ICollection<MilestoneUpdate> MilestoneUpdates { get; set; } = new List<MilestoneUpdate>();
 }
 

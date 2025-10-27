@@ -1,0 +1,143 @@
+@model Compass.Models.ProductAccessibility
+
+@{
+    var statementUrl = $"https://accessibility-statements.education.gov.uk/s/{Model.FipsId}";
+}
+
+<div class="row">
+    <div class="col-12">
+        <!-- Statement URL -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Accessibility Statement</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 settings-table">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Statement URL</strong></td>
+                            <td class="summary-value">
+                                <a href="@statementUrl" target="_blank" rel="noopener noreferrer">@statementUrl</a>
+                            </td>
+                            <td class="summary-action text-right">
+                                @* Auto-generated URL, no change action *@
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Installation status</strong></td>
+                            <td class="summary-value">
+                                @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
+                                {
+                                    <span class="badge badge-success">Verified</span><br>
+                                    <small class="text-muted">Verified on @Model.VerifiedAt.Value.ToString("dd MMM yyyy") by @Model.VerifiedBy</small>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">Not verified</span>
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                @if (User.IsInRole("AccessibilityAdministrator"))
+                                {
+                                    @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
+                                    {
+                                        <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Change</a>
+                                    }
+                                    else
+                                    {
+                                        <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Verify installation</a>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Installation Instructions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Installation Instructions</h3>
+            </div>
+            <div class="card-body">
+                <p><strong>To install the accessibility statement on your website:</strong></p>
+                <ol>
+                    <li>Locate the footer section of your website</li>
+                    <li>Find the "Accessibility" link (if it exists) or create a new link</li>
+                    <li>Replace the link URL with the statement URL shown above:
+                        <div class="mt-2 mb-2">
+                            <code class="p-2 bg-light d-block">@statementUrl</code>
+                        </div>
+                    </li>
+                    <li>Ensure the link text reads "Accessibility" or "Accessibility Statement"</li>
+                    <li>Publish your changes so your statement is live on your website</li>
+                    <li><a href="#" id="requestVerificationLink">Request verification</a></li>
+                </ol>
+                
+                <div class="alert alert-info mt-3">
+                    <strong>Note:</strong> Once the statement is installed, an Accessibility Administrator must verify it before it's marked as compliant.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    $(document).on('click', '#requestVerificationLink', function(e) {
+        e.preventDefault();
+        // TODO: Implement request verification functionality
+        alert('Verification request functionality will be implemented.');
+    });
+})();
+</script>
+
+<!-- Verify Statement Installation Modal (Accessibility Administrators only) -->
+@if (User.IsInRole("AccessibilityAdministrator"))
+{
+    <div class="modal fade" id="verifyStatementModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Verify Statement Installation</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form asp-action="VerifyStatement" method="post">
+                    <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                    <div class="modal-body">
+                        <p>Please confirm that you have checked the product website and verified that the accessibility statement is correctly installed in the footer with the URL:</p>
+                        
+                        <div class="alert alert-info">
+                            <strong>Statement URL:</strong><br>
+                            <code>@statementUrl</code>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Verification Status *</label>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="verifyInstalled" name="statementInstalled" value="true" required @(Model.StatementInstalled ? "checked" : "") />
+                                <label class="form-check-label" for="verifyInstalled">
+                                    Installed and Verified
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="verifyNotInstalled" name="statementInstalled" value="false" required @(!Model.StatementInstalled ? "checked" : "") />
+                                <label class="form-check-label" for="verifyNotInstalled">
+                                    Not Installed
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Verification</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+

@@ -1,0 +1,46 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Compass.Models;
+
+public class ProjectResourceFundingHistory
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    public int ProjectId { get; set; }
+
+    [ForeignKey(nameof(ProjectId))]
+    public Project Project { get; set; } = null!;
+
+    [Required]
+    [MaxLength(20)]
+    public string ResourceType { get; set; } = string.Empty; // "Permanent" or "MSP"
+
+    [Required]
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal Count { get; set; }
+
+    [Required]
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal ProgrammeFundedPercentage { get; set; }
+
+    [Required]
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal AdminFundedPercentage { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
+    [Required]
+    public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
+
+    [Required]
+    [MaxLength(255)]
+    public string ChangedByEmail { get; set; } = string.Empty;
+
+    [MaxLength(255)]
+    public string? ChangedByName { get; set; }
+}
+

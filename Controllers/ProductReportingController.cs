@@ -43,17 +43,20 @@ public class ProductReportingController : Controller
         var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
         
+        // Get all returns for current period in one query
+        var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
+        var userReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
         // Create view model for user's products
         var userProductStatuses = new List<ProductReturnStatusViewModel>();
         foreach (var product in userProducts)
         {
             if (string.IsNullOrEmpty(product.FipsId)) continue;
             
-            var currentReturn = await _context.ProductReturns
-                .Include(pr => pr.MetricValues)
-                .FirstOrDefaultAsync(pr => pr.FipsId == product.FipsId 
-                                        && pr.Year == currentYear 
-                                        && pr.Month == currentMonth);
+            var currentReturn = userReturns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
             
             ReturnStatus? status = null;
             int? completedMetrics = null;
@@ -103,17 +106,20 @@ public class ProductReportingController : Controller
             });
         }
         
+        // Get all returns for all products in one query
+        var allFipsIds = allProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
+        var allReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
         // Create view model for all products with service owner
         var allProductStatuses = new List<ProductReturnStatusViewModel>();
         foreach (var product in allProducts)
         {
             if (string.IsNullOrEmpty(product.FipsId)) continue;
             
-            var currentReturn = await _context.ProductReturns
-                .Include(pr => pr.MetricValues)
-                .FirstOrDefaultAsync(pr => pr.FipsId == product.FipsId 
-                                        && pr.Year == currentYear 
-                                        && pr.Month == currentMonth);
+            var currentReturn = allReturns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
             
             ReturnStatus? status = null;
             int? completedMetrics = null;
@@ -457,6 +463,7 @@ public class ProductReportingController : Controller
             var existingReturn = await _context.ProductReturns
                 .Include(pr => pr.MetricValues)
                     .ThenInclude(mv => mv.PerformanceMetric)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(pr => pr.FipsId == fipsId && pr.Year == date.Year && pr.Month == date.Month);
 
             if (existingReturn != null)
