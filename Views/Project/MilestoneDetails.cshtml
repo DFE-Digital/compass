@@ -1,0 +1,514 @@
+@model Compass.Models.Milestone
+
+@{
+    ViewData["Title"] = "Milestone Details";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                @if (Model.Project != null)
+                {
+                    <a asp-action="Details" asp-route-id="@Model.ProjectId" asp-route-tab="milestones" class="btn btn-outline-primary mb-4">
+                        <i class="fas fa-arrow-left mr-2 "></i>Back to Project
+                    </a>
+                }
+                <h1 class="m-0">@Model.Name</h1>
+                <p class="text-muted mb-0">Milestone Details</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box @(Model.Status == "complete" ? "bg-success" : Model.Status == "at_risk" ? "bg-warning" : Model.Status == "in_progress" ? "bg-info" : "bg-secondary")">
+                    <div class="inner">
+                        <h3>@Model.Status.Replace("_", " ")</h3>
+                        <p>Status</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@Model.DueDate.ToString("dd MMM yyyy")</h3>
+                        <p>Due Date</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box @(Model.ActualDate.HasValue ? "bg-success" : "bg-secondary")">
+                    <div class="inner">
+                        <h3>
+                            @if (Model.ActualDate.HasValue)
+                            {
+                                @Model.ActualDate.Value.ToString("dd MMM yyyy")
+                            }
+                            else
+                            {
+                                <span>Not set</span>
+                            }
+                        </h3>
+                        <p>Actual Date</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box @(Model.ProgressPercent >= 75 ? "bg-success" : Model.ProgressPercent >= 50 ? "bg-info" : Model.ProgressPercent >= 25 ? "bg-warning" : "bg-secondary")">
+                    <div class="inner">
+                        <h3>@(Model.ProgressPercent ?? 0)%</h3>
+                        <p>Progress</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Project Summary -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                @if (Model.Project != null)
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Project</h3>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-12">Title</dt>
+                                <dd class="col-sm-12">
+                                    <a asp-action="Details" asp-route-id="@Model.ProjectId" asp-route-tab="overview">@Model.Project.Title</a>
+                                </dd>
+                                
+                                <dt class="col-sm-12">Project Code</dt>
+                                <dd class="col-sm-12">@Model.Project.ProjectCode</dd>
+                                
+                                @if (!string.IsNullOrEmpty(Model.Project.BusinessArea))
+                                {
+                                    <dt class="col-sm-12">Business Area</dt>
+                                    <dd class="col-sm-12">@Model.Project.BusinessArea</dd>
+                                }
+                            </dl>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+
+                <!-- Milestone Details Card -->
+                <div class="card mb-4" id="details">
+                    <div class="card-header">
+                        <h3 class="card-title">Milestone Information</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-borderless mb-0 milestone-summary">
+                            <tbody>
+                                <tr>
+                                    <td class="summary-label"><strong>Milestone Name</strong></td>
+                                    <td class="summary-value">@Model.Name</td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="name" data-value="@Model.Name">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Status</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-@(Model.Status == "complete" ? "success" : Model.Status == "at_risk" ? "warning" : Model.Status == "in_progress" ? "info" : "secondary")">
+                                            @Model.Status.Replace("_", " ")
+                                        </span>
+                                    </td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="status" data-value="@Model.Status">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Description</strong></td>
+                                    <td class="summary-value">@(string.IsNullOrEmpty(Model.Description) ? "-" : Model.Description)</td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="description" data-value="@(Model.Description ?? "")">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Due Date</strong></td>
+                                    <td class="summary-value">@Model.DueDate.ToString("dd MMMM yyyy")</td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="dueDate" data-value="@Model.DueDate.ToString("yyyy-MM-dd")">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Actual Date</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.ActualDate.HasValue)
+                                        {
+                                            @Model.ActualDate.Value.ToString("dd MMMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not completed</span>
+                                        }
+                                    </td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="actualDate" data-value="@(Model.ActualDate?.ToString("yyyy-MM-dd") ?? "")">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Progress</strong></td>
+                                    <td class="summary-value">
+                                        @(Model.ProgressPercent ?? 0)%
+                                        @if (Model.ProgressPercent.HasValue)
+                                        {
+                                            <div class="progress mt-2">
+                                                <div class="progress-bar milestone-progress @(Model.ProgressPercent >= 75 ? "bg-success" : Model.ProgressPercent >= 50 ? "bg-info" : Model.ProgressPercent >= 25 ? "bg-warning" : "bg-danger")" 
+                                                     role="progressbar" 
+                                                     data-progress="@Model.ProgressPercent"
+                                                     aria-valuenow="@Model.ProgressPercent" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="progress" data-value="@(Model.ProgressPercent ?? 0)">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Notes</strong></td>
+                                    <td class="summary-value">@(string.IsNullOrEmpty(Model.Notes) ? "-" : Model.Notes)</td>
+                                    <td class="summary-action text-right">
+                                        <a href="#" class="change-link" data-field="notes" data-value="@(Model.Notes ?? "")">Change</a>
+                                    </td>
+                                </tr>
+                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
+                                {
+                                    <tr>
+                                        <td class="summary-label"><strong>Business Area</strong></td>
+                                        <td class="summary-value">
+                                            <span class="badge badge-info">@Model.BusinessArea</span>
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="businessArea" data-value="@Model.BusinessArea">Change</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Milestone Updates History -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Milestone Updates History</h3>
+                        <div class="card-tools">
+                            <a href="#" class="btn btn-sm btn-primary" id="addUpdateBtn">Add Update</a>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        @if (Model.MilestoneUpdates.Any())
+                        {
+                            <table class="table table-hover milestone-updates-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Update Details</th>
+                                        <th>Status Change</th>
+                                        <th>Progress Change</th>
+                                        <th>Updated By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var update in Model.MilestoneUpdates.OrderByDescending(u => u.UpdatedAt))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@update.UpdatedAt.ToString("dd MMM yyyy")</strong>
+                                                <br><small class="text-muted">@update.UpdatedAt.ToString("HH:mm")</small>
+                                            </td>
+                                            <td>@update.UpdateDetails</td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus))
+                                                {
+                                                    <span class="badge badge-secondary">@update.PreviousStatus.Replace("_", " ")</span>
+                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <span class="badge badge-@(update.NewStatus == "complete" ? "success" : update.NewStatus == "at_risk" ? "warning" : update.NewStatus == "in_progress" ? "info" : "secondary")">@update.NewStatus.Replace("_", " ")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (update.PreviousProgress.HasValue && update.NewProgress.HasValue)
+                                                {
+                                                    <span>@update.PreviousProgress%</span>
+                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <span class="font-weight-bold">@update.NewProgress%</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(update.UpdatedByName))
+                                                {
+                                                    @update.UpdatedByName
+                                                }
+                                                else
+                                                {
+                                                    @update.UpdatedByEmail
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <p class="text-muted">No updates recorded yet.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Add Milestone Update Modal -->
+<div class="modal fade" id="addUpdateModal" tabindex="-1" role="dialog" aria-labelledby="addUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUpdateModalLabel">Add Milestone Update</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-controller="Milestone" asp-action="AddUpdate" method="post">
+                <input type="hidden" name="milestoneId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="updateDetails">Update Details</label>
+                        <textarea class="form-control" id="updateDetails" name="updateDetails" rows="3" required placeholder="Describe the milestone update..."></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="updateStatus">Update Status (Optional)</label>
+                                <select class="form-control" id="updateStatus" name="newStatus">
+                                    <option value="">No change</option>
+                                    <option value="not_started">Not Started</option>
+                                    <option value="planned">Planned</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="at_risk">At Risk</option>
+                                    <option value="complete">Complete</option>
+                                </select>
+                                <small class="form-text text-muted">Current: <strong>@Model.Status.Replace("_", " ")</strong></small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="updateProgress">Update Progress (Optional)</label>
+                                <input type="number" class="form-control" id="updateProgress" name="newProgress" min="0" max="100" placeholder="Leave empty for no change">
+                                <small class="form-text text-muted">Current: <strong>@(Model.ProgressPercent ?? 0)%</strong></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <small><strong>Note:</strong> You can optionally update the status and/or progress along with your update notes.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Field Modal -->
+<div class="modal fade" id="editFieldModal" tabindex="-1" role="dialog" aria-labelledby="editFieldModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editFieldModalLabel">Edit Field</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-controller="Milestone" asp-action="UpdateField" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" id="editFieldName" />
+                <div class="modal-body">
+                    <div class="form-group d-none" id="editNameGroup">
+                        <label for="editName">Milestone Name</label>
+                        <input type="text" class="form-control" id="editName" name="name" value="@Model.Name" required>
+                    </div>
+                    <div class="form-group d-none" id="editStatusGroup">
+                        <label for="editStatus">Status</label>
+                        <select class="form-control" id="editStatus" name="status">
+                            <option value="not_started" selected="@(Model.Status == "not_started")">Not Started</option>
+                            <option value="planned" selected="@(Model.Status == "planned")">Planned</option>
+                            <option value="in_progress" selected="@(Model.Status == "in_progress")">In Progress</option>
+                            <option value="at_risk" selected="@(Model.Status == "at_risk")">At Risk</option>
+                            <option value="complete" selected="@(Model.Status == "complete")">Complete</option>
+                        </select>
+                    </div>
+                    <div class="form-group d-none" id="editDescriptionGroup">
+                        <label for="editDescription">Description</label>
+                        <textarea class="form-control" id="editDescription" name="description" rows="4">@Model.Description</textarea>
+                    </div>
+                    <div class="form-group d-none" id="editDueDateGroup">
+                        <label for="editDueDate">Due Date</label>
+                        <input type="date" class="form-control" id="editDueDate" name="dueDate" value="@Model.DueDate.ToString("yyyy-MM-dd")" required>
+                    </div>
+                    <div class="form-group d-none" id="editActualDateGroup">
+                        <label for="editActualDate">Actual Date</label>
+                        <input type="date" class="form-control" id="editActualDate" name="actualDate" value="@(Model.ActualDate?.ToString("yyyy-MM-dd"))">
+                        <small class="form-text text-muted">Leave empty if not completed</small>
+                    </div>
+                    <div class="form-group d-none" id="editProgressGroup">
+                        <label for="editProgress">Progress (%)</label>
+                        <input type="number" class="form-control" id="editProgress" name="progressPercent" min="0" max="100" value="@Model.ProgressPercent">
+                    </div>
+                    <div class="form-group d-none" id="editNotesGroup">
+                        <label for="editNotes">Notes</label>
+                        <textarea class="form-control" id="editNotes" name="notes" rows="4">@Model.Notes</textarea>
+                    </div>
+                    <div class="form-group d-none" id="editBusinessAreaGroup">
+                        <label for="editBusinessArea">Business Area</label>
+                        <input type="text" class="form-control" id="editBusinessArea" name="businessArea" value="@Model.BusinessArea">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initMilestoneDetails() {
+            // Set progress bar width from data attribute
+            $('.milestone-progress').each(function() {
+                var progress = $(this).attr('data-progress');
+                if (progress) {
+                    $(this).css('width', progress + '%');
+                }
+            });
+
+            // Handle add update button
+            $('#addUpdateBtn').on('click', function(e) {
+                e.preventDefault();
+                $('#addUpdateModal').modal('show');
+            });
+
+            // Handle change link clicks
+            $(document).on('click', '.change-link', function(e) {
+                e.preventDefault();
+                var field = $(this).attr('data-field');
+                var value = $(this).attr('data-value');
+                
+                // Hide all form groups
+                $('.modal-body .form-group').addClass('d-none');
+                
+                // Show the appropriate form group and set field name
+                $('#editFieldName').val(field);
+                
+                var fieldTitles = {
+                    'name': 'Edit Milestone Name',
+                    'status': 'Edit Status',
+                    'description': 'Edit Description',
+                    'dueDate': 'Edit Due Date',
+                    'actualDate': 'Edit Actual Date',
+                    'progress': 'Edit Progress',
+                    'notes': 'Edit Notes',
+                    'businessArea': 'Edit Business Area'
+                };
+                
+                $('#editFieldModalLabel').text(fieldTitles[field] || 'Edit Field');
+                
+                // Show relevant field and set value
+                switch(field) {
+                    case 'name':
+                        $('#editNameGroup').removeClass('d-none');
+                        $('#editName').val(value);
+                        break;
+                    case 'status':
+                        $('#editStatusGroup').removeClass('d-none');
+                        $('#editStatus').val(value);
+                        break;
+                    case 'description':
+                        $('#editDescriptionGroup').removeClass('d-none');
+                        $('#editDescription').val(value);
+                        break;
+                    case 'dueDate':
+                        $('#editDueDateGroup').removeClass('d-none');
+                        $('#editDueDate').val(value);
+                        break;
+                    case 'actualDate':
+                        $('#editActualDateGroup').removeClass('d-none');
+                        $('#editActualDate').val(value);
+                        break;
+                    case 'progress':
+                        $('#editProgressGroup').removeClass('d-none');
+                        $('#editProgress').val(value);
+                        break;
+                    case 'notes':
+                        $('#editNotesGroup').removeClass('d-none');
+                        $('#editNotes').val(value);
+                        break;
+                    case 'businessArea':
+                        $('#editBusinessAreaGroup').removeClass('d-none');
+                        $('#editBusinessArea').val(value);
+                        break;
+                }
+                
+                $('#editFieldModal').modal('show');
+            });
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initMilestoneDetails);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initMilestoneDetails);
+                }
+            });
+        }
+    })();
+</script>
+

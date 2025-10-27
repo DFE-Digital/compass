@@ -23,7 +23,7 @@ public class UserController : Controller
     }
 
     // GET: User/MySettings
-    public async Task<IActionResult> MySettings()
+    public async Task<IActionResult> MySettings(string section = "profile")
     {
         var userEmail = User.Identity?.Name;
         _logger.LogInformation($"MySettings accessed by user: {userEmail}");
@@ -66,6 +66,7 @@ public class UserController : Controller
         ViewBag.User = user;
         ViewBag.SelectedBusinessAreas = selectedBusinessAreas;
         ViewBag.BusinessAreas = businessAreas;
+        ViewBag.CurrentSection = section;
 
         return View();
     }
@@ -73,7 +74,7 @@ public class UserController : Controller
     // POST: User/MySettings
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> MySettings(string[] selectedBusinessAreas)
+    public async Task<IActionResult> MySettings(string[] selectedBusinessAreas, string section = "preferences")
     {
         try
         {
@@ -95,7 +96,7 @@ public class UserController : Controller
             TempData["ErrorMessage"] = "An error occurred while saving your preferences. Please try again.";
         }
 
-        return RedirectToAction(nameof(MySettings));
+        return RedirectToAction(nameof(MySettings), new { section = section });
     }
 }
 

@@ -304,7 +304,7 @@ public class ProductsController : Controller
                     m.Status != "cancelled"),
                 KeyMilestones = milestones.Take(5).ToList(),
                 
-                // Performance metrics
+                // Operational reports
                 UserSatisfaction = userSatisfaction,
                 LastReportDate = latestReturn?.SubmittedDate,
                 HasMetricsData = latestReturn != null,

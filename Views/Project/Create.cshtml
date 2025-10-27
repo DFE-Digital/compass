@@ -14,7 +14,7 @@
                 <ol class="breadcrumb float-sm-right">
                     <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
                     <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Index">Projects</a></li>
-                    <li class="breadcrumb-item active">Create</li>
+                    <li class="breadcrumb-item active">Project</li>
                 </ol>
             </div>
         </div>
@@ -112,6 +112,53 @@
                                             }
                                         </select>
                                         <span asp-validation-for="BusinessArea" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Organizational Structure -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="PrimaryOrganizationalGroupId" class="control-label">Primary Organizational Group</label>
+                                        <select asp-for="PrimaryOrganizationalGroupId" class="form-control" id="primaryOrgGroup">
+                                            <option value="">Select organizational group</option>
+                                            @if (ViewBag.OrganizationalGroups != null)
+                                            {
+                                                @foreach (var group in ViewBag.OrganizationalGroups)
+                                                {
+                                                    <option value="@group.Id">@group.FullPath</option>
+                                                }
+                                            }
+                                        </select>
+                                        <span asp-validation-for="PrimaryOrganizationalGroupId" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="form-check">
+                                            <input asp-for="IsMultiDepartmentProject" class="form-check-input" id="isMultiDept" />
+                                            <label asp-for="IsMultiDepartmentProject" class="form-check-label">Is this a multi-department project?</label>
+                                        </div>
+                                        <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
+                                        <span asp-validation-for="IsMultiDepartmentProject" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row" id="otherDepartmentsRow" style="display: none;">
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <label class="control-label">Other Government Departments</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." />
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
+                                            </div>
+                                        </div>
+                                        <div id="selectedDepartments" class="mt-2"></div>
+                                        <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
+                                        <span asp-validation-for="OtherDepartments" class="text-danger"></span>
                                     </div>
                                 </div>
                             </div>
@@ -530,5 +577,126 @@
         function removeContact(button) {
             button.closest('.card').remove();
         }
+
+        // Multi-department project functionality
+        let selectedDepartments = [];
+        
+        document.getElementById('isMultiDept').addEventListener('change', function() {
+            const otherDeptRow = document.getElementById('otherDepartmentsRow');
+            if (this.checked) {
+                otherDeptRow.style.display = 'block';
+            } else {
+                otherDeptRow.style.display = 'none';
+                selectedDepartments = [];
+                updateSelectedDepartments();
+            }
+        });
+
+        // Department search functionality
+        let searchTimeout;
+        document.getElementById('departmentSearch').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value;
+            
+            if (query.length < 2) {
+                hideDepartmentResults();
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                searchDepartments(query);
+            }, 300);
+        });
+
+        function searchDepartments(query) {
+            fetch(`/Admin/GovernmentDepartment/Search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    showDepartmentResults(data.results);
+                })
+                .catch(error => {
+                    console.error('Error searching departments:', error);
+                });
+        }
+
+        function showDepartmentResults(departments) {
+            const resultsContainer = document.getElementById('departmentResults');
+            if (!resultsContainer) {
+                const container = document.createElement('div');
+                container.id = 'departmentResults';
+                container.className = 'list-group mt-2';
+                document.getElementById('departmentSearch').parentNode.appendChild(container);
+            }
+            
+            const container = document.getElementById('departmentResults');
+            container.innerHTML = '';
+            
+            if (departments.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-muted">No departments found</div>';
+            } else {
+                departments.forEach(dept => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<strong>${dept.text}</strong>${dept.abbreviation ? ` (${dept.abbreviation})` : ''}`;
+                    item.addEventListener('click', () => addDepartment(dept));
+                    container.appendChild(item);
+                });
+            }
+            
+            container.style.display = 'block';
+        }
+
+        function hideDepartmentResults() {
+            const container = document.getElementById('departmentResults');
+            if (container) {
+                container.style.display = 'none';
+            }
+        }
+
+        function addDepartment(department) {
+            if (!selectedDepartments.find(d => d.id === department.id)) {
+                selectedDepartments.push(department);
+                updateSelectedDepartments();
+            }
+            
+            document.getElementById('departmentSearch').value = '';
+            hideDepartmentResults();
+        }
+
+        function removeDepartment(departmentId) {
+            selectedDepartments = selectedDepartments.filter(d => d.id !== departmentId);
+            updateSelectedDepartments();
+        }
+
+        function updateSelectedDepartments() {
+            const container = document.getElementById('selectedDepartments');
+            const jsonInput = document.getElementById('otherDepartmentsJson');
+            
+            if (selectedDepartments.length === 0) {
+                container.innerHTML = '';
+                jsonInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected Departments:</strong></div>';
+            selectedDepartments.forEach(dept => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${dept.text}${dept.abbreviation ? ` (${dept.abbreviation})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeDepartment(${dept.id})">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            jsonInput.value = JSON.stringify(selectedDepartments.map(d => d.id));
+        }
+
+        // Hide department results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#departmentSearch') && !e.target.closest('#departmentResults')) {
+                hideDepartmentResults();
+            }
+        });
     </script>
 }

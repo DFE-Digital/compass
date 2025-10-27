@@ -1,0 +1,51 @@
+@model Compass.Models.GovernmentDepartment
+
+<div class="dept-node level-@Model.Level">
+    <div class="dept-title">
+        <a href="@Url.Action("Details", "GovernmentDepartment", new { id = Model.Id })">@Model.Title</a>
+        @if (!string.IsNullOrEmpty(Model.Abbreviation))
+        {
+            <span class="badge badge-info ml-2">@Model.Abbreviation</span>
+        }
+        @if (Model.IsActive)
+        {
+            @if (Model.GovukStatus == "live")
+            {
+                <span class="badge badge-success ml-2">Live</span>
+            }
+            else if (Model.GovukStatus == "exempt")
+            {
+                <span class="badge badge-info ml-2">Exempt</span>
+            }
+            else
+            {
+                <span class="badge badge-primary ml-2">@Model.GovukStatus</span>
+            }
+        }
+        else
+        {
+            <span class="badge badge-secondary ml-2">Closed</span>
+        }
+    </div>
+    <div class="dept-meta">
+        @if (!string.IsNullOrEmpty(Model.Format))
+        {
+            <span>@Model.Format</span>
+        }
+        @if (Model.ChildDepartments.Any())
+        {
+            <span class="ml-3">@Model.ChildDepartments.Count child department(s)</span>
+        }
+    </div>
+    
+    @if (Model.ChildDepartments.Any())
+    {
+        <div class="mt-2">
+            @foreach (var child in Model.ChildDepartments.OrderBy(c => c.Title))
+            {
+                @await Html.PartialAsync("~/Views/Admin/GovernmentDepartment/_GovernmentDepartmentNode.cshtml", child)
+            }
+        </div>
+    }
+</div>
+

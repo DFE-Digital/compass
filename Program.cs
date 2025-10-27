@@ -97,6 +97,9 @@ builder.Services.AddHttpClient<IProductsApiService, ProductsApiService>(client =
     }
 });
 
+// Register HttpClient for GovernmentDepartmentController
+builder.Services.AddHttpClient<Compass.Controllers.GovernmentDepartmentController>();
+
 // Register services
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IGraphService, GraphService>();

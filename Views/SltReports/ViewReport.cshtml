@@ -1,0 +1,661 @@
+@model List<Compass.Models.Project>
+
+@{
+    ViewData["Title"] = "SLT Weekly Reports";
+    var currentSection = ViewBag.CurrentSection as string ?? "summary";
+    var weekStart = (DateTime)ViewBag.WeekStart;
+    var weekEnd = (DateTime)ViewBag.WeekEnd;
+    
+    // Aggregate all flagged successes across projects within the report timeframe
+    var allSltSuccesses = Model
+        .SelectMany(p => p.Successes
+            .Where(s => s.IsReportedToSlt && 
+                       s.RecordedAt >= weekStart && 
+                       s.RecordedAt <= weekEnd)
+            .Select(s => new { Project = p, Success = s }))
+        .OrderByDescending(x => x.Success.RecordedAt)
+        .ToList();
+    
+    // Calculate date ranges for milestone filtering
+    var twoWeeksFromEnd = weekEnd.AddDays(14);
+    
+    // Milestones due this week (not deleted, with due date in current week)
+    var milestonesDueThisWeek = Model
+        .SelectMany(p => p.Milestones
+            .Where(m => !m.IsDeleted && 
+                       m.DueDate >= weekStart && 
+                       m.DueDate <= weekEnd &&
+                       m.Status != "complete")
+            .Select(m => new { Project = p, Milestone = m }))
+        .OrderBy(x => x.Milestone.DueDate)
+        .ToList();
+    
+    // Upcoming milestones in next 2 weeks (not deleted, with due date in next 2 weeks)
+    var upcomingMilestones = Model
+        .SelectMany(p => p.Milestones
+            .Where(m => !m.IsDeleted && 
+                       m.DueDate > weekEnd && 
+                       m.DueDate <= twoWeeksFromEnd &&
+                       m.Status != "complete")
+            .Select(m => new { Project = p, Milestone = m }))
+        .OrderBy(x => x.Milestone.DueDate)
+        .ToList();
+    
+    // All active milestones (for counts in summary)
+    var allActiveMilestones = milestonesDueThisWeek.Concat(upcomingMilestones).ToList();
+    
+    // Get projects with non-green RAG status
+    var atRiskProjects = Model.Where(p => p.RagStatus != "Green").ToList();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">SLT Reports</a></li>
+                    <li class="breadcrumb-item active">Weekly Report</li>
+                </ol>
+            </div>
+        </div>
+        <div class="row mb-2 align-items-center">
+            <div class="col-sm-6">
+                <h1 class="m-0">SLT Weekly Report</h1>
+                <p class="text-muted mb-0">@weekStart.ToString("dd MMM yyyy") - @weekEnd.ToString("dd MMM yyyy")</p>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a asp-action="ViewReport" asp-route-weekStart="@weekStart.AddDays(-7).ToString("yyyy-MM-dd")" asp-route-section="@currentSection" class="btn btn-outline-secondary">
+                    <i class="fas fa-chevron-left"></i> Previous Week
+                </a>
+                @if (weekStart < DateTime.Today)
+                {
+                    <a asp-action="ViewReport" asp-route-weekStart="@weekStart.AddDays(7).ToString("yyyy-MM-dd")" asp-route-section="@currentSection" class="btn btn-outline-secondary ml-2">
+                        Next Week <i class="fas fa-chevron-right"></i>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Report Sections</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("ViewReport", new { weekStart = weekStart.ToString("yyyy-MM-dd"), section = "summary" })" 
+                               class="list-group-item list-group-item-action @(currentSection == "summary" ? "active" : "")">
+                                Executive Summary
+                            </a>
+                            <a href="@Url.Action("ViewReport", new { weekStart = weekStart.ToString("yyyy-MM-dd"), section = "projects" })" 
+                               class="list-group-item list-group-item-action @(currentSection == "projects" ? "active" : "")">
+                                Projects at Risk
+                            </a>
+                            <a href="@Url.Action("ViewReport", new { weekStart = weekStart.ToString("yyyy-MM-dd"), section = "milestones" })" 
+                               class="list-group-item list-group-item-action @(currentSection == "milestones" ? "active" : "")">
+                                Milestone Progress
+                            </a>
+                            <a href="@Url.Action("ViewReport", new { weekStart = weekStart.ToString("yyyy-MM-dd"), section = "successes" })" 
+                               class="list-group-item list-group-item-action @(currentSection == "successes" ? "active" : "")">
+                                Successes
+                            </a>
+                            <a href="@Url.Action("ViewReport", new { weekStart = weekStart.ToString("yyyy-MM-dd"), section = "portfolio" })" 
+                               class="list-group-item list-group-item-action @(currentSection == "portfolio" ? "active" : "")">
+                                Portfolio Overview
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @switch (currentSection)
+                {
+                    case "summary":
+                        <!-- Executive Summary -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-primary text-white">
+                                <h3 class="card-title mb-0">Executive Summary</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>Active Projects</h5>
+                                        <p class="mb-3">
+                                            <strong>@Model.Count active projects</strong><br>
+                                            <span class="text-muted">@atRiskProjects.Count requiring attention</span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>This Week</h5>
+                                        <p class="mb-0">
+                                            <strong>@milestonesDueThisWeek.Count milestones due this week</strong><br>
+                                            <strong>@upcomingMilestones.Count upcoming milestones (next 2 weeks)</strong><br>
+                                            <strong>@allSltSuccesses.Count successes reported</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Stats -->
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="info-box">
+                                    <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Green RAG</span>
+                                        <span class="info-box-number">@Model.Count(p => p.RagStatus == "Green")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box">
+                                    <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Amber RAG</span>
+                                        <span class="info-box-number">@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box">
+                                    <span class="info-box-icon bg-danger"><i class="fas fa-times-circle"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Red RAG</span>
+                                        <span class="info-box-number">@Model.Count(p => p.RagStatus == "Red")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box">
+                                    <span class="info-box-icon bg-info"><i class="fas fa-flag-checkered"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Active Milestones</span>
+                                        <span class="info-box-number">@allActiveMilestones.Count</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        break;
+
+                    case "projects":
+                        <!-- Projects Requiring Attention -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Projects Requiring Attention</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                @if (atRiskProjects.Any())
+                                {
+                                    <table class="table table-hover text-nowrap">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>RAG Status</th>
+                                                <th>Justification</th>
+                                                <th>Path to Green</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var project in atRiskProjects)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                            <strong>@project.Title</strong>
+                                                        </a><br>
+                                                        <small class="text-muted">@project.ProjectCode</small>
+                                                    </td>
+                                                    <td>
+                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(project.RagJustification))
+                                                        {
+                                                            @project.RagJustification.Substring(0, Math.Min(150, project.RagJustification.Length))@(project.RagJustification.Length > 150 ? "..." : "")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">No justification provided</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(project.PathToGreen))
+                                                        {
+                                                            @project.PathToGreen.Substring(0, Math.Min(100, project.PathToGreen.Length))@(project.PathToGreen.Length > 100 ? "..." : "")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-warning">Not documented</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <div class="text-center p-4">
+                                        <p class="text-muted">No projects require attention - all projects are on Green RAG status.</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case "milestones":
+                        <!-- Milestones Due This Week -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Milestones Due This Week</h3>
+                                <div class="card-tools">
+                                    <span class="badge badge-primary">@milestonesDueThisWeek.Count</span>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                @if (milestonesDueThisWeek.Any())
+                                {
+                                    <table class="table table-hover text-nowrap">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>Milestone</th>
+                                                <th>Status</th>
+                                                <th>Progress</th>
+                                                <th>Due Date</th>
+                                                <th>Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in milestonesDueThisWeek)
+                                            {
+                                                var milestone = item.Milestone;
+                                                var project = item.Project;
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "milestones" })">
+                                                            <strong>@project.Title</strong>
+                                                        </a><br>
+                                                        <small class="text-muted">@project.ProjectCode</small>
+                                                    </td>
+                                                    <td><strong>@milestone.Name</strong></td>
+                                                    <td>
+                                                        <span class="badge badge-@(milestone.Status == "at_risk" ? "danger" : milestone.Status == "in_progress" ? "primary" : milestone.Status == "not_started" ? "secondary" : "info")">
+                                                            @milestone.Status.Replace("_", " ")
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
+                                                        {
+                                                            <strong>@milestone.ProgressPercent.Value%</strong>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">0%</span>
+                                                        }
+                                                    </td>
+                                                    <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                                    <td>
+                                                        @if (milestone.DueDate < DateTime.Today)
+                                                        {
+                                                            <span class="text-danger">Overdue</span>
+                                                        }
+                                                        else if (milestone.Status == "at_risk")
+                                                        {
+                                                            <span class="text-danger">At Risk</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">—</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <div class="text-center p-4">
+                                        <p class="text-muted">No milestones due this week.</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Upcoming Milestones (Next 2 Weeks) -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Upcoming Milestones (Next 2 Weeks)</h3>
+                                <div class="card-tools">
+                                    <span class="badge badge-info">@upcomingMilestones.Count</span>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                @if (upcomingMilestones.Any())
+                                {
+                                    <table class="table table-hover text-nowrap">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>Milestone</th>
+                                                <th>Status</th>
+                                                <th>Progress</th>
+                                                <th>Due Date</th>
+                                                <th>Days Until Due</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in upcomingMilestones)
+                                            {
+                                                var milestone = item.Milestone;
+                                                var project = item.Project;
+                                                var daysUntilDue = (milestone.DueDate - DateTime.Today).Days;
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "milestones" })">
+                                                            <strong>@project.Title</strong>
+                                                        </a><br>
+                                                        <small class="text-muted">@project.ProjectCode</small>
+                                                    </td>
+                                                    <td><strong>@milestone.Name</strong></td>
+                                                    <td>
+                                                        <span class="badge badge-@(milestone.Status == "at_risk" ? "danger" : milestone.Status == "in_progress" ? "primary" : milestone.Status == "not_started" ? "secondary" : "info")">
+                                                            @milestone.Status.Replace("_", " ")
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
+                                                        {
+                                                            <strong>@milestone.ProgressPercent.Value%</strong>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">0%</span>
+                                                        }
+                                                    </td>
+                                                    <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                                    <td>
+                                                        <span class="@(daysUntilDue <= 7 ? "text-warning" : "text-muted")">
+                                                            @daysUntilDue day@(daysUntilDue != 1 ? "s" : "")
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <div class="text-center p-4">
+                                        <p class="text-muted">No upcoming milestones in the next 2 weeks.</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case "successes":
+                        <!-- Successes for SLT -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Successes Flagged for SLT Reporting</h3>
+                            </div>
+                            <div class="card-body">
+                                @if (allSltSuccesses.Any())
+                                {
+                                    var successesByBusinessArea = allSltSuccesses
+                                        .GroupBy(x => x.Project.BusinessArea ?? "Not Specified")
+                                        .OrderBy(g => g.Key);
+                                    
+                                    @foreach (var businessAreaGroup in successesByBusinessArea)
+                                    {
+                                        <div class="mb-4">
+                                            <h5 class="mb-3 pb-2 border-bottom">@businessAreaGroup.Key</h5>
+                                            
+                                            @{
+                                                var successesByProject = businessAreaGroup
+                                                    .GroupBy(x => x.Project)
+                                                    .OrderBy(g => g.Key.Title);
+                                            }
+                                            
+                                            @foreach (var projectGroup in successesByProject)
+                                            {
+                                                var project = projectGroup.Key;
+                                                <div class="mb-3">
+                                                    <h6 class="mb-2">
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "successes" })">
+                                                            <strong>@project.Title</strong>
+                                                        </a>
+                                                        <small class="text-muted">(@project.ProjectCode)</small>
+                                                    </h6>
+                                                    
+                                                    @foreach (var item in projectGroup.OrderByDescending(x => x.Success.RecordedAt))
+                                                    {
+                                                        var success = item.Success;
+                                                        <div class="ml-3 mb-2 pb-2 border-bottom">
+                                                            <div class="row">
+                                                                <div class="col-md-9">
+                                                                    <p class="mb-1">@success.SuccessDescription</p>
+                                                                </div>
+                                                                <div class="col-md-3 text-right">
+                                                                    <small class="text-muted">@success.RecordedAt.ToString("dd MMM yyyy")<br>@success.RecordedByName</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <p class="text-muted">No successes have been flagged for SLT reporting.</p>
+                                    <p><small>To flag a success for SLT reporting, navigate to a project's Successes tab and check the "Reported in weekly update to SLT" option.</small></p>
+                                }
+                            </div>
+                        </div>
+                        break;
+
+                    case "portfolio":
+                        <!-- Portfolio Overview -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Portfolio Summary</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Green RAG</span>
+                                                <span class="info-box-number">@Model.Count(p => p.RagStatus == "Green")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Amber RAG</span>
+                                                <span class="info-box-number">@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-danger"><i class="fas fa-times-circle"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Red RAG</span>
+                                                <span class="info-box-number">@Model.Count(p => p.RagStatus == "Red")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-info"><i class="fas fa-flag-checkered"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Active Milestones</span>
+                                                <span class="info-box-number">@allActiveMilestones.Count</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- All Projects List -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">All Active Projects</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>RAG Status</th>
+                                            <th>Target Delivery</th>
+                                            <th>Resources</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.OrderBy(p => p.Title))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                        <strong>@project.Title</strong>
+                                                    </a><br>
+                                                    <small class="text-muted">@project.ProjectCode</small>
+                                                </td>
+                                                <td>
+                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                </td>
+                                                <td>@project.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
+                                                <td>
+                                                    @if (project.TotalPermFte.HasValue || project.TotalMspFte.HasValue)
+                                                    {
+                                                        var totalFte = (project.TotalPermFte ?? 0) + (project.TotalMspFte ?? 0);
+                                                        <text>@totalFte FTE</text>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        break;
+
+                    default:
+                        <!-- Default to Summary -->
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h3 class="card-title mb-0">Executive Summary</h3>
+                            </div>
+                            <div class="card-body">
+                                <p>Select a report section from the menu.</p>
+                            </div>
+                        </div>
+                        break;
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+
+@section Styles {
+    <style nonce="@Context.Items["Nonce"]">
+        @@media print {
+            /* Hide navigation and non-essential elements when printing */
+            .main-header,
+            .main-sidebar,
+            .content-header .breadcrumb,
+            .btn,
+            .card-tools,
+            .list-group {
+                display: none !important;
+            }
+            
+            .content-wrapper {
+                margin-left: 0 !important;
+                padding: 0 !important;
+            }
+            
+            .card {
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+                page-break-inside: avoid;
+            }
+            
+            .card-header {
+                background-color: #f8f9fa !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .bg-primary {
+                background-color: #007bff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .badge,
+            .badge-green,
+            .badge-amber,
+            .badge-red {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+}
+

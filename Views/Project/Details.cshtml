@@ -11,9 +11,10 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item"><a asp-action="Index">Projects</a></li>
-                    <li class="breadcrumb-item active">@Model.Title</li>
+                    <li class="breadcrumb-item active">Project</li>
                 </ol>
                 <h1 class="m-0">@Model.Title</h1>
+                <p class="text-muted mb-0">@Model.ProjectCode</p>
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
@@ -23,12 +24,24 @@
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
                             <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">
-                                <i class="fas fa-edit"></i> Edit Project
+                                Edit Project
+                            </a>
+                            <a class="dropdown-item" href="@Url.Action("Details", new { id = Model.Id, tab = "settings" })">
+                                Project Settings
                             </a>
                             <div class="dropdown-divider"></div>
-                            <button type="button" class="dropdown-item" onclick="confirmDelete(@Model.Id, '@Model.Title')">
-                                <i class="fas fa-trash"></i> Delete Project
-                            </button>
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addMilestoneModal">
+                                Add Milestone
+                            </a>
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addSuccessModal">
+                                Add Success
+                            </a>
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addIssueModal">
+                                Add Issue
+                            </a>
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addContactModal">
+                                Add Contact
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -55,509 +68,527 @@
         }
 
         <div class="row">
-            <!-- Project Overview -->
-            <div class="col-lg-8">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Project Overview</h3>
+                        <h3 class="card-title">Navigation</h3>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h5>Aim</h5>
-                                <p>@Model.Aim</p>
-                                
-                                <h5>Expected Outcomes</h5>
-                                @if (Model.Outcomes.Any())
-                                {
-                                    <ul class="list-unstyled">
-                                        @foreach (var outcome in Model.Outcomes.OrderBy(o => o.SortOrder))
-                                        {
-                                            <li class="mb-2">
-                                                <strong>@outcome.Outcome</strong>
-                                                <br />
-                                                <small class="text-muted">Measure: @outcome.MeasureOfSuccess</small>
-                                                <br />
-                                                <span class="badge badge-@(outcome.ConfidenceLevel == "High" ? "success" : outcome.ConfidenceLevel == "Medium" ? "warning" : "danger")">
-                                                    @outcome.ConfidenceLevel Confidence
-                                                </span>
-                                                @if (!string.IsNullOrEmpty(outcome.ConfidenceExplanation))
-                                                {
-                                                    <br />
-                                                    <small class="text-muted">@outcome.ConfidenceExplanation</small>
-                                                }
-                                            </li>
-                                        }
-                                    </ul>
-                                }
-                                else
-                                {
-                                    <p class="text-muted">No outcomes defined</p>
-                                }
-                            </div>
-                            <div class="col-md-6">
-                                <h5>Missions</h5>
-                                <p>
-                                    @if (Model.ProjectMissions.Any())
-                                    {
-                                        @foreach (var mission in Model.ProjectMissions)
-                                        {
-                                            <span class="badge badge-info mr-1">@mission.Mission.Title</span>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not assigned</span>
-                                    }
-                                </p>
-                                
-                                <h5>Funding Allocations</h5>
-                                <p>
-                                    @if (Model.FundingAllocations.Any())
-                                    {
-                                        @foreach (var allocation in Model.FundingAllocations)
-                                        {
-                                            <span class="badge badge-secondary mr-1">@allocation.FundingSource.Name (@allocation.AllocationPercentage%)</span>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not assigned</span>
-                                    }
-                                </p>
-                                
-                                <h5>Business Area</h5>
-                                <p>
-                                    @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                    {
-                                        @Model.BusinessArea
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not specified</span>
-                                    }
-                                </p>
-                            </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "overview" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "overview" ? "active" : "")">
+                                Overview
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "outcomes" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "outcomes" ? "active" : "")">
+                                Outcomes
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "strategicalignment" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "strategicalignment" ? "active" : "")">
+                                Strategic Alignment
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "milestones" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "milestones" ? "active" : "")">
+                                Milestones
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "successes" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "successes" ? "active" : "")">
+                                Successes
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "rag" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "rag" ? "active" : "")">
+                                RAG Tracking
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "funding" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "funding" ? "active" : "")">
+                                Funding and Resources
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "contacts" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "contacts" ? "active" : "")">
+                                Contacts
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "products" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "products" ? "active" : "")">
+                                Products
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "issues" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "issues" ? "active" : "")">
+                                Issues
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "dependencies" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "dependencies" ? "active" : "")">
+                                Dependencies
+                            </a>
                         </div>
-                    </div>
-                </div>
-
-                <!-- RAG Status and History -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">RAG Status</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h5>Current Status</h5>
-                                @if (Model.RagStatus == "Green")
-                                {
-                                    <span class="badge badge-success badge-lg">@Model.RagStatus</span>
-                                }
-                                else if (Model.RagStatus == "Amber-Green")
-                                {
-                                    <span class="badge badge-warning badge-lg">@Model.RagStatus</span>
-                                }
-                                else if (Model.RagStatus == "Amber-Red")
-                                {
-                                    <span class="badge badge-warning badge-lg">@Model.RagStatus</span>
-                                }
-                                else if (Model.RagStatus == "Red")
-                                {
-                                    <span class="badge badge-danger badge-lg">@Model.RagStatus</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-secondary badge-lg">@Model.RagStatus</span>
-                                }
-                                
-                                @if (!string.IsNullOrEmpty(Model.RagJustification))
-                                {
-                                    <p class="mt-2"><strong>Justification:</strong> @Model.RagJustification</p>
-                                }
-                            </div>
-                            <div class="col-md-6">
-                                <h5>RAG History</h5>
-                                @if (Model.RagHistory.Any())
-                                {
-                                    <div class="timeline">
-                                        @foreach (var history in Model.RagHistory.Take(5))
-                                        {
-                                            <div class="timeline-item">
-                                                <div class="timeline-marker"></div>
-                                                <div class="timeline-content">
-                                                    <h6 class="timeline-title">
-                                                        @if (history.RagStatus == "Green")
-                                                        {
-                                                            <span class="badge badge-success">@history.RagStatus</span>
-                                                        }
-                                                        else if (history.RagStatus == "Amber-Green")
-                                                        {
-                                                            <span class="badge badge-warning">@history.RagStatus</span>
-                                                        }
-                                                        else if (history.RagStatus == "Amber-Red")
-                                                        {
-                                                            <span class="badge badge-warning">@history.RagStatus</span>
-                                                        }
-                                                        else if (history.RagStatus == "Red")
-                                                        {
-                                                            <span class="badge badge-danger">@history.RagStatus</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">@history.RagStatus</span>
-                                                        }
-                                                    </h6>
-                                                    <p class="timeline-text">@history.Justification</p>
-                                                    <p class="timeline-time">@history.ChangedAt.ToString("dd MMM yyyy HH:mm") by @history.ChangedByName</p>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <p class="text-muted">No RAG history available.</p>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Project Successes -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Project Successes</h3>
-                    </div>
-                    <div class="card-body">
-                        @if (Model.Successes.Any())
-                        {
-                            @foreach (var success in Model.Successes.Take(5))
-                            {
-                                <div class="alert alert-success">
-                                    <h6>@success.SuccessDescription</h6>
-                                    <small class="text-muted">Recorded on @success.RecordedAt.ToString("dd MMM yyyy") by @success.RecordedByName</small>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-muted">No successes recorded yet.</p>
-                        }
-                        
-                        <form asp-action="AddSuccess" method="post" class="mt-3">
-                            <input type="hidden" name="projectId" value="@Model.Id" />
-                            <div class="input-group">
-                                <input type="text" name="successDescription" class="form-control" placeholder="Add a success..." required />
-                                <div class="input-group-append">
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="fas fa-plus"></i> Add Success
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Project Details Sidebar -->
-            <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Project Details</h3>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <tr>
-                                <td><strong>Project Code:</strong></td>
-                                <td><span class="font-weight-bold text-primary">@Model.ProjectCode</span></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Status:</strong></td>
-                                <td>
-                                    @if (Model.Status == "Active")
-                                    {
-                                        <span class="badge badge-success">@Model.Status</span>
-                                    }
-                                    else if (Model.Status == "Paused")
-                                    {
-                                        <span class="badge badge-warning">@Model.Status</span>
-                                    }
-                                    else if (Model.Status == "Completed")
-                                    {
-                                        <span class="badge badge-primary">@Model.Status</span>
-                                    }
-                                    else if (Model.Status == "Cancelled")
-                                    {
-                                        <span class="badge badge-secondary">@Model.Status</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge badge-info">@Model.Status</span>
-                                    }
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Phase:</strong></td>
-                                <td>
-                                    @if (!string.IsNullOrEmpty(Model.Phase))
-                                    {
-                                        <span class="badge badge-info">@Model.Phase</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not set</span>
-                                    }
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Flagship:</strong></td>
-                                <td>
-                                    @if (Model.IsFlagship)
-                                    {
-                                        <span class="badge badge-warning">Yes</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge badge-secondary">No</span>
-                                    }
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Start Date:</strong></td>
-                                <td>@Model.StartDate.ToString("dd MMM yyyy")</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Target Delivery:</strong></td>
-                                <td>@Model.TargetDeliveryDate.ToString("dd MMM yyyy")</td>
-                            </tr>
-                            @if (Model.ActualDeliveryDate.HasValue)
-                            {
-                                <tr>
-                                    <td><strong>Actual Delivery:</strong></td>
-                                    <td>@Model.ActualDeliveryDate.Value.ToString("dd MMM yyyy")</td>
-                                </tr>
-                            }
-                            <tr>
-                                <td><strong>Perm FTE:</strong></td>
-                                <td>@(Model.TotalPermFte?.ToString("F1") ?? "0.0")</td>
-                            </tr>
-                            <tr>
-                                <td><strong>MSP FTE:</strong></td>
-                                <td>@(Model.TotalMspFte?.ToString("F1") ?? "0.0")</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @{
+                    var currentTab = ViewBag.CurrentTab as string ?? "overview";
+                }
 
-                <!-- Dependencies -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Dependencies</h3>
-                    </div>
-                    <div class="card-body">
-                        @if (Model.DependenciesAsSource.Any())
-                        {
-                            @foreach (var dependency in Model.DependenciesAsSource.Where(d => d.Status == "Active"))
-                            {
-                                <div class="alert alert-info">
-                                    <h6>@dependency.TargetEntityTitle (@dependency.TargetEntityType)</h6>
-                                    @if (!string.IsNullOrEmpty(dependency.DependencyType))
-                                    {
-                                        <small class="badge badge-secondary">@dependency.DependencyType</small>
-                                    }
-                                    @if (!string.IsNullOrEmpty(dependency.Description))
-                                    {
-                                        <p class="mb-0">@dependency.Description</p>
-                                    }
-                                    <form asp-action="RemoveDependency" method="post" class="mt-2">
-                                        <input type="hidden" name="dependencyId" value="@dependency.Id" />
-                                        <input type="hidden" name="projectId" value="@Model.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="fas fa-times"></i> Remove
-                                        </button>
-                                    </form>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-muted">No dependencies recorded.</p>
-                        }
-                        
-                        <form asp-action="AddDependency" method="post" class="mt-3">
-                            <input type="hidden" name="projectId" value="@Model.Id" />
-                            <div class="form-group">
-                                <label>Add Dependency</label>
-                                <select name="dependsOnProjectId" class="form-control" required>
-                                    <option value="">Select project...</option>
-                                    @foreach (var project in ViewBag.AllProjects)
-                                    {
-                                        if (project.Id != Model.Id)
-                                        {
-                                            <option value="@project.Id">@project.Title</option>
-                                        }
-                                    }
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <input type="text" name="dependencyType" class="form-control" placeholder="Dependency type (optional)" />
-                            </div>
-                            <div class="form-group">
-                                <textarea name="description" class="form-control" rows="2" placeholder="Description (optional)"></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> Add Dependency
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Linked Products -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Linked Products</h3>
-                    </div>
-                    <div class="card-body">
-                        @if (Model.ProjectProducts.Any())
-                        {
-                            @foreach (var product in Model.ProjectProducts)
-                            {
-                                <div class="alert alert-light">
-                                    <h6>@product.ProductTitle</h6>
-                                    <small class="text-muted">FIPS ID: @product.ProductFipsId</small>
-                                    @if (!string.IsNullOrEmpty(product.ProductDescription))
-                                    {
-                                        <p class="mb-1">@product.ProductDescription</p>
-                                    }
-                                    @if (!string.IsNullOrEmpty(product.ProductUrl))
-                                    {
-                                        <a href="@product.ProductUrl" target="_blank" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-external-link-alt"></i> View Product
-                                        </a>
-                                    }
-                                    <form asp-action="RemoveProduct" method="post" class="mt-2">
-                                        <input type="hidden" name="projectProductId" value="@product.Id" />
-                                        <input type="hidden" name="projectId" value="@Model.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="fas fa-times"></i> Remove
-                                        </button>
-                                    </form>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-muted">No products linked.</p>
-                        }
-                        
-                        <form asp-action="AddProduct" method="post" class="mt-3">
-                            <input type="hidden" name="projectId" value="@Model.Id" />
-                            <div class="form-group">
-                                <label>Add Product</label>
-                                <input type="text" name="productFipsId" class="form-control" placeholder="Product FIPS ID" required />
-                            </div>
-                            <div class="form-group">
-                                <input type="text" name="productTitle" class="form-control" placeholder="Product Title" required />
-                            </div>
-                            <div class="form-group">
-                                <textarea name="productDescription" class="form-control" rows="2" placeholder="Product Description (optional)"></textarea>
-                            </div>
-                            <div class="form-group">
-                                <input type="url" name="productUrl" class="form-control" placeholder="Product URL (optional)" />
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> Link Product
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Related Items -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Related Items</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="info-box">
-                                    <span class="info-box-icon bg-info"><i class="fas fa-flag"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Milestones</span>
-                                        <span class="info-box-number">@Model.Milestones.Count</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="info-box">
-                                    <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Risks</span>
-                                        <span class="info-box-number">@Model.Risks.Count</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="info-box">
-                                    <span class="info-box-icon bg-danger"><i class="fas fa-bug"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Issues</span>
-                                        <span class="info-box-number">@Model.Issues.Count</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="info-box">
-                                    <span class="info-box-icon bg-success"><i class="fas fa-tasks"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">Actions</span>
-                                        <span class="info-box-number">@Model.Actions.Count</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @switch (currentTab)
+                {
+                    case "overview":
+                        @await Html.PartialAsync("_Overview", Model)
+                        break;
+                    case "outcomes":
+                        @await Html.PartialAsync("_Outcomes", Model)
+                        break;
+                    case "strategicalignment":
+                        @await Html.PartialAsync("_StrategicAlignment", Model)
+                        break;
+                    case "milestones":
+                        @await Html.PartialAsync("_Milestones", Model)
+                        break;
+                    case "successes":
+                        @await Html.PartialAsync("_Successes", Model)
+                        break;
+                    case "rag":
+                        @await Html.PartialAsync("_RagTracking", Model)
+                        break;
+                    case "funding":
+                        @await Html.PartialAsync("_Funding", Model)
+                        break;
+                    case "contacts":
+                        @await Html.PartialAsync("_Contacts", Model)
+                        break;
+                    case "products":
+                        @await Html.PartialAsync("_Products", Model)
+                        break;
+                    case "issues":
+                        @await Html.PartialAsync("_Issues", Model)
+                        break;
+                    case "dependencies":
+                        @await Html.PartialAsync("_Dependencies", Model)
+                        break;
+                    case "settings":
+                        @await Html.PartialAsync("_Settings", Model)
+                        break;
+                    default:
+                        @await Html.PartialAsync("_Overview", Model)
+                        break;
+                }
             </div>
         </div>
     </div>
-</section>
+</div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<!-- Add Milestone Modal -->
+<div class="modal fade" id="addMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="addMilestoneModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <h5 class="modal-title" id="addMilestoneModalLabel">Add New Milestone</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="AddMilestone" method="post">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="milestoneName">Milestone Name</label>
+                        <input type="text" class="form-control" id="milestoneName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="milestoneDescription">Description</label>
+                        <textarea class="form-control" id="milestoneDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="milestoneDueDate">Due Date</label>
+                        <input type="date" class="form-control" id="milestoneDueDate" name="dueDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="milestoneStatus">Status</label>
+                        <select class="form-control" id="milestoneStatus" name="status">
+                            <option value="planned">Planned</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="at_risk">At Risk</option>
+                            <option value="complete">Complete</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Milestone</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Milestones Modal -->
+<div class="modal fade" id="viewMilestonesModal" tabindex="-1" role="dialog" aria-labelledby="viewMilestonesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewMilestonesModalLabel">Project Milestones</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                Are you sure you want to delete the project "<span id="projectTitle"></span>"? This action cannot be undone.
+                <div class="table-responsive">
+                    <table class="table table-hover sortable-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                    Name
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                                    Status
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">
+                                    Due Date
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">
+                                    Actual Date
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Milestones.Any())
+                            {
+                                @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate))
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@milestone.Name</strong>
+                                            @if (!string.IsNullOrEmpty(milestone.Description))
+                                            {
+                                                <br><small class="text-muted">@milestone.Description</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "in_progress" ? "info" : "secondary")">
+                                                @milestone.Status.Replace("_", " ")
+                                            </span>
+                                        </td>
+                                        <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            @if (milestone.ActualDate.HasValue)
+                                            {
+                                                @milestone.ActualDate.Value.ToString("dd MMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not completed</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewMilestone(@milestone.Id)">
+                                                View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No milestones defined.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form id="deleteForm" method="post" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">Delete</button>
-                </form>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
-    <script>
-        function confirmDelete(id, title) {
-            document.getElementById('projectTitle').textContent = title;
-            document.getElementById('deleteForm').action = '@Url.Action("Delete")/' + id;
-            $('#deleteModal').modal('show');
+    <script nonce="@Context.Items["Nonce"]">
+    function confirmDelete(projectId, projectTitle) {
+        if (confirm('Are you sure you want to delete the project "' + projectTitle + '"? This action cannot be undone.')) {
+            // Create a form and submit it
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '@Url.Action("Delete", "Project")/' + projectId;
+            
+            // Add CSRF token
+            var token = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (token) {
+                var csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = '__RequestVerificationToken';
+                csrfInput.value = token.value;
+                form.appendChild(csrfInput);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
         }
+    }
+
+    function viewMilestone(milestoneId) {
+        // This would typically open a detailed view of the milestone
+        // For now, we'll show an alert with the milestone ID
+        alert('Viewing milestone ID: ' + milestoneId + '\n\nThis would open a detailed milestone view.');
+    }
+
+    $(document).ready(function() {
+        console.log('Details.cshtml Scripts loaded - jQuery is ready');
+        console.log('Found edit-funding-link elements:', $('.edit-funding-link').length);
+        console.log('Found edit-funding-btn elements:', $('.edit-funding-btn').length);
+        console.log('Found modal:', $('#updateFundingModal').length);
+        
+        // Initialize sortable tables in modals
+        $('.sortable-table').each(function() {
+            initializeSortableTable($(this));
+        });
+        
+        // Event delegation for edit funding links and buttons
+        $(document).on('click', '.edit-funding-link, .edit-funding-btn', function(e) {
+            console.log('CLICK EVENT TRIGGERED!');
+            e.preventDefault();
+            var $this = $(this);
+            var type = $this.data('type');
+            var count = $this.data('count');
+            var programmePercent = $this.data('programme');
+            var adminPercent = $this.data('admin');
+            
+            console.log('Edit funding clicked:', { type: type, count: count, programmePercent: programmePercent, adminPercent: adminPercent });
+            
+            // Set form values
+            $('#resourceType').val(type);
+            $('#resourceCount').val(count);
+            $('#programmePercentage').val(programmePercent);
+            $('#adminPercentage').val(adminPercent);
+            $('#updateFundingModalLabel').text('Update ' + type + ' Funding Allocation');
+            
+            console.log('Form values set, opening modal...');
+            
+            // Show modal
+            $('#updateFundingModal').modal('show');
+        });
+        
+        // Clear modal when closed
+        $('#updateFundingModal').on('hidden.bs.modal', function () {
+            $('#resourceType').val('');
+            $('#resourceCount').val('');
+            $('#programmePercentage').val('');
+            $('#adminPercentage').val('');
+            $('#fundingNotes').val('');
+            $('.invalid-feedback').remove();
+            $('#programmePercentage, #adminPercentage').removeClass('is-invalid');
+            $('button[type="submit"]', '#updateFundingModal').prop('disabled', false);
+        });
+        
+                // Validate percentage totals
+                $('#programmePercentage, #adminPercentage').on('input', function() {
+                    var programme = parseFloat($('#programmePercentage').val()) || 0;
+                    var admin = parseFloat($('#adminPercentage').val()) || 0;
+                    var total = programme + admin;
+                    
+                    if (total > 100) {
+                        $('#programmePercentage, #adminPercentage').addClass('is-invalid');
+                        $('#programmePercentage').siblings('.invalid-feedback').remove();
+                        $('#programmePercentage').after('<div class="invalid-feedback d-block">Total percentage cannot exceed 100% (currently ' + total + '%)</div>');
+                        $('button[type="submit"]', '#updateFundingModal').prop('disabled', true);
+                    } else {
+                        $('#programmePercentage, #adminPercentage').removeClass('is-invalid');
+                        $('.invalid-feedback').remove();
+                        $('button[type="submit"]', '#updateFundingModal').prop('disabled', false);
+                    }
+                });
+                
+                // Event delegation for view funding history links
+                $(document).on('click', '.view-funding-history-link', function(e) {
+                    e.preventDefault();
+                    var $this = $(this);
+                    
+                    // Populate modal with data
+                    $('#historyDate').text($this.data('date'));
+                    $('#historyTime').text($this.data('time'));
+                    $('#historyType').html('<span class="badge badge-' + ($this.data('type') === 'Permanent' ? 'primary' : 'info') + '">' + $this.data('type') + '</span>');
+                    $('#historyChangedBy').text($this.data('changed-by'));
+                    
+                    // Build changes table
+                    var hasPrevious = $this.data('has-previous') === 'true';
+                    var count = parseFloat($this.data('count'));
+                    var programme = parseFloat($this.data('programme'));
+                    var admin = parseFloat($this.data('admin'));
+                    var prevCount = parseFloat($this.data('prev-count'));
+                    var prevProgramme = parseFloat($this.data('prev-programme'));
+                    var prevAdmin = parseFloat($this.data('prev-admin'));
+                    
+                    var tableHtml = '<table class="table table-sm table-bordered">';
+                    tableHtml += '<thead><tr><th>Field</th>';
+                    if (hasPrevious) {
+                        tableHtml += '<th>Old Value</th><th>New Value</th><th>Change</th>';
+                    } else {
+                        tableHtml += '<th>Value</th>';
+                    }
+                    tableHtml += '</tr></thead><tbody>';
+                    
+                    // Count row
+                    tableHtml += '<tr><td><strong>Count</strong></td>';
+                    if (hasPrevious) {
+                        var countDiff = count - prevCount;
+                        var countArrow = countDiff > 0 ? '↑' : (countDiff < 0 ? '↓' : '');
+                        tableHtml += '<td>' + prevCount + '</td>';
+                        tableHtml += '<td><strong>' + count + '</strong></td>';
+                        tableHtml += '<td>' + (countDiff !== 0 ? countArrow + ' ' + Math.abs(countDiff).toFixed(1) : 'No change') + '</td>';
+                    } else {
+                        tableHtml += '<td><strong>' + count + '</strong></td>';
+                    }
+                    tableHtml += '</tr>';
+                    
+                    // Programme row
+                    tableHtml += '<tr><td><strong>Programme %</strong></td>';
+                    if (hasPrevious) {
+                        var progDiff = programme - prevProgramme;
+                        var progArrow = progDiff > 0 ? '↑' : (progDiff < 0 ? '↓' : '');
+                        tableHtml += '<td>' + prevProgramme + '%</td>';
+                        tableHtml += '<td><span class="badge badge-success">' + programme + '%</span></td>';
+                        tableHtml += '<td>' + (progDiff !== 0 ? progArrow + ' ' + Math.abs(progDiff).toFixed(1) + '%' : 'No change') + '</td>';
+                    } else {
+                        tableHtml += '<td><span class="badge badge-success">' + programme + '%</span></td>';
+                    }
+                    tableHtml += '</tr>';
+                    
+                    // Admin row
+                    tableHtml += '<tr><td><strong>Admin %</strong></td>';
+                    if (hasPrevious) {
+                        var adminDiff = admin - prevAdmin;
+                        var adminArrow = adminDiff > 0 ? '↑' : (adminDiff < 0 ? '↓' : '');
+                        tableHtml += '<td>' + prevAdmin + '%</td>';
+                        tableHtml += '<td><span class="badge badge-info">' + admin + '%</span></td>';
+                        tableHtml += '<td>' + (adminDiff !== 0 ? adminArrow + ' ' + Math.abs(adminDiff).toFixed(1) + '%' : 'No change') + '</td>';
+                    } else {
+                        tableHtml += '<td><span class="badge badge-info">' + admin + '%</span></td>';
+                    }
+                    tableHtml += '</tr>';
+                    
+                    tableHtml += '</tbody></table>';
+                    $('#historyChangesTable').html(tableHtml);
+                    
+                    // Show/hide notes section
+                    var notes = $this.data('notes');
+                    if (notes && notes.trim() !== '') {
+                        $('#historyNotes').text(notes);
+                        $('#historyNotesContainer').show();
+                    } else {
+                        $('#historyNotesContainer').hide();
+                    }
+                    
+                    // Show modal
+                    $('#viewFundingHistoryModal').modal('show');
+                });
+            });
+
+    function initializeSortableTable(table) {
+        var currentSort = { column: null, direction: 'asc' };
+
+        table.find('.sortable').on('click keypress', function(e) {
+            if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                return;
+            }
+            
+            var column = $(this).data('column');
+            var direction = 'asc';
+            
+            if (currentSort.column === column && currentSort.direction === 'asc') {
+                direction = 'desc';
+            }
+            
+            sortTable(table, column, direction);
+            currentSort = { column: column, direction: direction };
+        });
+
+        function sortTable(table, column, direction) {
+            var tbody = table.find('tbody');
+            var rows = tbody.find('tr').toArray();
+            
+            rows.sort(function(a, b) {
+                var aVal, bVal;
+                var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                
+                if (column === 'DueDate' || column === 'ActualDate') {
+                    var aDate = $(a).find('td').eq(colIndex).text().trim();
+                    var bDate = $(b).find('td').eq(colIndex).text().trim();
+                    aVal = new Date(aDate);
+                    bVal = new Date(bDate);
+                } else {
+                    aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                    bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                } else {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                }
+            });
+            
+            tbody.empty();
+            rows.forEach(function(row) {
+                tbody.append(row);
+            });
+            
+            updateSortIcons(table, column, direction);
+        }
+
+        function updateSortIcons(table, column, direction) {
+            table.find('.sortable i').remove();
+            var header = table.find('.sortable[data-column="' + column + '"]');
+            var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+            header.append(' <i class="fas ' + iconClass + '"></i>');
+        }
+    }
     </script>
 }
+
+<!-- Add Contact Modal -->
+<div class="modal fade" id="addContactModal" tabindex="-1" role="dialog" aria-labelledby="addContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addContactModalLabel">Add New Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="AddContact" method="post">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="contactName">Name</label>
+                        <input type="text" class="form-control" id="contactName" name="name" required placeholder="Enter contact name">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmail">Email Address</label>
+                        <input type="email" class="form-control" id="contactEmail" name="email" required placeholder="Enter email address">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactRole">Role (Optional)</label>
+                        <input type="text" class="form-control" id="contactRole" name="role" placeholder="e.g., Project Manager, Stakeholder, Developer">
+                        <small class="form-text text-muted">Role will be populated from Entra ID once integration is complete</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactDescription">Description (Optional)</label>
+                        <textarea class="form-control" id="contactDescription" name="description" rows="2" placeholder="Additional details about this contact..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

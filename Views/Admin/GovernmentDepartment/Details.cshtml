@@ -1,0 +1,170 @@
+@model Compass.Models.GovernmentDepartment
+@{
+    ViewData["Title"] = "Government Department Details";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">Government Departments</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
+        </ol>
+    </nav>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Department Details</h3>
+                <div class="card-tools">
+                    <a href="@Url.Action("Edit", "GovernmentDepartment", new { id = Model.Id })" class="btn btn-primary btn-sm">Edit</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Title</strong></td>
+                            <td class="summary-value">@Model.Title</td>
+                        </tr>
+                        @if (!string.IsNullOrEmpty(Model.Abbreviation))
+                        {
+                            <tr>
+                                <td class="summary-label"><strong>Abbreviation</strong></td>
+                                <td class="summary-value"><span class="badge badge-info">@Model.Abbreviation</span></td>
+                            </tr>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.Format))
+                        {
+                            <tr>
+                                <td class="summary-label"><strong>Format</strong></td>
+                                <td class="summary-value">@Model.Format</td>
+                            </tr>
+                        }
+                        <tr>
+                            <td class="summary-label"><strong>Status</strong></td>
+                            <td class="summary-value">
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge badge-success">Live</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Inactive</span>
+                                }
+                            </td>
+                        </tr>
+                        @if (!string.IsNullOrEmpty(Model.WebUrl))
+                        {
+                            <tr>
+                                <td class="summary-label"><strong>Website</strong></td>
+                                <td class="summary-value"><a href="@Model.WebUrl" target="_blank" rel="noopener noreferrer">@Model.WebUrl</a></td>
+                            </tr>
+                        }
+                        @if (Model.ParentDepartment != null)
+                        {
+                            <tr>
+                                <td class="summary-label"><strong>Parent Department</strong></td>
+                                <td class="summary-value">
+                                    <a href="@Url.Action("Details", "GovernmentDepartment", new { id = Model.ParentDepartment.Id })">@Model.ParentDepartment.Title</a>
+                                </td>
+                            </tr>
+                        }
+                        <tr>
+                            <td class="summary-label"><strong>Child Departments</strong></td>
+                            <td class="summary-value">@Model.ChildDepartments.Count</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Last Synced</strong></td>
+                            <td class="summary-value">@Model.LastSyncedAt.ToString("dd MMM yyyy HH:mm")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (Model.ChildDepartments.Any())
+        {
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="card-title">Child Departments</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Abbreviation</th>
+                                <th>Format</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var child in Model.ChildDepartments.OrderBy(c => c.Title))
+                            {
+                                <tr>
+                                    <td>@child.Title</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(child.Abbreviation))
+                                        {
+                                            <span class="badge badge-info">@child.Abbreviation</span>
+                                        }
+                                    </td>
+                                    <td><small class="text-muted">@child.Format</small></td>
+                                    <td>
+                                        <a href="@Url.Action("Details", "GovernmentDepartment", new { id = child.Id })" class="btn btn-outline-info btn-sm">View</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="@Url.Action("Edit", "GovernmentDepartment", new { id = Model.Id })" class="btn btn-primary btn-block">Edit</a>
+                    <a href="@Url.Action("Index", "GovernmentDepartment")" class="btn btn-secondary btn-block">Back to List</a>
+                    <a href="@Url.Action("Hierarchy", "GovernmentDepartment")" class="btn btn-info btn-block">View Hierarchy</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Sync Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="mb-0">
+                    <dt>GOV.UK ID</dt>
+                    <dd><code>@Model.GovukId</code></dd>
+
+                    @if (!string.IsNullOrEmpty(Model.AnalyticsIdentifier))
+                    {
+                        <dt>Analytics ID</dt>
+                        <dd>@Model.AnalyticsIdentifier</dd>
+                    }
+
+                    <dt>Last Synced</dt>
+                    <dd>@Model.LastSyncedAt.ToString("dd MMM yyyy HH:mm")</dd>
+
+                    <dt>Created</dt>
+                    <dd>@Model.CreatedAt.ToString("dd MMM yyyy")</dd>
+
+                    <dt>Updated</dt>
+                    <dd>@Model.UpdatedAt.ToString("dd MMM yyyy")</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,532 @@
+@model Compass.Models.Project
+
+@{
+    var totalOutcomes = Model.Outcomes.Count;
+    var totalMilestones = Model.Milestones.Count;
+    var completedMilestones = Model.Milestones.Count(m => m.Status == "complete");
+}
+
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-lg-8">
+        <!-- Project Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Project Summary</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 project-overview-summary">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Project Code</strong></td>
+                            <td class="summary-value">@Model.ProjectCode</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Business Area</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
+                                {
+                                    @Model.BusinessArea
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not specified</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Phase</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.Phase))
+                                {
+                                    @Model.Phase
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not specified</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Status</strong></td>
+                            <td class="summary-value">
+                                <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>RAG Status</strong></td>
+                            <td class="summary-value">
+                                <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Flagship</strong></td>
+                            <td class="summary-value">
+                                @if (Model.IsFlagship)
+                                {
+                                    <span class="badge badge-success">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">No</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Outcomes</strong></td>
+                            <td class="summary-value">@totalOutcomes defined</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Milestones</strong></td>
+                            <td class="summary-value">@completedMilestones of @totalMilestones completed</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Project Aim -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Project Aim</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#editAimModal">Change</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.Aim))
+                {
+                    <p class="mb-0">@Model.Aim</p>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No aim specified</p>
+                }
+            </div>
+        </div>
+
+        <!-- Strategic Alignment -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Strategic Alignment</h3>
+                <div class="card-tools">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="strategicalignment">Manage alignment</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 project-overview-summary">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Strategic Objectives</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
+                                {
+                                    @Model.StrategicObjectives
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No strategic objectives defined</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Mission Pillars</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.MissionPillars))
+                                {
+                                    @Model.MissionPillars
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No mission pillars defined</span>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Project Milestones -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Recent Milestones</h3>
+                <div class="card-tools">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View all milestones</a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.Milestones.Any())
+                {
+                    <table class="table table-hover text-nowrap milestones-table">
+                        <thead>
+                            <tr>
+                                <th class="col-name">Name</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-due">Due Date</th>
+                                <th class="col-actual">Actual Date</th>
+                                <th class="col-progress">Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate).Take(5))
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="#" 
+                                           class="view-milestone-link"
+                                           data-milestone-id="@milestone.Id"
+                                           data-milestone-name="@milestone.Name"
+                                           data-milestone-status="@milestone.Status"
+                                           data-milestone-progress="@(milestone.ProgressPercent ?? 0)"
+                                           data-milestone-due="@milestone.DueDate.ToString("yyyy-MM-dd")"
+                                           data-milestone-actual="@(milestone.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
+                                           data-milestone-description="@milestone.Description">
+                                            @milestone.Name
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "in_progress" ? "info" : "secondary")">
+                                            @milestone.Status.Replace("_", " ")
+                                        </span>
+                                    </td>
+                                    <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                    <td>
+                                        @if (milestone.ActualDate.HasValue)
+                                        {
+                                            @milestone.ActualDate.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not completed</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
+                                        {
+                                            @milestone.ProgressPercent.Value<text>%</text>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0%</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center p-4">
+                        <p class="text-muted">No milestones defined.</p>
+                        <a href="#" data-toggle="modal" data-target="#addMilestoneModal">Add milestone</a>
+                    </div>
+                }
+            </div>
+            @if (Model.Milestones.Count > 5)
+            {
+                <div class="card-footer">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View all @Model.Milestones.Count milestones</a>
+                </div>
+            }
+        </div>
+    </div>
+    
+    <!-- Right Column -->
+    <div class="col-lg-4">
+        <!-- Staff & Funding Overview -->
+        <div class="card mb-4 staff-funding-card">
+            <div class="card-header">
+                <h3 class="card-title">Staff & Funding Overview</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @{
+                    var permFte = Model.TotalPermFte ?? 0;
+                    var mspFte = Model.TotalMspFte ?? 0;
+                    var totalFte = permFte + mspFte;
+                    
+                    // Calculate percentages for Permanent vs MSP
+                    var permPercentage = totalFte > 0 ? Math.Round((permFte / totalFte) * 100, 1) : 0;
+                    var mspPercentage = totalFte > 0 ? Math.Round((mspFte / totalFte) * 100, 1) : 0;
+                    
+                    // Funding calculations
+                    var permFunding = Model.ResourceFunding?.FirstOrDefault(rf => rf.ResourceType == "Permanent");
+                    var mspFunding = Model.ResourceFunding?.FirstOrDefault(rf => rf.ResourceType == "MSP");
+                    
+                    var permProgrammeFunded = permFunding != null ? (permFunding.ProgrammeFundedPercentage / 100m) * permFte : 0;
+                    var permAdminFunded = permFunding != null ? (permFunding.AdminFundedPercentage / 100m) * permFte : 0;
+                    var mspProgrammeFunded = mspFunding != null ? (mspFunding.ProgrammeFundedPercentage / 100m) * mspFte : 0;
+                    var mspAdminFunded = mspFunding != null ? (mspFunding.AdminFundedPercentage / 100m) * mspFte : 0;
+                    
+                    var programmeFunded = permProgrammeFunded + mspProgrammeFunded;
+                    var adminFunded = permAdminFunded + mspAdminFunded;
+                }
+                
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th class="text-right">FTE</th>
+                            <th class="text-right">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Permanent</td>
+                            <td class="text-right"><strong>@permFte</strong></td>
+                            <td class="text-right">@permPercentage%</td>
+                        </tr>
+                        <tr>
+                            <td>MSP</td>
+                            <td class="text-right"><strong>@mspFte</strong></td>
+                            <td class="text-right">@mspPercentage%</td>
+                        </tr>
+                        <tr class="table-info">
+                            <td><strong>Total FTE</strong></td>
+                            <td class="text-right"><strong>@totalFte</strong></td>
+                            <td class="text-right"><strong>100%</strong></td>
+                        </tr>
+                        <tr class="border-top">
+                            <td>Programme</td>
+                            <td class="text-right" colspan="2">@programmeFunded.ToString("0.0") FTE</td>
+                        </tr>
+                        <tr>
+                            <td>Admin</td>
+                            <td class="text-right" colspan="2">@adminFunded.ToString("0.0") FTE</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contacts -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Contacts</h3>
+                <div class="card-tools">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts">View contacts</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.ProjectContacts.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var contact in Model.ProjectContacts.OrderBy(c => c.SortOrder).Take(5))
+                        {
+                            <div class="mb-3 pb-3 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong class="d-block">@contact.Name</strong>
+                                        <small class="text-muted d-block">@contact.Role</small>
+                                        <small class="text-muted">@contact.Email</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (Model.ProjectContacts.Count > 5)
+                    {
+                        <div class="text-center mt-3">
+                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts" class="btn btn-sm btn-outline-secondary">
+                                View all @Model.ProjectContacts.Count contacts
+                            </a>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No contacts defined.</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Aim Modal -->
+<div class="modal fade" id="editAimModal" tabindex="-1" role="dialog" aria-labelledby="editAimModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editAimModalLabel">Edit Project Aim</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateAim" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="aim">Project Aim</label>
+                        <textarea class="form-control" id="aim" name="aim" rows="6" placeholder="Describe the project aim...">@Model.Aim</textarea>
+                        <small class="form-text text-muted">Clearly state the primary objective and purpose of this project.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View/Edit Milestone Modal -->
+<div class="modal fade" id="viewMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="viewMilestoneModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewMilestoneModalLabel">Milestone Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="editMilestoneForm" asp-action="UpdateMilestone" method="post">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <input type="hidden" name="milestoneId" id="editMilestoneId" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editMilestoneName">Milestone Name</label>
+                        <input type="text" class="form-control" id="editMilestoneName" name="name" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editMilestoneStatus">Status</label>
+                                <select class="form-control" id="editMilestoneStatus" name="status" required>
+                                    <option value="not_started">Not Started</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="at_risk">At Risk</option>
+                                    <option value="complete">Complete</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editMilestoneProgress">Progress (%)</label>
+                                <input type="number" class="form-control" id="editMilestoneProgress" name="progressPercent" min="0" max="100">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editMilestoneDueDate">Due Date</label>
+                                <input type="date" class="form-control" id="editMilestoneDueDate" name="dueDate" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editMilestoneActualDate">Actual Completion Date</label>
+                                <input type="date" class="form-control" id="editMilestoneActualDate" name="actualDate">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editMilestoneDescription">Description</label>
+                        <textarea class="form-control" id="editMilestoneDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn btn-danger" id="deleteMilestoneFromViewBtn">Delete Milestone</button>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Milestone Confirmation Modal -->
+<div class="modal fade" id="deleteMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="deleteMilestoneModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteMilestoneModalLabel">Confirm Delete Milestone</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this milestone? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <form asp-action="DeleteMilestone" method="post" id="deleteMilestoneForm">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="milestoneId" id="deleteMilestoneId" />
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initOverviewPage() {
+            // Handle view milestone link clicks
+            $(document).on('click', '.view-milestone-link', function(e) {
+                e.preventDefault();
+                
+                var milestoneId = $(this).attr('data-milestone-id');
+                var milestoneName = $(this).attr('data-milestone-name');
+                var milestoneStatus = $(this).attr('data-milestone-status');
+                var milestoneProgress = $(this).attr('data-milestone-progress');
+                var milestoneDue = $(this).attr('data-milestone-due');
+                var milestoneActual = $(this).attr('data-milestone-actual');
+                var milestoneDescription = $(this).attr('data-milestone-description');
+                
+                // Populate modal fields
+                $('#editMilestoneId').val(milestoneId);
+                $('#editMilestoneName').val(milestoneName);
+                $('#editMilestoneStatus').val(milestoneStatus);
+                $('#editMilestoneProgress').val(milestoneProgress);
+                $('#editMilestoneDueDate').val(milestoneDue);
+                $('#editMilestoneActualDate').val(milestoneActual);
+                $('#editMilestoneDescription').val(milestoneDescription);
+                
+                // Show the modal
+                $('#viewMilestoneModal').modal('show');
+            });
+
+            // Handle delete milestone button from view modal
+            $('#deleteMilestoneFromViewBtn').on('click', function() {
+                var milestoneId = $('#editMilestoneId').val();
+                $('#viewMilestoneModal').modal('hide');
+                $('#deleteMilestoneId').val(milestoneId);
+                $('#deleteMilestoneModal').modal('show');
+            });
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initOverviewPage);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initOverviewPage);
+                }
+            });
+        }
+    })();
+</script>

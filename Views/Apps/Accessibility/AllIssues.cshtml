@@ -1,0 +1,130 @@
+@model IEnumerable<Compass.Models.AccessibilityIssue>
+
+@{
+    ViewData["Title"] = "All Accessibility Issues";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item">Apps</li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">Accessibility Management</a></li>
+            <li class="breadcrumb-item active" aria-current="page">All Issues</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">All Accessibility Issues</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">
+                        Back to Products
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Open Issues (@Model.Count())</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        @if (Model.Any())
+                        {
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>WCAG Criteria</th>
+                                        <th>Level</th>
+                                        <th>Status</th>
+                                        <th>Identified</th>
+                                        <th>Resolving</th>
+                                        <th>Planned Resolution</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in Model.OrderBy(i => i.ProductAccessibility.ProductName).ThenBy(i => i.WcagCriteria))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })">
+                                                    <strong>@issue.ProductAccessibility.ProductName</strong>
+                                                </a>
+                                                <br><small class="text-muted">@issue.ProductAccessibility.FipsId</small>
+                                            </td>
+                                            <td>
+                                                <strong>@issue.WcagCriteria</strong>
+                                                <br><small class="text-muted">WCAG @issue.WcagVersion</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(issue.WcagLevel == "A" ? "info" : issue.WcagLevel == "AA" ? "primary" : "warning")">
+                                                    Level @issue.WcagLevel
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Status == "open" ? "danger" : issue.Status == "in_progress" ? "warning" : "secondary")">
+                                                    @issue.Status.Replace("_", " ")
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @issue.IdentifiedDate.ToString("dd MMM yyyy")<br>
+                                                <small class="text-muted">via @issue.IdentifiedVia</small>
+                                            </td>
+                                            <td>
+                                                @if (issue.IsResolving)
+                                                {
+                                                    <span class="badge badge-success">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">No</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (issue.PlannedResolutionDate.HasValue)
+                                                {
+                                                    @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-primary btn-sm">
+                                                    View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <p class="text-muted">No open accessibility issues across all products.</p>
+                                <a href="@Url.Action("Index")" class="btn btn-primary">Back to Products</a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

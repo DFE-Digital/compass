@@ -1,0 +1,483 @@
+@model Compass.Models.Project
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+    
+    string GetTrendIcon(string currentRag, string previousRag)
+    {
+        if (string.IsNullOrEmpty(previousRag)) return "fas fa-minus text-muted";
+        
+        var ragOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+        var currentIndex = Array.IndexOf(ragOrder, currentRag);
+        var previousIndex = Array.IndexOf(ragOrder, previousRag);
+        
+        if (currentIndex > previousIndex) return "fas fa-arrow-up text-success";
+        if (currentIndex < previousIndex) return "fas fa-arrow-down text-danger";
+        return "fas fa-minus text-muted";
+    }
+    
+    string GetTrendText(string currentRag, string previousRag)
+    {
+        if (string.IsNullOrEmpty(previousRag)) return "Initial status";
+        
+        var ragOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+        var currentIndex = Array.IndexOf(ragOrder, currentRag);
+        var previousIndex = Array.IndexOf(ragOrder, previousRag);
+        
+        if (currentIndex > previousIndex) return "Improving";
+        if (currentIndex < previousIndex) return "Worsening";
+        return "No change";
+    }
+}
+
+
+
+<!-- Current RAG Status -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4" id="current-status">
+            <div class="card-header">
+                <h3 class="card-title">Current Status</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 rag-summary">
+                    <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>RAG Status</strong></td>
+                            <td class="summary-value">
+                                <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                            </td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="ragStatus">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Justification</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.RagJustification))
+                                {
+                                    <div class="preserve-formatting">@Model.RagJustification</div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No justification provided</span>
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="ragStatus">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Path to Green</strong></td>
+                            <td class="summary-value path-to-green-text">
+                                @if (!string.IsNullOrEmpty(Model.PathToGreen))
+                                {
+                                    <div class="preserve-formatting">@Model.PathToGreen</div>
+                                }
+                                else if (Model.RagStatus != "Green")
+                                {
+                                    <span class="text-warning">Action required - Please document path to green</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                <a href="#" class="change-link" data-field="pathToGreen">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Last Updated</strong></td>
+                            <td class="summary-value">
+                                @if (Model.RagHistory?.Any() == true)
+                                {
+                                    var lastUpdate = Model.RagHistory.OrderByDescending(h => h.ChangedAt).FirstOrDefault();
+                                    if (lastUpdate != null)
+                                    {
+                                        var daysSince = (DateTime.UtcNow - lastUpdate.ChangedAt).TotalDays;
+                                        var hoursSince = (DateTime.UtcNow - lastUpdate.ChangedAt).TotalHours;
+                                        
+                                        @lastUpdate.ChangedAt.ToString("dd MMM yyyy")
+                                        <text> </text>
+                                        <span class="text-muted">
+                                            (@(daysSince >= 1 
+                                                ? $"{(int)daysSince} day{((int)daysSince != 1 ? "s" : "")} ago" 
+                                                : $"{(int)hoursSince} hour{((int)hoursSince != 1 ? "s" : "")} ago"))
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not recorded</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not recorded</span>
+                                }
+                            </td>
+                            <td class="summary-action text-right"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card" id="history">
+            <div class="card-header">
+                <h3 class="card-title">RAG Status History</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.RagHistory?.Any() == true)
+                {
+                    <table class="table table-hover text-nowrap sortable-table rag-tracking-table">
+                        <thead>
+                            <tr>
+                                <th class="col-rag-date sortable" data-column="Date" tabindex="0" role="button" aria-label="Sort by Date">Date</th>
+                                <th class="col-rag-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">RAG Status</th>
+                                <th class="col-rag-trend sortable" data-column="Trend" tabindex="0" role="button" aria-label="Sort by Trend">Trend</th>
+                                <th class="col-rag-justification">Justification</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var ragHistory = Model.RagHistory.OrderByDescending(h => h.ChangedAt).ToList();
+                            }
+                            @for (int i = 0; i < ragHistory.Count; i++)
+                            {
+                                var history = ragHistory[i];
+                                var previousRag = i < ragHistory.Count - 1 ? ragHistory[i + 1].RagStatus : null;
+                                <tr>
+                                    <td>
+                                        <a href="#" class="view-rag-update" 
+                                           data-rag-id="@history.Id" 
+                                           data-rag-status="@history.RagStatus" 
+                                           data-rag-justification="@(history.Justification ?? "")" 
+                                           data-rag-date="@history.ChangedAt.ToString("dd MMM yyyy")" 
+                                           data-rag-by="@(history.ChangedByName ?? history.ChangedByEmail)">
+                                            @history.ChangedAt.ToString("dd MMM yyyy")
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="@GetRagBadgeClass(history.RagStatus)">
+                                            @history.RagStatus
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <i class="@GetTrendIcon(history.RagStatus, previousRag)" title="@GetTrendText(history.RagStatus, previousRag)"></i>
+                                        <small class="text-muted">@GetTrendText(history.RagStatus, previousRag)</small>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(history.Justification))
+                                        {
+                                            <div class="preserve-formatting">@history.Justification</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No justification provided</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center p-4">
+                        <p class="text-muted">No RAG history available.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initRagTrackingPage() {
+            // Initialize sortable tables
+            $('.rag-tracking-table').each(function() {
+                initializeRagTrackingTable($(this));
+            });
+
+            // Handle change link clicks
+            $(document).on('click', '.change-link', function(e) {
+                e.preventDefault();
+                var field = $(this).attr('data-field');
+                
+                if (field === 'ragStatus') {
+                    $('#updateRagModal').modal('show');
+                } else if (field === 'pathToGreen') {
+                    $('#pathToGreenModal').modal('show');
+                }
+            });
+
+            // Handle view RAG update button clicks
+            $(document).on('click', '.view-rag-update', function(e) {
+                e.preventDefault();
+                var ragId = $(this).attr('data-rag-id');
+                var ragStatus = $(this).attr('data-rag-status');
+                var ragDate = $(this).attr('data-rag-date');
+                var ragBy = $(this).attr('data-rag-by');
+                var ragJustification = $(this).attr('data-rag-justification');
+                
+                viewRagUpdate(ragId, ragStatus, ragDate, ragBy, ragJustification);
+            });
+
+            // Handle delete RAG history button
+            $('#deleteRagHistoryBtn').on('click', function() {
+                var ragHistoryId = $('#viewRagHistoryId').val();
+                $('#deleteRagHistoryId').val(ragHistoryId);
+                $('#viewRagUpdateModal').modal('hide');
+                $('#deleteRagHistoryModal').modal('show');
+            });
+        }
+
+        function viewRagUpdate(ragId, ragStatus, ragDate, ragBy, ragJustification) {
+            $('#viewRagHistoryId').val(ragId);
+            var badgeClass = getBadgeClass(ragStatus);
+            $('#viewRagStatus').html('<span class="' + badgeClass + '">' + ragStatus + '</span>');
+            $('#viewRagDate').text(ragDate);
+            $('#viewRagBy').text(ragBy);
+            $('#viewRagJustification').text(ragJustification || 'No justification provided');
+            $('#viewRagUpdateModal').modal('show');
+        }
+
+        function getBadgeClass(ragStatus) {
+            switch(ragStatus) {
+                case 'Green': return 'badge badge-green';
+                case 'Amber-Green': return 'badge badge-amber-green';
+                case 'Amber': return 'badge badge-amber';
+                case 'Amber-Red': return 'badge badge-amber-red';
+                case 'Red': return 'badge badge-red';
+                default: return 'badge badge-secondary';
+            }
+        }
+
+        function initializeRagTrackingTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Date') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = new Date(aDate);
+                        bVal = new Date(bDate);
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+
+        if (typeof jQuery !== 'undefined') {
+            $(document).ready(initRagTrackingPage);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    $(document).ready(initRagTrackingPage);
+                }
+            });
+        }
+    })();
+</script>
+
+<!-- Update RAG Status Modal -->
+<div class="modal fade" id="updateRagModal" tabindex="-1" role="dialog" aria-labelledby="updateRagModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="updateRagModalLabel">Update RAG Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateRagStatus" asp-controller="Project" method="post">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="ragStatus">RAG Status</label>
+                        <select class="form-control" id="ragStatus" name="ragStatus" required>
+                            <option value="">Select status...</option>
+                            <option value="Green" selected="@(Model.RagStatus == "Green")">Green - On track, no issues</option>
+                            <option value="Amber-Green" selected="@(Model.RagStatus == "Amber-Green")">Amber-Green - Minor issues, corrective action in place</option>
+                            <option value="Amber" selected="@(Model.RagStatus == "Amber")">Amber - Some issues, may impact delivery</option>
+                            <option value="Amber-Red" selected="@(Model.RagStatus == "Amber-Red")">Amber-Red - Significant issues, likely to impact delivery</option>
+                            <option value="Red" selected="@(Model.RagStatus == "Red")">Red - Critical issues, will impact delivery</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ragJustification">Justification</label>
+                        <textarea class="form-control" id="ragJustification" name="ragJustification" rows="5" required placeholder="Explain the reason for this RAG status...">@Model.RagJustification</textarea>
+                        <small class="form-text text-muted">Provide a clear explanation for the current status</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View RAG Update Modal -->
+<div class="modal fade" id="viewRagUpdateModal" tabindex="-1" role="dialog" aria-labelledby="viewRagUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewRagUpdateModalLabel">RAG Update Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="viewRagHistoryId" />
+                <dl class="row">
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8" id="viewRagStatus"></dd>
+                    
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8" id="viewRagDate"></dd>
+                    
+                    <dt class="col-sm-4">Updated By</dt>
+                    <dd class="col-sm-8" id="viewRagBy"></dd>
+                    
+                    <dt class="col-sm-4">Justification</dt>
+                    <dd class="col-sm-8 preserve-formatting" id="viewRagJustification"></dd>
+                </dl>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-danger" id="deleteRagHistoryBtn">Delete</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Path to Green Modal -->
+<div class="modal fade" id="pathToGreenModal" tabindex="-1" role="dialog" aria-labelledby="pathToGreenModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pathToGreenModalLabel">Update Path to Green</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdatePathToGreen" asp-controller="Project" method="post">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Current Status:</strong> <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                        @if (Model.RagStatus != "Green")
+                        {
+                            <p class="mb-0 mt-2">Document the actions being taken to return this project to green status.</p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 mt-2">Document the actions to maintain green status or address potential risks.</p>
+                        }
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="pathToGreen">Path to Green Plan</label>
+                        <textarea class="form-control" id="pathToGreen" name="pathToGreen" rows="8" placeholder="Describe the steps, actions, and timeline...">@(Model.PathToGreen ?? "")</textarea>
+                        <small class="form-text text-muted">Include specific actions, responsible parties, and target dates</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Path to Green</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete RAG History Confirmation Modal -->
+<div class="modal fade" id="deleteRagHistoryModal" tabindex="-1" role="dialog" aria-labelledby="deleteRagHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteRagHistoryModalLabel">Confirm Delete RAG History</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this RAG status update?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form asp-action="DeleteRagHistory" asp-controller="Project" method="post" class="d-inline">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="ragHistoryId" id="deleteRagHistoryId" />
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

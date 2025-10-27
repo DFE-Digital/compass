@@ -1,0 +1,507 @@
+@model Compass.Models.Project
+
+<div class="row">
+    <div class="col-12">
+        <!-- Multi-Department Cooperation -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Multi-Department Cooperation</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#manageDepartmentsModal">Manage</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.IsMultiDepartmentProject)
+                {
+                    <p><strong>This project is being delivered in cooperation with other government departments.</strong></p>
+                    
+                    @if (!string.IsNullOrEmpty(Model.OtherDepartments))
+                    {
+                        var departmentIds = System.Text.Json.JsonSerializer.Deserialize<List<int>>(Model.OtherDepartments);
+                        var departments = ViewBag.GovernmentDepartments as List<Compass.Models.GovernmentDepartment>;
+                        var selectedDepartments = departments?.Where(d => departmentIds.Contains(d.Id)).ToList();
+                        
+                        @if (selectedDepartments != null && selectedDepartments.Any())
+                        {
+                            <div class="mt-2">
+                                <strong>Partnering Departments:</strong>
+                                <ul class="mt-2">
+                                    @foreach (var dept in selectedDepartments.OrderBy(d => d.Title))
+                                    {
+                                        <li>
+                                            <strong>@dept.Title</strong>
+                                            @if (!string.IsNullOrEmpty(dept.Abbreviation))
+                                            {
+                                                <span class="text-muted">(@dept.Abbreviation)</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted mt-2">No partnering departments specified.</p>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">This is a single-department project (DfE only).</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Strategic Objectives -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Strategic Objectives</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#manageObjectivesModal">Manage</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
+                {
+                    <div class="mb-3">
+                        <strong>Narrative:</strong>
+                        <div class="preserve-formatting mt-2">@Model.StrategicObjectives</div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No strategic objectives description provided.</p>
+                }
+
+                @if (Model.ProjectObjectives.Any())
+                {
+                    <hr>
+                    <strong>Linked Objectives:</strong>
+                    <ul class="mt-2">
+                        @foreach (var projectObjective in Model.ProjectObjectives.OrderBy(po => po.Objective?.Title))
+                        {
+                            <li class="mb-2">
+                                <strong>@projectObjective.Objective?.Title</strong>
+                                @if (!string.IsNullOrEmpty(projectObjective.Objective?.Description))
+                                {
+                                    <br>
+                                    <small class="text-muted">@projectObjective.Objective.Description</small>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Mission Pillars -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Mission Pillars</h3>
+                <div class="card-tools">
+                    <a href="#" data-toggle="modal" data-target="#manageMissionsModal">Manage</a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.MissionPillars))
+                {
+                    <div class="mb-3">
+                        <strong>Narrative:</strong>
+                        <div class="preserve-formatting mt-2">@Model.MissionPillars</div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No mission pillars description provided.</p>
+                }
+
+                @if (Model.ProjectMissions.Any())
+                {
+                    <hr>
+                    <strong>Linked Missions:</strong>
+                    <ul class="mt-2">
+                        @foreach (var projectMission in Model.ProjectMissions.OrderBy(pm => pm.Mission?.Title))
+                        {
+                            <li class="mb-2">
+                                <strong>@projectMission.Mission?.Title</strong>
+                                @if (!string.IsNullOrEmpty(projectMission.Mission?.Description))
+                                {
+                                    <br>
+                                    <small class="text-muted">@projectMission.Mission.Description</small>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Strategic Objectives Modal -->
+<div class="modal fade" id="manageObjectivesModal" tabindex="-1" role="dialog" aria-labelledby="manageObjectivesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manageObjectivesModalLabel">Manage Strategic Objectives</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateStrategicObjectivesAndLinks" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="strategicObjectivesText">Strategic Objectives Narrative</label>
+                        <textarea class="form-control preserve-formatting" id="strategicObjectivesText" name="strategicObjectivesText" rows="6" placeholder="Describe how this project aligns with strategic objectives...">@Model.StrategicObjectives</textarea>
+                        <small class="form-text text-muted">Provide a narrative description of how this project supports strategic objectives.</small>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label>Link to Specific Objectives</label>
+                        <p class="small text-muted">Select the strategic objectives this project directly supports.</p>
+                        
+                        @{
+                            var selectedObjectiveIds = Model.ProjectObjectives.Select(po => po.ObjectiveId).ToList();
+                            var objectives = ViewBag.Objectives as IEnumerable<Compass.Models.Objective>;
+                            
+                            if (objectives != null && objectives.Any())
+                            {
+                                var objectivesByTheme = objectives.GroupBy(o => o.Theme ?? "Other");
+                                
+                                foreach (var themeGroup in objectivesByTheme.OrderBy(g => g.Key))
+                                {
+                                    <div class="mb-3">
+                                        <h6 class="mb-2">@themeGroup.Key</h6>
+                                        @foreach (var objective in themeGroup.OrderBy(o => o.Title))
+                                        {
+                                            <div class="form-check">
+                                                <input type="checkbox" name="selectedObjectiveIds" value="@objective.Id" 
+                                                       class="form-check-input" id="obj_@objective.Id"
+                                                       @(selectedObjectiveIds.Contains(objective.Id) ? "checked" : "") />
+                                                <label class="form-check-label" for="obj_@objective.Id">
+                                                    @objective.Title
+                                                    @if (!string.IsNullOrEmpty(objective.Description))
+                                                    {
+                                                        <br><small class="text-muted">@objective.Description</small>
+                                                    }
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No strategic objectives available.</p>
+                            }
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Mission Pillars Modal -->
+<div class="modal fade" id="manageMissionsModal" tabindex="-1" role="dialog" aria-labelledby="manageMissionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manageMissionsModalLabel">Manage Mission Pillars</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateMissionPillarsAndLinks" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="missionPillarsText">Mission Pillars Narrative</label>
+                        <textarea class="form-control preserve-formatting" id="missionPillarsText" name="missionPillarsText" rows="6" placeholder="Describe how this project aligns with mission pillars...">@Model.MissionPillars</textarea>
+                        <small class="form-text text-muted">Provide a narrative description of how this project supports mission pillars.</small>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label>Link to Specific Missions</label>
+                        <p class="small text-muted">Select the missions this project directly supports.</p>
+                        
+                        @{
+                            var selectedMissionIds = Model.ProjectMissions.Select(pm => pm.MissionId).ToList();
+                            var missions = ViewBag.Missions as IEnumerable<Compass.Models.Mission>;
+                            
+                            if (missions != null && missions.Any())
+                            {
+                                var missionsByTheme = missions.GroupBy(m => m.Theme ?? "Other");
+                                
+                                foreach (var themeGroup in missionsByTheme.OrderBy(g => g.Key))
+                                {
+                                    <div class="mb-3">
+                                        <h6 class="mb-2">@themeGroup.Key</h6>
+                                        @foreach (var mission in themeGroup.OrderBy(m => m.Title))
+                                        {
+                                            <div class="form-check">
+                                                <input type="checkbox" name="selectedMissionIds" value="@mission.Id" 
+                                                       class="form-check-input" id="mission_@mission.Id"
+                                                       @(selectedMissionIds.Contains(mission.Id) ? "checked" : "") />
+                                                <label class="form-check-label" for="mission_@mission.Id">
+                                                    @mission.Title
+                                                    @if (!string.IsNullOrEmpty(mission.Description))
+                                                    {
+                                                        <br><small class="text-muted">@mission.Description</small>
+                                                    }
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No missions available.</p>
+                            }
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Multi-Department Cooperation Modal -->
+<div class="modal fade" id="manageDepartmentsModal" tabindex="-1" role="dialog" aria-labelledby="manageDepartmentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manageDepartmentsModalLabel">Manage Multi-Department Cooperation</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateMultiDepartmentCooperation" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isMultiDeptCheck" name="isMultiDepartmentProject" value="true" @(Model.IsMultiDepartmentProject ? "checked" : "") />
+                            <label class="form-check-label" for="isMultiDeptCheck">Is this a multi-department project?</label>
+                        </div>
+                        <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
+                    </div>
+
+                    <div id="departmentSelectionSection" style="@(Model.IsMultiDepartmentProject ? "" : "display: none;")">
+                        <hr>
+                        
+                        <div class="form-group">
+                            <label>Other Government Departments</label>
+                            <p class="small text-muted">Search and select the government departments partnering on this project.</p>
+                            
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="deptSearch" placeholder="Search for government departments..." autocomplete="off" />
+                            </div>
+                            <div id="deptSearchResults"></div>
+                            
+                            <div id="selectedDepartmentsList" class="mt-3"></div>
+                            <input type="hidden" name="otherDepartments" id="otherDepartmentsInput" value="@Model.OtherDepartments" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    // Namespace to avoid conflicts
+    if (!window.StrategicAlignment) {
+        window.StrategicAlignment = {};
+    }
+    
+    // Initialize with existing departments
+    window.StrategicAlignment.selectedDepartmentsData = [];
+    let searchTimeout;
+    
+    @if (Model.IsMultiDepartmentProject && !string.IsNullOrEmpty(Model.OtherDepartments))
+    {
+        var deptIds = System.Text.Json.JsonSerializer.Deserialize<List<int>>(Model.OtherDepartments);
+        var depts = ViewBag.GovernmentDepartments as List<Compass.Models.GovernmentDepartment>;
+        var selected = depts?.Where(d => deptIds.Contains(d.Id)).ToList();
+        
+        if (selected != null && selected.Any())
+        {
+            @:window.StrategicAlignment.selectedDepartmentsData = [
+            for (int i = 0; i < selected.Count; i++)
+            {
+                var dept = selected[i];
+                @:{ id: @dept.Id, text: '@Html.Raw(dept.Title.Replace("'", "\\'"))', abbreviation: '@Html.Raw(dept.Abbreviation?.Replace("'", "\\'") ?? "")' }@(i < selected.Count - 1 ? "," : "")
+            }
+            @:];
+        }
+    }
+    
+    function updateSelectedDepartmentsList() {
+        const $container = $('#selectedDepartmentsList');
+        const $input = $('#otherDepartmentsInput');
+        const selectedData = window.StrategicAlignment.selectedDepartmentsData;
+        
+        if (selectedData.length === 0) {
+            $container.empty();
+            $input.val('');
+            return;
+        }
+        
+        $container.html('<strong class="d-block mb-2">Selected Departments:</strong>');
+        
+        selectedData.forEach(function(dept) {
+            const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
+            const $item = $('<div class="d-inline-block mr-2 mb-2"></div>');
+            const $badge = $('<span class="badge badge-primary"></span>');
+            $badge.text(displayText + ' ');
+            
+            const $removeBtn = $('<button type="button" class="btn btn-sm btn-link text-white p-0 ml-1" aria-label="Remove"></button>');
+            $removeBtn.html('&times;');
+            $removeBtn.on('click', function() {
+                removeDepartmentFromList(dept.id);
+            });
+            
+            $badge.append($removeBtn);
+            $item.append($badge);
+            $container.append($item);
+        });
+        
+        // Update hidden input with JSON array of IDs
+        $input.val(JSON.stringify(selectedData.map(d => d.id)));
+    }
+    
+    function removeDepartmentFromList(deptId) {
+        window.StrategicAlignment.selectedDepartmentsData = window.StrategicAlignment.selectedDepartmentsData.filter(d => d.id !== deptId);
+        updateSelectedDepartmentsList();
+    }
+    
+    function addDepartment(dept) {
+        if (!window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
+            window.StrategicAlignment.selectedDepartmentsData.push(dept);
+            updateSelectedDepartmentsList();
+            $('#deptSearch').val('');
+            $('#deptSearchResults').empty();
+        }
+    }
+    
+    function displaySearchResults(results) {
+        const $container = $('#deptSearchResults');
+        $container.empty();
+        
+        if (results.length === 0) {
+            $container.html('<div class="list-group-item text-muted mt-2">No departments found</div>');
+            return;
+        }
+        
+        const $listGroup = $('<div class="list-group mt-2"></div>');
+        
+        results.forEach(function(dept) {
+            // Check if already selected
+            if (window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
+                return; // Skip already selected
+            }
+            
+            const $item = $('<a href="#" class="list-group-item list-group-item-action"></a>');
+            const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
+            $item.text(displayText);
+            
+            $item.on('click', function(e) {
+                e.preventDefault();
+                addDepartment(dept);
+            });
+            
+            $listGroup.append($item);
+        });
+        
+        $container.append($listGroup);
+    }
+    
+    function searchDepartments(query) {
+        $.ajax({
+            url: '/Admin/GovernmentDepartment/Search',
+            data: { q: query },
+            success: function(data) {
+                displaySearchResults(data.results);
+            },
+            error: function() {
+                $('#deptSearchResults').html('<div class="alert alert-danger mt-2">Error searching departments</div>');
+            }
+        });
+    }
+    
+    // Set up event handlers - remove existing first to avoid duplicates
+    $(document).off('shown.bs.modal', '#manageDepartmentsModal');
+    $(document).off('change', '#isMultiDeptCheck');
+    $(document).off('input', '#deptSearch');
+    
+    // Set up department management modal
+    $(document).on('shown.bs.modal', '#manageDepartmentsModal', function() {
+        updateSelectedDepartmentsList();
+    });
+    
+    // Show/hide department selection when checkbox changes
+    $(document).on('change', '#isMultiDeptCheck', function() {
+        if ($(this).is(':checked')) {
+            $('#departmentSelectionSection').slideDown();
+        } else {
+            $('#departmentSelectionSection').slideUp();
+        }
+    });
+    
+    // Department search with debounce
+    $(document).on('input', '#deptSearch', function() {
+        clearTimeout(searchTimeout);
+        const query = $(this).val().trim();
+        
+        if (query.length < 2) {
+            $('#deptSearchResults').empty();
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            searchDepartments(query);
+        }, 300);
+    });
+    
+    // Hide search results when clicking outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('#deptSearch').length && !$(e.target).closest('#deptSearchResults').length) {
+            $('#deptSearchResults').empty();
+        }
+    });
+    
+    // Initialize display if modal is already open or on page load
+    if ($('#manageDepartmentsModal').hasClass('show')) {
+        updateSelectedDepartmentsList();
+    }
+})();
+</script>
+
