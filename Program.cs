@@ -174,7 +174,7 @@ app.Use(async (context, next) =>
     context.Response.Headers["Content-Security-Policy"] = 
         $"default-src 'self'; " +
         $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
-        $"style-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
+        $"style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
         $"img-src 'self' data: https:; " +
         $"font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
         $"connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
