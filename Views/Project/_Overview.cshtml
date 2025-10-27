@@ -4,6 +4,12 @@
     var totalOutcomes = Model.Outcomes.Count;
     var totalMilestones = Model.Milestones.Count;
     var completedMilestones = Model.Milestones.Count(m => m.Status == "complete");
+    
+    // Flagship project deliverables
+    var deliverableProjects = ViewBag.DeliverableProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var totalPermFte = (Model.TotalPermFte ?? 0) + deliverableProjects.Sum(p => p.TotalPermFte ?? 0);
+    var totalMspFte = (Model.TotalMspFte ?? 0) + deliverableProjects.Sum(p => p.TotalMspFte ?? 0);
+    var totalFte = totalPermFte + totalMspFte;
 }
 
 <div class="row">
@@ -84,6 +90,94 @@
                 </table>
             </div>
         </div>
+
+        @if (Model.IsFlagship)
+        {
+            <!-- Flagship Project Deliverables -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title">Flagship Project Deliverables</h3>
+                    <div class="card-tools">
+                        <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })">Manage deliverables</a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (deliverableProjects.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>RAG Status</th>
+                                        <th>Phase</th>
+                                        <th>Business Area</th>
+                                        <th>Milestones</th>
+                                        <th>FTE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in deliverableProjects.OrderBy(p => p.Title))
+                                    {
+                                        var projectMilestoneCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0;
+                                        var projectCompletedMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0;
+                                        var projectFte = (project.TotalPermFte ?? 0) + (project.TotalMspFte ?? 0);
+                                        
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                    <strong>@project.Title</strong>
+                                                </a><br>
+                                                <small class="text-muted">@project.ProjectCode</small>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                {
+                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not set</span>
+                                                }
+                                            </td>
+                                            <td>@(project.Phase ?? "Not set")</td>
+                                            <td>@(project.BusinessArea ?? "Not set")</td>
+                                            <td>
+                                                @if (projectMilestoneCount > 0)
+                                                {
+                                                    <span>@projectCompletedMilestones / @projectMilestoneCount</span>
+                                                    <div class="progress" style="height: 4px;">
+                                                        <div class="progress-bar bg-success" role="progressbar" 
+                                                             style="width: @((projectCompletedMilestones * 100.0 / projectMilestoneCount).ToString("F0"))%" 
+                                                             aria-valuenow="@projectCompletedMilestones" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="@projectMilestoneCount"></div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td>@projectFte.ToString("F1")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center p-3">
+                            <p class="text-muted mb-2">No deliverables have been added yet.</p>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus"></i> Add Deliverables
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         <!-- Project Aim -->
         <div class="card mb-4">
@@ -244,11 +338,11 @@
                 @{
                     var permFte = Model.TotalPermFte ?? 0;
                     var mspFte = Model.TotalMspFte ?? 0;
-                    var totalFte = permFte + mspFte;
+                    var projectTotalFte = permFte + mspFte;
                     
                     // Calculate percentages for Permanent vs MSP
-                    var permPercentage = totalFte > 0 ? Math.Round((permFte / totalFte) * 100, 1) : 0;
-                    var mspPercentage = totalFte > 0 ? Math.Round((mspFte / totalFte) * 100, 1) : 0;
+                    var permPercentage = projectTotalFte > 0 ? Math.Round((permFte / projectTotalFte) * 100, 1) : 0;
+                    var mspPercentage = projectTotalFte > 0 ? Math.Round((mspFte / projectTotalFte) * 100, 1) : 0;
                     
                     // Funding calculations
                     var permFunding = Model.ResourceFunding?.FirstOrDefault(rf => rf.ResourceType == "Permanent");
@@ -284,7 +378,7 @@
                         </tr>
                         <tr class="table-info">
                             <td><strong>Total FTE</strong></td>
-                            <td class="text-right"><strong>@totalFte</strong></td>
+                            <td class="text-right"><strong>@projectTotalFte</strong></td>
                             <td class="text-right"><strong>100%</strong></td>
                         </tr>
                         <tr class="border-top">

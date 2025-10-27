@@ -1,0 +1,216 @@
+@model List<Compass.Models.Project>
+
+@{
+    ViewData["Title"] = "Flagship Projects - DDT Reports";
+    var deliverablesDict = ViewBag.Deliverables as Dictionary<int, List<Compass.Models.Project>> ?? new Dictionary<int, List<Compass.Models.Project>>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active">Flagship Projects</li>
+                </ol>
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0"><i class="fas fa-flag"></i> Flagship Projects</h1>
+                <p class="text-muted mb-0">High-priority strategic initiatives with multiple deliverables</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (!Model.Any())
+        {
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                    <h4>No Flagship Projects</h4>
+                    <p class="text-muted">There are currently no active flagship projects to display.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-primary"><i class="fas fa-flag"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Flagship Projects</span>
+                            <span class="info-box-number">@Model.Count</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Green RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Green")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Amber RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="info-box">
+                        <span class="info-box-icon bg-danger"><i class="fas fa-times-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Red RAG</span>
+                            <span class="info-box-number">@Model.Count(p => p.RagStatus == "Red")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flagship Projects -->
+            @foreach (var flagship in Model)
+            {
+                var deliverables = deliverablesDict.ContainsKey(flagship.Id) 
+                    ? deliverablesDict[flagship.Id] 
+                    : new List<Compass.Models.Project>();
+                    
+                var totalFte = (flagship.TotalPermFte ?? 0) + (flagship.TotalMspFte ?? 0) + 
+                              deliverables.Sum(d => (d.TotalPermFte ?? 0) + (d.TotalMspFte ?? 0));
+                
+                var totalMilestones = (flagship.Milestones?.Count(m => !m.IsDeleted) ?? 0) +
+                                     deliverables.Sum(d => d.Milestones?.Count(m => !m.IsDeleted) ?? 0);
+                                     
+                var completedMilestones = (flagship.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0) +
+                                         deliverables.Sum(d => d.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0);
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h3 class="card-title mb-0">
+                                    <i class="fas fa-flag text-primary"></i> 
+                                    <a href="@Url.Action("Details", "Project", new { id = flagship.Id })">
+                                        <strong>@flagship.Title</strong>
+                                    </a>
+                                </h3>
+                                <small class="text-muted">@flagship.ProjectCode</small>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <span class="@GetRagBadgeClass(flagship.RagStatus)">@flagship.RagStatus</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <strong>Business Area:</strong><br>
+                                <span>@(flagship.BusinessArea ?? "Not set")</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Phase:</strong><br>
+                                <span>@(flagship.Phase ?? "Not set")</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Total FTE:</strong><br>
+                                <span class="badge badge-info">@totalFte.ToString("F1")</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Milestones:</strong><br>
+                                <span>@completedMilestones / @totalMilestones completed</span>
+                            </div>
+                        </div>
+
+                        @if (deliverables.Any())
+                        {
+                            <h5 class="mt-3 mb-2">Deliverables (@deliverables.Count)</h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>RAG</th>
+                                            <th>Phase</th>
+                                            <th>Business Area</th>
+                                            <th>Milestones</th>
+                                            <th>FTE</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var deliverable in deliverables.OrderBy(d => d.Title))
+                                        {
+                                            var delMilestones = deliverable.Milestones?.Count(m => !m.IsDeleted) ?? 0;
+                                            var delCompleted = deliverable.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0;
+                                            var delFte = (deliverable.TotalPermFte ?? 0) + (deliverable.TotalMspFte ?? 0);
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = deliverable.Id })">
+                                                        @deliverable.Title
+                                                    </a>
+                                                </td>
+                                                <td><span class="@GetRagBadgeClass(deliverable.RagStatus)">@deliverable.RagStatus</span></td>
+                                                <td>@(deliverable.Phase ?? "Not set")</td>
+                                                <td>@(deliverable.BusinessArea ?? "Not set")</td>
+                                                <td>@delCompleted / @delMilestones</td>
+                                                <td>@delFte.ToString("F1")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-info-circle"></i> No deliverables have been added to this flagship project yet.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</section>
+
+@functions {
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-warning",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-warning",
+            "Red" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+

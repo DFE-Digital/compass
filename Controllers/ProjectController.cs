@@ -101,16 +101,20 @@ namespace Compass.Controllers
             ViewBag.CurrentPhase = phase;
             ViewBag.CurrentFlagship = flagship;
 
-            // Get only existing business areas from the database
-            ViewBag.BusinessAreas = await _context.Projects
-                .Where(p => !p.IsDeleted && !string.IsNullOrEmpty(p.BusinessArea))
-                .Select(p => p.BusinessArea)
-                .Distinct()
-                .OrderBy(ba => ba)
+            // Get business areas and phases from lookup tables
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
                 .ToListAsync();
 
-            // All possible phases based on the model comment
-            ViewBag.Phases = new List<string> { "Discovery", "Alpha", "Private beta", "Public beta", "Live" };
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
 
             // Pass user projects to the view
             ViewBag.UserProjects = userProjects;
@@ -144,14 +148,21 @@ namespace Compass.Controllers
                 .Include(p => p.RagHistory)
                 .Include(p => p.ResourceFunding)
                 .Include(p => p.FundingHistory)
-                .Include(p => p.DependenciesAsSource)
-                .Include(p => p.DependenciesAsTarget)
                 .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
 
             if (project == null)
             {
                 return NotFound();
             }
+
+            // Manually load dependencies since the relationship is polymorphic
+            project.DependenciesAsSource = await _context.Dependencies
+                .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                .ToListAsync();
+
+            project.DependenciesAsTarget = await _context.Dependencies
+                .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                .ToListAsync();
 
             // Populate dependency titles
             foreach (var dep in project.DependenciesAsSource)
@@ -193,6 +204,47 @@ namespace Compass.Controllers
                 .Where(d => !d.IsDeleted && d.ClosedAt == null)
                 .OrderBy(d => d.Title)
                 .ToListAsync();
+
+            // Get deliverable projects if this is a flagship project
+            if (project.IsFlagship)
+            {
+                _logger.LogInformation("Loading deliverables for flagship project {ProjectId}. Total dependencies: {Count}", 
+                    project.Id, project.DependenciesAsSource?.Count ?? 0);
+                
+                if (project.DependenciesAsSource != null && project.DependenciesAsSource.Any())
+                {
+                    foreach (var dep in project.DependenciesAsSource)
+                    {
+                        _logger.LogInformation("Dependency found: TargetType={TargetType}, TargetId={TargetId}, DependencyType={DependencyType}",
+                            dep.TargetEntityType, dep.TargetEntityId, dep.DependencyType);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("DependenciesAsSource is null or empty for project {ProjectId}", project.Id);
+                }
+                
+                var deliverableIds = project.DependenciesAsSource
+                    .Where(d => d.TargetEntityType == "Project" && d.DependencyType == "Deliverable")
+                    .Select(d => d.TargetEntityId)
+                    .ToList();
+
+                _logger.LogInformation("Found {Count} deliverable relationships for project {ProjectId}", 
+                    deliverableIds.Count, project.Id);
+
+                ViewBag.DeliverableProjects = await _context.Projects
+                    .Include(p => p.Milestones)
+                    .Where(p => deliverableIds.Contains(p.Id) && !p.IsDeleted)
+                    .OrderBy(p => p.Title)
+                    .ToListAsync();
+                
+                _logger.LogInformation("Loaded {Count} deliverable projects for project {ProjectId}", 
+                    ((List<Project>)ViewBag.DeliverableProjects).Count, project.Id);
+            }
+            else
+            {
+                ViewBag.DeliverableProjects = new List<Project>();
+            }
 
             // Set current tab
             ViewBag.CurrentTab = tab;
@@ -517,7 +569,20 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Use Compass-specific lookups instead of CMS
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
 
             // Get objectives grouped by theme
             var objectives = await _context.Objectives
@@ -712,7 +777,20 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Use Compass-specific lookups instead of CMS
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
 
             // Get objectives grouped by theme
             var objectives = await _context.Objectives
@@ -1839,6 +1917,158 @@ namespace Compass.Controllers
                 _logger.LogError(ex, "Error getting entity title for {EntityType} {EntityId}", entityType, entityId);
                 return $"Error loading {entityType}";
             }
+        }
+
+        // POST: Project/UpdateFlagshipStatus
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateFlagshipStatus(int id, bool isFlagship)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.IsFlagship = isFlagship;
+                project.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = isFlagship 
+                    ? "Project marked as flagship successfully." 
+                    : "Flagship status removed successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating flagship status for project {ProjectId}", id);
+                TempData["ErrorMessage"] = "Error updating flagship status. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id, tab = "strategicalignment" });
+        }
+
+        // POST: Project/AddDeliverable
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddDeliverable(int flagshipProjectId, int deliverableProjectId, string? description)
+        {
+            try
+            {
+                _logger.LogInformation("AddDeliverable called: FlagshipId={FlagshipId}, DeliverableId={DeliverableId}", 
+                    flagshipProjectId, deliverableProjectId);
+
+                var flagshipProject = await _context.Projects.FindAsync(flagshipProjectId);
+                if (flagshipProject == null || flagshipProject.IsDeleted || !flagshipProject.IsFlagship)
+                {
+                    _logger.LogWarning("Flagship project {FlagshipId} not found or invalid", flagshipProjectId);
+                    TempData["ErrorMessage"] = "Flagship project not found or invalid.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var deliverableProject = await _context.Projects.FindAsync(deliverableProjectId);
+                if (deliverableProject == null || deliverableProject.IsDeleted)
+                {
+                    _logger.LogWarning("Deliverable project {DeliverableId} not found", deliverableProjectId);
+                    TempData["ErrorMessage"] = "Deliverable project not found.";
+                    return RedirectToAction(nameof(Details), new { id = flagshipProjectId, tab = "deliverables" });
+                }
+
+                // Check if relationship already exists
+                var allDependencies = await _context.Dependencies
+                    .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == flagshipProjectId)
+                    .ToListAsync();
+                    
+                _logger.LogInformation("Found {Count} existing dependencies for flagship {FlagshipId}", 
+                    allDependencies.Count, flagshipProjectId);
+                
+                foreach (var dep in allDependencies)
+                {
+                    _logger.LogInformation("Existing dependency: TargetType={TargetType}, TargetId={TargetId}, DependencyType={DependencyType}",
+                        dep.TargetEntityType, dep.TargetEntityId, dep.DependencyType);
+                }
+
+                var existingDependency = allDependencies.FirstOrDefault(d => 
+                    d.TargetEntityType == "Project" && 
+                    d.TargetEntityId == deliverableProjectId &&
+                    d.DependencyType == "Deliverable");
+
+                if (existingDependency != null)
+                {
+                    _logger.LogWarning("Deliverable relationship already exists between {FlagshipId} and {DeliverableId}", 
+                        flagshipProjectId, deliverableProjectId);
+                    TempData["ErrorMessage"] = "This project is already added as a deliverable.";
+                    return RedirectToAction(nameof(Details), new { id = flagshipProjectId, tab = "deliverables" });
+                }
+
+                // Create the deliverable relationship
+                var dependency = new Dependency
+                {
+                    SourceEntityType = "Project",
+                    SourceEntityId = flagshipProjectId,
+                    TargetEntityType = "Project",
+                    TargetEntityId = deliverableProjectId,
+                    DependencyType = "Deliverable",
+                    Description = description ?? "",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Dependencies.Add(dependency);
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Successfully added deliverable {DeliverableId} ({DeliverableTitle}) to flagship project {FlagshipId} with DependencyType={DependencyType}", 
+                    deliverableProjectId, deliverableProject.Title, flagshipProjectId, dependency.DependencyType);
+
+                TempData["SuccessMessage"] = $"'{deliverableProject.Title}' added as a deliverable successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding deliverable {DeliverableId} to flagship project {FlagshipId}", 
+                    deliverableProjectId, flagshipProjectId);
+                TempData["ErrorMessage"] = "Error adding deliverable. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = flagshipProjectId, tab = "deliverables" });
+        }
+
+        // POST: Project/RemoveDeliverable
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveDeliverable(int flagshipProjectId, int deliverableProjectId)
+        {
+            try
+            {
+                var dependency = await _context.Dependencies
+                    .FirstOrDefaultAsync(d => 
+                        d.SourceEntityType == "Project" && 
+                        d.SourceEntityId == flagshipProjectId &&
+                        d.TargetEntityType == "Project" && 
+                        d.TargetEntityId == deliverableProjectId &&
+                        d.DependencyType == "Deliverable");
+
+                if (dependency == null)
+                {
+                    TempData["ErrorMessage"] = "Deliverable relationship not found.";
+                    return RedirectToAction(nameof(Details), new { id = flagshipProjectId, tab = "deliverables" });
+                }
+
+                _context.Dependencies.Remove(dependency);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Deliverable removed successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing deliverable {DeliverableId} from flagship project {FlagshipId}", 
+                    deliverableProjectId, flagshipProjectId);
+                TempData["ErrorMessage"] = "Error removing deliverable. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = flagshipProjectId, tab = "deliverables" });
         }
     }
 }
