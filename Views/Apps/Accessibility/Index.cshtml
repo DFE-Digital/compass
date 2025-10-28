@@ -2,6 +2,8 @@
 
 @{
     ViewData["Title"] = "Accessibility Management";
+    var summaryStats = ViewBag.SummaryStats as dynamic;
+    var activeTab = ViewBag.ActiveTab as string ?? "products";
 }
 
 <div class="content-header">
@@ -11,7 +13,7 @@
                 <nav aria-label="Breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
-                        <li class="breadcrumb-item">Apps</li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Apps")">Apps</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Accessibility Issues and Statements</li>
                     </ol>
                 </nav>
@@ -45,39 +47,32 @@
             </div>
         }
 
-        @{
-            var totalOpenIssues = Model.Sum(p => p.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted));
-            var totalResolvedIssues = Model.Sum(p => p.Issues.Count(i => i.Status == "resolved" && !i.IsDeleted));
-            var totalVerifiedStatements = Model.Count(p => p.StatementInstalled && p.VerifiedAt.HasValue);
-            var totalAuditSpend = Model.Sum(p => p.AuditHistories.Where(a => !a.IsDeleted && a.Cost.HasValue).Sum(a => a.Cost.Value));
-        }
-
         <!-- Summary Cards -->
-        <div class="row">
+        <div class="row mb-4">
             <div class="col-lg-3 col-12">
                 <div class="info-box">
                     <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
                     <div class="info-box-content">
                         <span class="info-box-text">Open Issues</span>
-                        <span class="info-box-number">@totalOpenIssues</span>
+                        <span class="info-box-number">@(summaryStats?.TotalOpenIssues ?? 0)</span>
                     </div>
                 </div>
             </div>
             <div class="col-lg-3 col-12">
                 <div class="info-box">
-                    <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                    <span class="info-box-icon bg-info"><i class="fas fa-box"></i></span>
                     <div class="info-box-content">
-                        <span class="info-box-text">Resolved Issues</span>
-                        <span class="info-box-number">@totalResolvedIssues</span>
+                        <span class="info-box-text">Products Enrolled</span>
+                        <span class="info-box-number">@(summaryStats?.TotalEnrolledProducts ?? 0) / @(summaryStats?.TotalProducts ?? 0)</span>
                     </div>
                 </div>
             </div>
             <div class="col-lg-3 col-12">
                 <div class="info-box">
-                    <span class="info-box-icon bg-info"><i class="fas fa-file-contract"></i></span>
+                    <span class="info-box-icon bg-danger"><i class="fas fa-clock"></i></span>
                     <div class="info-box-content">
-                        <span class="info-box-text">Verified Statements</span>
-                        <span class="info-box-number">@totalVerifiedStatements / @Model.Count()</span>
+                        <span class="info-box-text">Overdue Issues</span>
+                        <span class="info-box-number">@(summaryStats?.OverdueIssues ?? 0)</span>
                     </div>
                 </div>
             </div>
@@ -86,258 +81,618 @@
                     <span class="info-box-icon bg-primary"><i class="fas fa-pound-sign"></i></span>
                     <div class="info-box-content">
                         <span class="info-box-text">Total Audit Spend</span>
-                        <span class="info-box-number">£@totalAuditSpend.ToString("N2")</span>
+                        <span class="info-box-number">£@((summaryStats?.TotalAuditSpend ?? 0).ToString("N2"))</span>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="row">
-            <!-- Left Column: Filters -->
-            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+            <!-- Left Column: Navigation Pills -->
+            <div class="col-lg-3 col-md-4 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Filters</h3>
+                        <h3 class="card-title">Navigation</h3>
                     </div>
-                    <div class="card-body">
-                        <form method="get" id="filterForm">
-                            <div class="form-group">
-                                <label>Search</label>
-                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search products..." value="@ViewBag.CurrentSearch" />
-                            </div>
-
-                            <div class="form-group">
-                                <label>Compliance Status</label>
-                                <select name="status" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    @if (ViewBag.CurrentStatus == "compliant")
-                                    {
-                                        <option value="compliant" selected>Compliant</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="compliant">Compliant</option>
-                                    }
-                                    @if (ViewBag.CurrentStatus == "partially")
-                                    {
-                                        <option value="partially" selected>Partially Compliant</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="partially">Partially Compliant</option>
-                                    }
-                                    @if (ViewBag.CurrentStatus == "non-compliant")
-                                    {
-                                        <option value="non-compliant" selected>Non-compliant</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="non-compliant">Non-compliant</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Issues</label>
-                                <select name="issues" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    @if (ViewBag.CurrentIssues == "with-issues")
-                                    {
-                                        <option value="with-issues" selected>With Open Issues</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="with-issues">With Open Issues</option>
-                                    }
-                                    @if (ViewBag.CurrentIssues == "no-issues")
-                                    {
-                                        <option value="no-issues" selected>No Open Issues</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="no-issues">No Open Issues</option>
-                                    }
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Statement Status</label>
-                                <select name="statement" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    @if (ViewBag.CurrentStatement == "verified")
-                                    {
-                                        <option value="verified" selected>Verified</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="verified">Verified</option>
-                                    }
-                                    @if (ViewBag.CurrentStatement == "not-verified")
-                                    {
-                                        <option value="not-verified" selected>Not Verified</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="not-verified">Not Verified</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
-                                <a asp-action="Index" class="btn btn-default btn-sm btn-block">Clear All Filters</a>
-                            </div>
-                        </form>
-                        
-                        @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
-                             !string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString()) || 
-                             !string.IsNullOrEmpty(ViewBag.CurrentIssues?.ToString()) || 
-                             !string.IsNullOrEmpty(ViewBag.CurrentStatement?.ToString()))
-                        {
-                            <div class="mt-3 pt-3 border-top">
-                                <strong class="d-block mb-2">Active Filters:</strong>
-                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
-                                {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <strong>Search:</strong> @ViewBag.CurrentSearch
-                                        <a href="@Url.Action("Index", new { status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString()))
-                                {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <strong>Status:</strong> @ViewBag.CurrentStatus
-                                        <a href="@Url.Action("Index", new { search = ViewBag.CurrentSearch, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(ViewBag.CurrentIssues?.ToString()))
-                                {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <strong>Issues:</strong> @ViewBag.CurrentIssues
-                                        <a href="@Url.Action("Index", new { search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, statement = ViewBag.CurrentStatement })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(ViewBag.CurrentStatement?.ToString()))
-                                {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <strong>Statement:</strong> @ViewBag.CurrentStatement
-                                        <a href="@Url.Action("Index", new { search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
-                                }
-                            </div>
-                        }
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link @(activeTab == "products" ? "active" : "")" 
+                                   href="@Url.Action("Index", new { tab = "products" })">
+                                    <i class="fas fa-box mr-2"></i> Products
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link @(activeTab == "issues" ? "active" : "")" 
+                                   href="@Url.Action("Index", new { tab = "issues" })">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i> Issues
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link @(activeTab == "audits" ? "active" : "")" 
+                                   href="@Url.Action("Index", new { tab = "audits" })">
+                                    <i class="fas fa-clipboard-check mr-2"></i> Audits
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </div>
+
+                <!-- Tab-specific filters -->
+                @if (activeTab == "products")
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Filters</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="get" action="@Url.Action("Index")">
+                                <input type="hidden" name="tab" value="products" />
+                                <input type="hidden" name="productsPage" value="1" />
+                                
+                                <div class="form-group">
+                                    <label>Search</label>
+                                    <input type="text" name="search" class="form-control form-control-sm" 
+                                           placeholder="Product name or FIPS ID..." 
+                                           value="@ViewBag.CurrentSearch" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Compliance Status</label>
+                                    <select name="status" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        <option value="compliant" selected="@(ViewBag.CurrentStatus == "compliant")">Compliant</option>
+                                        <option value="partially" selected="@(ViewBag.CurrentStatus == "partially")">Partially Compliant</option>
+                                        <option value="non-compliant" selected="@(ViewBag.CurrentStatus == "non-compliant")">Non-compliant</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Issues</label>
+                                    <select name="issues" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        <option value="with-issues" selected="@(ViewBag.CurrentIssues == "with-issues")">With Open Issues</option>
+                                        <option value="no-issues" selected="@(ViewBag.CurrentIssues == "no-issues")">No Open Issues</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Statement Status</label>
+                                    <select name="statement" class="form-control form-control-sm">
+                                        <option value="">All</option>
+                                        <option value="verified" selected="@(ViewBag.CurrentStatement == "verified")">Verified</option>
+                                        <option value="not-verified" selected="@(ViewBag.CurrentStatement == "not-verified")">Not Verified</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                                    <a href="@Url.Action("Index", new { tab = "products" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "issues")
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Filters</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="get" action="@Url.Action("Index")">
+                                <input type="hidden" name="tab" value="issues" />
+                                <input type="hidden" name="issuesPage" value="1" />
+                                
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <select name="issueStatus" class="form-control form-control-sm">
+                                        <option value="">All Open Issues</option>
+                                        <option value="open" selected="@(ViewBag.CurrentIssueStatus == "open")">Open</option>
+                                        <option value="in_progress" selected="@(ViewBag.CurrentIssueStatus == "in_progress")">In Progress</option>
+                                        <option value="resolved" selected="@(ViewBag.CurrentIssueStatus == "resolved")">Resolved</option>
+                                        <option value="wont_fix" selected="@(ViewBag.CurrentIssueStatus == "wont_fix")">Won't Fix</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>WCAG Level</label>
+                                    <select name="issueLevel" class="form-control form-control-sm">
+                                        <option value="">All Levels</option>
+                                        <option value="AA" selected="@(ViewBag.CurrentIssueLevel == "AA")">Level AA</option>
+                                        <option value="A" selected="@(ViewBag.CurrentIssueLevel == "A")">Level A</option>
+                                        <option value="AAA" selected="@(ViewBag.CurrentIssueLevel == "AAA")">Level AAA</option>
+                                        <option value="Best Practice" selected="@(ViewBag.CurrentIssueLevel == "Best Practice")">Best Practice</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                                    <a href="@Url.Action("Index", new { tab = "issues" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "audits")
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Filters</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="get" action="@Url.Action("Index")">
+                                <input type="hidden" name="tab" value="audits" />
+                                <input type="hidden" name="auditsPage" value="1" />
+                                
+                                <div class="form-group">
+                                    <label>Audit Type</label>
+                                    <select name="auditType" class="form-control form-control-sm">
+                                        <option value="">All Types</option>
+                                        <option value="Internal" selected="@(ViewBag.CurrentAuditType == "Internal")">Internal</option>
+                                        <option value="External" selected="@(ViewBag.CurrentAuditType == "External")">External</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                                    <a href="@Url.Action("Index", new { tab = "audits" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
             </div>
 
-            <!-- Right Column: Products Table -->
-            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Enrolled Products (@Model.Count())</h3>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        @if (Model.Any())
-                        {
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Product Name</th>
-                                        <th>FIPS ID</th>
-                                        <th>Compliance Status</th>
-                                        <th>Open Issues</th>
-                                        <th>Last Audit</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var product in Model.OrderBy(p => p.ProductName))
-                                    {
-                                        var openIssues = product.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
-                                        var totalIssues = product.Issues.Count(i => !i.IsDeleted);
-                                        var levelAAIssues = product.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
-                                        
-                                        var complianceStatus = "compliant";
-                                        var complianceBadge = "badge-success";
-                                        
-                                        if (levelAAIssues > 0)
-                                        {
-                                            complianceStatus = "non-compliant";
-                                            complianceBadge = "badge-danger";
-                                        }
-                                        else if (openIssues > 0)
-                                        {
-                                            complianceStatus = "partially compliant";
-                                            complianceBadge = "badge-warning";
-                                        }
-                                        
-                                        var lastAudit = product.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).FirstOrDefault();
-                                        
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
-                                                    <strong>@product.ProductName</strong>
-                                                </a>
-                                            </td>
-                                            <td><span class="badge badge-info">@product.FipsId</span></td>
-                                         
-                                            <td>
-                                                <span class="badge @complianceBadge">
-                                                    @complianceStatus
-                                                </span>
-                                            </td>
-                                            <td>
-                                                @if (openIssues > 0)
-                                                {
-                                                    <span class="badge badge-warning">@openIssues open</span>
-                                                    if (levelAAIssues > 0)
-                                                    {
-                                                        <small class="text-danger ml-1">(@levelAAIssues Level A/AA)</small>
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">None</span>
-                                                }
-                                            </td>
-                                           
-                                            <td>
-                                                @if (lastAudit != null)
-                                                {
-                                                    <small class="text-muted">
-                                                        @lastAudit.AuditDate.ToString("dd MMM yyyy")<br>
-                                                        <span class="badge badge-@(lastAudit.AuditType == "External" ? "primary" : "secondary")">@lastAudit.AuditType</span>
-                                                    </small>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">None</span>
-                                                }
-                                            </td>
-                                           
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        }
-                        else
-                        {
-                            <div class="text-center p-4">
-                                <p class="text-muted">No products enrolled in accessibility management.</p>
-                                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#enrollProductModal">
-                                    Enrol First Product
-                                </button>
+            <!-- Right Column: Content -->
+            <div class="col-lg-9 col-md-8 col-12">
+                @if (activeTab == "products")
+                {
+                    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
+                    @if (enrolledProducts.Any())
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h3 class="card-title">Enrolled Products (@enrolledProducts.Count)</h3>
                             </div>
-                        }
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Product Name</th>
+                                            <th>Statement Status</th>
+                                            <th>Compliance Status</th>
+                                            <th>Open Issues</th>
+                                            <th>Last Audit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in enrolledProducts)
+                                        {
+                                            var productAccessibility = product.ProductAccessibility as Compass.Models.ProductAccessibility;
+                                            var openIssues = (int)product.OpenIssuesCount;
+                                            var levelAAIssues = 0;
+                                            if (productAccessibility != null)
+                                            {
+                                                levelAAIssues = productAccessibility.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
+                                            }
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
+                                                        <strong>@product.ProductName</strong>
+                                                    </a>
+                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    {
+                                                        <br><small class="text-muted mr-2">@product.FipsId</small>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(product.Phase))
+                                                    {
+                                                        <small class="text-muted">@product.Phase</small>
+                                                    }
+                                                </td>
+                                                
+                                                <td>
+                                                    @if (product.IsVerified)
+                                                    {
+                                                        <span class="badge bg-success">Verified</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Not Verified</span>
+                                                    }
+                                                </td>
+                                             
+                                                <td>
+                                                    <span class="badge @product.ComplianceBadge">
+                                                        @product.ComplianceStatus
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (openIssues > 0)
+                                                    {
+                                                        <span class="badge badge-warning">@openIssues open</span>
+                                                        if (levelAAIssues > 0)
+                                                        {
+                                                            <small class="text-danger ml-1">(@levelAAIssues Level A/AA)</small>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">None</span>
+                                                    }
+                                                </td>
+                                               
+                                                <td>
+                                                    @if (product.LastAudit != null)
+                                                    {
+                                                        var lastAudit = product.LastAudit as Compass.Models.AuditHistory;
+                                                        <small class="text-muted">
+                                                            @lastAudit.AuditDate.ToString("dd MMM yyyy")<br>
+                                                            <span class="badge badge-@(lastAudit.AuditType == "External" ? "primary" : "secondary")">@lastAudit.AuditType</span>
+                                                        </small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">None</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    var nonEnrolledProducts = ViewBag.NonEnrolledProducts as List<dynamic> ?? new List<dynamic>();
+                    var productsTotalCount = (int)(ViewBag.ProductsTotalCount ?? 0);
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">All Products (@productsTotalCount)</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            @if (nonEnrolledProducts.Any())
+                            {
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Enrollment Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in nonEnrolledProducts)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })" class="text-decoration-none">
+                                                        <strong>@product.ProductName</strong>
+                                                    </a>
+                                                    <br>
+                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    {
+                                                        <small class="text-muted mr-2">@product.FipsId</small>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(product.Phase))
+                                                    {
+                                                        <small class="text-muted">@product.Phase</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-secondary">Not Enrolled</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                @if (ViewBag.ProductsTotalPages != null && (int)ViewBag.ProductsTotalPages > 1)
+                                {
+                                    <div class="card-footer">
+                                        <nav>
+                                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                                @{
+                                                    var productsPage = (int)(ViewBag.ProductsPage ?? 1);
+                                                    var productsTotalPages = (int)(ViewBag.ProductsTotalPages ?? 1);
+                                                    var productsStartPage = Math.Max(1, productsPage - 2);
+                                                    var productsEndPage = Math.Min(productsTotalPages, productsPage + 2);
+                                                }
+                                                <li class="page-item @(productsPage == 1 ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = productsPage - 1, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">Previous</a>
+                                                </li>
+                                                @for (int i = productsStartPage; i <= productsEndPage; i++)
+                                                {
+                                                    <li class="page-item @(i == productsPage ? "active" : "")">
+                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = i, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">@i</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item @(productsPage == productsTotalPages ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "products", productsPage = productsPage + 1, search = ViewBag.CurrentSearch, status = ViewBag.CurrentStatus, issues = ViewBag.CurrentIssues, statement = ViewBag.CurrentStatement })">Next</a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                        <div class="text-center text-muted mt-2">
+                                            Showing @(((productsPage - 1) * 25) + 1) to @(Math.Min(productsPage * 25, productsTotalCount)) of @productsTotalCount products
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-center p-4">
+                                    <p class="text-muted">No products found matching the current filters.</p>
+                                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#enrollProductModal">
+                                        Enrol First Product
+                                    </button>
+                                </div>
+                            }
+                        </div>
                     </div>
-                </div>
+                }
+                else if (activeTab == "issues")
+                {
+                    var issues = ViewBag.Issues as List<Compass.Models.AccessibilityIssue>;
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Accessibility Issues (@(ViewBag.IssuesTotalCount ?? 0))</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            @if (issues != null && issues.Any())
+                            {
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Issue</th>
+                                            <th>WCAG Level</th>
+                                            <th>Status</th>
+                                            <th>Identified Date</th>
+                                            <th>Planned Resolution</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in issues)
+                                        {
+                                            var wcagLevel = "N/A";
+                                            var levelBadge = "badge-secondary";
+                                            if (issue.IssueType == "Best Practice")
+                                            {
+                                                wcagLevel = "Best Practice";
+                                                levelBadge = "badge-info";
+                                            }
+                                            else if (issue.WcagCriteriaLinks.Any())
+                                            {
+                                                var levels = issue.WcagCriteriaLinks.Select(link => link.WcagCriterion.Level).Distinct().ToList();
+                                                wcagLevel = string.Join(", ", levels);
+                                                levelBadge = levels.Contains("AA") ? "badge-danger" : levels.Contains("A") ? "badge-warning" : "badge-secondary";
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.WcagLevel))
+                                            {
+                                                wcagLevel = issue.WcagLevel;
+                                                levelBadge = issue.WcagLevel == "AA" ? "badge-danger" : issue.WcagLevel == "A" ? "badge-warning" : "badge-secondary";
+                                            }
+
+                                            var statusBadge = issue.Status switch
+                                            {
+                                                "open" => "badge-warning",
+                                                "in_progress" => "badge-info",
+                                                "resolved" => "badge-success",
+                                                "wont_fix" => "badge-secondary",
+                                                _ => "badge-secondary"
+                                            };
+
+                                            var isOverdue = issue.PlannedResolutionDate.HasValue && 
+                                                           issue.PlannedResolutionDate.Value < DateTime.UtcNow.Date && 
+                                                           issue.Status != "resolved";
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })">
+                                                        <strong>@issue.ProductAccessibility.ProductName</strong><br>
+                                                        <small class="text-muted">@issue.ProductAccessibility.FipsId</small>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    @if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks.Any())
+                                                    {
+                                                        foreach (var link in issue.WcagCriteriaLinks)
+                                                        {
+                                                            <div>
+                                                                <strong>@link.WcagCriterion.Criterion - @link.WcagCriterion.Title</strong>
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(issue.IssueTitle))
+                                                    {
+                                                        <strong>@issue.IssueTitle</strong>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(issue.WcagCriteria))
+                                                    {
+                                                        <strong>@issue.WcagCriteria</strong>
+                                                    }
+                                                    else
+                                                    {
+                                                        <strong>@issue.IssueType Issue</strong>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(issue.IssueDescription))
+                                                    {
+                                                        <br><small class="text-muted">@(issue.IssueDescription.Length > 100 ? issue.IssueDescription.Substring(0, 100) + "..." : issue.IssueDescription)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge @levelBadge">@wcagLevel</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @statusBadge">@issue.Status.Replace("_", " ")</span>
+                                                </td>
+                                                <td>
+                                                    <small>@issue.IdentifiedDate.ToString("dd MMM yyyy")</small>
+                                                </td>
+                                                <td>
+                                                    @if (issue.PlannedResolutionDate.HasValue)
+                                                    {
+                                                        <small class="@(isOverdue ? "text-danger font-weight-bold" : "")">
+                                                            @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
+                                                            @if (isOverdue)
+                                                            {
+                                                                <br><span class="badge badge-danger">Overdue</span>
+                                                            }
+                                                        </small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                @if (ViewBag.IssuesTotalPages != null && (int)ViewBag.IssuesTotalPages > 1)
+                                {
+                                    <div class="card-footer">
+                                        <nav>
+                                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                                @{
+                                                    var issuesPage = (int)(ViewBag.IssuesPage ?? 1);
+                                                    var issuesTotalPages = (int)(ViewBag.IssuesTotalPages ?? 1);
+                                                    var issuesStartPage = Math.Max(1, issuesPage - 2);
+                                                    var issuesEndPage = Math.Min(issuesTotalPages, issuesPage + 2);
+                                                }
+                                                <li class="page-item @(issuesPage == 1 ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = issuesPage - 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Previous</a>
+                                                </li>
+                                                @for (int i = issuesStartPage; i <= issuesEndPage; i++)
+                                                {
+                                                    <li class="page-item @(i == issuesPage ? "active" : "")">
+                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = i, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">@i</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item @(issuesPage == issuesTotalPages ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "issues", issuesPage = issuesPage + 1, issueStatus = ViewBag.CurrentIssueStatus, issueLevel = ViewBag.CurrentIssueLevel })">Next</a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                        <div class="text-center text-muted mt-2">
+                                            Showing @(((issuesPage - 1) * 25) + 1) to @(Math.Min(issuesPage * 25, (int)(ViewBag.IssuesTotalCount ?? 0))) of @(ViewBag.IssuesTotalCount ?? 0) issues
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-center p-4">
+                                    <p class="text-muted">No issues found matching the current filters.</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "audits")
+                {
+                    var audits = ViewBag.Audits as List<Compass.Models.AuditHistory>;
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Audit History (@(ViewBag.AuditsTotalCount ?? 0))</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            @if (audits != null && audits.Any())
+                            {
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Product</th>
+                                            <th>Type</th>
+                                            <th>Audited By</th>
+                                            <th>Cost</th>
+                                            <th>Report</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var audit in audits)
+                                        {
+                                            <tr>
+                                                <td>@audit.AuditDate.ToString("dd MMM yyyy")</td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", new { fipsId = audit.ProductAccessibility.FipsId, tab = "audits" })">
+                                                        <strong>@audit.ProductAccessibility.ProductName</strong><br>
+                                                        <small class="text-muted">@audit.ProductAccessibility.FipsId</small>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(audit.AuditType == "External" ? "primary" : "secondary")">@audit.AuditType</span>
+                                                </td>
+                                                <td>@audit.AuditedBy</td>
+                                                <td>
+                                                    @if (audit.Cost.HasValue)
+                                                    {
+                                                        <strong>£@audit.Cost.Value.ToString("N2")</strong>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(audit.ReportUrl))
+                                                    {
+                                                        <a href="@audit.ReportUrl" target="_blank" class="btn btn-sm btn-outline-info">
+                                                            <i class="fas fa-external-link-alt"></i> View
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                @if (ViewBag.AuditsTotalPages != null && (int)ViewBag.AuditsTotalPages > 1)
+                                {
+                                    <div class="card-footer">
+                                        <nav>
+                                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                                @{
+                                                    var auditsPage = (int)(ViewBag.AuditsPage ?? 1);
+                                                    var auditsTotalPages = (int)(ViewBag.AuditsTotalPages ?? 1);
+                                                    var auditsStartPage = Math.Max(1, auditsPage - 2);
+                                                    var auditsEndPage = Math.Min(auditsTotalPages, auditsPage + 2);
+                                                }
+                                                <li class="page-item @(auditsPage == 1 ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = auditsPage - 1, auditType = ViewBag.CurrentAuditType })">Previous</a>
+                                                </li>
+                                                @for (int i = auditsStartPage; i <= auditsEndPage; i++)
+                                                {
+                                                    <li class="page-item @(i == auditsPage ? "active" : "")">
+                                                        <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = i, auditType = ViewBag.CurrentAuditType })">@i</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item @(auditsPage == auditsTotalPages ? "disabled" : "")">
+                                                    <a class="page-link" href="@Url.Action("Index", new { tab = "audits", auditsPage = auditsPage + 1, auditType = ViewBag.CurrentAuditType })">Next</a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                        <div class="text-center text-muted mt-2">
+                                            Showing @(((auditsPage - 1) * 25) + 1) to @(Math.Min(auditsPage * 25, (int)(ViewBag.AuditsTotalCount ?? 0))) of @(ViewBag.AuditsTotalCount ?? 0) audits
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-center p-4">
+                                    <p class="text-muted">No audits found matching the current filters.</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -379,7 +734,7 @@
 <script nonce="@Context.Items["Nonce"]">
 (function() {
     var searchTimeout = null;
-    var enrolledFipsIds = [@Html.Raw(string.Join(",", Model.Select(p => $"'{p.FipsId}'")))];
+    var enrolledFipsIds = [@Html.Raw(string.Join(",", (Model ?? Enumerable.Empty<Compass.Models.ProductAccessibility>()).Select(p => $"'{p.FipsId}'")))];
 
     function initEnrollProduct() {
         // Initialize product autocomplete
@@ -537,4 +892,3 @@
     }
 })();
 </script>
-

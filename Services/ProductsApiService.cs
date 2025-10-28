@@ -1,6 +1,8 @@
+using System.Text;
 using System.Text.Json;
 using Compass.Models;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Compass.Services;
@@ -10,13 +12,19 @@ public class ProductsApiService : IProductsApiService
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
     private readonly ILogger<ProductsApiService> _logger;
+    private readonly IConfiguration _configuration;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public ProductsApiService(HttpClient httpClient, IMemoryCache cache, ILogger<ProductsApiService> logger)
+    public ProductsApiService(
+        HttpClient httpClient, 
+        IMemoryCache cache, 
+        ILogger<ProductsApiService> logger,
+        IConfiguration configuration)
     {
         _httpClient = httpClient;
         _cache = cache;
         _logger = logger;
+        _configuration = configuration;
         
         _jsonOptions = new JsonSerializerOptions
         {
@@ -45,6 +53,7 @@ public class ProductsApiService : IProductsApiService
                 "fields[0]=id",
                 "fields[1]=title",
                 "fields[2]=fips_id",
+                "fields[3]=product_url",
                 "populate[category_values][fields][0]=name",
                 "populate[category_values][populate][category_type][fields][0]=name",
                 "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
@@ -129,12 +138,17 @@ public class ProductsApiService : IProductsApiService
 
         try
         {
+            // Explicitly request fields we need, including product_url which may not be in default response
+            // Populate category_values with category_type to get Business area
+            // fips_id will be included automatically since we're filtering by it
             var queryParams = new[]
             {
                 "filters[fips_id][$eq]=" + fipsId,
                 "fields[0]=id",
-                "fields[1]=title",
-                "fields[2]=fips_id",
+                "fields[1]=documentId",
+                "fields[2]=title",
+                "fields[3]=fips_id",
+                "fields[4]=product_url",
                 "populate[category_values][fields][0]=name",
                 "populate[category_values][populate][category_type][fields][0]=name"
             };
@@ -284,6 +298,82 @@ public class ProductsApiService : IProductsApiService
         {
             _logger.LogError(ex, "Error fetching business areas from CMS");
             return new List<string>();
+        }
+    }
+
+    public async Task<bool> UpdateProductUrlAsync(string fipsId, string productUrl)
+    {
+        try
+        {
+            // First, get the product to find its documentId
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(product.FipsId))
+            {
+                _logger.LogError("Product {FipsId} is missing fips_id value", fipsId);
+                return false;
+            }
+
+            // Prepare update data - include fips_id to prevent it from changing
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId, // Include existing fips_id to prevent it from changing
+                    product_url = productUrl
+                    
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            // Use write API key for PUT requests - create a new HttpClient since the main one has read-only headers
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Clear cache for this product
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                
+                _logger.LogInformation("Successfully updated product URL for {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update product URL for {FipsId}. Status: {StatusCode}, Error: {Error}", 
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product URL for {FipsId}", fipsId);
+            return false;
         }
     }
 }

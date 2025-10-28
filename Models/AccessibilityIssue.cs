@@ -57,6 +57,7 @@ namespace Compass.Models
         public ICollection<IssueComment> Comments { get; set; } = new List<IssueComment>();
         public ICollection<IssueHistory> History { get; set; } = new List<IssueHistory>();
         public ICollection<IssueWcagCriterion> WcagCriteriaLinks { get; set; } = new List<IssueWcagCriterion>();
+        public ICollection<AccessibilityRetestRequest> RetestRequests { get; set; } = new List<AccessibilityRetestRequest>();
     }
 }
 

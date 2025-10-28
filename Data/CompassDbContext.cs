@@ -63,6 +63,8 @@ public class CompassDbContext : DbContext
     public DbSet<IssueHistory> IssueHistories { get; set; }
     public DbSet<WcagCriterion> WcagCriteria { get; set; }
     public DbSet<IssueWcagCriterion> IssueWcagCriteria { get; set; }
+    public DbSet<AccessibilityRetestRequest> AccessibilityRetestRequests { get; set; }
+    public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
     
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
@@ -561,6 +563,33 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiRequestLog>()
             .HasIndex(arl => arl.IsSuccess);
+
+        // Accessibility retest request configuration
+        modelBuilder.Entity<AccessibilityRetestRequest>()
+            .HasOne(rr => rr.AccessibilityIssue)
+            .WithMany(ai => ai.RetestRequests)
+            .HasForeignKey(rr => rr.AccessibilityIssueId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AccessibilityRetestRequest>()
+            .HasIndex(rr => rr.AccessibilityIssueId);
+
+        modelBuilder.Entity<AccessibilityRetestRequest>()
+            .HasIndex(rr => rr.IsCompleted);
+
+        modelBuilder.Entity<AccessibilityRetestRequest>()
+            .HasIndex(rr => rr.RequestedAt);
+
+        // Accessibility email configuration
+        modelBuilder.Entity<AccessibilityEmailConfiguration>()
+            .HasIndex(ec => ec.Purpose);
+
+        modelBuilder.Entity<AccessibilityEmailConfiguration>()
+            .HasIndex(ec => ec.IsActive);
+
+        modelBuilder.Entity<AccessibilityEmailConfiguration>()
+            .HasIndex(ec => new { ec.Purpose, ec.EmailAddress })
+            .IsUnique();
 
         // ========================================
         // PROJECT MANAGEMENT CONFIGURATION

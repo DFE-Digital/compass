@@ -1,10 +1,18 @@
 @model Compass.Models.ProductAccessibility
 @{
-    ViewData["Title"] = $"{Model.ProductName} - Accessibility";
+    var isNotEnrolled = ViewBag.IsNotEnrolled as bool? ?? false;
+    var cmsProduct = ViewBag.CmsProduct as Compass.Models.ProductDto;
     var currentTab = ViewBag.CurrentTab as string ?? "overview";
+    
+    if (isNotEnrolled)
+    {
+        ViewData["Title"] = $"{cmsProduct?.Title ?? "Product"} - Accessibility";
+    }
+    else
+    {
+        ViewData["Title"] = $"{Model?.ProductName ?? "Product"} - Accessibility";
+    }
 }
-
-
 
 <div class="content-header">
     <div class="container-fluid">
@@ -13,13 +21,13 @@
                 <nav aria-label="Breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
-                        <li class="breadcrumb-item">Apps</li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Apps")">Apps</a></li>
                         <li class="breadcrumb-item"><a href="@Url.Action("Index")">Accessibility Issues and Statements</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">@Model.ProductName</li>
+                        <li class="breadcrumb-item active" aria-current="page">@(Model?.ProductName ?? cmsProduct?.Title ?? "Product")</li>
                     </ol>
                 </nav>
-                <h1 class="m-0">@Model.ProductName</h1>
-                <p class="text-muted mb-0">@Model.FipsId</p>
+                <h1 class="m-0">@(Model?.ProductName ?? cmsProduct?.Title ?? "Product Details")</h1>
+                <p class="text-muted mb-0">@(Model?.FipsId ?? cmsProduct?.FipsId ?? "")</p>
             </div>
         </div>
     </div>
@@ -42,72 +50,91 @@
             </div>
         }
 
-        <div class="row">
-            <!-- Left Column: Navigation -->
-            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
-               
-                
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Navigation</h3>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "overview" })" 
-                               class="list-group-item list-group-item-action @(currentTab == "overview" ? "active" : "")">
-                                Overview
-                            </a>
-                            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" 
-                               class="list-group-item list-group-item-action @(currentTab == "issues" ? "active" : "")">
-                                Issues
-                            </a>
-                            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "audits" })" 
-                               class="list-group-item list-group-item-action @(currentTab == "audits" ? "active" : "")">
-                                Audits
-                            </a>
-                            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "settings" })" 
-                               class="list-group-item list-group-item-action @(currentTab == "settings" ? "active" : "")">
-                                Settings
-                            </a>
-                            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })" 
-                               class="list-group-item list-group-item-action @(currentTab == "statement" ? "active" : "")">
-                                Statement
-                            </a>
+        @if (isNotEnrolled)
+        {
+            <!-- Enrollment Prompt -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Product Enrollment</h3>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">This product is not yet enrolled in the Accessibility Issues Service.</p>
+                    <a href="@Url.Action("Enroll", new { fipsId = cmsProduct?.FipsId })" class="btn btn-primary">
+                        Enrol Product
+                    </a>
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">Back to Products</a>
+                </div>
+            </div>
+        }
+        else if (Model != null)
+        {
+            <div class="row">
+                <!-- Left Column: Navigation -->
+                <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                   
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Navigation</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "overview" })" 
+                                   class="list-group-item list-group-item-action @(currentTab == "overview" ? "active" : "")">
+                                    Overview
+                                </a>
+                                <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" 
+                                   class="list-group-item list-group-item-action @(currentTab == "issues" ? "active" : "")">
+                                    Issues
+                                </a>
+                                <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "audits" })" 
+                                   class="list-group-item list-group-item-action @(currentTab == "audits" ? "active" : "")">
+                                    Audits
+                                </a>
+                                <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "settings" })" 
+                                   class="list-group-item list-group-item-action @(currentTab == "settings" ? "active" : "")">
+                                    Settings
+                                </a>
+                                <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })" 
+                                   class="list-group-item list-group-item-action @(currentTab == "statement" ? "active" : "")">
+                                    Statement
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Right Column: Content -->
+                <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                    @switch (currentTab)
+                    {
+                        case "overview":
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Overview.cshtml", Model)
+                            break;
+
+                        case "issues":
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Issues.cshtml", Model)
+                            break;
+
+                        case "audits":
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Audits.cshtml", Model)
+                            break;
+
+                        case "settings":
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Settings.cshtml", Model)
+                            break;
+
+                        case "statement":
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Statement.cshtml", Model)
+                            break;
+
+                        default:
+                            @await Html.PartialAsync("~/Views/Apps/Accessibility/_Overview.cshtml", Model)
+                            break;
+                    }
+                </div>
             </div>
-
-            <!-- Right Column: Content -->
-            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @switch (currentTab)
-                {
-                    case "overview":
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Overview.cshtml", Model)
-                        break;
-
-                    case "issues":
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Issues.cshtml", Model)
-                        break;
-
-                    case "audits":
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Audits.cshtml", Model)
-                        break;
-
-                    case "settings":
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Settings.cshtml", Model)
-                        break;
-
-                    case "statement":
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Statement.cshtml", Model)
-                        break;
-
-                    default:
-                        @await Html.PartialAsync("~/Views/Apps/Accessibility/_Overview.cshtml", Model)
-                        break;
-                }
-            </div>
-        </div>
+        }
     </div>
 </section>
 

@@ -32,6 +32,7 @@ namespace Compass.Models
         public bool StatementInstalled { get; set; } = false; // Whether statement is installed on website
         public string? VerifiedBy { get; set; } // Accessibility Administrator who verified
         public DateTime? VerifiedAt { get; set; } // When it was verified
+        public string? StatementVerificationMethod { get; set; } // "Manual", "Automatic", null
         
         public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
         public string? EnrolledBy { get; set; } // User who enrolled the product

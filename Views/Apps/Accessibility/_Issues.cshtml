@@ -276,6 +276,41 @@
     </div>
 </div>
 
+<!-- Request Retest Modal -->
+<div class="modal fade" id="requestRetestModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Retest</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="RequestRetest" method="post">
+                <input type="hidden" id="requestRetestIssueId" name="issueId" />
+                <div class="modal-body">
+                    <p class="mb-3">Submit a request for an administrator to retest this accessibility issue.</p>
+                    
+                    <div class="form-group">
+                        <label for="requestorEmail">Your Email Address</label>
+                        <input type="email" class="form-control" id="requestorEmail" name="requestorEmail" value="@User.Identity?.Name" />
+                        <small class="form-text text-muted">Email address to receive retest confirmation and results</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="requestNotes">Notes (Optional)</label>
+                        <textarea class="form-control" id="requestNotes" name="requestNotes" rows="3" placeholder="Any additional information about why you're requesting a retest..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script nonce="@Context.Items["Nonce"]">
 (function() {
     function initIssuesPage() {
@@ -608,6 +643,11 @@
                         <button type="button" class="btn btn-primary btn-block edit-issue-btn" data-issue-id="${issueData.id}">
                             Edit Issue
                         </button>
+                        ${issueData.status !== 'resolved' ? `
+                            <button type="button" class="btn btn-warning btn-block mt-2 request-retest-btn" data-issue-id="${issueData.id}">
+                                Request Retest
+                            </button>
+                        ` : ''}
                         <form asp-action="DeleteIssue" method="post" class="w-100">
                             <input type="hidden" name="id" value="${issueData.id}" />
                             <button type="submit" class="btn btn-danger btn-block mt-2" onclick="return confirm('Are you sure you want to delete this issue?')">
@@ -800,6 +840,16 @@
                 $('#editPlannedResolutionDate').prop('required', false);
                 $('#editNonResolutionReason').prop('required', true);
             }
+        });
+
+        // Request retest button
+        $(document).on('click', '.request-retest-btn', function() {
+            const issueId = $(this).data('issue-id');
+            $('#viewIssueModal').modal('hide');
+            
+            // Show request retest modal
+            $('#requestRetestIssueId').val(issueId);
+            $('#requestRetestModal').modal('show');
         });
     }
 

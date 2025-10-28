@@ -1,0 +1,250 @@
+@model Compass.Models.AccessibilityRetestRequest
+@{
+    ViewData["Title"] = "Retest Request Details";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index")">Accessibility Issues Service</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("RetestRequests")">Retest Requests</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Request Details</li>
+                    </ol>
+                </nav>
+                <h1 class="m-0">Retest Request Details</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation Pills -->
+            <div class="col-lg-3 col-md-4 col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Navigation</h3>
+            </div>
+            <div class="card-body p-0">
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="@Url.Action("Index")">
+                            Products
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="@Url.Action("RetestRequests")">
+                            Retest Requests
+                            @if (ViewBag.PendingRetestCount != null && (int)ViewBag.PendingRetestCount > 0)
+                            {
+                                <span class="badge bg-danger float-right ml-2">@ViewBag.PendingRetestCount</span>
+                            }
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="@Url.Action("EmailConfigurations")">
+                            Email Configuration
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Content -->
+    <div class="col-lg-9 col-md-8 col-12">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Request Information</h3>
+            </div>
+            <div class="card-body">
+
+                <dl class="row">
+                    <dt class="col-sm-4">Product</dt>
+                    <dd class="col-sm-8">
+                        <strong>@Model.AccessibilityIssue.ProductAccessibility.ProductName</strong><br>
+                        <small class="text-muted">@Model.AccessibilityIssue.ProductAccessibility.FipsId</small>
+                    </dd>
+
+                    <dt class="col-sm-4">Issue</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.AccessibilityIssue.IssueType == "WCAG" && Model.AccessibilityIssue.WcagCriteriaLinks != null && Model.AccessibilityIssue.WcagCriteriaLinks.Any())
+                        {
+                            @foreach (var link in Model.AccessibilityIssue.WcagCriteriaLinks)
+                            {
+                                <strong>@link.WcagCriterion.Criterion - @link.WcagCriterion.Title</strong>
+                                <span class="badge bg-@(link.WcagCriterion.Level == "AAA" ? "primary" : link.WcagCriterion.Level == "AA" ? "info" : "secondary")">
+                                    Level @link.WcagCriterion.Level
+                                </span>
+                                <br>
+                            }
+                        }
+                        else if (!string.IsNullOrEmpty(Model.AccessibilityIssue.IssueTitle))
+                        {
+                            <strong>@Model.AccessibilityIssue.IssueTitle</strong>
+                        }
+                        else if (!string.IsNullOrEmpty(Model.AccessibilityIssue.WcagCriteria))
+                        {
+                            <strong>@Model.AccessibilityIssue.WcagCriteria</strong>
+                        }
+                        else
+                        {
+                            <strong>@Model.AccessibilityIssue.IssueType Issue</strong>
+                        }
+                        <br>
+                        <small class="text-muted">@Model.AccessibilityIssue.IssueType</small>
+                        @if (!string.IsNullOrEmpty(Model.AccessibilityIssue.IssueDescription))
+                        {
+                            <br><small class="text-muted">@Model.AccessibilityIssue.IssueDescription</small>
+                        }
+                        @if (Model.AccessibilityIssue.PlannedResolutionDate.HasValue)
+                        {
+                            <br><small class="text-muted">Planned resolution: @Model.AccessibilityIssue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</small>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-4">Requested By</dt>
+                    <dd class="col-sm-8">
+                        @Model.RequestedBy
+                        @if (!string.IsNullOrEmpty(Model.RequestorEmail))
+                        {
+                            <br><small class="text-muted">@Model.RequestorEmail</small>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-4">Requested At</dt>
+                    <dd class="col-sm-8">@Model.RequestedAt.ToString("dd MMM yyyy HH:mm")</dd>
+
+                    <dt class="col-sm-4">Request Notes</dt>
+                    <dd class="col-sm-8">@(string.IsNullOrEmpty(Model.RequestNotes) ? "—" : Model.RequestNotes)</dd>
+
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.IsCompleted == null)
+                        {
+                            <span class="badge bg-warning">Pending</span>
+                        }
+                        else if (Model.IsCompleted == true)
+                        {
+                            <span class="badge bg-success">Completed</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Cancelled</span>
+                        }
+                    </dd>
+
+                    @if (Model.IsCompleted == true)
+                    {
+                        <dt class="col-sm-4">Outcome</dt>
+                        <dd class="col-sm-8">
+                            @if (!string.IsNullOrEmpty(Model.Outcome))
+                            {
+                                <span class="badge bg-@(Model.Outcome == "Resolved" ? "success" : "danger")">
+                                    @Model.Outcome
+                                </span>
+                            }
+                        </dd>
+
+                        <dt class="col-sm-4">Completed By</dt>
+                        <dd class="col-sm-8">@(Model.CompletedBy ?? "—")</dd>
+
+                        <dt class="col-sm-4">Completed At</dt>
+                        <dd class="col-sm-8">@(Model.CompletedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</dd>
+                    }
+                </dl>
+
+                @if (Model.IsCompleted == null)
+                {
+                    <hr>
+                    <h5 class="mb-3">Complete Retest Request</h5>
+                    <form asp-action="UpdateRetestRequest" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        
+                        <div class="form-group mb-3">
+                            <label class="form-label">Mark as Completed</label>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="isCompleted" name="isCompleted" value="true" checked />
+                                <label class="form-check-label" for="isCompleted">
+                                    Retest has been completed
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="outcome" class="form-label">Outcome *</label>
+                            <select class="form-control" id="outcome" name="outcome" required>
+                                <option value="">— Select outcome —</option>
+                                <option value="Resolved">Resolved</option>
+                                <option value="Not resolved">Not resolved</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="adminNotes" class="form-label">Notes for Requestor</label>
+                            <textarea class="form-control" id="adminNotes" name="adminNotes" rows="4" placeholder="Add notes about the retest results that will be shared with the requestor..."></textarea>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <a href="@Url.Action("RetestRequests")" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <hr>
+                    <h5 class="mb-3">Admin Notes</h5>
+                    <p>@(string.IsNullOrEmpty(Model.AdminNotes) ? "—" : Model.AdminNotes)</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="@Url.Action("RetestRequests")" class="btn btn-secondary btn-block">
+                        Back to Requests
+                    </a>
+                    <a href="@Url.Action("Details", "Accessibility", new { fipsId = Model.AccessibilityIssue.ProductAccessibility.FipsId, tab = "issues" })" 
+                       class="btn btn-info btn-block">
+                        View Product Issues
+                    </a>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</section>
+

@@ -1,0 +1,300 @@
+@model IEnumerable<Compass.Models.StandardDto>
+
+@{
+    ViewData["Title"] = "Published Standards";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                    <li class="breadcrumb-item active">Published Standards</li>
+                </ol>
+                <h1 class="mb-3">Published Standards</h1>
+            </div>
+        </div>
+
+        
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation and Filters -->
+            <div class="col-lg-3 col-md-4 col-12">
+                <!-- Navigation -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="@Url.Action("Published", "Standard", new { search = ViewBag.CurrentSearch, category = ViewBag.CurrentCategory, stage = ViewBag.CurrentStage })">
+                                    Published
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("Draft", "Standard", new { search = ViewBag.CurrentSearch, category = ViewBag.CurrentCategory, stage = ViewBag.CurrentStage })">
+                                    Draft
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Filters -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="filterForm">
+                            <div class="form-group">
+                                <label>Search</label>
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search standards..." value="@ViewBag.CurrentSearch" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Category</label>
+                                <select name="category" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.Categories != null)
+                                    {
+                                        @foreach (var cat in ViewBag.Categories)
+                                        {
+                                            @if (ViewBag.CurrentCategory == cat)
+                                            {
+                                                <option value="@cat" selected>@cat</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@cat">@cat</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Stage</label>
+                                <select name="stage" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @if (ViewBag.Stages != null)
+                                    {
+                                        @foreach (var stage in ViewBag.Stages)
+                                        {
+                                            @if (ViewBag.CurrentStage == stage)
+                                            {
+                                                <option value="@stage" selected>@stage</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@stage">@stage</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a asp-action="Published" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                            </div>
+                        </form>
+                        
+                        @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentCategory?.ToString()) || 
+                             !string.IsNullOrEmpty(ViewBag.CurrentStage?.ToString()))
+                        {
+                            <div class="mt-3 pt-3 border-top">
+                                <strong class="d-block mb-2">Active Filters:</strong>
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Search: @ViewBag.CurrentSearch</span>
+                                        <a href="@Url.Action("Published", new { 
+                                            category = ViewBag.CurrentCategory, 
+                                            stage = ViewBag.CurrentStage 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentCategory?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Category: @ViewBag.CurrentCategory</span>
+                                        <a href="@Url.Action("Published", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            stage = ViewBag.CurrentStage 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentStage?.ToString()))
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Stage: @ViewBag.CurrentStage</span>
+                                        <a href="@Url.Action("Published", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            category = ViewBag.CurrentCategory 
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Standards Table -->
+            <div class="col-lg-9 col-md-8 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Published Standards</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.Any())
+                        {
+                            <table class="table table-hover sortable-table standards-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Id" tabindex="0" role="button" aria-label="Sort by ID">ID <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Categories" tabindex="0" role="button" aria-label="Sort by Categories">Categories <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version">Version <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Published" tabindex="0" role="button" aria-label="Sort by Published">Published <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var standard in Model)
+                                    {
+                                        <tr>
+                                            <td>@(standard.StandardId.HasValue ? $"DDTS-{standard.StandardId.Value}" : $"DDTS-{standard.Id}")</td>
+                                            <td><a asp-controller="Standard" asp-action="Details" asp-route-id="@(standard.DocumentId ?? standard.Id.ToString())">@standard.Title</a></td>
+                                            <td>
+                                                @if (standard.Categories != null && standard.Categories.Any())
+                                                {
+                                                    <div>@string.Join(", ", standard.Categories.Select(c => c.Title))</div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@standard.Version</td>
+                                            <td>@(standard.PublishedAt?.ToString("dd MMM yyyy") ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <p class="text-muted">No published standards found matching your criteria.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Id') {
+                        aVal = parseInt($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseInt($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else if (column === 'Published') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(0) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(0) : new Date(bDate);
+                    } else if (column === 'Version') {
+                        aVal = parseFloat($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseFloat($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('i').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}
+

@@ -2,10 +2,20 @@
 
 @{
     var statementUrl = $"https://accessibility-statements.education.gov.uk/s/{Model.FipsId}";
+    var cmsProduct = ViewBag.CmsProduct as Compass.Models.ProductDto;
+    var hasProductUrl = cmsProduct != null && !string.IsNullOrWhiteSpace(cmsProduct.ProductUrl);
+    var isNotVerified = !(Model.StatementInstalled && Model.VerifiedAt.HasValue);
+    var showProductUrlAlert = !hasProductUrl && isNotVerified;
 }
 
 <div class="row">
     <div class="col-12">
+        @if (showProductUrlAlert)
+        {
+            <div class="alert alert-warning mb-4">
+                <strong>Product URL Required:</strong> You must update the Product URL before you can verify your statement is installed correctly.
+            </div>
+        }
         <!-- Statement URL -->
         <div class="card mb-4">
             <div class="card-header">
@@ -15,12 +25,32 @@
                 <table class="table table-borderless mb-0 settings-table">
                     <tbody>
                         <tr>
+                            <td class="summary-label"><strong>Product URL</strong></td>
+                            <td class="summary-value">
+                                @if (hasProductUrl)
+                                {
+                                    <a href="@cmsProduct.ProductUrl" target="_blank" rel="noopener noreferrer">@cmsProduct.ProductUrl</a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                    <br>
+                                    <small class="text-muted">Product URL is required for automatic verification</small>
+                                }
+                            </td>
+                            <td class="summary-action text-right">
+                                <a href="#" data-toggle="modal" data-target="#updateProductUrlModal">
+                                    @(hasProductUrl ? "Change" : "Add") URL
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="summary-label"><strong>Statement URL</strong></td>
                             <td class="summary-value">
                                 <a href="@statementUrl" target="_blank" rel="noopener noreferrer">@statementUrl</a>
                             </td>
                             <td class="summary-action text-right">
-                                @* Auto-generated URL, no change action *@
+                                
                             </td>
                         </tr>
                         <tr>
@@ -28,8 +58,7 @@
                             <td class="summary-value">
                                 @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
                                 {
-                                    <span class="badge badge-success">Verified</span><br>
-                                    <small class="text-muted">Verified on @Model.VerifiedAt.Value.ToString("dd MMM yyyy") by @Model.VerifiedBy</small>
+                                    <span class="badge badge-success">Verified</span>
                                 }
                                 else
                                 {
@@ -37,15 +66,30 @@
                                 }
                             </td>
                             <td class="summary-action text-right">
-                                @if (User.IsInRole("AccessibilityAdministrator"))
+                                @if (User.IsInRole("AccessibilityAdministrator") || User.IsInRole("Admin") || User.IsInRole("Super admin"))
                                 {
                                     @if (Model.StatementInstalled && Model.VerifiedAt.HasValue)
                                     {
                                         <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Change</a>
                                     }
+                                    else if (showProductUrlAlert)
+                                    {
+                                        <a href="#" data-toggle="modal" data-target="#updateProductUrlModal">Update product URL</a>
+                                    }
                                     else
                                     {
                                         <a href="#" data-toggle="modal" data-target="#verifyStatementModal">Verify installation</a>
+                                    }
+                                }
+                                else
+                                {
+                                    @if (showProductUrlAlert)
+                                    {
+                                        <a href="#" data-toggle="modal" data-target="#updateProductUrlModal">Update product URL</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
                                     }
                                 }
                             </td>
@@ -93,8 +137,51 @@
 })();
 </script>
 
+<!-- Update Product URL Modal -->
+@{
+    var cmsProductForModal = ViewBag.CmsProduct as Compass.Models.ProductDto;
+    var hasProductUrlForModal = cmsProductForModal != null && !string.IsNullOrWhiteSpace(cmsProductForModal.ProductUrl);
+}
+<div class="modal fade" id="updateProductUrlModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(hasProductUrlForModal ? "Update" : "Add") Product URL</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form action="/Admin/AccessibilityService/UpdateProductUrl" method="post">
+                <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">The Product URL is required for automatic verification. It should be the main URL of the product website.</p>
+                    <p class="mb-3">The FIPS entry will be updated with the new Product URL immediately.</p>
+                    <div class="form-group">
+                        <label for="productUrl" class="form-label">Product URL *</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="productUrl" 
+                               name="productUrl" 
+                               value="@cmsProductForModal?.ProductUrl"
+                               placeholder="https://example.gov.uk" 
+                               required />
+                        <small class="form-text text-muted">
+                            Enter the main URL of the product website (must start with http:// or https://)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Product URL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Verify Statement Installation Modal (Accessibility Administrators only) -->
-@if (User.IsInRole("AccessibilityAdministrator"))
+@if (User.IsInRole("AccessibilityAdministrator") || User.IsInRole("Admin") || User.IsInRole("Super admin"))
 {
     <div class="modal fade" id="verifyStatementModal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
@@ -105,8 +192,9 @@
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <form asp-action="VerifyStatement" method="post">
+                <form action="/Admin/AccessibilityService/VerifyStatement" method="post">
                     <input type="hidden" name="fipsId" value="@Model.FipsId" />
+                    <input type="hidden" name="statementInstalled" value="true" />
                     <div class="modal-body">
                         <p>Please confirm that you have checked the product website and verified that the accessibility statement is correctly installed in the footer with the URL:</p>
                         
@@ -115,25 +203,44 @@
                             <code>@statementUrl</code>
                         </div>
                         
+                        @if (!hasProductUrlForModal)
+                        {
+                            <div class="alert alert-warning">
+                                <strong>Product URL Required:</strong> A Product URL must be set before automatic verification can proceed. 
+                                Please add a Product URL first.
+                            </div>
+                        }
+                        
                         <div class="form-group">
-                            <label>Verification Status *</label>
-                            <div class="form-check">
-                                <input type="radio" class="form-check-input" id="verifyInstalled" name="statementInstalled" value="true" required @(Model.StatementInstalled ? "checked" : "") />
-                                <label class="form-check-label" for="verifyInstalled">
-                                    Installed and Verified
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input type="radio" class="form-check-input" id="verifyNotInstalled" name="statementInstalled" value="false" required @(!Model.StatementInstalled ? "checked" : "") />
-                                <label class="form-check-label" for="verifyNotInstalled">
-                                    Not Installed
-                                </label>
-                            </div>
+                            <label>Verification Method *</label>
+                            <select class="form-control" name="verificationMethod" id="verificationMethodSelect" required>
+                                <option value="">— Select method —</option>
+                                <option value="Manual">Manual</option>
+                                @if (hasProductUrlForModal)
+                                {
+                                    <option value="Automatic">Automatic</option>
+                                }
+                                else
+                                {
+                                    <option value="Automatic" disabled>Automatic</option>
+                                }
+                            </select>
+                            <small class="form-text text-muted">
+                                @if (!hasProductUrlForModal)
+                                {
+                                    <span class="text-danger">Automatic verification requires a Product URL to be set first.</span>
+                                }
+                                else
+                                {
+                                    <span>Select whether the verification was done manually by an administrator or automatically by checking the product website.</span>
+                                }
+                            </small>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Verification</button>
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-primary" id="verifySubmitBtn" @(!hasProductUrlForModal ? "disabled" : "")>Save Verification</button>
                     </div>
                 </form>
             </div>
