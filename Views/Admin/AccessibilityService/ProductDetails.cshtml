@@ -1,0 +1,586 @@
+@model Compass.Models.ProductAccessibility
+@{
+    ViewData["Title"] = "Product Details";
+    var retestRequests = ViewBag.RetestRequests as List<Compass.Models.AccessibilityRetestRequest> ?? new List<Compass.Models.AccessibilityRetestRequest>();
+    var isNotEnrolled = ViewBag.IsNotEnrolled as bool? ?? false;
+    var cmsProduct = ViewBag.CmsProduct as Compass.Models.ProductDto;
+    var hasProductUrl = cmsProduct != null && !string.IsNullOrWhiteSpace(cmsProduct.ProductUrl);
+    var isVerified = Model != null && Model.StatementInstalled && Model.VerifiedAt.HasValue;
+    
+    // Extract business area from category values
+    var businessArea = "";
+    if (cmsProduct?.CategoryValues != null)
+    {
+        var businessAreaCategory = cmsProduct.CategoryValues
+            .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true);
+        businessArea = businessAreaCategory?.Name ?? "";
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index")">Accessibility Issues Service</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">@(Model?.ProductName ?? cmsProduct?.Title ?? "Product")</li>
+                    </ol>
+                </nav>
+                <h1 class="m-0">@(Model?.ProductName ?? cmsProduct?.Title ?? "Product Details")</h1>
+                <p class="text-muted mb-0">@(Model?.FipsId ?? cmsProduct?.FipsId ?? "")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation Pills -->
+            <div class="col-lg-3 col-md-4 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("Index")">
+                                    Products
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("RetestRequests")">
+                                    Retest Requests
+                                    @if (ViewBag.PendingRetestCount != null && (int)ViewBag.PendingRetestCount > 0)
+                                    {
+                                        <span class="badge bg-danger float-right ml-2">@ViewBag.PendingRetestCount</span>
+                                    }
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("EmailConfigurations")">
+                                    Email Configuration
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-lg-9 col-md-8 col-12">
+                <!-- Product Information -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Product Information</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Phase</th>
+                                    <th>Business Area</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <strong>@(cmsProduct?.Title ?? Model?.ProductName ?? "—")</strong>
+                                        @if (!string.IsNullOrEmpty(cmsProduct?.FipsId ?? Model?.FipsId))
+                                        {
+                                            <br><small class="text-muted">@(cmsProduct?.FipsId ?? Model?.FipsId)</small>
+                                        }
+                                    </td>
+                                    <td>@(cmsProduct?.Phase ?? Model?.ProductPhase ?? "—")</td>
+                                    <td>@(!string.IsNullOrEmpty(businessArea) ? businessArea : "—")</td>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Accessibility", new { fipsId = cmsProduct?.FipsId ?? Model?.FipsId })" 
+                                           target="_blank" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            View in Accessibility App
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                @if (isNotEnrolled)
+                {
+                    <!-- Enrollment Prompt -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Product Enrollment</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">This product is not yet enrolled in the Accessibility Issues Service.</p>
+                            <form asp-action="EnrollProduct" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="fipsId" value="@cmsProduct?.FipsId" />
+                                <button type="submit" class="btn btn-primary" onclick="return confirm('Are you sure you want to enroll this product in the accessibility service?');">
+                                    Enrol Product
+                                </button>
+                                <a href="@Url.Action("Index")" class="btn btn-secondary">Back to Products</a>
+                            </form>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- Statement Verification -->
+                    <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Accessibility Statement Verification</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product URL</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        @if (hasProductUrl)
+                                        {
+                                            <a href="@cmsProduct.ProductUrl" target="_blank" rel="noopener noreferrer">
+                                                @cmsProduct.ProductUrl
+                                            </a>
+                                            <br>
+                                            <a href="#" class="text-decoration-none small" data-toggle="modal" data-target="#updateProductUrlModal">
+                                                Change URL
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                            <br>
+                                            <a href="#" class="text-decoration-none small" data-toggle="modal" data-target="#updateProductUrlModal">
+                                                Add Product URL
+                                            </a>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isVerified)
+                                        {
+                                            <span class="badge bg-success">Verified</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Not Verified</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isVerified && Model != null)
+                                        {
+                                            <a href="#" class="text-decoration-none" data-toggle="modal" data-target="#removeVerificationModal">
+                                                Remove Verification
+                                            </a>
+                                        }
+                                        else if (Model != null)
+                                        {
+                                            <a href="#" class="text-decoration-none" data-toggle="modal" data-target="#verifyModal">
+                                                Manage Verified Status
+                                            </a>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                    <!-- Retest Requests -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Retest Requests (@retestRequests.Count)</h3>
+                        </div>
+                    <div class="card-body table-responsive p-0">
+                        @if (retestRequests.Any())
+                        {
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Issue</th>
+                                            <th>Requested By</th>
+                                            <th>Requested At</th>
+                                            <th>Status</th>
+                                            <th>Outcome</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var request in retestRequests)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    @if (request.AccessibilityIssue.IssueType == "WCAG" && request.AccessibilityIssue.WcagCriteriaLinks.Any())
+                                                    {
+                                                        var firstLink = request.AccessibilityIssue.WcagCriteriaLinks.First();
+                                                        <strong>@firstLink.WcagCriterion.Criterion</strong>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(request.AccessibilityIssue.IssueTitle))
+                                                    {
+                                                        <strong>@request.AccessibilityIssue.IssueTitle</strong>
+                                                    }
+                                                    else
+                                                    {
+                                                        <strong>@request.AccessibilityIssue.IssueType Issue</strong>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @request.RequestedBy
+                                                    @if (!string.IsNullOrEmpty(request.RequestorEmail))
+                                                    {
+                                                        <br><small class="text-muted">@request.RequestorEmail</small>
+                                                    }
+                                                </td>
+                                                <td>@request.RequestedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                                <td>
+                                                    @if (request.IsCompleted == null)
+                                                    {
+                                                        <span class="badge bg-warning">Pending</span>
+                                                    }
+                                                    else if (request.IsCompleted == true)
+                                                    {
+                                                        <span class="badge bg-success">Completed</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Cancelled</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(request.Outcome))
+                                                    {
+                                                        <span class="badge bg-@(request.Outcome == "Resolved" ? "success" : "danger")">
+                                                            @request.Outcome
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">—</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("RetestRequestDetails", new { id = request.Id })" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        View Details
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center p-3 mb-0">No retest requests for this product.</p>
+                        }
+                    </div>
+                </div>
+
+                    <!-- Accessibility Issues -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Accessibility Issues (@(Model?.Issues?.Count(i => !i.IsDeleted) ?? 0))</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            @if (Model?.Issues != null && Model.Issues.Any(i => !i.IsDeleted))
+                        {
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Issue</th>
+                                            <th>WCAG Level</th>
+                                            <th>Status</th>
+                                            <th>Identified Date</th>
+                                            <th>Planned Resolution</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in Model!.Issues.Where(i => !i.IsDeleted))
+                                        {
+                                            var wcagLevel = "N/A";
+                                            var levelBadge = "badge-secondary";
+                                            if (issue.IssueType == "Best Practice")
+                                            {
+                                                wcagLevel = "Best Practice";
+                                                levelBadge = "badge-info";
+                                            }
+                                            else if (issue.WcagCriteriaLinks.Any())
+                                            {
+                                                var levels = issue.WcagCriteriaLinks.Select(link => link.WcagCriterion.Level).Distinct().ToList();
+                                                wcagLevel = string.Join(", ", levels);
+                                                levelBadge = levels.Contains("AA") ? "badge-danger" : levels.Contains("A") ? "badge-warning" : "badge-secondary";
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.WcagLevel))
+                                            {
+                                                wcagLevel = issue.WcagLevel;
+                                                levelBadge = issue.WcagLevel == "AA" ? "badge-danger" : issue.WcagLevel == "A" ? "badge-warning" : "badge-secondary";
+                                            }
+
+                                            var statusBadge = issue.Status switch
+                                            {
+                                                "open" => "badge-warning",
+                                                "in_progress" => "badge-info",
+                                                "resolved" => "badge-success",
+                                                "wont_fix" => "badge-secondary",
+                                                _ => "badge-secondary"
+                                            };
+
+                                            var isOverdue = issue.PlannedResolutionDate.HasValue && 
+                                                           issue.PlannedResolutionDate.Value < DateTime.UtcNow.Date && 
+                                                           issue.Status != "resolved";
+
+                                            <tr>
+                                                <td>
+                                                    @if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks.Any())
+                                                    {
+                                                        foreach (var link in issue.WcagCriteriaLinks)
+                                                        {
+                                                            <div>
+                                                                <strong>@link.WcagCriterion.Criterion - @link.WcagCriterion.Title</strong>
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(issue.IssueTitle))
+                                                    {
+                                                        <strong>@issue.IssueTitle</strong>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(issue.WcagCriteria))
+                                                    {
+                                                        <strong>@issue.WcagCriteria</strong>
+                                                    }
+                                                    else
+                                                    {
+                                                        <strong>@issue.IssueType Issue</strong>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(issue.IssueDescription))
+                                                    {
+                                                        <br><small class="text-muted">@(issue.IssueDescription.Length > 100 ? issue.IssueDescription.Substring(0, 100) + "..." : issue.IssueDescription)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge @levelBadge">@wcagLevel</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @statusBadge">@issue.Status.Replace("_", " ")</span>
+                                                </td>
+                                                <td>
+                                                    <small>@issue.IdentifiedDate.ToString("dd MMM yyyy")</small>
+                                                </td>
+                                                <td>
+                                                    @if (issue.PlannedResolutionDate.HasValue)
+                                                    {
+                                                        <small class="@(isOverdue ? "text-danger font-weight-bold" : "")">
+                                                            @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
+                                                            @if (isOverdue)
+                                                            {
+                                                                <br><span class="badge badge-danger">Overdue</span>
+                                                            }
+                                                        </small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">—</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center p-3 mb-0">No accessibility issues for this product.</p>
+                        }
+                    </div>
+                </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Verification Modal -->
+<div class="modal fade" id="verifyModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Verify Statement</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="VerifyStatement" method="post" id="verifyStatementForm">
+                <input type="hidden" name="fipsId" value="@(Model?.FipsId ?? cmsProduct?.FipsId)" />
+                <input type="hidden" name="statementInstalled" value="true" />
+                <div class="modal-body">
+                    <p class="mb-3">Mark this product's accessibility statement as verified.</p>
+                    @{
+                        var cmsProductForModal = ViewBag.CmsProduct as Compass.Models.ProductDto;
+                        var hasProductUrlForModal = cmsProductForModal != null && !string.IsNullOrWhiteSpace(cmsProductForModal.ProductUrl);
+                    }
+                    @if (!hasProductUrlForModal)
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Product URL Required:</strong> A Product URL must be set before verification can proceed. 
+                            Please add a Product URL first.
+                        </div>
+                    }
+                    <div class="form-group">
+                        <label>Verification Method *</label>
+                        <select class="form-control" name="verificationMethod" id="verificationMethodSelect" required>
+                            <option value="">— Select method —</option>
+                            <option value="Manual">Manual</option>
+                            @if (hasProductUrlForModal)
+                            {
+                                <option value="Automatic">Automatic</option>
+                            }
+                            else
+                            {
+                                <option value="Automatic" disabled>Automatic</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">
+                            <span>Select whether the verification was done manually by an administrator or automatically by checking the product website.</span>
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary" id="verifySubmitBtn" @(!hasProductUrlForModal ? "disabled" : "")>Verify Statement</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Verification Modal -->
+<div class="modal fade" id="removeVerificationModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Verification</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="VerifyStatement" method="post">
+                <input type="hidden" name="fipsId" value="@(Model?.FipsId ?? cmsProduct?.FipsId)" />
+                <input type="hidden" name="statementInstalled" value="false" />
+                <input type="hidden" name="verificationMethod" value="" />
+                <div class="modal-body">
+                    <p class="mb-3">Are you sure you want to mark this accessibility statement as not verified?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-warning">Remove Verification</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Product URL Modal -->
+<div class="modal fade" id="updateProductUrlModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(hasProductUrl ? "Update" : "Add") Product URL</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductUrl" method="post">
+                <input type="hidden" name="fipsId" value="@(Model?.FipsId ?? cmsProduct?.FipsId)" />
+                <div class="modal-body">
+                    <p class="mb-3">The Product URL should be the main URL of the product website.</p>
+                    <div class="form-group">
+                        <label for="productUrl" class="form-label">Product URL *</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="productUrl" 
+                               name="productUrl" 
+                               value="@cmsProduct?.ProductUrl"
+                               placeholder="https://example.gov.uk" 
+                               required />
+                        <small class="form-text text-muted">
+                            Enter the main URL of the product website (must start with http:// or https://)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Product URL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@{
+    var shouldEnableVerify = !isVerified && hasProductUrl;
+}
+<script>
+    $(document).ready(function() {
+        // Enable verify button if product URL exists and status is "Not Verified"
+        @if (shouldEnableVerify)
+        {
+            <text>
+            var verifyBtn = $('#verifySubmitBtn');
+            var verificationSelect = $('#verificationMethodSelect');
+            var automaticOption = verificationSelect.find('option[value="Automatic"]');
+            
+            // Enable the verify button
+            if (verifyBtn.length) {
+                verifyBtn.prop('disabled', false);
+            }
+            
+            // Enable and show Automatic option
+            if (automaticOption.length) {
+                automaticOption.prop('disabled', false);
+            }
+            
+            // Update help text in verify modal
+            var helpText = verificationSelect.siblings('.form-text');
+            if (helpText.length) {
+                helpText.removeClass('text-danger')
+                        .html('<span>Select whether the verification was done manually by an administrator or automatically by checking the product website.</span>');
+            }
+            </text>
+        }
+    });
+</script>
+
+

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Compass.Models;
+using Compass.Services;
 using System.Security.Claims;
 
 namespace Compass.Controllers;
@@ -9,10 +10,14 @@ namespace Compass.Controllers;
 public class ProfileController : Controller
 {
     private readonly ILogger<ProfileController> _logger;
+    private readonly IGraphService _graphService;
 
-    public ProfileController(ILogger<ProfileController> logger)
+    public ProfileController(
+        ILogger<ProfileController> logger,
+        IGraphService graphService)
     {
         _logger = logger;
+        _graphService = graphService;
     }
 
     public IActionResult UserInfo()
@@ -59,6 +64,38 @@ public class ProfileController : Controller
         }
 
         return View(viewModel);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> SearchUsers(string term)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(term) || term.Length < 2)
+            {
+                return Json(new List<object>());
+            }
+
+            var users = await _graphService.SearchStaffAsync(term, 20);
+            
+            // Format for autocomplete
+            var results = users.Select(u => new
+            {
+                label = $"{u.DisplayName} ({u.Email})",
+                value = u.DisplayName,
+                email = u.Email,
+                displayName = u.DisplayName,
+                jobTitle = u.JobTitle ?? "",
+                department = u.Department ?? ""
+            });
+
+            return Json(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching users for term: {Term}", term);
+            return Json(new List<object>());
+        }
     }
 }
 

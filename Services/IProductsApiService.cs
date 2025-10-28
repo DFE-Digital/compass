@@ -8,5 +8,6 @@ public interface IProductsApiService
     Task<ProductDto?> GetProductByFipsIdAsync(string fipsId);
     Task<List<string>> GetPhasesAsync();
     Task<List<string>> GetBusinessAreasAsync();
+    Task<bool> UpdateProductUrlAsync(string fipsId, string productUrl);
 }
 

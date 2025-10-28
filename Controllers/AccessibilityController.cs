@@ -55,74 +55,340 @@ namespace Compass.Controllers
         }
 
         // GET: Accessibility/Index
-        public async Task<IActionResult> Index(string? search, string? status, string? issues, string? statement)
+        public async Task<IActionResult> Index(
+            string tab = "products",
+            int productsPage = 1,
+            int issuesPage = 1,
+            int auditsPage = 1,
+            string? search = null,
+            string? status = null,
+            string? issues = null,
+            string? statement = null,
+            string? issueStatus = null,
+            string? issueLevel = null,
+            string? auditType = null)
         {
-            var query = _context.ProductAccessibilities
+            const int pageSize = 25;
+            
+            // Load all products with issues and audits for summary calculations
+            var allProducts = await _context.ProductAccessibilities
                 .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
                 .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
                 .Where(pa => !pa.IsDeleted && pa.IsActive)
-                .AsQueryable();
-            
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(search))
+                .ToListAsync();
+
+            // Get total products from CMS
+            var cmsProducts = await _productsApiService.GetProductsAsync();
+            var totalProducts = cmsProducts?.Count ?? 0;
+
+            // Calculate summary statistics
+            var totalOpenIssues = allProducts.Sum(p => p.Issues.Count(i => i.Status != "resolved"));
+            var totalEnrolledProducts = allProducts.Count;
+            var overdueIssues = allProducts.Sum(p => p.Issues.Count(i => 
+                i.Status != "resolved" && 
+                i.PlannedResolutionDate.HasValue && 
+                i.PlannedResolutionDate.Value < DateTime.UtcNow.Date));
+            var totalAuditSpend = allProducts.Sum(p => p.AuditHistories
+                .Where(a => a.Cost.HasValue)
+                .Sum(a => a.Cost.Value));
+
+            ViewBag.SummaryStats = new
             {
-                query = query.Where(pa => pa.ProductName.Contains(search) || pa.FipsId.Contains(search));
-                ViewBag.CurrentSearch = search;
-            }
-            
-            var enrolledProducts = await query.OrderBy(pa => pa.ProductName).ToListAsync();
-            
-            // Apply compliance status filter (needs to be done in memory after loading issues)
-            if (!string.IsNullOrWhiteSpace(status))
+                TotalOpenIssues = totalOpenIssues,
+                TotalEnrolledProducts = totalEnrolledProducts,
+                TotalProducts = totalProducts,
+                OverdueIssues = overdueIssues,
+                TotalAuditSpend = totalAuditSpend
+            };
+
+            ViewBag.ActiveTab = tab;
+
+            // Handle Products tab
+            if (tab == "products")
             {
-                enrolledProducts = enrolledProducts.Where(pa =>
+                // Get all CMS products
+                if (cmsProducts == null)
                 {
-                    var openIssues = pa.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
-                    var levelAAIssues = pa.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
+                    cmsProducts = await _productsApiService.GetProductsAsync();
+                }
+                
+                // Create a dictionary for quick lookup of enrolled products
+                var enrolledDict = allProducts.ToDictionary(pa => pa.FipsId, pa => pa);
+
+                // Create view model lists
+                var enrolledProductViewModels = new List<dynamic>();
+                var allProductViewModels = new List<dynamic>();
+
+                foreach (var cmsProduct in cmsProducts)
+                {
+                    var isEnrolled = enrolledDict.TryGetValue(cmsProduct.FipsId, out var enrolled);
                     
-                    return status switch
+                    // Apply search filter
+                    if (!string.IsNullOrWhiteSpace(search))
                     {
-                        "compliant" => levelAAIssues == 0 && openIssues == 0,
-                        "partially" => levelAAIssues == 0 && openIssues > 0,
-                        "non-compliant" => levelAAIssues > 0,
-                        _ => true
+                        var searchLower = search.ToLower();
+                        var titleMatch = cmsProduct.Title.ToLower().Contains(searchLower);
+                        var fipsIdMatch = !string.IsNullOrEmpty(cmsProduct.FipsId) && cmsProduct.FipsId.ToLower().Contains(searchLower);
+                        
+                        if (!titleMatch && !fipsIdMatch)
+                        {
+                            continue;
+                        }
+                    }
+
+                    var openIssuesCount = 0;
+                    var pastDueCount = 0;
+                    var isVerified = false;
+                    var complianceStatus = "compliant";
+                    var complianceBadge = "badge-success";
+                    var lastAudit = (dynamic?)null;
+
+                    if (isEnrolled)
+                    {
+                        openIssuesCount = enrolled.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
+                        pastDueCount = enrolled.Issues.Count(i => 
+                            !i.IsDeleted && 
+                            i.Status != "resolved" && 
+                            i.PlannedResolutionDate.HasValue &&
+                            i.PlannedResolutionDate.Value < DateTime.UtcNow.Date);
+                        isVerified = enrolled.StatementInstalled && enrolled.VerifiedAt.HasValue;
+                        
+                        var levelAAIssues = enrolled.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
+                        if (levelAAIssues > 0)
+                        {
+                            complianceStatus = "non-compliant";
+                            complianceBadge = "badge-danger";
+                        }
+                        else if (openIssuesCount > 0)
+                        {
+                            complianceStatus = "partially compliant";
+                            complianceBadge = "badge-warning";
+                        }
+                        
+                        lastAudit = enrolled.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).FirstOrDefault();
+                    }
+
+                    var productViewModel = new
+                    {
+                        FipsId = cmsProduct.FipsId,
+                        ProductName = cmsProduct.Title,
+                        Phase = cmsProduct.Phase,
+                        IsEnrolled = isEnrolled,
+                        ProductAccessibility = isEnrolled ? enrolled : null,
+                        OpenIssuesCount = openIssuesCount,
+                        PastDueCount = pastDueCount,
+                        IsVerified = isVerified,
+                        ComplianceStatus = complianceStatus,
+                        ComplianceBadge = complianceBadge,
+                        LastAudit = lastAudit
                     };
-                }).ToList();
-                ViewBag.CurrentStatus = status;
-            }
-            
-            // Apply issues filter
-            if (!string.IsNullOrWhiteSpace(issues))
-            {
-                enrolledProducts = enrolledProducts.Where(pa =>
+
+                    if (isEnrolled)
+                    {
+                        // Apply filters for enrolled products
+                        var shouldInclude = true;
+                        
+                        if (!string.IsNullOrWhiteSpace(status))
+                        {
+                            shouldInclude = status switch
+                            {
+                                "compliant" => complianceStatus == "compliant",
+                                "partially" => complianceStatus == "partially compliant",
+                                "non-compliant" => complianceStatus == "non-compliant",
+                                _ => true
+                            };
+                            ViewBag.CurrentStatus = status;
+                        }
+                        
+                        if (shouldInclude && !string.IsNullOrWhiteSpace(issues))
+                        {
+                            shouldInclude = issues switch
+                            {
+                                "with-issues" => openIssuesCount > 0,
+                                "no-issues" => openIssuesCount == 0,
+                                _ => true
+                            };
+                            ViewBag.CurrentIssues = issues;
+                        }
+                        
+                        if (shouldInclude && !string.IsNullOrWhiteSpace(statement))
+                        {
+                            shouldInclude = statement switch
+                            {
+                                "verified" => isVerified,
+                                "not-verified" => !isVerified,
+                                _ => true
+                            };
+                            ViewBag.CurrentStatement = statement;
+                        }
+                        
+                        if (shouldInclude)
+                        {
+                            enrolledProductViewModels.Add(productViewModel);
+                        }
+                    }
+                    else
+                    {
+                        // Non-enrolled products - no filtering needed
+                        allProductViewModels.Add(productViewModel);
+                    }
+                }
+
+                // Sort enrolled products
+                enrolledProductViewModels = enrolledProductViewModels
+                    .OrderBy(p => ((dynamic)p).ProductName)
+                    .ToList();
+
+                // Pagination for non-enrolled products
+                var totalCount = allProductViewModels.Count;
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+                var pagedNonEnrolledProducts = allProductViewModels
+                    .OrderBy(p => ((dynamic)p).ProductName)
+                    .Skip((productsPage - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                ViewBag.EnrolledProducts = enrolledProductViewModels;
+                ViewBag.NonEnrolledProducts = pagedNonEnrolledProducts;
+                ViewBag.ProductsPage = productsPage;
+                ViewBag.ProductsTotalPages = totalPages;
+                ViewBag.ProductsTotalCount = totalCount;
+                
+                // Pass search filter to view if set
+                if (!string.IsNullOrWhiteSpace(search))
                 {
-                    var openIssues = pa.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
-                    return issues switch
-                    {
-                        "with-issues" => openIssues > 0,
-                        "no-issues" => openIssues == 0,
-                        _ => true
-                    };
-                }).ToList();
-                ViewBag.CurrentIssues = issues;
+                    ViewBag.CurrentSearch = search;
+                }
+                
+                // Get the actual enrolled ProductAccessibility objects for the model
+                // The view uses ViewBag for display, but needs the correct model type
+                var enrolledFipsIds = enrolledProductViewModels
+                    .Select(vm => ((dynamic)vm).FipsId as string)
+                    .Where(fipsId => !string.IsNullOrEmpty(fipsId))
+                    .ToList();
+                
+                var enrolledProductAccessibilities = allProducts
+                    .Where(pa => enrolledFipsIds.Contains(pa.FipsId))
+                    .OrderBy(pa => pa.ProductName)
+                    .ToList();
+                
+                return View("~/Views/Apps/Accessibility/Index.cshtml", enrolledProductAccessibilities);
             }
-            
-            // Apply statement filter
-            if (!string.IsNullOrWhiteSpace(statement))
+
+            // Handle Issues tab
+            if (tab == "issues")
             {
-                enrolledProducts = enrolledProducts.Where(pa =>
+                var issuesQuery = _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .Include(i => i.WcagCriteriaLinks)
+                        .ThenInclude(link => link.WcagCriterion)
+                    .Where(i => !i.IsDeleted)
+                    .AsQueryable();
+
+                // Filter by status
+                if (!string.IsNullOrWhiteSpace(issueStatus))
                 {
-                    return statement switch
+                    issuesQuery = issuesQuery.Where(i => i.Status == issueStatus);
+                    ViewBag.CurrentIssueStatus = issueStatus;
+                }
+                else
+                {
+                    // Default to non-resolved issues
+                    issuesQuery = issuesQuery.Where(i => i.Status != "resolved");
+                }
+
+                // Filter by level
+                if (!string.IsNullOrWhiteSpace(issueLevel))
+                {
+                    if (issueLevel == "Best Practice")
                     {
-                        "verified" => pa.StatementInstalled && pa.VerifiedAt.HasValue,
-                        "not-verified" => !pa.StatementInstalled || !pa.VerifiedAt.HasValue,
-                        _ => true
+                        issuesQuery = issuesQuery.Where(i => i.IssueType == "Best Practice");
+                    }
+                    else
+                    {
+                        issuesQuery = issuesQuery.Where(i => 
+                            i.IssueType == "WCAG" && 
+                            (i.WcagLevel == issueLevel || 
+                             i.WcagCriteriaLinks.Any(link => link.WcagCriterion.Level == issueLevel)));
+                    }
+                    ViewBag.CurrentIssueLevel = issueLevel;
+                }
+
+                var allIssuesList = await issuesQuery.ToListAsync();
+
+                // Order by WCAG level: AA first, then A, then Best Practice
+                var orderedIssues = allIssuesList.OrderBy(i =>
+                {
+                    if (i.IssueType == "Best Practice") return 3; // Best Practice last
+                    if (i.IssueType == "WCAG" && i.WcagCriteriaLinks.Any())
+                    {
+                        var highestLevel = i.WcagCriteriaLinks
+                            .Select(link => link.WcagCriterion.Level)
+                            .Max();
+                        return highestLevel == "AA" ? 1 : highestLevel == "A" ? 2 : 4; // AA=1, A=2, AAA=4
+                    }
+                    // Fallback to deprecated WcagLevel
+                    return i.WcagLevel switch
+                    {
+                        "AA" => 1,
+                        "A" => 2,
+                        "AAA" => 4,
+                        _ => 5
                     };
-                }).ToList();
-                ViewBag.CurrentStatement = statement;
+                }).ThenBy(i => i.IssueType == "WCAG" && i.WcagCriteriaLinks.Any()
+                    ? i.WcagCriteriaLinks.First().WcagCriterion.Criterion
+                    : i.WcagCriteria ?? i.IssueTitle ?? "")
+                .ToList();
+
+                var totalIssues = orderedIssues.Count;
+                var pagedIssues = orderedIssues
+                    .Skip((issuesPage - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                ViewBag.IssuesPage = issuesPage;
+                ViewBag.IssuesTotalPages = (int)Math.Ceiling((double)totalIssues / pageSize);
+                ViewBag.IssuesTotalCount = totalIssues;
+                ViewBag.Issues = pagedIssues;
+
+                return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
             }
-            
-            return View("~/Views/Apps/Accessibility/Index.cshtml", enrolledProducts);
+
+            // Handle Audits tab
+            if (tab == "audits")
+            {
+                var auditsQuery = _context.AuditHistories
+                    .Include(ah => ah.ProductAccessibility)
+                    .Where(ah => !ah.IsDeleted)
+                    .AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(auditType))
+                {
+                    auditsQuery = auditsQuery.Where(ah => ah.AuditType == auditType);
+                    ViewBag.CurrentAuditType = auditType;
+                }
+
+                var orderedAudits = auditsQuery
+                    .OrderByDescending(ah => ah.AuditDate)
+                    .ToList();
+
+                var totalAudits = orderedAudits.Count;
+                var pagedAudits = orderedAudits
+                    .Skip((auditsPage - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                ViewBag.AuditsPage = auditsPage;
+                ViewBag.AuditsTotalPages = (int)Math.Ceiling((double)totalAudits / pageSize);
+                ViewBag.AuditsTotalCount = totalAudits;
+                ViewBag.Audits = pagedAudits;
+
+                return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
+            }
+
+            // Default to products tab
+            ViewBag.ActiveTab = "products";
+            return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts.Take(pageSize).ToList());
         }
         
         // GET: Accessibility/AllIssues
@@ -140,6 +406,15 @@ namespace Compass.Controllers
         // GET: Accessibility/Details/{fipsId}?tab=overview
         public async Task<IActionResult> Details(string fipsId, string tab = "overview")
         {
+            // Get CMS product info first
+            var cmsProducts = await _productsApiService.GetProductsAsync();
+            var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == fipsId);
+            
+            if (productInfo == null)
+            {
+                return NotFound();
+            }
+            
             var productAccessibility = await _context.ProductAccessibilities
                 .Include(pa => pa.ContactMethods.Where(cm => cm.IsActive))
                 .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
@@ -152,15 +427,16 @@ namespace Compass.Controllers
                         .ThenInclude(link => link.WcagCriterion)
                 .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
             
+            // If product not enrolled, show enrollment option
             if (productAccessibility == null)
             {
-                return NotFound();
+                ViewBag.CmsProduct = productInfo;
+                ViewBag.IsNotEnrolled = true;
+                ViewBag.CurrentTab = tab;
+                return View("~/Views/Apps/Accessibility/Details.cshtml", (ProductAccessibility?)null);
             }
             
             // Update cached product info from CMS
-            var cmsProducts = await _productsApiService.GetProductsAsync();
-            var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == fipsId);
-            
             if (productInfo != null && 
                 (productAccessibility.ProductName != productInfo.Title || 
                  productAccessibility.ProductPhase != productInfo.Phase))
@@ -170,6 +446,9 @@ namespace Compass.Controllers
                 productAccessibility.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
+            
+            // Pass CMS product data to view (for Product URL)
+            ViewBag.CmsProduct = productInfo;
             
             ViewBag.CurrentTab = tab;
             return View("~/Views/Apps/Accessibility/Details.cshtml", productAccessibility);
@@ -614,6 +893,62 @@ namespace Compass.Controllers
             {
                 _logger.LogError(ex, "Error deleting accessibility issue");
                 return Json(new { success = false, message = "Error deleting issue" });
+            }
+        }
+
+        // POST: Accessibility/RequestRetest
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RequestRetest(int issueId, string? requestorEmail, string? requestNotes)
+        {
+            try
+            {
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == issueId && !i.IsDeleted);
+                
+                if (issue == null)
+                {
+                    return NotFound();
+                }
+
+                // Check if there's already a pending retest request
+                var existingRequest = await _context.AccessibilityRetestRequests
+                    .FirstOrDefaultAsync(rr => 
+                        rr.AccessibilityIssueId == issueId && 
+                        rr.IsCompleted == null);
+
+                if (existingRequest != null)
+                {
+                    TempData["ErrorMessage"] = "There is already a pending retest request for this issue.";
+                    return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                }
+
+                var retestRequest = new AccessibilityRetestRequest
+                {
+                    AccessibilityIssueId = issueId,
+                    RequestedBy = User.Identity?.Name ?? "Unknown",
+                    RequestorEmail = requestorEmail?.Trim(),
+                    RequestNotes = requestNotes?.Trim(),
+                    RequestedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.AccessibilityRetestRequests.Add(retestRequest);
+                await _context.SaveChangesAsync();
+
+                // TODO: Send email notifications to configured admin emails
+                // await SendRetestRequestEmails(retestRequest);
+
+                TempData["SuccessMessage"] = "Retest request submitted successfully. An administrator will review your request.";
+                return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating retest request");
+                TempData["ErrorMessage"] = "An error occurred while submitting the retest request.";
+                return RedirectToAction(nameof(Details), new { fipsId = "unknown", tab = "issues" });
             }
         }
 

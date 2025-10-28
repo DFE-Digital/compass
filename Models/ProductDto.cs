@@ -9,11 +9,17 @@ public class ProductDto
 {
     public int Id { get; set; }
     
+    [JsonPropertyName("documentId")]
+    public string? DocumentId { get; set; }
+    
     [JsonPropertyName("fips_id")]
     public string? FipsId { get; set; }
     
     public string Title { get; set; } = string.Empty;
     public string? Phase { get; set; }
+    
+    [JsonPropertyName("product_url")]
+    public string? ProductUrl { get; set; }
     
     [JsonPropertyName("category_values")]
     public List<CategoryValueDto>? CategoryValues { get; set; }

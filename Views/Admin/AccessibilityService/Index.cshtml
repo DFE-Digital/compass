@@ -1,0 +1,309 @@
+@model dynamic
+@{
+    ViewData["Title"] = "Accessibility Issues Service";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Accessibility Issues Service</li>
+                    </ol>
+                </nav>
+                <h1 class="m-0">Accessibility Issues Service</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation Pills -->
+            <div class="col-lg-3 col-md-4 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="@Url.Action("Index")">
+                                    Products
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("RetestRequests")">
+                                    Retest Requests
+                                    @if (ViewBag.PendingRetestCount != null && (int)ViewBag.PendingRetestCount > 0)
+                                    {
+                                        <span class="badge bg-danger float-right ml-2">@ViewBag.PendingRetestCount</span>
+                                    }
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("EmailConfigurations")">
+                                    Email Configuration
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" action="@Url.Action("Index")">
+                            <input type="hidden" name="page" value="1" />
+                            <div class="form-group">
+                                <label for="search" class="form-label">Search</label>
+                                <input type="text" 
+                                       class="form-control form-control-sm" 
+                                       id="search" 
+                                       name="search" 
+                                       value="@ViewBag.CurrentSearch"
+                                       placeholder="Product name or FIPS ID..." />
+                            </div>
+                            <div class="form-group">
+                                <label for="enrollmentStatus" class="form-label">Enrollment Status</label>
+                                <select class="form-control form-control-sm" id="enrollmentStatus" name="enrollmentStatus">
+                                    <option value="">All</option>
+                                    @if (ViewBag.CurrentEnrollmentStatus == "not-enrolled")
+                                    {
+                                        <option value="not-enrolled" selected>Not Enrolled</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="not-enrolled">Not Enrolled</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Enrolled products are shown in the table above</small>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                                <a href="@Url.Action("Index")" class="btn btn-default btn-sm btn-block">Clear All</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+    <!-- Right Column: Content -->
+    <div class="col-lg-9 col-md-8 col-12">
+        <!-- Enrolled Products Summary -->
+        @{
+            var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
+        }
+        @if (enrolledProducts.Any())
+        {
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Enrolled Products (@enrolledProducts.Count)</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Statement Status</th>
+                                        <th>Open Issues</th>
+                                        <th>Issues Past Due</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in enrolledProducts)
+                                    {
+                                        var productAccessibility = product.ProductAccessibility;
+                                        var isVerified = false;
+                                        var verificationMethod = "";
+                                        
+                                        if (productAccessibility != null)
+                                        {
+                                            var pa = productAccessibility as Compass.Models.ProductAccessibility;
+                                            if (pa != null)
+                                            {
+                                                isVerified = pa.StatementInstalled && pa.VerifiedAt.HasValue;
+                                                verificationMethod = pa.StatementVerificationMethod ?? "";
+                                            }
+                                        }
+                                        
+                                        var openIssuesCount = (int)product.OpenIssuesCount;
+                                        var pastDueCount = (int)product.PastDueCount;
+                                        
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("ProductDetails", new { fipsId = product.FipsId })" class="text-decoration-none">
+                                                    <strong>@product.ProductName</strong>
+                                                </a>
+                                                <br>
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <small class="text-muted mr-2">@product.FipsId</small>
+                                                }
+                                                @if (!string.IsNullOrEmpty(product.Phase))
+                                                {
+                                                    <small class="text-muted">@product.Phase</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (isVerified)
+                                                {
+                                                    <span class="badge bg-success">Verified</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Not Verified</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (openIssuesCount > 0)
+                                                {
+                                                    <span class="badge bg-warning">@openIssuesCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (pastDueCount > 0)
+                                                {
+                                                    <span class="badge bg-danger">@pastDueCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                    </div>
+                </div>
+            }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">All Products (@(ViewBag.TotalCount ?? 0))</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model != null && ((IEnumerable<dynamic>)Model).Any())
+                {
+                        <table class="table table-hover text-nowrap sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Enrollment Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in (IEnumerable<dynamic>)Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("ProductDetails", new { fipsId = product.FipsId })" class="text-decoration-none">
+                                                <strong>@product.ProductName</strong>
+                                            </a>
+                                            <br>
+                                            @if (!string.IsNullOrEmpty(product.FipsId))
+                                            {
+                                                <small class="text-muted mr-2">@product.FipsId</small>
+                                            }
+                                            @if (!string.IsNullOrEmpty(product.Phase))
+                                            {
+                                                <small class="text-muted">@product.Phase</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">Not Enrolled</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                }
+                else
+                {
+                    <p class="text-muted text-center p-3 mb-0">No products found.</p>
+                }
+
+                @if (ViewBag.TotalPages != null && (int)ViewBag.TotalPages > 1)
+                {
+                    <div class="card-footer">
+                        <nav>
+                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                @{
+                                    var currentPage = (int)(ViewBag.CurrentPage ?? 1);
+                                    var totalPages = (int)(ViewBag.TotalPages ?? 1);
+                                    var startPage = Math.Max(1, currentPage - 2);
+                                    var endPage = Math.Min(totalPages, currentPage + 2);
+                                }
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    @{
+                                        var prevRouteValues = new { 
+                                            page = currentPage - 1, 
+                                            search = ViewBag.CurrentSearch as string, 
+                                            enrollmentStatus = ViewBag.CurrentEnrollmentStatus as string 
+                                        };
+                                    }
+                                    <a class="page-link" href="@Url.Action("Index", prevRouteValues)">Previous</a>
+                                </li>
+                                @for (int i = startPage; i <= endPage; i++)
+                                {
+                                    var pageRouteValues = new { 
+                                        page = i, 
+                                        search = ViewBag.CurrentSearch as string, 
+                                        enrollmentStatus = ViewBag.CurrentEnrollmentStatus as string 
+                                    };
+                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                        <a class="page-link" href="@Url.Action("Index", pageRouteValues)">@i</a>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    @{
+                                        var nextRouteValues = new { 
+                                            page = currentPage + 1, 
+                                            search = ViewBag.CurrentSearch as string, 
+                                            enrollmentStatus = ViewBag.CurrentEnrollmentStatus as string 
+                                        };
+                                    }
+                                    <a class="page-link" href="@Url.Action("Index", nextRouteValues)">Next</a>
+                                </li>
+                            </ul>
+                        </nav>
+                        <div class="text-center text-muted mt-2">
+                            Showing @(((currentPage - 1) * 20) + 1) to @(Math.Min(currentPage * 20, (int)(ViewBag.TotalCount ?? 0))) of @(ViewBag.TotalCount ?? 0) products
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    </div>
+</section>
+
+
