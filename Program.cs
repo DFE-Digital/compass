@@ -42,6 +42,25 @@ if (args.Length > 0 && args[0] == "--migrate-data")
     return;
 }
 
+// Check for Azure SQL → Azure SQL environment migration
+if (args.Length > 0 && args[0] == "--migrate-sql")
+{
+    // Usage: --migrate-sql --source Development --target Test|Production
+    string source = "Development";
+    string target = "Production";
+    bool referenceOnly = false;
+
+    for (int i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--source") source = args[i + 1];
+        if (args[i] == "--target") target = args[i + 1];
+        if (args[i] == "--reference-only") referenceOnly = true;
+    }
+
+    await Compass.AzureSqlEnvironmentMigration.RunAsync(source, target, referenceOnly);
+    return;
+}
+
 // Add file logging
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -62,6 +81,25 @@ builder.Services.AddAuthorization();
 
 // Configure database - Use Azure SQL for all environments
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// Diagnostic logging to help debug connection string issues
+var currentEnvironment = builder.Environment.EnvironmentName;
+Console.WriteLine($"\n[CONFIG DEBUG] ASPNETCORE_ENVIRONMENT = {currentEnvironment}");
+Console.WriteLine($"[CONFIG DEBUG] Expected files: appsettings.json, appsettings.{currentEnvironment}.json");
+
+// Show which connection string values exist in each source (for debugging)
+var baseConnection = builder.Configuration["ConnectionStrings:DefaultConnection"];
+Console.WriteLine($"[CONFIG DEBUG] Resolved ConnectionStrings:DefaultConnection exists: {!string.IsNullOrEmpty(baseConnection)}");
+
+if (connectionString != null)
+{
+    var catalogMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Initial Catalog=([^;]+)");
+    if (catalogMatch.Success)
+    {
+        Console.WriteLine($"[CONFIG DEBUG] ✓ Database catalog: {catalogMatch.Groups[1].Value}");
+    }
+    Console.WriteLine($"[CONFIG DEBUG] Connection string preview: {connectionString.Substring(0, Math.Min(80, connectionString.Length))}...\n");
+}
 
 if (string.IsNullOrEmpty(connectionString))
 {

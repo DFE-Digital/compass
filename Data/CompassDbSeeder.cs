@@ -89,9 +89,21 @@ public class CompassDbSeeder
         var items = await _sourceDb.RiskTiers.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            await _targetDb.RiskTiers.AddRangeAsync(items);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {items.Count} Risk Tiers");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[RiskTiers] ON");
+                await _targetDb.RiskTiers.AddRangeAsync(items);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[RiskTiers] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {items.Count} Risk Tiers");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 
@@ -136,9 +148,21 @@ public class CompassDbSeeder
         var items = await _sourceDb.RiskTypes.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            await _targetDb.RiskTypes.AddRangeAsync(items);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {items.Count} Risk Types");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[RiskTypes] ON");
+                await _targetDb.RiskTypes.AddRangeAsync(items);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[RiskTypes] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {items.Count} Risk Types");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 
@@ -165,9 +189,21 @@ public class CompassDbSeeder
         var items = await _sourceDb.EnterpriseMetrics.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            await _targetDb.EnterpriseMetrics.AddRangeAsync(items);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {items.Count} Enterprise Metrics");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[EnterpriseMetrics] ON");
+                await _targetDb.EnterpriseMetrics.AddRangeAsync(items);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[EnterpriseMetrics] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {items.Count} Enterprise Metrics");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 
@@ -192,6 +228,7 @@ public class CompassDbSeeder
         if (_sourceDb == null || await _targetDb.FunctionalStandards.AnyAsync()) return;
 
         // Migrate in order: Standards -> Themes -> Practice Areas -> Criteria
+        // FunctionalStandards uses user-defined IDs, not identity
         var standards = await _sourceDb.FunctionalStandards.AsNoTracking().ToListAsync();
         if (standards.Any())
         {
@@ -203,25 +240,61 @@ public class CompassDbSeeder
         var themes = await _sourceDb.FunctionalStandardThemes.AsNoTracking().ToListAsync();
         if (themes.Any())
         {
-            await _targetDb.FunctionalStandardThemes.AddRangeAsync(themes);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {themes.Count} Functional Standard Themes");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[FunctionalStandardThemes] ON");
+                await _targetDb.FunctionalStandardThemes.AddRangeAsync(themes);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[FunctionalStandardThemes] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {themes.Count} Functional Standard Themes");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         var practiceAreas = await _sourceDb.PracticeAreas.AsNoTracking().ToListAsync();
         if (practiceAreas.Any())
         {
-            await _targetDb.PracticeAreas.AddRangeAsync(practiceAreas);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {practiceAreas.Count} Practice Areas");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[PracticeAreas] ON");
+                await _targetDb.PracticeAreas.AddRangeAsync(practiceAreas);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[PracticeAreas] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {practiceAreas.Count} Practice Areas");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         var criteria = await _sourceDb.Criteria.AsNoTracking().ToListAsync();
         if (criteria.Any())
         {
-            await _targetDb.Criteria.AddRangeAsync(criteria);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {criteria.Count} Criteria");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[Criteria] ON");
+                await _targetDb.Criteria.AddRangeAsync(criteria);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[Criteria] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {criteria.Count} Criteria");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 
@@ -248,9 +321,21 @@ public class CompassDbSeeder
         var items = await _sourceDb.Objectives.AsNoTracking().ToListAsync();
         if (items.Any())
         {
-            await _targetDb.Objectives.AddRangeAsync(items);
-            await _targetDb.SaveChangesAsync();
-            Console.WriteLine($"✓ Migrated {items.Count} Objectives");
+            using var transaction = await _targetDb.Database.BeginTransactionAsync();
+            try
+            {
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[Objectives] ON");
+                await _targetDb.Objectives.AddRangeAsync(items);
+                await _targetDb.SaveChangesAsync();
+                await _targetDb.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [dbo].[Objectives] OFF");
+                await transaction.CommitAsync();
+                Console.WriteLine($"✓ Migrated {items.Count} Objectives");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 

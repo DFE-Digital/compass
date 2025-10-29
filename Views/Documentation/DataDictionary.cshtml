@@ -410,6 +410,7 @@
                 <p>Many-to-many relationship tables connecting RAID entities:</p>
 
                 <h3 class="h6 mt-3">RiskRiskTypes</h3>
+                <p class="small">Many-to-many junction table enabling risks to be classified with multiple risk types.</p>
                 <table class="table table-sm table-bordered">
                     <thead class="thead-light">
                         <tr>
@@ -422,15 +423,21 @@
                         <tr>
                             <td><code>RiskId</code></td>
                             <td>INTEGER</td>
-                            <td>Foreign key to Risks table</td>
+                            <td>Foreign key to Risks table (composite PK part 1)</td>
                         </tr>
                         <tr>
                             <td><code>RiskTypeId</code></td>
                             <td>INTEGER</td>
-                            <td>Foreign key to RiskTypes table</td>
+                            <td>Foreign key to RiskTypes table (composite PK part 2)</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreatedAt</code></td>
+                            <td>DATETIME</td>
+                            <td>When the association was created</td>
                         </tr>
                     </tbody>
                 </table>
+                <p class="small text-muted">Composite primary key on (RiskId, RiskTypeId). Cascade delete when risk is deleted, restrict delete on risk type if in use.</p>
 
                 <h3 class="h6 mt-3">RiskActions</h3>
                 <table class="table table-sm table-bordered">
@@ -486,30 +493,48 @@
                 <h2 id="lookups">Lookup tables</h2>
                 
                 <h3 class="h6 mt-3">RiskTiers</h3>
-                <p>Defines risk tier levels (product, programme, portfolio, enterprise).</p>
+                <p>Defines risk governance tier levels from project through to cross-government.</p>
                 <ul class="small">
                     <li><code>Id</code> - INTEGER, primary key</li>
-                    <li><code>Name</code> - VARCHAR(100), tier name</li>
-                    <li><code>Description</code> - TEXT, tier description</li>
-                    <li><code>DisplayOrder</code> - INTEGER, sort order</li>
+                    <li><code>Code</code> - VARCHAR(50), unique identifier (e.g., "PROJECT", "DEPARTMENT")</li>
+                    <li><code>Name</code> - VARCHAR(100), tier name (e.g., "Project-level risk")</li>
+                    <li><code>Description</code> - TEXT, full definition with governance details</li>
+                    <li><code>Summary</code> - VARCHAR(200), concise scope description</li>
+                    <li><code>SortOrder</code> - INTEGER, hierarchical display order</li>
+                    <li><code>IsActive</code> - BIT/BOOLEAN, whether tier appears in dropdowns</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
                 </ul>
+
+                <p class="small text-muted">5 standard risk tiers seeded: Project, Programme, Portfolio, Department, Cross-government</p>
 
                 <h3 class="h6 mt-3">RiskTypes</h3>
-                <p>Defines risk categories (strategic, operational, financial, etc.).</p>
+                <p>Defines risk categories with 13 standard types. Risks can be assigned multiple types via the RiskRiskTypes junction table.</p>
                 <ul class="small">
                     <li><code>Id</code> - INTEGER, primary key</li>
-                    <li><code>Name</code> - VARCHAR(100), type name</li>
-                    <li><code>Description</code> - TEXT, type description</li>
-                    <li><code>Colour</code> - VARCHAR(20), display colour code</li>
+                    <li><code>Code</code> - VARCHAR(50), unique identifier (e.g., "STRATEGY", "TECHNOLOGY")</li>
+                    <li><code>Name</code> - VARCHAR(100), display name (e.g., "Strategy risk")</li>
+                    <li><code>Description</code> - TEXT, full definition with examples</li>
+                    <li><code>Summary</code> - VARCHAR(200), concise one-line description</li>
+                    <li><code>IsActive</code> - BIT/BOOLEAN, whether type appears in forms</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
                 </ul>
 
+                <p class="small text-muted">13 standard risk types seeded covering strategic, operational, financial, technical, security, and other categories</p>
+
                 <h3 class="h6 mt-3">ActionSources</h3>
-                <p>Defines where actions originate from (risk, issue, meeting, etc.).</p>
+                <p>Defines where actions originate from (risk, issue, milestone, service assessment).</p>
                 <ul class="small">
                     <li><code>Id</code> - INTEGER, primary key</li>
-                    <li><code>Name</code> - VARCHAR(100), source name</li>
-                    <li><code>Description</code> - TEXT, source description</li>
+                    <li><code>Code</code> - VARCHAR(50), unique identifier (e.g., "RISK", "SERVICE_ASSESSMENT")</li>
+                    <li><code>Name</code> - VARCHAR(100), display name (e.g., "Risk", "Service Assessment")</li>
+                    <li><code>Description</code> - TEXT, full definition with examples</li>
+                    <li><code>Summary</code> - VARCHAR(200), concise one-line description</li>
+                    <li><code>SortOrder</code> - INTEGER, display order in dropdowns</li>
+                    <li><code>IsActive</code> - BIT/BOOLEAN, whether source appears in dropdowns</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
                 </ul>
+
+                <p class="small text-muted">4 standard action sources seeded: Risk, Issue, Milestone, Service Assessment</p>
 
                 <hr class="my-4">
 
@@ -527,13 +552,14 @@
                 </ul>
 
                 <h3 class="h6 mt-3">UserPreferences</h3>
-                <p>Stores user-specific settings and preferences.</p>
+                <p>Stores user-specific settings and preferences including preferred business areas.</p>
                 <ul class="small">
-                    <li><code>Id</code> - INTEGER, primary key</li>
-                    <li><code>UserId</code> - INTEGER, foreign key to Users</li>
-                    <li><code>PreferenceKey</code> - VARCHAR(100), setting name</li>
-                    <li><code>PreferenceValue</code> - TEXT, setting value</li>
+                    <li><code>UserId</code> - INTEGER, primary key and foreign key to Users (one-to-one relationship)</li>
+                    <li><code>PreferredBusinessAreas</code> - TEXT, comma-separated list of preferred business areas</li>
+                    <li><code>CreatedAt</code>, <code>UpdatedAt</code> - DATETIME, audit timestamps</li>
                 </ul>
+
+                <p class="small text-muted">Preferences automatically filter RAID index views to show items from selected business areas</p>
 
                 <hr class="my-4">
 

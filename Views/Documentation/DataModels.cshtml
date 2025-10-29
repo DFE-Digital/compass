@@ -207,11 +207,15 @@
                 <h4 class="h6 mt-3">Risk navigation properties:</h4>
                 <ul>
                     <li><code>Objective</code> - Associated strategic objective</li>
-                    <li><code>RiskTier</code> - Associated risk tier</li>
-                    <li><code>RiskRiskTypes</code> - Collection of risk type associations</li>
+                    <li><code>RiskTier</code> - Associated risk tier (single selection)</li>
+                    <li><code>RiskRiskTypes</code> - Collection of risk type associations (many-to-many via junction table)</li>
                     <li><code>RiskActions</code> - Collection of associated actions</li>
                     <li><code>MilestoneRisks</code> - Collection of milestone associations</li>
                 </ul>
+
+                <div class="alert alert-info mt-3">
+                    <p class="mb-0"><strong>Multi-dimensional classification:</strong> Risks can be classified by strategic objective, product (FipsId), business area, multiple risk types, risk tier, and custom category for comprehensive reporting.</p>
+                </div>
 
                 <h3 class="h5 mt-4">Issue entity</h3>
                 <p>Stores information about identified issues.</p>
@@ -601,10 +605,12 @@
 
                 <h3 class="h5 mt-4">Lookup tables</h3>
                 <ul>
-                    <li><strong>RiskTier:</strong> Risk tier definitions (product, programme, portfolio, enterprise)</li>
-                    <li><strong>RiskType:</strong> Risk type categories (strategic, operational, financial, etc.)</li>
-                    <li><strong>ActionSource:</strong> Sources where actions originate from</li>
+                    <li><strong>RiskTier:</strong> Risk governance tier definitions (project, programme, portfolio, department, cross-government) - 5 standard tiers</li>
+                    <li><strong>RiskType:</strong> Risk category taxonomy (strategy, governance, operations, legal, financial, technical, security, etc.) - 13 standard types</li>
+                    <li><strong>ActionSource:</strong> Action origin tracking (risk, issue, milestone, service assessment) - 4 standard sources</li>
                 </ul>
+
+                <p class="small text-muted">All lookup tables include Code (unique identifier), Name, Description, Summary, IsActive flag, and audit timestamps. Managed via Administration → Settings.</p>
 
                 <hr class="my-4">
 
@@ -613,11 +619,14 @@
                 <h3 class="h5 mt-4">Junction tables (many-to-many relationships)</h3>
 
                 <h4 class="h6 mt-3">RiskRiskType</h4>
-                <p>Links risks to one or more risk types.</p>
+                <p>Many-to-many junction table linking risks to risk types. Enables multi-select risk type classification.</p>
                 <ul>
-                    <li><code>RiskId</code> - Foreign key to Risk</li>
-                    <li><code>RiskTypeId</code> - Foreign key to RiskType</li>
+                    <li><code>RiskId</code> - Foreign key to Risk (composite primary key part 1)</li>
+                    <li><code>RiskTypeId</code> - Foreign key to RiskType (composite primary key part 2)</li>
+                    <li><code>CreatedAt</code> - Timestamp when association was created</li>
                 </ul>
+
+                <p class="small text-muted">A single risk can have multiple risk types. Cascade delete when risk is removed, restrict delete on risk type if in use.</p>
 
                 <h4 class="h6 mt-3">RiskAction</h4>
                 <p>Links risks to their mitigation actions.</p>
