@@ -10,6 +10,84 @@ namespace Compass;
 /// </summary>
 public class DataMigrationUtility
 {
+    public static async Task PurgeTargetDataAsync(CompassDbContext targetDb)
+    {
+        Console.WriteLine("Purging target data (non-destructive to schema)...");
+
+        // Junction tables first
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[MilestoneIssues]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[MilestoneRisks]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[MilestoneActions]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[IssueActions]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskRiskTypes]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskActions]");
+
+        // Dependent entities
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Comments]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Actions]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Milestones]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Issues]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Risks]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ProductMetricValues]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ProductReturns]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[AssessmentCriteriaResponses]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[FunctionalStandardAssessments]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[EnterpriseMetricValues]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[EnterpriseReturns]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Objectives]");
+
+        // Functional standards hierarchy (order matters)
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Criteria]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[PracticeAreas]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[FunctionalStandardThemes]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[FunctionalStandards]");
+
+        // Performance/enterprise
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[PerformanceMetrics]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[EnterpriseMetrics]");
+
+        // API management
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ApiRequestLogs]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ApiTokenPermissions]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ApiTokens]");
+
+        // Users and preferences
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[UserPreferences]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[Users]");
+
+        // Lookups last
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ActionSources]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskTypes]");
+        await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskTiers]");
+
+        Console.WriteLine("✓ Target data purged");
+    }
+
+    public static async Task MigrateReferenceDataOnlyAsync(CompassDbContext sourceDb, CompassDbContext targetDb)
+    {
+        Console.WriteLine("Starting reference data migration only...");
+
+        // Ensure schema/migrations on target
+        Console.WriteLine("Preparing target database (schema only)...");
+        try { await targetDb.Database.MigrateAsync(); } catch { /* proceed with existing */ }
+
+        // Lookups and reference sets
+        await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTiers", db => db.RiskTiers);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTypes", db => db.RiskTypes);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "ActionSources", db => db.ActionSources);
+
+        // Metrics
+        await MigrateTableWithIdentity(sourceDb, targetDb, "PerformanceMetrics", db => db.PerformanceMetrics);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "EnterpriseMetrics", db => db.EnterpriseMetrics);
+
+        // Functional Standards hierarchy
+        await MigrateFunctionalStandards(sourceDb, targetDb);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "FunctionalStandardThemes", db => db.FunctionalStandardThemes);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "PracticeAreas", db => db.PracticeAreas);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "Criteria", db => db.Criteria);
+
+        Console.WriteLine("\n✓ Reference data migration completed");
+    }
     public static async Task MigrateDataAsync(CompassDbContext sourceDb, CompassDbContext targetDb)
     {
         Console.WriteLine("Starting data migration from SQLite to Azure SQL...");
