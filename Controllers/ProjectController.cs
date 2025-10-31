@@ -2126,6 +2126,64 @@ namespace Compass.Controllers
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
         }
 
+        // POST: Project/UpdateStartDate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateStartDate(int id, DateTime? startDate)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.StartDate = startDate;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Start date updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating start date");
+                TempData["ErrorMessage"] = "An error occurred while updating the start date.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateTargetDeliveryDate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateTargetDeliveryDate(int id, DateTime? targetDeliveryDate)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.TargetDeliveryDate = targetDeliveryDate;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Target end date updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating target delivery date");
+                TempData["ErrorMessage"] = "An error occurred while updating the target end date.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
         // POST: Project/AddDeliverable
         [HttpPost]
         [ValidateAntiForgeryToken]
