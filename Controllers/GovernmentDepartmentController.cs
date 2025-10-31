@@ -278,6 +278,33 @@ namespace Compass.Controllers
             return Json(new { results = departments });
         }
 
+        // API endpoint to get a single department by ID
+        [HttpGet("Get")]
+        public async Task<IActionResult> Get(int? id)
+        {
+            if (id == null)
+            {
+                return Json(new { error = "ID is required" });
+            }
+
+            var department = await _context.GovernmentDepartments
+                .Where(d => d.Id == id && !d.IsDeleted)
+                .Select(d => new { 
+                    id = d.Id, 
+                    title = d.Title,
+                    text = d.Title,
+                    abbreviation = d.Abbreviation 
+                })
+                .FirstOrDefaultAsync();
+
+            if (department == null)
+            {
+                return Json(new { error = "Department not found" });
+            }
+
+            return Json(department);
+        }
+
         private async Task<(int Added, int Updated, int Errors)> SyncGovernmentDepartments()
         {
             int added = 0, updated = 0, errors = 0;

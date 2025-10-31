@@ -78,6 +78,20 @@ public class CompassDbContext : DbContext
     public DbSet<Milestone> Milestones { get; set; }
     public DbSet<Models.Action> Actions { get; set; }
     public DbSet<Comment> Comments { get; set; }
+
+    // Surveys (Apps)
+    public DbSet<FipsService> Services { get; set; }
+    public DbSet<SurveyTemplate> SurveyTemplates { get; set; }
+    public DbSet<SurveyQuestion> SurveyQuestions { get; set; }
+    public DbSet<SurveyOption> SurveyOptions { get; set; }
+    public DbSet<ResponseScale> ResponseScales { get; set; }
+    public DbSet<ResponseScaleOption> ResponseScaleOptions { get; set; }
+    public DbSet<JourneyStep> JourneySteps { get; set; }
+    public DbSet<SurveyInstance> SurveyInstances { get; set; }
+    public DbSet<SurveyResponse> SurveyResponses { get; set; }
+    public DbSet<ResponseAnswer> ResponseAnswers { get; set; }
+    public DbSet<ScoreSnapshot> ScoreSnapshots { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
     
     // Project Management
     public DbSet<Project> Projects { get; set; }
@@ -117,6 +131,80 @@ public class CompassDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        // Surveys configuration
+        modelBuilder.Entity<FipsService>()
+            .HasIndex(s => s.FipsId)
+            .IsUnique();
+
+        modelBuilder.Entity<FipsService>()
+            .HasMany(s => s.SurveyInstances)
+            .WithOne(si => si.Service)
+            .HasForeignKey(si => si.ServiceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SurveyTemplate>()
+            .HasIndex(t => new { t.Name, t.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<SurveyQuestion>()
+            .HasOne(q => q.Template)
+            .WithMany(t => t.Questions)
+            .HasForeignKey(q => q.SurveyTemplateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SurveyQuestion>()
+            .HasIndex(q => new { q.SurveyTemplateId, q.Code })
+            .IsUnique();
+
+        modelBuilder.Entity<SurveyOption>()
+            .HasOne(o => o.Question)
+            .WithMany(q => q.Options)
+            .HasForeignKey(o => o.SurveyQuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResponseScaleOption>()
+            .HasOne(o => o.Scale)
+            .WithMany(s => s.Options)
+            .HasForeignKey(o => o.ResponseScaleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<JourneyStep>()
+            .HasOne(js => js.Template)
+            .WithMany(t => t.JourneySteps)
+            .HasForeignKey(js => js.SurveyTemplateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<JourneyStep>()
+            .HasIndex(js => new { js.SurveyTemplateId, js.Ordinal })
+            .IsUnique();
+
+        modelBuilder.Entity<SurveyInstance>()
+            .HasOne(si => si.Template)
+            .WithMany()
+            .HasForeignKey(si => si.SurveyTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SurveyInstance>()
+            .HasIndex(si => new { si.ServiceId, si.IsActive })
+            .HasFilter("[IsActive] = 1");
+
+        modelBuilder.Entity<SurveyResponse>()
+            .HasOne(r => r.SurveyInstance)
+            .WithMany(si => si.Responses)
+            .HasForeignKey(r => r.SurveyInstanceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResponseAnswer>()
+            .HasOne(ra => ra.SurveyResponse)
+            .WithMany(r => r.Answers)
+            .HasForeignKey(ra => ra.SurveyResponseId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResponseAnswer>()
+            .HasOne(ra => ra.SurveyQuestion)
+            .WithMany()
+            .HasForeignKey(ra => ra.SurveyQuestionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Configure User entity
         modelBuilder.Entity<User>()
