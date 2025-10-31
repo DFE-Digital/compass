@@ -82,8 +82,8 @@ public class ApiAuthenticationMiddleware
         // Store token in context items for use in controllers
         context.Items["ApiToken"] = apiToken;
 
-        // Update last used timestamp (fire and forget)
-        _ = apiTokenService.UpdateLastUsedAsync(apiToken.Id);
+        // Update last used timestamp (await to avoid concurrent DbContext operations)
+        await apiTokenService.UpdateLastUsedAsync(apiToken.Id);
 
         await _next(context);
     }

@@ -199,6 +199,21 @@ namespace Compass.Controllers
                 .ThenBy(m => m.Title)
                 .ToListAsync();
 
+            // Get business areas and phases from lookup tables
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
+
             // Get government departments for multi-department cooperation
             ViewBag.GovernmentDepartments = await _context.GovernmentDepartments
                 .Where(d => !d.IsDeleted && d.ClosedAt == null)
@@ -608,10 +623,112 @@ namespace Compass.Controllers
             return View(new Project());
         }
 
+        // GET: Project/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var project = await _context.Projects.FindAsync(id);
+            if (project == null || project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            // Get phases from lookup table for dropdown
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
+
+            return View(project);
+        }
+
+        // POST: Project/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,Aim,Phase,IsMultiDepartmentProject,OtherDepartments")] Project project)
+        {
+            if (id != project.Id)
+            {
+                return NotFound();
+            }
+
+            // Log the Phase value received
+            _logger.LogInformation("Edit POST - Project ID: {ProjectId}, Phase received: {Phase}, Form Phase value: {FormPhase}", 
+                id, project?.Phase, Request.Form["Phase"].ToString());
+
+            // Get Phase directly from form if model binding didn't work
+            var phaseFromForm = Request.Form["Phase"].ToString();
+            if (string.IsNullOrEmpty(project.Phase) && !string.IsNullOrEmpty(phaseFromForm))
+            {
+                project.Phase = phaseFromForm;
+                _logger.LogInformation("Phase value taken from form directly: {Phase}", phaseFromForm);
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    var existingProject = await _context.Projects.FindAsync(id);
+                    if (existingProject == null || existingProject.IsDeleted)
+                    {
+                        return NotFound();
+                    }
+
+                    _logger.LogInformation("Updating project {ProjectId} - Old Phase: {OldPhase}, New Phase: {NewPhase}", 
+                        id, existingProject.Phase, project.Phase);
+
+                    existingProject.Title = project.Title;
+                    existingProject.BusinessArea = project.BusinessArea;
+                    existingProject.Aim = project.Aim;
+                    existingProject.Phase = project.Phase;
+                    existingProject.IsMultiDepartmentProject = project.IsMultiDepartmentProject;
+                    existingProject.OtherDepartments = project.OtherDepartments;
+                    existingProject.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("Project {ProjectId} updated successfully. Phase is now: {Phase}", id, existingProject.Phase);
+
+                    TempData["SuccessMessage"] = "Project updated successfully.";
+                    return RedirectToAction(nameof(Details), new { id = id });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error updating project {ProjectId}", id);
+                    TempData["ErrorMessage"] = "An error occurred while updating the project.";
+                }
+            }
+            else
+            {
+                // Log model state errors
+                foreach (var error in ModelState)
+                {
+                    _logger.LogWarning("ModelState error for {Key}: {Errors}", 
+                        error.Key, string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage)));
+                }
+            }
+
+            // Reload phases if there's an error
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
+
+            return View(project);
+        }
+
         // POST: Project/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,TotalPermFte,TotalMspFte,Status,PrimaryOrganizationalGroupId,IsMultiDepartmentProject,OtherDepartments")] Project project)
+        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,TotalPermFte,TotalMspFte,Status,IsMultiDepartmentProject,OtherDepartments")] Project project)
         {
             _logger.LogInformation("Create POST called - Title: {Title}, Aim: {Aim}", project.Title, project.Aim);
             _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
@@ -1949,6 +2066,64 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id, tab = "strategicalignment" });
+        }
+
+        // POST: Project/UpdateBusinessArea
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBusinessArea(int id, string? businessArea)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.BusinessArea = businessArea;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Business area updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating business area");
+                TempData["ErrorMessage"] = "An error occurred while updating the business area.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdatePhase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdatePhase(int id, string? phase)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.Phase = phase;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Phase updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating phase");
+                TempData["ErrorMessage"] = "An error occurred while updating the phase.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
         }
 
         // POST: Project/AddDeliverable

@@ -652,6 +652,43 @@ namespace Compass.Migrations
                     b.ToTable("AuditHistories");
                 });
 
+            modelBuilder.Entity("Compass.Models.AuditLog", b =>
+                {
+                    b.Property<Guid>("AuditLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ChangedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Entity")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PayloadJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("AuditLogId");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("Compass.Models.BusinessAreaLookup", b =>
                 {
                     b.Property<int>("Id")
@@ -1062,6 +1099,40 @@ namespace Compass.Migrations
                         .IsUnique();
 
                     b.ToTable("EnterpriseReturns");
+                });
+
+            modelBuilder.Entity("Compass.Models.FipsService", b =>
+                {
+                    b.Property<int>("ServiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ServiceId"));
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("FipsId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ServiceId");
+
+                    b.HasIndex("FipsId")
+                        .IsUnique();
+
+                    b.ToTable("Service");
                 });
 
             modelBuilder.Entity("Compass.Models.FunctionalStandard", b =>
@@ -1508,6 +1579,42 @@ namespace Compass.Migrations
                     b.HasIndex("WcagCriterionId");
 
                     b.ToTable("IssueWcagCriteria");
+                });
+
+            modelBuilder.Entity("Compass.Models.JourneyStep", b =>
+                {
+                    b.Property<Guid>("JourneyStepId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ConditionalOnJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("HelpText")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QuestionCode")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("SurveyTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("JourneyStepId");
+
+                    b.HasIndex("SurveyTemplateId", "Ordinal")
+                        .IsUnique();
+
+                    b.ToTable("JourneySteps");
                 });
 
             modelBuilder.Entity("Compass.Models.Milestone", b =>
@@ -2849,6 +2956,102 @@ namespace Compass.Migrations
                     b.ToTable("ProjectSuccesses");
                 });
 
+            modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
+                {
+                    b.Property<Guid>("ResponseAnswerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OptionValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SurveyQuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SurveyResponseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TextValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ResponseAnswerId");
+
+                    b.HasIndex("SurveyQuestionId");
+
+                    b.HasIndex("SurveyResponseId");
+
+                    b.ToTable("ResponseAnswers");
+                });
+
+            modelBuilder.Entity("Compass.Models.ResponseScale", b =>
+                {
+                    b.Property<Guid>("ResponseScaleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("InputType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ResponseScaleId");
+
+                    b.ToTable("ResponseScales");
+                });
+
+            modelBuilder.Entity("Compass.Models.ResponseScaleOption", b =>
+                {
+                    b.Property<Guid>("ResponseScaleOptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ResponseScaleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ResponseScaleOptionId");
+
+                    b.HasIndex("ResponseScaleId");
+
+                    b.ToTable("ResponseScaleOptions");
+                });
+
             modelBuilder.Entity("Compass.Models.Risk", b =>
                 {
                     b.Property<int>("Id")
@@ -3083,6 +3286,225 @@ namespace Compass.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("RiskTypes");
+                });
+
+            modelBuilder.Entity("Compass.Models.ScoreSnapshot", b =>
+                {
+                    b.Property<Guid>("ScoreSnapshotId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AvgUss")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MedianUss")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ResponsesCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("SnapshotDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("ScoreSnapshotId");
+
+                    b.HasIndex("ServiceId");
+
+                    b.ToTable("ScoreSnapshots");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
+                {
+                    b.Property<Guid>("SurveyInstanceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("EndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SurveyTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WeightsJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("SurveyInstanceId");
+
+                    b.HasIndex("SurveyTemplateId");
+
+                    b.HasIndex("ServiceId", "IsActive")
+                        .HasFilter("[IsActive] = 1");
+
+                    b.ToTable("SurveyInstances");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyOption", b =>
+                {
+                    b.Property<Guid>("SurveyOptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SurveyQuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("SurveyOptionId");
+
+                    b.HasIndex("SurveyQuestionId");
+
+                    b.ToTable("SurveyOptions");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyQuestion", b =>
+                {
+                    b.Property<Guid>("SurveyQuestionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("InputType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Mandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ResponseScaleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SurveyTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Weight")
+                        .HasColumnType("int");
+
+                    b.HasKey("SurveyQuestionId");
+
+                    b.HasIndex("ResponseScaleId");
+
+                    b.HasIndex("SurveyTemplateId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("SurveyQuestions");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyResponse", b =>
+                {
+                    b.Property<Guid>("SurveyResponseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Band")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Channel")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("FreeText")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("GeoRegion")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("SubmittedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SurveyInstanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserAgentHash")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal>("UssComputed")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("SurveyResponseId");
+
+                    b.HasIndex("SurveyInstanceId");
+
+                    b.ToTable("SurveyResponses");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyTemplate", b =>
+                {
+                    b.Property<Guid>("SurveyTemplateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("SurveyTemplateId");
+
+                    b.HasIndex("Name", "Version")
+                        .IsUnique();
+
+                    b.ToTable("SurveyTemplates");
                 });
 
             modelBuilder.Entity("Compass.Models.User", b =>
@@ -3509,6 +3931,17 @@ namespace Compass.Migrations
                     b.Navigation("WcagCriterion");
                 });
 
+            modelBuilder.Entity("Compass.Models.JourneyStep", b =>
+                {
+                    b.HasOne("Compass.Models.SurveyTemplate", "Template")
+                        .WithMany("JourneySteps")
+                        .HasForeignKey("SurveyTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Template");
+                });
+
             modelBuilder.Entity("Compass.Models.Milestone", b =>
                 {
                     b.HasOne("Compass.Models.Objective", "Objective")
@@ -3827,6 +4260,36 @@ namespace Compass.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
+                {
+                    b.HasOne("Compass.Models.SurveyQuestion", "SurveyQuestion")
+                        .WithMany()
+                        .HasForeignKey("SurveyQuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.SurveyResponse", "SurveyResponse")
+                        .WithMany("Answers")
+                        .HasForeignKey("SurveyResponseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SurveyQuestion");
+
+                    b.Navigation("SurveyResponse");
+                });
+
+            modelBuilder.Entity("Compass.Models.ResponseScaleOption", b =>
+                {
+                    b.HasOne("Compass.Models.ResponseScale", "Scale")
+                        .WithMany("Options")
+                        .HasForeignKey("ResponseScaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Scale");
+                });
+
             modelBuilder.Entity("Compass.Models.Risk", b =>
                 {
                     b.HasOne("Compass.Models.Objective", "Objective")
@@ -3889,6 +4352,75 @@ namespace Compass.Migrations
                     b.Navigation("RiskType");
                 });
 
+            modelBuilder.Entity("Compass.Models.ScoreSnapshot", b =>
+                {
+                    b.HasOne("Compass.Models.FipsService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Service");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
+                {
+                    b.HasOne("Compass.Models.FipsService", "Service")
+                        .WithMany("SurveyInstances")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.SurveyTemplate", "Template")
+                        .WithMany()
+                        .HasForeignKey("SurveyTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Template");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyOption", b =>
+                {
+                    b.HasOne("Compass.Models.SurveyQuestion", "Question")
+                        .WithMany("Options")
+                        .HasForeignKey("SurveyQuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyQuestion", b =>
+                {
+                    b.HasOne("Compass.Models.ResponseScale", "ResponseScale")
+                        .WithMany()
+                        .HasForeignKey("ResponseScaleId");
+
+                    b.HasOne("Compass.Models.SurveyTemplate", "Template")
+                        .WithMany("Questions")
+                        .HasForeignKey("SurveyTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ResponseScale");
+
+                    b.Navigation("Template");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyResponse", b =>
+                {
+                    b.HasOne("Compass.Models.SurveyInstance", "SurveyInstance")
+                        .WithMany("Responses")
+                        .HasForeignKey("SurveyInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SurveyInstance");
+                });
+
             modelBuilder.Entity("Compass.Models.UserPreference", b =>
                 {
                     b.HasOne("Compass.Models.User", "User")
@@ -3936,6 +4468,11 @@ namespace Compass.Migrations
             modelBuilder.Entity("Compass.Models.EnterpriseReturn", b =>
                 {
                     b.Navigation("MetricValues");
+                });
+
+            modelBuilder.Entity("Compass.Models.FipsService", b =>
+                {
+                    b.Navigation("SurveyInstances");
                 });
 
             modelBuilder.Entity("Compass.Models.FunctionalStandard", b =>
@@ -4070,6 +4607,11 @@ namespace Compass.Migrations
                     b.Navigation("Successes");
                 });
 
+            modelBuilder.Entity("Compass.Models.ResponseScale", b =>
+                {
+                    b.Navigation("Options");
+                });
+
             modelBuilder.Entity("Compass.Models.Risk", b =>
                 {
                     b.Navigation("DependenciesAsSource");
@@ -4081,6 +4623,28 @@ namespace Compass.Migrations
                     b.Navigation("RiskActions");
 
                     b.Navigation("RiskRiskTypes");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
+                {
+                    b.Navigation("Responses");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyQuestion", b =>
+                {
+                    b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyResponse", b =>
+                {
+                    b.Navigation("Answers");
+                });
+
+            modelBuilder.Entity("Compass.Models.SurveyTemplate", b =>
+                {
+                    b.Navigation("JourneySteps");
+
+                    b.Navigation("Questions");
                 });
 #pragma warning restore 612, 618
         }

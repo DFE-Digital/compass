@@ -52,7 +52,6 @@
                             <input type="hidden" asp-for="RagStatus" />
                             <input type="hidden" asp-for="RagJustification" />
                             <input type="hidden" asp-for="Status" />
-                            <input type="hidden" asp-for="Phase" />
                             <input type="hidden" asp-for="TotalPermFte" />
                             <input type="hidden" asp-for="TotalMspFte" />
                             <input type="hidden" asp-for="IsFlagship" />
@@ -63,6 +62,29 @@
                                 <input asp-for="Title" class="form-control" placeholder="Enter project title" />
                                 <span asp-validation-for="Title" class="text-danger"></span>
                                 <small class="form-text text-muted">The name of your project</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Phase" class="control-label">Phase of Delivery</label>
+                                <select asp-for="Phase" class="form-control">
+                                    <option value="">Select phase</option>
+                                    @if (ViewBag.Phases != null)
+                                    {
+                                        @foreach (var phase in ViewBag.Phases)
+                                        {
+                                            @if (Model.Phase == phase)
+                                            {
+                                                <option value="@phase" selected>@phase</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@phase">@phase</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="Phase" class="text-danger"></span>
+                                <small class="form-text text-muted">The current phase of the project</small>
                             </div>
 
                             <div class="form-group">
@@ -78,6 +100,33 @@
                                 <span asp-validation-for="Aim" class="text-danger"></span>
                                 <small class="form-text text-muted">What is this project trying to achieve?</small>
                             </div>
+
+                            <!-- Multi-department Project -->
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsMultiDepartmentProject" class="form-check-input" id="isMultiDept" />
+                                    <label asp-for="IsMultiDepartmentProject" class="form-check-label">Is this a multi-department project?</label>
+                                </div>
+                                <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
+                                <span asp-validation-for="IsMultiDepartmentProject" class="text-danger"></span>
+                            </div>
+
+                            <div class="row" id="otherDepartmentsRow" style="display: none;">
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <label class="control-label">Other Government Departments</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." />
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
+                                            </div>
+                                        </div>
+                                        <div id="selectedDepartments" class="mt-2"></div>
+                                        <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
+                                        <span asp-validation-for="OtherDepartments" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-footer">
                             <button type="submit" class="btn btn-primary">Update Project</button>
@@ -92,4 +141,175 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        // Multi-department project functionality
+        let selectedDepartments = [];
+        
+        // Initialize with existing departments if any
+        const existingDepartmentsJson = document.getElementById('otherDepartmentsJson').value;
+        if (existingDepartmentsJson) {
+            try {
+                const departmentIds = JSON.parse(existingDepartmentsJson);
+                if (Array.isArray(departmentIds) && departmentIds.length > 0) {
+                    // Load department details for existing IDs
+                    Promise.all(departmentIds.map(id => 
+                        fetch(`/Admin/GovernmentDepartment/Get?id=${id}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.error) return null;
+                                return { id: data.id, text: data.text || data.title, abbreviation: data.abbreviation };
+                            })
+                            .catch(() => null)
+                    )).then(departments => {
+                        selectedDepartments = departments.filter(d => d !== null);
+                        updateSelectedDepartments();
+                    });
+                }
+            } catch (e) {
+                console.error('Error parsing existing departments:', e);
+            }
+        }
+        
+        // Show/hide department row based on checkbox
+        const isMultiDeptCheckbox = document.getElementById('isMultiDept');
+        const otherDeptRow = document.getElementById('otherDepartmentsRow');
+        
+        // Initialize visibility based on checkbox state
+        if (isMultiDeptCheckbox && isMultiDeptCheckbox.checked) {
+            if (otherDeptRow) otherDeptRow.style.display = 'block';
+        }
+        
+        if (isMultiDeptCheckbox) {
+            isMultiDeptCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    if (otherDeptRow) otherDeptRow.style.display = 'block';
+                } else {
+                    if (otherDeptRow) otherDeptRow.style.display = 'none';
+                    selectedDepartments = [];
+                    updateSelectedDepartments();
+                }
+            });
+        }
+
+        // Department search functionality
+        let searchTimeout;
+        const departmentSearchInput = document.getElementById('departmentSearch');
+        
+        if (departmentSearchInput) {
+            departmentSearchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value;
+                
+                if (query.length < 2) {
+                    hideDepartmentResults();
+                    return;
+                }
+                
+                searchTimeout = setTimeout(() => {
+                    searchDepartments(query);
+                }, 300);
+            });
+        }
+
+        function searchDepartments(query) {
+            fetch(`/Admin/GovernmentDepartment/Search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    showDepartmentResults(data.results);
+                })
+                .catch(error => {
+                    console.error('Error searching departments:', error);
+                });
+        }
+
+        function showDepartmentResults(departments) {
+            let container = document.getElementById('departmentResults');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'departmentResults';
+                container.className = 'list-group mt-2';
+                const searchInput = document.getElementById('departmentSearch');
+                if (searchInput && searchInput.parentNode) {
+                    searchInput.parentNode.appendChild(container);
+                }
+            }
+            
+            container.innerHTML = '';
+            
+            if (departments.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-muted">No departments found</div>';
+            } else {
+                departments.forEach(dept => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<strong>${dept.text}</strong>${dept.abbreviation ? ` (${dept.abbreviation})` : ''}`;
+                    item.addEventListener('click', () => addDepartment(dept));
+                    container.appendChild(item);
+                });
+            }
+            
+            container.style.display = 'block';
+        }
+
+        function hideDepartmentResults() {
+            const container = document.getElementById('departmentResults');
+            if (container) {
+                container.style.display = 'none';
+            }
+        }
+
+        function addDepartment(department) {
+            if (!selectedDepartments.find(d => d.id === department.id)) {
+                selectedDepartments.push(department);
+                updateSelectedDepartments();
+            }
+            
+            const searchInput = document.getElementById('departmentSearch');
+            if (searchInput) searchInput.value = '';
+            hideDepartmentResults();
+        }
+
+        function removeDepartment(departmentId) {
+            selectedDepartments = selectedDepartments.filter(d => d.id !== departmentId);
+            updateSelectedDepartments();
+        }
+
+        function updateSelectedDepartments() {
+            const container = document.getElementById('selectedDepartments');
+            const jsonInput = document.getElementById('otherDepartmentsJson');
+            
+            if (!container || !jsonInput) return;
+            
+            if (selectedDepartments.length === 0) {
+                container.innerHTML = '';
+                jsonInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected Departments:</strong></div>';
+            selectedDepartments.forEach(dept => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${dept.text}${dept.abbreviation ? ` (${dept.abbreviation})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeDepartment(${dept.id})">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            jsonInput.value = JSON.stringify(selectedDepartments.map(d => d.id));
+        }
+
+        // Hide department results when clicking outside
+        document.addEventListener('click', function(e) {
+            const searchInput = document.getElementById('departmentSearch');
+            const resultsContainer = document.getElementById('departmentResults');
+            if (searchInput && resultsContainer && 
+                !e.target.closest('#departmentSearch') && 
+                !e.target.closest('#departmentResults')) {
+                hideDepartmentResults();
+            }
+        });
+    </script>
 }

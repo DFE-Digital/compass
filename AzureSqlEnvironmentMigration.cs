@@ -71,6 +71,8 @@ public static class AzureSqlEnvironmentMigration
             await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[ActionSources]");
             await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskTypes]");
             await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[RiskTiers]");
+            await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[BusinessAreaLookups]");
+            await targetDb.Database.ExecuteSqlRawAsync("DELETE FROM [dbo].[PhaseLookups]");
 
             await DataMigrationUtility.MigrateReferenceDataOnlyAsync(sourceDb, targetDb);
         }

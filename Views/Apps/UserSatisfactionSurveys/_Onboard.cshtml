@@ -1,0 +1,88 @@
+@{
+    var products = ViewBag.Products as IEnumerable<dynamic>;
+    var services = ViewBag.Services as IEnumerable<Compass.Models.FipsService>;
+}
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Onboard product</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="@Url.Action("Onboard", "UserSatisfactionSurveys")">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3">
+                        <label class="form-label">Select product</label>
+                        <select class="form-control" id="productSelect">
+                            <option value="">Select a product</option>
+                            @foreach (var p in products ?? Enumerable.Empty<dynamic>())
+                            {
+                                <option value="@p.FipsId" data-name="@p.Name">@p.Name (@p.FipsId)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">FIPS ID</label>
+                        <input type="text" name="fipsId" id="fipsId" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Display name</label>
+                        <input type="text" name="displayName" id="displayName" class="form-control" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Onboard</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Onboarded services</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>FIPS ID</th>
+                                <th>Display name</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in services ?? Enumerable.Empty<Compass.Models.FipsService>())
+                            {
+                                <tr>
+                                    <td>@s.FipsId</td>
+                                    <td>@s.DisplayName</td>
+                                    <td>@(s.IsActive ? "Active" : "Inactive")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+<script nonce="@Context.Items["Nonce"]">
+document.addEventListener('DOMContentLoaded', function(){
+  const select = document.getElementById('productSelect');
+  const fips = document.getElementById('fipsId');
+  const name = document.getElementById('displayName');
+  if(select){
+    select.addEventListener('change', function(){
+      const opt = select.options[select.selectedIndex];
+      fips.value = opt.value || '';
+      name.value = opt.getAttribute('data-name') || '';
+    });
+  }
+});
+</script>
+}
+
+
