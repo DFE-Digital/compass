@@ -15,7 +15,7 @@ public class GraphService : IGraphService
     private readonly bool _isConfigured;
 
     public GraphService(
-        IConfiguration configuration, 
+        IConfiguration configuration,
         ILogger<GraphService> logger,
         IMemoryCache cache)
     {
@@ -28,8 +28,8 @@ public class GraphService : IGraphService
         var clientId = configuration["AzureAd:ClientId"];
         var clientSecret = configuration["AzureAd:ClientSecret"];
 
-        if (!string.IsNullOrEmpty(tenantId) && 
-            !string.IsNullOrEmpty(clientId) && 
+        if (!string.IsNullOrEmpty(tenantId) &&
+            !string.IsNullOrEmpty(clientId) &&
             !string.IsNullOrEmpty(clientSecret))
         {
             try
@@ -74,7 +74,7 @@ public class GraphService : IGraphService
                         // Build filter query
                         if (!string.IsNullOrEmpty(searchTerm))
                         {
-                            requestConfiguration.QueryParameters.Filter = 
+                            requestConfiguration.QueryParameters.Filter =
                                 $"startswith(displayName,'{searchTerm}') or startswith(givenName,'{searchTerm}') or startswith(surname,'{searchTerm}') or startswith(mail,'{searchTerm}') or startswith(userPrincipalName,'{searchTerm}')";
                         }
                         requestConfiguration.QueryParameters.Select = new[] { "displayName", "mail", "jobTitle", "department", "userPrincipalName" };
@@ -118,7 +118,7 @@ public class GraphService : IGraphService
     {
         // For now, return mock data
         // In production, this would call: GET https://graph.microsoft.com/v1.0/users/{email}
-        
+
         var allStaff = GetMockStaffData("", 100);
         return await Task.FromResult(allStaff.FirstOrDefault(s => s.Email.Equals(email, StringComparison.OrdinalIgnoreCase)));
     }
@@ -147,8 +147,8 @@ public class GraphService : IGraphService
 
         var searchLower = searchTerm.ToLower();
         return mockStaff
-            .Where(s => 
-                s.DisplayName.ToLower().Contains(searchLower) || 
+            .Where(s =>
+                s.DisplayName.ToLower().Contains(searchLower) ||
                 s.Email.ToLower().Contains(searchLower) ||
                 (s.JobTitle?.ToLower().Contains(searchLower) ?? false))
             .Take(maxResults)

@@ -22,11 +22,9 @@ public class Project
 
     public string? MissionPillars { get; set; }
 
-    [Required]
-    public DateTime StartDate { get; set; }
+    public DateTime? StartDate { get; set; }
 
-    [Required]
-    public DateTime TargetDeliveryDate { get; set; }
+    public DateTime? TargetDeliveryDate { get; set; }
 
     public DateTime? ActualDeliveryDate { get; set; }
 
@@ -36,9 +34,8 @@ public class Project
     [Required]
     public bool IsAiInitiative { get; set; } = false;
 
-    [Required]
     [MaxLength(20)]
-    public string RagStatus { get; set; } = "Green"; // Green, Amber-Green, Amber-Red, Red
+    public string? RagStatus { get; set; } // Green, Amber-Green, Amber, Amber-Red, Red
 
     public string? RagJustification { get; set; }
 
