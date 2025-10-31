@@ -66,6 +66,384 @@ public class AdminController : Controller
         return View("~/Views/Admin/User/CreateUser.cshtml", user);
     }
 
+    // ==================== USER SATISFACTION (USS) ADMIN ====================
+
+    public IActionResult UserSatisfaction()
+    {
+        return View("~/Views/Admin/UserSatisfaction/Index.cshtml");
+    }
+
+    public async Task<IActionResult> ResponseScales()
+    {
+        var scales = await _context.ResponseScales
+            .Include(s => s.Options.OrderBy(o => o.Ordinal))
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+        
+        ViewBag.Scales = scales;
+        return View("~/Views/Admin/UserSatisfaction/ResponseScales.cshtml");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateResponseScale(string name, string? description, SurveyInputType inputType, bool isDefault)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["ErrorMessage"] = "Scale name is required.";
+            return RedirectToAction(nameof(ResponseScales));
+        }
+        
+        var scale = new ResponseScale
+        {
+            Name = name.Trim(),
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            InputType = inputType,
+            IsDefault = isDefault,
+            CreatedUtc = DateTime.UtcNow
+        };
+        
+        _context.ResponseScales.Add(scale);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Response scale created.";
+        return RedirectToAction(nameof(ResponseScales));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddScaleOption(Guid scaleId, string value, string label, int ordinal)
+    {
+        if (scaleId == Guid.Empty || string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(label))
+        {
+            TempData["ErrorMessage"] = "Scale, value and label are required.";
+            return RedirectToAction(nameof(ResponseScales));
+        }
+        
+        _context.ResponseScaleOptions.Add(new ResponseScaleOption
+        {
+            ResponseScaleId = scaleId,
+            Value = value.Trim(),
+            Label = label.Trim(),
+            Ordinal = ordinal,
+            Active = true
+        });
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Option added.";
+        return RedirectToAction(nameof(ResponseScales));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateScaleOption(Guid optionId, string label, int ordinal, bool active)
+    {
+        var option = await _context.ResponseScaleOptions.FindAsync(optionId);
+        if (option == null)
+        {
+            TempData["ErrorMessage"] = "Option not found.";
+            return RedirectToAction(nameof(ResponseScales));
+        }
+        
+        option.Label = label.Trim();
+        option.Ordinal = ordinal;
+        option.Active = active;
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Option updated.";
+        return RedirectToAction(nameof(ResponseScales));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteResponseScale(Guid scaleId)
+    {
+        var scale = await _context.ResponseScales
+            .Include(s => s.Options)
+            .FirstOrDefaultAsync(s => s.ResponseScaleId == scaleId);
+        
+        if (scale == null)
+        {
+            TempData["ErrorMessage"] = "Scale not found.";
+            return RedirectToAction(nameof(ResponseScales));
+        }
+        
+        // Check if any questions use this scale
+        var questionsUsingScale = await _context.SurveyQuestions
+            .AnyAsync(q => q.ResponseScaleId == scaleId);
+        
+        if (questionsUsingScale)
+        {
+            TempData["ErrorMessage"] = "Cannot delete scale as it is in use by questions.";
+            return RedirectToAction(nameof(ResponseScales));
+        }
+        
+        _context.ResponseScales.Remove(scale);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Scale deleted.";
+        return RedirectToAction(nameof(ResponseScales));
+    }
+
+    public async Task<IActionResult> UserSatisfactionQuestions()
+    {
+        // Get or create default template
+        var template = await _context.SurveyTemplates
+            .OrderByDescending(t => t.IsDefault)
+            .ThenByDescending(t => t.CreatedUtc)
+            .FirstOrDefaultAsync();
+        
+        if (template == null)
+        {
+            // Create default template if none exists
+            template = new SurveyTemplate
+            {
+                Name = "Default USS Template",
+                Version = 1,
+                IsDefault = true,
+                CreatedUtc = DateTime.UtcNow
+            };
+            _context.SurveyTemplates.Add(template);
+            await _context.SaveChangesAsync();
+        }
+        
+        var questions = await _context.SurveyQuestions
+            .Include(q => q.ResponseScale)
+            .Include(q => q.Options.OrderBy(o => o.Ordinal))
+            .Where(q => q.SurveyTemplateId == template.SurveyTemplateId)
+            .OrderBy(q => q.Ordinal)
+            .ToListAsync();
+        
+        var scales = await _context.ResponseScales
+            .Include(s => s.Options.OrderBy(o => o.Ordinal))
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+        
+        ViewBag.Questions = questions;
+        ViewBag.SelectedTemplateId = template.SurveyTemplateId;
+        ViewBag.ResponseScales = scales;
+        
+        return View("~/Views/Admin/UserSatisfaction/Questions.cshtml");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateUssTemplate(string name, int version, bool isDefault)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["ErrorMessage"] = "Template name is required.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        var template = new SurveyTemplate
+        {
+            Name = name.Trim(),
+            Version = version > 0 ? version : 1,
+            IsDefault = isDefault,
+            CreatedUtc = DateTime.UtcNow
+        };
+        _context.SurveyTemplates.Add(template);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Template created.";
+        return RedirectToAction(nameof(UserSatisfactionQuestions), new { templateId = template.SurveyTemplateId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddUssQuestion(string? templateId, string code, string title, string? description, bool mandatory, int weight, int ordinal, string inputType, string? responseScaleId)
+    {
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(title))
+        {
+            TempData["ErrorMessage"] = "Code and title are required.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        if (!Enum.TryParse<SurveyInputType>(inputType, true, out var inputTypeEnum))
+        {
+            TempData["ErrorMessage"] = "Invalid input type.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        // Get or create default template
+        Guid templateIdGuid;
+        if (string.IsNullOrWhiteSpace(templateId) || !Guid.TryParse(templateId, out templateIdGuid) || templateIdGuid == Guid.Empty)
+        {
+            var template = await _context.SurveyTemplates
+                .OrderByDescending(t => t.IsDefault)
+                .ThenByDescending(t => t.CreatedUtc)
+                .FirstOrDefaultAsync();
+            
+            if (template == null)
+            {
+                // Create default template if none exists
+                template = new SurveyTemplate
+                {
+                    Name = "Default USS Template",
+                    Version = 1,
+                    IsDefault = true,
+                    CreatedUtc = DateTime.UtcNow
+                };
+                _context.SurveyTemplates.Add(template);
+                await _context.SaveChangesAsync();
+            }
+            templateIdGuid = template.SurveyTemplateId;
+        }
+        
+        Guid? responseScaleGuid = null;
+        if (!string.IsNullOrWhiteSpace(responseScaleId) && Guid.TryParse(responseScaleId, out var parsedScaleId) && parsedScaleId != Guid.Empty)
+        {
+            responseScaleGuid = parsedScaleId;
+        }
+        
+        var question = new SurveyQuestion
+        {
+            SurveyTemplateId = templateIdGuid,
+            Code = code.Trim(),
+            Title = title.Trim(),
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Mandatory = mandatory,
+            Weight = weight,
+            Ordinal = ordinal,
+            InputType = inputTypeEnum,
+            ResponseScaleId = responseScaleGuid,
+            Active = true
+        };
+        _context.SurveyQuestions.Add(question);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Question added.";
+        
+        // If input type is Select, redirect with question ID so options can be added
+        if (inputTypeEnum == SurveyInputType.Select)
+        {
+            TempData["NewQuestionId"] = question.SurveyQuestionId.ToString();
+        }
+        
+        return RedirectToAction(nameof(UserSatisfactionQuestions));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateUssQuestion(Guid questionId, string title, string? description, bool mandatory, int weight, int ordinal, SurveyInputType inputType, bool active, string? responseScaleId)
+    {
+        var q = await _context.SurveyQuestions.FindAsync(questionId);
+        if (q == null)
+        {
+            TempData["ErrorMessage"] = "Question not found.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        q.Title = title.Trim();
+        q.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        q.Mandatory = mandatory;
+        q.Weight = weight;
+        q.Ordinal = ordinal;
+        q.InputType = inputType;
+        q.Active = active;
+        
+        if (!string.IsNullOrWhiteSpace(responseScaleId) && Guid.TryParse(responseScaleId, out var parsedScaleId) && parsedScaleId != Guid.Empty)
+        {
+            q.ResponseScaleId = parsedScaleId;
+        }
+        else
+        {
+            q.ResponseScaleId = null;
+        }
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Question updated.";
+        return RedirectToAction(nameof(UserSatisfactionQuestions));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddQuestionOption(Guid questionId, string value, string label, int ordinal, int? score)
+    {
+        var question = await _context.SurveyQuestions.FindAsync(questionId);
+        if (question == null)
+        {
+            TempData["ErrorMessage"] = "Question not found.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        if (string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(label))
+        {
+            TempData["ErrorMessage"] = "Value and label are required.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        _context.SurveyOptions.Add(new SurveyOption
+        {
+            SurveyQuestionId = questionId,
+            Value = value.Trim(),
+            Label = label.Trim(),
+            Ordinal = ordinal,
+            Score = score,
+            Active = true
+        });
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Option added.";
+        return RedirectToAction(nameof(UserSatisfactionQuestions));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateQuestionOption(Guid optionId, string label, int ordinal, int? score, bool active)
+    {
+        var option = await _context.SurveyOptions.FindAsync(optionId);
+        if (option == null)
+        {
+            TempData["ErrorMessage"] = "Option not found.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        option.Label = label.Trim();
+        option.Ordinal = ordinal;
+        option.Score = score;
+        option.Active = active;
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Option updated.";
+        return RedirectToAction(nameof(UserSatisfactionQuestions));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteQuestionOption(Guid optionId)
+    {
+        var option = await _context.SurveyOptions.FindAsync(optionId);
+        if (option == null)
+        {
+            TempData["ErrorMessage"] = "Option not found.";
+            return RedirectToAction(nameof(UserSatisfactionQuestions));
+        }
+        
+        _context.SurveyOptions.Remove(option);
+        await _context.SaveChangesAsync();
+        TempData["SuccessMessage"] = "Option deleted.";
+        return RedirectToAction(nameof(UserSatisfactionQuestions));
+    }
+
+    public async Task<IActionResult> UserSatisfactionResponses(string? fipsId = null, DateTime? from = null, DateTime? to = null)
+    {
+        ViewBag.Services = await _context.Services.OrderBy(s => s.FipsId).ToListAsync();
+        var query = _context.SurveyResponses
+            .Include(r => r.SurveyInstance)
+            .ThenInclude(si => si.Service)
+            .AsQueryable();
+        if (!string.IsNullOrWhiteSpace(fipsId))
+        {
+            query = query.Where(r => r.SurveyInstance!.Service!.FipsId == fipsId);
+        }
+        if (from.HasValue)
+        {
+            query = query.Where(r => r.SubmittedUtc >= from.Value);
+        }
+        if (to.HasValue)
+        {
+            query = query.Where(r => r.SubmittedUtc <= to.Value);
+        }
+
+        var list = await query.OrderByDescending(r => r.SubmittedUtc).Take(200).ToListAsync();
+        var n = list.Count;
+        var avg = n > 0 ? Math.Round(list.Average(r => (double)r.UssComputed), 1) : 0;
+        var median = n > 0 ? Math.Round(list.Select(r => (double)r.UssComputed).OrderBy(x => x).ElementAt(n / 2), 1) : 0;
+        ViewBag.Summary = new { n, avg, median };
+        return View("~/Views/Admin/UserSatisfaction/Responses.cshtml", list);
+    }
+
     // GET: Admin/EditUser/5
     public async Task<IActionResult> EditUser(int? id)
     {
@@ -1039,7 +1417,7 @@ public class AdminController : Controller
 
         var permissions = await _apiTokenService.GetPermissionsAsync(id);
 
-        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues" };
+        var resources = new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses" };
         
         ViewBag.Token = token;
         ViewBag.Permissions = permissions;
@@ -1056,7 +1434,7 @@ public class AdminController : Controller
         {
             var permissionsDict = new Dictionary<string, (bool read, bool create, bool update, bool delete)>();
 
-            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues" })
+            foreach (var resource in new[] { "Risks", "Issues", "Actions", "Milestones", "PerformanceMetrics", "EnterpriseMetrics", "FunctionalStandards", "AccessibilityIssues", "SurveysAdmin", "UserSatisfactionQuestions", "UserSatisfactionResponses" })
             {
                 var read = permissions.ContainsKey($"{resource}_read") && permissions[$"{resource}_read"] == "on";
                 var create = permissions.ContainsKey($"{resource}_create") && permissions[$"{resource}_create"] == "on";
@@ -1857,46 +2235,78 @@ public class AdminController : Controller
     // POST: Admin/EditPhase
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditPhase(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] PhaseLookup phase)
+    public async Task<IActionResult> EditPhase(int id, string name, string? description, int sortOrder, bool isActive = false)
     {
-        if (id != phase.Id)
+        _logger.LogInformation("EditPhase POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}", 
+            id, name, description, sortOrder, isActive);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}", 
+            formId, formName, formDescription, formSortOrder, formIsActive);
+        
+        try
         {
-            return NotFound();
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            
+            var existingPhase = await _context.PhaseLookups.FindAsync(id);
+            if (existingPhase == null)
+            {
+                _logger.LogWarning("Phase not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "Phase not found.";
+                return RedirectToAction(nameof(Settings));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.PhaseLookups.AnyAsync(p => p.Name == name && p.Id != id))
+            {
+                TempData["ErrorMessage"] = "A phase with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating phase {Id} - Name: {Name}, IsActive: {IsActive}", id, name, isActive);
+                
+                existingPhase.Name = name;
+                existingPhase.Description = description;
+                existingPhase.SortOrder = sortOrder;
+                existingPhase.IsActive = isActive;
+                existingPhase.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Phase '{name}' has been updated successfully.";
+                _logger.LogInformation("Phase {Id} updated successfully", id);
+            }
         }
-
-        if (ModelState.IsValid)
+        catch (Exception ex)
         {
-            try
-            {
-                // Check if name already exists for a different record
-                if (await _context.PhaseLookups.AnyAsync(p => p.Name == phase.Name && p.Id != id))
-                {
-                    TempData["ErrorMessage"] = "A phase with this name already exists.";
-                }
-                else
-                {
-                    var existingPhase = await _context.PhaseLookups.FindAsync(id);
-                    if (existingPhase == null)
-                    {
-                        return NotFound();
-                    }
-
-                    existingPhase.Name = phase.Name;
-                    existingPhase.Description = phase.Description;
-                    existingPhase.SortOrder = phase.SortOrder;
-                    existingPhase.IsActive = phase.IsActive;
-                    existingPhase.UpdatedAt = DateTime.UtcNow;
-
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Phase '{phase.Name}' has been updated successfully.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating phase");
-                TempData["ErrorMessage"] = "An error occurred while updating the phase. Please try again.";
-            }
+            _logger.LogError(ex, "Error updating phase {PhaseId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the phase. Please try again.";
         }
 
         return RedirectToAction(nameof(Settings));
