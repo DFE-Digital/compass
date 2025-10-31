@@ -1,0 +1,293 @@
+@{
+    ViewData["Title"] = "User satisfaction surveys";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Apps")">Apps</a></li>
+            <li class="breadcrumb-item active" aria-current="page">User satisfaction surveys</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">User satisfaction surveys</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#enrollProductModal">
+                        Enrol Product
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+                <!-- Summary Cards -->
+                <div class="row mb-4">
+                    @{ var summary = ViewBag.SummaryStats as dynamic; }
+                    <div class="col-lg-3 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-box"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Products Enrolled</span>
+                                <span class="info-box-number">@(summary?.TotalEnrolledProducts ?? 0) / @(summary?.TotalProducts ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-primary"><i class="fas fa-star"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Overall Average USS</span>
+                                <span class="info-box-number">@(summary?.OverallAvg ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-database"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Total Submissions</span>
+                                <span class="info-box-number">@(summary?.TotalResponses ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        <div class="row">
+                    <!-- Filters -->
+                    <div class="col-lg-3 col-md-4 col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Filters</h3>
+                            </div>
+                            <div class="card-body">
+                                <form method="get" action="@Url.Action("Index")">
+                                    <div class="form-group">
+                                        <label>Search</label>
+                                        <input type="text" name="search" class="form-control form-control-sm" value="@ViewBag.CurrentSearch" placeholder="Product name or FIPS ID..." />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Score range</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="number" name="minScore" class="form-control form-control-sm mr-2" min="0" max="100" value="@ViewBag.MinScore" placeholder="Min" />
+                                            <span class="mx-1">–</span>
+                                            <input type="number" name="maxScore" class="form-control form-control-sm ml-2" min="0" max="100" value="@ViewBag.MaxScore" placeholder="Max" />
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                                        <a href="@Url.Action("Index")" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lists -->
+                    <div class="col-lg-9 col-md-8 col-12">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h3 class="card-title">Enrolled products</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>FIPS ID</th>
+                                            <th>Average USS</th>
+                                            <th>Submissions</th>
+                                            <th>Survey link</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var enrolled = ViewBag.Enrolled as IEnumerable<dynamic> ?? new List<dynamic>();
+                                        }
+                                        @if (enrolled.Any())
+                                        {
+                                            foreach (var e in enrolled)
+                                            {
+                                                var avg = e.Avg is double da ? Math.Round(da, 1) : (e.Avg is decimal dec ? Math.Round((double)dec, 1) : 0);
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "UserSatisfactionSurveys", new { fipsId = e.FipsId })">
+                                                            <strong>@(e.DisplayName ?? e.FipsId)</strong>
+                                                        </a>
+                                                    </td>
+                                                    <td>@e.FipsId</td>
+                                                    <td>@avg</td>
+                                                    <td>@e.Count</td>
+                                                    <td><a href="https://user-satisfaction.education.gov.uk/@e.FipsId" target="_blank" rel="noopener">Open</a></td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr><td colspan="5" class="text-center text-muted p-3">No enrolled products</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">All products</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>FIPS ID</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var nonEnrolled = ViewBag.NonEnrolled as IEnumerable<dynamic> ?? new List<dynamic>();
+                                        }
+                                        @if (nonEnrolled.Any())
+                                        {
+                                            foreach (var p in nonEnrolled)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Enroll", "UserSatisfactionSurveys", new { fipsId = p.FipsId })" class="text-decoration-none">
+                                                            <strong>@p.ProductName</strong>
+                                                        </a>
+                                                    </td>
+                                                    <td>@p.FipsId</td>
+                                                    <td><span class="badge bg-secondary">Not enrolled</span></td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr><td colspan="3" class="text-center text-muted p-3">No products found</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+        </div>
+    </div>
+    
+</section>
+
+<!-- Enroll Product Modal -->
+<div class="modal fade" id="enrollProductModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Enrol Product</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form action="@Url.Action("Enroll", "UserSatisfactionSurveys")" method="get">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="productSearch">Search for Product</label>
+                        <input type="text" class="form-control product-autocomplete" id="productSearch" placeholder="Start typing product name or FIPS ID..." autocomplete="off" />
+                        <small class="form-text text-muted">Search by product name or FIPS ID</small>
+                    </div>
+                    <div id="selectedProductDisplay" class="alert alert-success mt-3 d-none">
+                        <strong>Selected Product:</strong><br>
+                        <div id="selectedProductTitle"></div>
+                        <small class="text-muted" id="selectedProductDetails"></small>
+                    </div>
+                    <input type="hidden" name="fipsId" id="selectedProductFipsId" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="enrollProductSubmitBtn" disabled>Continue to Enrol</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    var searchTimeout = null;
+    function initEnrollProduct() {
+        var $input = $('#productSearch');
+        var $resultsContainer = $('<div class="autocomplete-results"></div>');
+        $input.after($resultsContainer);
+        $input.on('input', function() {
+            clearTimeout(searchTimeout);
+            var q = $(this).val();
+            if (!q || q.length < 2) {
+                $resultsContainer.addClass('d-none').empty();
+                $('#selectedProductDisplay').addClass('d-none');
+                $('#enrollProductSubmitBtn').prop('disabled', true);
+                return;
+            }
+            searchTimeout = setTimeout(function() {
+                $.ajax({
+                    url: '/api/products/search',
+                    data: { q: q },
+                    dataType: 'json',
+                    success: function(data) {
+                        displayProductResults(data.results, $resultsContainer);
+                    },
+                    error: function() {
+                        $resultsContainer.html('<div class="autocomplete-item no-results">Error searching products</div>').removeClass('d-none');
+                    }
+                });
+            }, 300);
+        });
+        $(document).on('click', function(e){ if (!$(e.target).closest('.product-autocomplete,.autocomplete-results').length) { $resultsContainer.addClass('d-none'); } });
+        function displayProductResults(results, $c) {
+            $c.empty();
+            if (!results || results.length === 0) {
+                $c.html('<div class="autocomplete-item no-results">No products found</div>').removeClass('d-none');
+                return;
+            }
+            results.forEach(function(p){
+                var $item = $('<div class="autocomplete-item"></div>');
+                $item.html('<div class="autocomplete-name">' + p.title + '</div><div class="autocomplete-details">' + p.fipsId + ' • ' + (p.phase || '') + '</div>');
+                $item.on('click', function(){
+                    $('#productSearch').val(p.title);
+                    $('#selectedProductFipsId').val(p.fipsId);
+                    $('#selectedProductTitle').text(p.title);
+                    $('#selectedProductDetails').text(p.fipsId + ' • ' + (p.phase || ''));
+                    $('#selectedProductDisplay').removeClass('d-none');
+                    $('#enrollProductSubmitBtn').prop('disabled', false);
+                    $c.addClass('d-none').empty();
+                });
+                $c.append($item);
+            });
+            $c.removeClass('d-none');
+        }
+        $('#enrollProductModal').on('hidden.bs.modal', function(){
+            $input.val('');
+            $resultsContainer.addClass('d-none').empty();
+            $('#selectedProductDisplay').addClass('d-none');
+            $('#selectedProductFipsId').val('');
+            $('#enrollProductSubmitBtn').prop('disabled', true);
+        });
+    }
+    if (typeof jQuery !== 'undefined') {
+        $(document).ready(initEnrollProduct);
+    } else {
+        document.addEventListener('DOMContentLoaded', function(){ if (typeof jQuery !== 'undefined') { $(document).ready(initEnrollProduct); } });
+    }
+})();
+</script>
+
+

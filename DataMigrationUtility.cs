@@ -75,6 +75,8 @@ public class DataMigrationUtility
         await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTiers", db => db.RiskTiers);
         await MigrateTableWithIdentity(sourceDb, targetDb, "RiskTypes", db => db.RiskTypes);
         await MigrateTableWithIdentity(sourceDb, targetDb, "ActionSources", db => db.ActionSources);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "BusinessAreaLookups", db => db.BusinessAreaLookups);
+        await MigrateTableWithIdentity(sourceDb, targetDb, "PhaseLookups", db => db.PhaseLookups);
 
         // Metrics
         await MigrateTableWithIdentity(sourceDb, targetDb, "PerformanceMetrics", db => db.PerformanceMetrics);

@@ -142,6 +142,7 @@ builder.Services.AddHttpClient<Compass.Controllers.GovernmentDepartmentControlle
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -174,6 +175,41 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 100,
                 Window = TimeSpan.FromMinutes(1)
             }));
+
+    // More conservative named policies for surveys endpoints (per IP)
+    options.AddPolicy("ResponsesPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetFipsPartitionKey(httpContext) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    options.AddPolicy("SurveysGetPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetFipsPartitionKey(httpContext) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var ra) ? ra : TimeSpan.FromSeconds(60);
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            error = "rate_limited",
+            message = "Too many requests. Try again later.",
+            retryAfterSeconds = (int)retryAfter.TotalSeconds
+        });
+        await context.HttpContext.Response.WriteAsync(payload, token);
+    };
 });
 
 var app = builder.Build();
@@ -338,5 +374,20 @@ static async Task RunDataMigration(WebApplicationBuilder builder)
     
     Console.WriteLine("\nStarting migration...\n");
     await Compass.DataMigrationUtility.MigrateDataAsync(sourceDb, targetDb);
+}
+
+static string? GetFipsPartitionKey(HttpContext httpContext)
+{
+    try
+    {
+        // Prefer route value for GET /api/v1/surveys/{fipsId}
+        if (httpContext.Request.RouteValues.TryGetValue("fipsId", out var routeVal))
+        {
+            var s = routeVal?.ToString();
+            if (!string.IsNullOrWhiteSpace(s)) return $"fips:{s}";
+        }
+    }
+    catch { }
+    return null;
 }
 
