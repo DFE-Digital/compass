@@ -95,6 +95,38 @@
                             </td>
                         </tr>
                         <tr>
+                            <td class="summary-label"><strong>Start Date</strong></td>
+                            <td class="summary-value">
+                                @if (Model.StartDate.HasValue)
+                                {
+                                    @Model.StartDate.Value.ToString("dd MMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editStartDateModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Target End Date</strong></td>
+                            <td class="summary-value">
+                                @if (Model.TargetDeliveryDate.HasValue)
+                                {
+                                    @Model.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editTargetDateModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="summary-label"><strong>Outcomes</strong></td>
                             <td class="summary-value">@totalOutcomes defined</td>
                             <td class="text-right">
@@ -427,26 +459,40 @@
                     <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts">View contacts</a>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 @if (Model.ProjectContacts.Any())
                 {
-                    <div class="list-group list-group-flush">
-                        @foreach (var contact in Model.ProjectContacts.OrderBy(c => c.SortOrder).Take(5))
-                        {
-                            <div class="mb-3 pb-3 border-bottom">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <strong class="d-block">@contact.Name</strong>
-                                        <small class="text-muted d-block">@contact.Role</small>
-                                        <small class="text-muted">@contact.Email</small>
-                                    </div>
-                                </div>
-                            </div>
-                        }
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Role</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var contact in Model.ProjectContacts.OrderBy(c => c.SortOrder).Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(contact.Email))
+                                            {
+                                                <a href="mailto:@contact.Email">@contact.Name</a>
+                                            }
+                                            else
+                                            {
+                                                @contact.Name
+                                            }
+                                        </td>
+                                        <td>@contact.Role</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
                     @if (Model.ProjectContacts.Count > 5)
                     {
-                        <div class="text-center mt-3">
+                        <div class="text-center mt-3 p-3 border-top">
                             <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts" class="btn btn-sm btn-outline-secondary">
                                 View all @Model.ProjectContacts.Count contacts
                             </a>
@@ -455,7 +501,9 @@
                 }
                 else
                 {
-                    <p class="text-muted mb-0">No contacts defined.</p>
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No contacts defined.</p>
+                    </div>
                 }
             </div>
         </div>
@@ -764,6 +812,62 @@
                             <strong>Note:</strong> This project currently has deliverables linked to it. Removing flagship status will not remove these relationships, but the deliverables tab will no longer be accessible.
                         </div>
                     }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Start Date Modal -->
+<div class="modal fade" id="editStartDateModal" tabindex="-1" role="dialog" aria-labelledby="editStartDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editStartDateModalLabel">Edit Start Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateStartDate" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="startDate">Start Date</label>
+                        <input type="date" class="form-control" id="startDate" name="startDate" value="@(Model.StartDate?.ToString("yyyy-MM-dd") ?? "")" />
+                        <small class="form-text text-muted">Leave blank to remove the start date</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Target End Date Modal -->
+<div class="modal fade" id="editTargetDateModal" tabindex="-1" role="dialog" aria-labelledby="editTargetDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editTargetDateModalLabel">Edit Target End Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateTargetDeliveryDate" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="targetDeliveryDate">Target End Date</label>
+                        <input type="date" class="form-control" id="targetDeliveryDate" name="targetDeliveryDate" value="@(Model.TargetDeliveryDate?.ToString("yyyy-MM-dd") ?? "")" />
+                        <small class="form-text text-muted">Leave blank to remove the target end date</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
