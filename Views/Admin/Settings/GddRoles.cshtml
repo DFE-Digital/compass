@@ -1,0 +1,214 @@
+@model IEnumerable<Compass.Models.GddRole>
+
+@{
+    ViewData["Title"] = "GDD Roles";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Settings">Settings</a></li>
+                    <li class="breadcrumb-item active">GDD Roles</li>
+                </ol>
+                <h1 class="m-0">GDD Roles</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" asp-action="CreateGddRole">
+                                Create new GDD role
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
+                <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
+            </div>
+
+            <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">GDD Roles</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Manage GDD Roles from the Government Digital and Data Capability Framework.</p>
+
+                        <!-- Filter Controls -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="filterFamily" class="form-label">Filter by Family</label>
+                                <select id="filterFamily" class="form-control">
+                                    <option value="">All Families</option>
+                                    @{
+                                        var families = Model.Select(r => r.RoleFamily).Distinct().OrderBy(f => f).ToList();
+                                    }
+                                    @foreach (var family in families)
+                                    {
+                                        <option value="@family">@family</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterStatus" class="form-label">Filter by Status</label>
+                                <select id="filterStatus" class="form-control">
+                                    <option value="">All Statuses</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <label for="searchRoles" class="form-label">Search</label>
+                                <input type="text" id="searchRoles" class="form-control" placeholder="Search by name, level, or display name...">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive p-0">
+                            <table class="table table-hover text-nowrap" id="gddRolesTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">Family</th>
+                                        <th style="width: 30%;">Role Name</th>
+                                        <th style="width: 20%;">Level</th>
+                                        <th style="width: 20%;">Display Name</th>
+                                        <th style="width: 10%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Any())
+                                    {
+                                        @foreach (var item in Model)
+                                        {
+                                            <tr class="@(!item.IsActive ? "text-muted" : "")" data-family="@item.RoleFamily" data-status="@(item.IsActive ? "active" : "inactive")" data-search="@(item.RoleName + " " + item.RoleLevel + " " + item.DisplayName)">
+                                                <td><strong>@item.RoleFamily</strong></td>
+                                                <td>@item.RoleName</td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(item.RoleLevel))
+                                                    {
+                                                        <span class="badge badge-info">@item.RoleLevel</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a asp-action="EditGddRole" asp-route-id="@item.Id" class="font-weight-bold">
+                                                        @item.DisplayName
+                                                    </a>
+                                                    @if (!item.IsActive)
+                                                    {
+                                                        <span class="badge badge-secondary ml-2">Disabled</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (item.IsActive)
+                                                    {
+                                                        <span class="badge badge-success">Active</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">No GDD roles found.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Showing <span id="showingCount">0</span> of <span id="totalCount">@Model.Count()</span> roles
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterFamily = document.getElementById('filterFamily');
+        const filterStatus = document.getElementById('filterStatus');
+        const searchRoles = document.getElementById('searchRoles');
+        const table = document.getElementById('gddRolesTable');
+        const rows = table.querySelectorAll('tbody tr');
+        const showingCount = document.getElementById('showingCount');
+        const totalCount = document.getElementById('totalCount');
+        
+        function updateFilter() {
+            const familyValue = filterFamily.value.toLowerCase();
+            const statusValue = filterStatus.value.toLowerCase();
+            const searchValue = searchRoles.value.toLowerCase();
+            
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                if (row.querySelector('td')) { // Skip the "no results" row
+                    const family = row.getAttribute('data-family')?.toLowerCase() || '';
+                    const status = row.getAttribute('data-status')?.toLowerCase() || '';
+                    const search = row.getAttribute('data-search')?.toLowerCase() || '';
+                    
+                    const familyMatch = !familyValue || family.includes(familyValue);
+                    const statusMatch = !statusValue || status === statusValue;
+                    const searchMatch = !searchValue || search.includes(searchValue);
+                    
+                    if (familyMatch && statusMatch && searchMatch) {
+                        row.style.display = '';
+                        visibleCount++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+            
+            showingCount.textContent = visibleCount;
+        }
+        
+        filterFamily.addEventListener('change', updateFilter);
+        filterStatus.addEventListener('change', updateFilter);
+        searchRoles.addEventListener('input', updateFilter);
+        
+        // Initial count
+        updateFilter();
+    });
+</script>

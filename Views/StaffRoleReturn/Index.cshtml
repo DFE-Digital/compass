@@ -1,0 +1,603 @@
+@model Compass.Models.StaffRoleReturn
+
+@{
+    ViewData["Title"] = "Staff role return";
+    
+    var currentUser = ViewBag.CurrentUser as User;
+    var currentYear = ViewBag.CurrentYear ?? DateTime.Now.Year;
+    var dueDate = ViewBag.DueDate as DateTime? ?? new DateTime(currentYear, 3, 31);
+    var existingReturn = ViewBag.ExistingReturn as StaffRoleReturn;
+    var isOverdue = ViewBag.IsOverdue as bool? ?? false;
+    
+    var gddRoles = ViewBag.GddRoles as List<GddRole> ?? new List<GddRole>();
+    var skills = ViewBag.Skills as List<Skill> ?? new List<Skill>();
+    
+    var staffRoleReturn = Model ?? existingReturn;
+    var selectedSkillIds = new List<int>();
+    if (staffRoleReturn?.SecondarySkills != null)
+    {
+        foreach (var skillLink in staffRoleReturn.SecondarySkills)
+        {
+            selectedSkillIds.Add(skillLink.SkillId);
+        }
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index" asp-controller="EnterpriseReporting">Enterprise Reporting</a></li>
+                    <li class="breadcrumb-item active">Staff role return</li>
+                </ol>
+                <h1 class="m-0">Staff role return</h1>
+                <p class="text-muted mb-0">Annual submission of your primary GDD role and secondary skills</p>
+            </div>
+           
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (existingReturn != null && existingReturn.Status == ReturnStatus.Submitted)
+        {
+            <!-- Summary Section at Top -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h3 class="card-title mb-0">
+                                <i class="fas fa-check-circle mr-2"></i> Your @currentYear staff role return
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">GDD role</h6>
+                                    <p class="mb-2">
+                                        @if (!string.IsNullOrEmpty(existingReturn.GddRole.RoleLevel))
+                                        {
+                                            <span class="badge badge-info mr-1">@existingReturn.GddRole.RoleLevel</span>
+                                        }
+                                        <strong>@existingReturn.GddRole.RoleName</strong>
+                                    </p>
+                                    <p class="text-muted small mb-0">@existingReturn.GddRole.RoleFamily</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">Civil service grade</h6>
+                                    <p class="mb-0">
+                                        <span class="badge badge-secondary">@existingReturn.Grade</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">Last updated</h6>
+                                    <p class="mb-0">
+                                        @(existingReturn.LastModifiedDate?.ToString("dd MMM yyyy HH:mm") ?? "Not available")
+                                    </p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">Skills</h6>
+                                    @if (existingReturn.SecondarySkills != null && existingReturn.SecondarySkills.Any())
+                                    {
+                                        <p class="mb-0">
+                                            @foreach (var skillLink in existingReturn.SecondarySkills.OrderBy(s => s.DisplayOrder))
+                                            {
+                                                <span class="badge badge-secondary mr-1">@skillLink.Skill.SkillName</span>
+                                            }
+                                        </p>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted small mb-0">None selected</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (existingReturn != null && existingReturn.Status == ReturnStatus.Submitted)
+        {
+            <!-- Already submitted - show message -->
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle mr-2"></i>
+                Your staff role return has been submitted. If you need to make changes, please contact your administrator.
+            </div>
+        }
+        else
+        {
+            <!-- Submission Form -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="card-title mb-0">
+                                @if (existingReturn != null)
+                                {
+                                    <i class="fas fa-edit mr-2"></i><span>Edit your @currentYear staff role return</span>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-plus-circle mr-2"></i><span>Submit your @currentYear staff role return</span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <form asp-action="CreateOrUpdate" method="post">
+                                @Html.AntiForgeryToken()
+                                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                                
+                                <input asp-for="Id" type="hidden" />
+                                <input asp-for="Year" type="hidden" value="@currentYear" />
+                                <input asp-for="UserId" type="hidden" />
+                                <input asp-for="DueDate" type="hidden" value="@dueDate" />
+
+                                <!-- Primary GDD Role -->
+                                <div class="form-group">
+                                    <label asp-for="GddRoleId" class="control-label">Your primary GDD role <span class="text-danger">*</span></label>
+                                    <div class="autocomplete-wrapper position-relative">
+                                        <input type="text" class="form-control" id="gddRoleSearch" placeholder="Search by role name or level..." autocomplete="off" required />
+                                        <div id="gddRoleResults" class="autocomplete-results d-none"></div>
+                                        <input type="hidden" asp-for="GddRoleId" id="GddRoleId" />
+                                    </div>
+                                    <span asp-validation-for="GddRoleId" class="text-danger"></span>
+                                    <small class="form-text text-muted">Select your primary role from the Government Digital and Data Capability Framework.</small>
+                                    
+                                    <!-- Role Table -->
+                                    @if (staffRoleReturn?.GddRoleId != null)
+                                    {
+                                        var existingRole = gddRoles.FirstOrDefault(r => r.Id == staffRoleReturn.GddRoleId);
+                                        if (existingRole != null)
+                                        {
+                                            <div class="table-responsive mt-2" id="selectedGddRoleTableWrapper">
+                                                <table class="table table-sm table-bordered" id="selectedGddRoleTable">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width: 80%;">Role</th>
+                                                            <th style="width: 20%;">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr data-role-id="@existingRole.Id">
+                                                            <td>@existingRole.DisplayName@(existingRole.RoleLevel != null ? " (Level: " + existingRole.RoleLevel + ")" : "")</td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-sm btn-danger remove-gdd-role-btn">Remove</button>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="table-responsive mt-2 d-none" id="selectedGddRoleTableWrapper">
+                                            <table class="table table-sm table-bordered" id="selectedGddRoleTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 80%;">Role</th>
+                                                        <th style="width: 20%;">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Grade -->
+                                <div class="form-group">
+                                    <label asp-for="Grade" class="control-label">Your civil service grade <span class="text-danger">*</span></label>
+                                    <select asp-for="Grade" class="form-control" required>
+                                        <option value="">-- Select your civil service grade --</option>
+                                        <option value="EO">EO (Executive Officer)</option>
+                                        <option value="HEO">HEO (Higher Executive Officer)</option>
+                                        <option value="SEO">SEO (Senior Executive Officer)</option>
+                                        <option value="G7">G7 (Grade 7)</option>
+                                        <option value="G6">G6 (Grade 6)</option>
+                                        <option value="SCS1">SCS1 (Senior Civil Service Pay Band 1)</option>
+                                        <option value="SCS2">SCS2 (Senior Civil Service Pay Band 2)</option>
+                                        <option value="SCS3">SCS3 (Senior Civil Service Pay Band 3)</option>
+                                    </select>
+                                    <span asp-validation-for="Grade" class="text-danger"></span>
+                                </div>
+
+                                <!-- Secondary Skills (up to 10) -->
+                                <div class="form-group">
+                                    <label class="control-label">Secondary skills (optional)</label>
+                                    <small class="form-text text-muted d-block mb-2">You can select up to 10 secondary skills from the GDD Framework.</small>
+                                    
+                                    <!-- Autocomplete Input -->
+                                    <div class="input-group mb-2">
+                                        <input type="text" id="skillSearch" class="form-control" placeholder="Search and select a skill..." autocomplete="off">
+                                        <div class="input-group-append">
+                                            <button type="button" id="addSkillBtn" class="btn btn-outline-primary">
+                                                <i class="fas fa-plus"></i> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Skills Table -->
+                                    @if (staffRoleReturn?.SecondarySkills != null && staffRoleReturn.SecondarySkills.Any())
+                                    {
+                                        <div class="table-responsive" id="selectedSkillsTableWrapper">
+                                            <table class="table table-sm table-bordered" id="selectedSkillsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 80%;">Skill</th>
+                                                        <th style="width: 20%;">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var skillLink in staffRoleReturn.SecondarySkills.OrderBy(s => s.DisplayOrder))
+                                                    {
+                                                        <tr data-skill-id="@skillLink.SkillId">
+                                                            <td>@skillLink.Skill.SkillName</td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-sm btn-danger remove-skill-btn">Remove</button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="table-responsive d-none" id="selectedSkillsTableWrapper">
+                                            <table class="table table-sm table-bordered" id="selectedSkillsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 80%;">Skill</th>
+                                                        <th style="width: 20%;">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                    
+                                    <small class="form-text text-muted">Selected: <span id="skillCount">@(staffRoleReturn?.SecondarySkills?.Count ?? 0)</span> of 10</small>
+                                    
+                                    <!-- Hidden inputs for form submission -->
+                                    <div id="hiddenSkillInputs"></div>
+                                </div>
+
+                                <hr>
+
+                                <input type="hidden" name="Status" value="@((int)ReturnStatus.Submitted)" />
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-paper-plane mr-2"></i>Submit staff role return
+                                    </button>
+                                    <a asp-action="Index" asp-controller="Home" class="btn btn-outline-secondary btn-lg">
+                                        Cancel
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            console.log('Initializing staff role return form');
+            
+            // GDD Roles data for autocomplete
+            var gddRoles = [
+                @foreach (var role in gddRoles)
+                {
+                    @:{ id: @role.Id, displayName: '@Html.Raw(role.DisplayName)', roleName: '@Html.Raw(role.RoleName)', roleLevel: '@Html.Raw(role.RoleLevel ?? "")', roleFamily: '@Html.Raw(role.RoleFamily)' },
+                }
+            ];
+            console.log('GDD roles loaded:', gddRoles.length);
+            
+            // Track selected GDD role
+            var selectedGddRole = null;
+            var gddRoleSearchTimeout = null;
+            
+            // Update selected role display
+            function updateSelectedGddRole() {
+                var tbody = $('#selectedGddRoleTable tbody');
+                var wrapper = $('#selectedGddRoleTableWrapper');
+                tbody.empty();
+                
+                if (selectedGddRole) {
+                    var roleText = selectedGddRole.displayName;
+                    if (selectedGddRole.roleLevel) {
+                        roleText += ' (Level: ' + selectedGddRole.roleLevel + ')';
+                    }
+                    var newRow = '<tr data-role-id="' + selectedGddRole.id + '">' +
+                        '<td>' + roleText + '</td>' +
+                        '<td>' +
+                        '<button type="button" class="btn btn-sm btn-danger remove-gdd-role-btn">Remove</button>' +
+                        '</td>' +
+                        '</tr>';
+                    tbody.append(newRow);
+                    wrapper.removeClass('d-none');
+                } else {
+                    wrapper.addClass('d-none');
+                }
+            }
+            
+            // Initialize with existing role if present
+            @if (staffRoleReturn?.GddRoleId != null)
+            {
+                var existingRoleId = staffRoleReturn.GddRoleId;
+                <text>
+                var existingRole = gddRoles.find(function(r) { return r.id === @existingRoleId; });
+                if (existingRole) {
+                    selectedGddRole = existingRole;
+                    $('#GddRoleId').val(selectedGddRole.id);
+                    $('#gddRoleSearch').val(selectedGddRole.displayName);
+                    updateSelectedGddRole();
+                }
+                </text>
+            }
+            
+            // Search GDD roles
+            $(document).on('input', '#gddRoleSearch', function() {
+                clearTimeout(gddRoleSearchTimeout);
+                var query = $(this).val().trim();
+                
+                if (query.length < 1) {
+                    $('#gddRoleResults').addClass('d-none');
+                    return;
+                }
+                
+                gddRoleSearchTimeout = setTimeout(function() {
+                    var results = searchGddRoles(query);
+                    displayGddRoleResults(results);
+                }, 300);
+            });
+            
+            function searchGddRoles(query) {
+                var term = query.toLowerCase();
+                return gddRoles.filter(function(role) {
+                    return role.displayName.toLowerCase().includes(term) ||
+                           role.roleName.toLowerCase().includes(term) ||
+                           (role.roleLevel && role.roleLevel.toLowerCase().includes(term)) ||
+                           role.roleFamily.toLowerCase().includes(term);
+                });
+            }
+            
+            function displayGddRoleResults(results) {
+                if (!results || results.length === 0) {
+                    $('#gddRoleResults').html('<div class="autocomplete-item no-results">No roles found</div>').removeClass('d-none');
+                    return;
+                }
+                
+                var html = '<div class="list-group">';
+                results.forEach(function(role) {
+                    html += '<button type="button" class="list-group-item list-group-item-action autocomplete-item" data-id="' + role.id + '" data-display-name="' + role.displayName + '" data-role-name="' + role.roleName + '" data-role-level="' + role.roleLevel + '" data-role-family="' + role.roleFamily + '">';
+                    html += '<div class="autocomplete-name"><strong>' + role.displayName + '</strong></div>';
+                    html += '</button>';
+                });
+                html += '</div>';
+                
+                $('#gddRoleResults').html(html).removeClass('d-none');
+            }
+            
+            // Select GDD role from autocomplete
+            $(document).on('click', '#gddRoleResults .autocomplete-item', function() {
+                selectedGddRole = {
+                    id: $(this).data('id'),
+                    displayName: $(this).data('display-name'),
+                    roleName: $(this).data('role-name'),
+                    roleLevel: $(this).data('role-level'),
+                    roleFamily: $(this).data('role-family')
+                };
+                
+                $('#GddRoleId').val(selectedGddRole.id);
+                updateSelectedGddRole();
+                $('#gddRoleSearch').val('');
+                $('#gddRoleResults').addClass('d-none');
+            });
+            
+            // Remove selected GDD role
+            $(document).on('click', '.remove-gdd-role-btn', function(e) {
+                e.preventDefault();
+                var row = $(this).closest('tr');
+                selectedGddRole = null;
+                $('#GddRoleId').val('');
+                row.remove();
+                $('#gddRoleSearch').val('');
+                $('#gddRoleResults').addClass('d-none');
+                $('#selectedGddRoleTableWrapper').addClass('d-none');
+            });
+            
+            // Hide results when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.autocomplete-wrapper').length) {
+                    $('#gddRoleResults').addClass('d-none');
+                }
+            });
+
+            // Skills data for autocomplete
+            var skills = [
+                @foreach (var skill in skills)
+                {
+                    @:{ id: @skill.Id, name: '@Html.Raw(skill.SkillName)' },
+                }
+            ];
+            console.log('Skills loaded:', skills.length);
+
+            // Track selected skills
+            var selectedSkills = [];
+            
+            // Initialize with existing skills from the table
+            $('#selectedSkillsTable tbody tr').each(function() {
+                var skillId = $(this).data('skill-id');
+                var skillName = $(this).find('td:first').text();
+                selectedSkills.push({ id: skillId, name: skillName });
+            });
+            
+            // Show table wrapper if skills exist
+            if (selectedSkills.length > 0) {
+                $('#selectedSkillsTableWrapper').removeClass('d-none');
+            }
+
+            // Update hidden inputs
+            function updateHiddenInputs() {
+                $('#hiddenSkillInputs').empty();
+                selectedSkills.forEach(function(skill, index) {
+                    $('#hiddenSkillInputs').append(
+                        '<input type="hidden" name="secondarySkillIds" value="' + skill.id + '" />'
+                    );
+                });
+            }
+
+            // Update skill count
+            function updateSkillCount() {
+                $('#skillCount').text(selectedSkills.length);
+            }
+
+            // Add skill autocomplete
+            var $skillSearch = $('#skillSearch');
+            console.log('Skill search input found:', $skillSearch.length);
+            $skillSearch.autocomplete({
+                source: function(request, response) {
+                    var term = request.term.toLowerCase();
+                    var matches = skills.filter(function(skill) {
+                        // Check if already selected
+                        var alreadySelected = selectedSkills.some(function(s) {
+                            return s.id === skill.id;
+                        });
+                        return !alreadySelected && skill.name.toLowerCase().includes(term);
+                    }).map(function(skill) {
+                        // Format for jQuery UI autocomplete (needs label and value)
+                        return {
+                            label: skill.name,
+                            value: skill.name,
+                            id: skill.id,
+                            name: skill.name
+                        };
+                    });
+                    response(matches);
+                },
+                select: function(event, ui) {
+                    event.preventDefault();
+                    addSkill(ui.item.id, ui.item.name);
+                    $('#skillSearch').val('');
+                    return false;
+                },
+                focus: function(event, ui) {
+                    return false;
+                }
+            });
+            console.log('Autocomplete initialized on skill search');
+
+            // Add skill button
+            $('#addSkillBtn').on('click', function() {
+                var searchVal = $('#skillSearch').val().toLowerCase().trim();
+                if (!searchVal) return;
+
+                // Find matching skill
+                var matchedSkill = skills.find(function(skill) {
+                    var alreadySelected = selectedSkills.some(function(s) {
+                        return s.id === skill.id;
+                    });
+                    return !alreadySelected && skill.name.toLowerCase() === searchVal;
+                });
+
+                if (matchedSkill) {
+                    addSkill(matchedSkill.id, matchedSkill.name);
+                    $('#skillSearch').val('');
+                } else {
+                    alert('Please select a skill from the dropdown suggestions.');
+                }
+            });
+
+            // Add Enter key handler
+            $('#skillSearch').on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    $('#addSkillBtn').click();
+                }
+            });
+
+            // Add skill function
+            function addSkill(skillId, skillName) {
+                if (selectedSkills.length >= 10) {
+                    alert('You can only select up to 10 secondary skills.');
+                    return;
+                }
+
+                if (selectedSkills.some(function(s) { return s.id === skillId; })) {
+                    alert('This skill has already been added.');
+                    return;
+                }
+
+                selectedSkills.push({ id: skillId, name: skillName });
+                
+                // Add row to table
+                var newRow = '<tr data-skill-id="' + skillId + '">' +
+                    '<td>' + skillName + '</td>' +
+                    '<td>' +
+                    '<button type="button" class="btn btn-sm btn-danger remove-skill-btn">Remove</button>' +
+                    '</td>' +
+                    '</tr>';
+                
+                $('#selectedSkillsTable tbody').append(newRow);
+                $('#selectedSkillsTableWrapper').removeClass('d-none');
+                updateHiddenInputs();
+                updateSkillCount();
+            }
+
+            // Remove skill
+            $(document).on('click', '.remove-skill-btn', function() {
+                var row = $(this).closest('tr');
+                var skillId = row.data('skill-id');
+                
+                selectedSkills = selectedSkills.filter(function(s) {
+                    return s.id !== skillId;
+                });
+                
+                row.remove();
+                
+                // Hide table if no skills remain
+                if (selectedSkills.length === 0) {
+                    $('#selectedSkillsTableWrapper').addClass('d-none');
+                }
+                
+                updateHiddenInputs();
+                updateSkillCount();
+            });
+
+            // Initialize
+            updateHiddenInputs();
+            updateSkillCount();
+        });
+    </script>
+}
+
+

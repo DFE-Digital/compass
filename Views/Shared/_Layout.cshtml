@@ -31,6 +31,8 @@
     <!-- Select2 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" nonce="@Context.Items["Nonce"]">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2-bootstrap-theme/0.1.0-beta.10/select2-bootstrap.min.css" nonce="@Context.Items["Nonce"]">
+    <!-- jQuery UI (for autocomplete) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/ui-lightness/jquery-ui.min.css" nonce="@Context.Items["Nonce"]">
     <!-- Custom COMPASS theme -->
     <link href="~/css/compass-theme.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
     <!-- Custom styles -->
@@ -85,17 +87,27 @@
                             <a class="dropdown-item" href="@Url.Action("FundingSources", "Admin")">
                                 <i class="fas fa-pound-sign mr-2"></i> Funding sources
                             </a>
-                            <a class="dropdown-item" href="@Url.Action("ApiTokens", "Admin")">
-                                <i class="fas fa-key mr-2"></i> API tokens
-                            </a>
-                            <a class="dropdown-item" href="/Admin/AccessibilityService">
-                                <i class="fas fa-universal-access mr-2"></i> Accessibility Issues Service
-                            </a>
-                            <a class="dropdown-item" href="@Url.Action("UserSatisfaction", "Admin")">
-                                <i class="fas fa-poll mr-2"></i> User satisfaction service
-                            </a>
                             <a class="dropdown-item" href="@Url.Action("Settings", "Admin")">
                                 <i class="fas fa-sliders-h mr-2"></i> Settings
+                            </a>
+                            <a class="dropdown-item" href="@Url.Action("Index", "GovernmentDepartment")">
+                                <i class="fas fa-building mr-2"></i> Government departments
+                            </a>
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown d-none d-sm-inline-block">
+                        <a class="nav-link dropdown-toggle" href="#" id="systemSettingsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            System settings
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="systemSettingsDropdown">
+                            <a class="dropdown-item" href="@Url.Action("ApiTokens", "Admin")">
+                                <i class="fas fa-key mr-2"></i> API Manager
+                            </a>
+                            <a class="dropdown-item" href="/Admin/AccessibilityService">
+                                <i class="fas fa-universal-access mr-2"></i> Accessibility Service
+                            </a>
+                            <a class="dropdown-item" href="@Url.Action("UserSatisfaction", "Admin")">
+                                <i class="fas fa-poll mr-2"></i> User Satisfaction
                             </a>
                         </div>
                     </li>
@@ -185,8 +197,12 @@
                         </li>
 
                         <!-- Delivery Reporting -->
-                        <li class="nav-item @(new[] { "ProductReporting", "Project" }.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "menu-open" : "")">
-                            <a href="#" class="nav-link @(new[] { "ProductReporting", "Project" }.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(new[] { "ProductReporting", "Project" }.Contains(ViewContext.RouteData.Values["Controller"]?.ToString()) ? "true" : "false")">
+                        @{
+                            var reportingControllers = new[] { "ProductReporting", "Project" };
+                            var isReportingActive = reportingControllers.Contains(ViewContext.RouteData.Values["Controller"]?.ToString());
+                        }
+                        <li class="nav-item @(isReportingActive ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isReportingActive ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(isReportingActive ? "true" : "false")">
                                 <i class="nav-icon fas fa-list-check" aria-hidden="true"></i>
                                 <p>
                                      Reporting
@@ -200,8 +216,13 @@
                                         <p>Delivery reporting</p>
                                     </a>
                                 </li>
+                                @{
+                                    var operationalReportingActions = new[] { "PerformanceMetrics", "Index", "ProductHistory", "SubmitMetrics" };
+                                    var isOperationalReportingActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" && 
+                                                                       operationalReportingActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
+                                }
                                 <li class="nav-item">
-                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" ? "active" : "")" role="menuitem">
+                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(isOperationalReportingActive ? "active" : "")" role="menuitem">
                                         <i class="nav-icon fas fa-square-check" aria-hidden="true"></i>
                                         <p>Operational reporting</p>
                                     </a>
@@ -210,8 +231,12 @@
                         </li>
 
                         <!-- Enterprise Reporting -->
-                        <li class="nav-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseReporting" ? "menu-open" : "")" >
-                            <a href="#" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseReporting" ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseReporting" ? "true" : "false")">
+                        @{
+                            var enterpriseReportingControllers = new[] { "EnterpriseReporting", "StaffRoleReturn" };
+                            var isEnterpriseReportingActive = enterpriseReportingControllers.Contains(ViewContext.RouteData.Values["Controller"]?.ToString());
+                        }
+                        <li class="nav-item @(isEnterpriseReportingActive ? "menu-open" : "")" >
+                            <a href="#" class="nav-link @(isEnterpriseReportingActive ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(isEnterpriseReportingActive ? "true" : "false")">
                                 <i class="nav-icon fas fa-building" aria-hidden="true"></i>
                                 <p>
                                     Enterprise reporting
@@ -238,9 +263,15 @@
                                 </li>
                                 -->
                                 <li class="nav-item" >
-                                    <a href="@Url.Action("FunctionalStandards", "EnterpriseReporting")" class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "FunctionalStandards" ? "active" : "")" role="menuitem">
+                                    <a href="@Url.Action("FunctionalStandards", "EnterpriseReporting")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseReporting" && ViewContext.RouteData.Values["Action"]?.ToString() == "FunctionalStandards" ? "active" : "")" role="menuitem">
                                         <i class="nav-icon fas fa-clipboard-check" aria-hidden="true"></i>
                                         <p>Functional standards</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item" >
+                                    <a href="@Url.Action("Index", "StaffRoleReturn")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StaffRoleReturn" ? "active" : "")" role="menuitem">
+                                        <i class="nav-icon fas fa-id-card" aria-hidden="true"></i>
+                                        <p>Staff role return</p>
                                     </a>
                                 </li>
                             </ul>
@@ -360,6 +391,8 @@
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js" nonce="@Context.Items["Nonce"]"></script>
     <!-- Select2 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.full.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <!-- jQuery UI (for autocomplete) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js" nonce="@Context.Items["Nonce"]"></script>
     <!-- AdminLTE App -->
     <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js" nonce="@Context.Items["Nonce"]"></script>
     <!-- Custom scripts -->

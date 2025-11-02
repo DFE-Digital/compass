@@ -35,6 +35,90 @@ if (args.Length > 0 && args[0] == "--seed-from-sqlite")
     return;
 }
 
+// Check for GDD Framework seeding command
+if (args.Length > 0 && args[0] == "--seed-gdd-framework")
+{
+    var environment = "Development";
+    string? csvFilePath = null;
+
+    for (int i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--environment") environment = args[i + 1];
+        if (args[i] == "--csv-file") csvFilePath = args[i + 1];
+    }
+
+    await Compass.SeedGddFramework.RunAsync(environment, csvFilePath);
+    return;
+}
+
+// Check for query GDD roles command
+if (args.Length > 0 && args[0] == "--query-gdd-roles")
+{
+    var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
+    
+    var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
+    builder2.AddJsonFile("appsettings.json", optional: false);
+    builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
+    var config = builder2.Build();
+    
+    var options = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlServer(config.GetConnectionString("DefaultConnection"))
+        .Options;
+    using var db = new CompassDbContext(options);
+    
+    var roles = await db.GddRoles.OrderBy(r => r.RoleFamily).ThenBy(r => r.RoleName).ThenBy(r => r.RoleLevel).ToListAsync();
+    Console.WriteLine($"Total GDD Roles: {roles.Count}\n");
+    
+    Console.WriteLine("By Role Family:\n");
+    foreach (var family in roles.GroupBy(r => r.RoleFamily))
+    {
+        Console.WriteLine($"{family.Key}: {family.Count()} roles");
+        foreach (var role in family.Take(8))
+        {
+            Console.WriteLine($"  - {role.DisplayName}");
+        }
+        if (family.Count() > 8) Console.WriteLine($"  ... and {family.Count() - 8} more");
+        Console.WriteLine();
+    }
+    
+    Console.WriteLine("\nUnique Role Levels:");
+    var uniqueLevels = roles.Select(r => r.RoleLevel).Where(r => !string.IsNullOrEmpty(r)).Distinct().OrderBy(l => l).ToList();
+    Console.WriteLine($"Total unique levels: {uniqueLevels.Count}");
+    foreach (var level in uniqueLevels.Take(40))
+    {
+        Console.WriteLine($"  - {level}");
+    }
+    
+    return;
+}
+
+// Check for query Skills command
+if (args.Length > 0 && args[0] == "--query-skills")
+{
+    var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
+    
+    var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
+    builder2.AddJsonFile("appsettings.json", optional: false);
+    builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
+    var config = builder2.Build();
+    
+    var options = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlServer(config.GetConnectionString("DefaultConnection"))
+        .Options;
+    using var db = new CompassDbContext(options);
+    
+    var skills = await db.Skills.OrderBy(s => s.SkillName).ToListAsync();
+    Console.WriteLine($"Total Skills: {skills.Count}\n");
+    
+    Console.WriteLine("First 20 Skills:\n");
+    foreach (var skill in skills.Take(20))
+    {
+        Console.WriteLine($"  - {skill.SkillName}");
+    }
+    
+    return;
+}
+
 // Check for data migration command
 if (args.Length > 0 && args[0] == "--migrate-data")
 {

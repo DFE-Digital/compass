@@ -71,6 +71,12 @@ public class CompassDbContext : DbContext
     public DbSet<EnterpriseReturn> EnterpriseReturns { get; set; }
     public DbSet<EnterpriseMetricValue> EnterpriseMetricValues { get; set; }
     
+    // Staff Role Return
+    public DbSet<StaffRoleReturn> StaffRoleReturns { get; set; }
+    public DbSet<StaffRoleReturnSkill> StaffRoleReturnSkills { get; set; }
+    public DbSet<GddRole> GddRoles { get; set; }
+    public DbSet<Skill> Skills { get; set; }
+    
     // Product Governance
     public DbSet<Objective> Objectives { get; set; }
     public DbSet<Risk> Risks { get; set; }
@@ -935,6 +941,65 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.MissionId);
+        
+        // Configure StaffRoleReturn
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasOne(srr => srr.User)
+            .WithMany()
+            .HasForeignKey(srr => srr.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasOne(srr => srr.GddRole)
+            .WithMany(role => role.StaffRoleReturns)
+            .HasForeignKey(srr => srr.GddRoleId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasIndex(srr => srr.UserId);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasIndex(srr => new { srr.UserId, srr.Year })
+            .IsUnique();
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasMany(srr => srr.SecondarySkills)
+            .WithOne(srr => srr.StaffRoleReturn)
+            .HasForeignKey(srr => srr.StaffRoleReturnId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        // Configure StaffRoleReturnSkill
+        modelBuilder.Entity<StaffRoleReturnSkill>()
+            .HasOne(srs => srs.Skill)
+            .WithMany(s => s.StaffRoleReturns)
+            .HasForeignKey(srs => srs.SkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturnSkill>()
+            .HasIndex(srs => new { srs.StaffRoleReturnId, srs.SkillId })
+            .IsUnique();
+        
+        // Configure GddRole
+        modelBuilder.Entity<GddRole>()
+            .HasIndex(role => new { role.RoleFamily, role.RoleName, role.RoleLevel })
+            .IsUnique();
+        
+        // GddRole.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
+        modelBuilder.Entity<GddRole>()
+            .Property(r => r.Description)
+            .HasMaxLength(int.MaxValue) // Override default MaxLength(450)
+            .HasColumnType("nvarchar(max)");
+        
+        // Configure Skill
+        modelBuilder.Entity<Skill>()
+            .HasIndex(s => s.SkillName)
+            .IsUnique();
+        
+        // Skill.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
+        modelBuilder.Entity<Skill>()
+            .Property(s => s.Description)
+            .HasMaxLength(int.MaxValue) // Override default MaxLength(450)
+            .HasColumnType("nvarchar(max)");
     }
 }
 

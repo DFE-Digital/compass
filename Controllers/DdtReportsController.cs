@@ -367,8 +367,8 @@ public class DdtReportsController : Controller
             var enrolledProducts = await _context.ProductAccessibilities
                 .Where(pa => !pa.IsDeleted && pa.IsActive)
                 .Include(pa => pa.Issues)
-                .Include(pa => pa.Issues).ThenInclude(i => i.WcagCriteriaLinks).ThenInclude(w => w.WcagCriterion)
-                .Include(pa => pa.Issues).ThenInclude(i => i.ProductAccessibility)
+                    .ThenInclude(i => i.WcagCriteriaLinks)
+                    .ThenInclude(w => w.WcagCriterion)
                 .ToListAsync();
             
             // Get total products from CMS

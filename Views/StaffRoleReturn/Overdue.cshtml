@@ -1,0 +1,114 @@
+@model List<Compass.Models.User>
+
+@{
+    ViewData["Title"] = "Overdue staff role returns";
+    
+    var currentYear = ViewBag.CurrentYear ?? DateTime.Now.Year;
+    var dueDate = ViewBag.DueDate as DateTime? ?? new DateTime(currentYear, 3, 31);
+    var isOverdue = ViewBag.IsOverdue as bool? ?? false;
+    var overdueUsers = ViewBag.OverdueUsers as List<User> ?? new List<User>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index" asp-controller="EnterpriseReporting">Enterprise Reporting</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index" asp-controller="StaffRoleReturn">Staff role return</a></li>
+                    <li class="breadcrumb-item active">Overdue</li>
+                </ol>
+                <h1 class="m-0"><i class="fas fa-exclamation-triangle mr-2"></i> Overdue staff role returns</h1>
+                <p class="text-muted mb-0">Users who have not submitted their @currentYear staff role return</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Alert Banner -->
+        <div class="row mb-4">
+            <div class="col-12">
+                @if (isOverdue)
+                {
+                    <div class="alert alert-danger">
+                        <h5><i class="icon fas fa-exclamation-circle"></i> Returns are overdue</h5>
+                        <p class="mb-0">The due date for @currentYear returns was <strong>@dueDate.ToString("dd MMMM yyyy")</strong>.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <h5><i class="icon fas fa-clock"></i> Upcoming deadline</h5>
+                        <p class="mb-0">Staff role returns are due by <strong>@dueDate.ToString("dd MMMM yyyy")</strong> (@((dueDate - DateTime.Today).Days) days remaining).</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Overdue Users Table -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Staff Members Yet to Submit (@overdueUsers.Count)
+                        </h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Days @(isOverdue ? "Overdue" : "Remaining")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (overdueUsers.Any())
+                                {
+                                    @foreach (var user in overdueUsers)
+                                    {
+                                        var daysDiff = isOverdue 
+                                            ? (DateTime.Today - dueDate).Days 
+                                            : (dueDate - DateTime.Today).Days;
+                                        <tr>
+                                            <td><strong>@user.Name</strong></td>
+                                            <td>@user.Email</td>
+                                            <td>
+                                                <span class="badge badge-warning">Not submitted</span>
+                                            </td>
+                                            <td>
+                                                @if (isOverdue)
+                                                {
+                                                    <span class="badge badge-danger">@daysDiff days</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-info">@daysDiff days</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">
+                                            <i class="fas fa-check-circle text-success mr-2"></i>
+                                            All staff members have submitted their returns.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+

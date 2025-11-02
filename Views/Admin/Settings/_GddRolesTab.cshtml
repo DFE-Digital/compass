@@ -1,0 +1,166 @@
+@model List<Compass.Models.GddRole>
+
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">GDD Roles</h3>
+            <a asp-action="CreateGddRole">
+                Create new
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">Manage GDD Roles from the Government Digital and Data Capability Framework.</p>
+
+        <!-- Filter Controls -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="filterFamilyTab" class="form-label">Filter by Family</label>
+                <select id="filterFamilyTab" class="form-control">
+                    <option value="">All Families</option>
+                    @{
+                        var families = Model.Select(r => r.RoleFamily).Distinct().OrderBy(f => f).ToList();
+                    }
+                    @foreach (var family in families)
+                    {
+                        <option value="@family">@family</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filterStatusTab" class="form-label">Filter by Status</label>
+                <select id="filterStatusTab" class="form-control">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label for="searchRolesTab" class="form-label">Search</label>
+                <input type="text" id="searchRolesTab" class="form-control" placeholder="Search by name, level, or display name...">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="gddRolesTableTab">
+                <thead>
+                    <tr>
+                        <th>Family</th>
+                        <th>Role Name</th>
+                        <th>Level</th>
+                        <th>Display Name</th>
+                        <th>Status</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Any())
+                    {
+                        @foreach (var item in Model)
+                        {
+                            <tr data-family="@item.RoleFamily" data-status="@(item.IsActive ? "active" : "inactive")" data-search="@(item.RoleName + " " + item.RoleLevel + " " + item.DisplayName)">
+                                <td><strong>@item.RoleFamily</strong></td>
+                                <td>@item.RoleName</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(item.RoleLevel))
+                                    {
+                                        <span class="badge badge-info">@item.RoleLevel</span>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>@item.DisplayName</td>
+                                <td>
+                                    @if (item.IsActive)
+                                    {
+                                        <span class="badge badge-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a asp-action="EditGddRole" asp-route-id="@item.Id" class="btn btn-outline-primary" title="Edit">
+                                            Edit
+                                        </a>
+                                        <form asp-action="DeleteGddRole" asp-route-id="@item.Id" method="post" style="display: inline;" class="delete-form">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this GDD Role?');">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No GDD roles found.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-2">
+            <small class="text-muted">
+                Showing <span id="showingCountTab">0</span> of <span id="totalCountTab">@Model.Count</span> roles
+            </small>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterFamily = document.getElementById('filterFamilyTab');
+        const filterStatus = document.getElementById('filterStatusTab');
+        const searchRoles = document.getElementById('searchRolesTab');
+        const table = document.getElementById('gddRolesTableTab');
+        const rows = table.querySelectorAll('tbody tr');
+        const showingCount = document.getElementById('showingCountTab');
+        const totalCount = document.getElementById('totalCountTab');
+        
+        function updateFilter() {
+            const familyValue = filterFamily.value.toLowerCase();
+            const statusValue = filterStatus.value.toLowerCase();
+            const searchValue = searchRoles.value.toLowerCase();
+            
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                if (row.querySelector('td')) { // Skip the "no results" row
+                    const family = row.getAttribute('data-family')?.toLowerCase() || '';
+                    const status = row.getAttribute('data-status')?.toLowerCase() || '';
+                    const search = row.getAttribute('data-search')?.toLowerCase() || '';
+                    
+                    const familyMatch = !familyValue || family.includes(familyValue);
+                    const statusMatch = !statusValue || status === statusValue;
+                    const searchMatch = !searchValue || search.includes(searchValue);
+                    
+                    if (familyMatch && statusMatch && searchMatch) {
+                        row.style.display = '';
+                        visibleCount++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+            
+            showingCount.textContent = visibleCount;
+        }
+        
+        filterFamily.addEventListener('change', updateFilter);
+        filterStatus.addEventListener('change', updateFilter);
+        searchRoles.addEventListener('input', updateFilter);
+        
+        // Initial count
+        updateFilter();
+    });
+</script>
+
