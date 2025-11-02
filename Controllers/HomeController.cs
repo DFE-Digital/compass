@@ -13,17 +13,20 @@ public class HomeController : Controller
     private readonly ILogger<HomeController> _logger;
     private readonly ICmsApiService _cmsApiService;
     private readonly IProductsApiService _productsApiService;
+    private readonly IReturnStatusService _returnStatusService;
     private readonly CompassDbContext _context;
 
     public HomeController(
         ILogger<HomeController> logger, 
         ICmsApiService cmsApiService,
         IProductsApiService productsApiService,
+        IReturnStatusService returnStatusService,
         CompassDbContext context)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
         _productsApiService = productsApiService;
+        _returnStatusService = returnStatusService;
         _context = context;
     }
 
@@ -47,13 +50,21 @@ public class HomeController : Controller
         var viewModel = new DashboardViewModel
         {
             PageTitle = "Dashboard",
-            PageDescription = "Your personalised overview of products, risks, issues, actions and milestones",
+            PageDescription = "Your personalised overview of projects, products, issues and milestones",
             IsHomepage = true,
             CurrentUser = currentUser
         };
 
         try
         {
+            // Fetch projects where user is a project contact
+            viewModel.MyProjects = await _context.Projects
+                .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
+                .Include(p => p.Milestones)
+                .Include(p => p.Issues)
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
             // Fetch products where user is a product contact
             var allProducts = await _productsApiService.GetProductsAsync();
             viewModel.MyProducts = allProducts
@@ -64,7 +75,7 @@ public class HomeController : Controller
 
             if (currentUser != null)
             {
-                // Fetch issues owned by the user
+                // Fetch all issues across projects and products where user is owner
                 var issuesQuery = _context.Issues
                     .Include(i => i.Objective)
                     .Where(i => !i.IsDeleted && i.OwnerUserId == currentUser.Id);
@@ -88,31 +99,7 @@ public class HomeController : Controller
                     .Take(100)
                     .ToListAsync();
 
-                // Fetch actions assigned to the user
-                var actionsQuery = _context.Actions
-                    .Include(a => a.Objective)
-                    .Where(a => !a.IsDeleted && a.AssignedToEmail != null && a.AssignedToEmail.ToLower() == currentUser.Email.ToLower());
-
-                // Apply filters for actions view
-                if (view == "actions")
-                {
-                    if (!string.IsNullOrEmpty(statusFilter))
-                    {
-                        actionsQuery = actionsQuery.Where(a => a.Status == statusFilter);
-                    }
-                    if (!string.IsNullOrEmpty(priorityFilter))
-                    {
-                        actionsQuery = actionsQuery.Where(a => a.Priority == priorityFilter);
-                    }
-                    actionsQuery = ApplyDateFilter(actionsQuery, dateFilter, a => a.DueDate);
-                }
-
-                viewModel.MyActions = await actionsQuery
-                    .OrderBy(a => a.DueDate)
-                    .Take(100)
-                    .ToListAsync();
-
-                // Fetch milestones owned by the user
+                // Fetch milestones across projects where user is owner
                 var milestonesQuery = _context.Milestones
                     .Include(m => m.Objective)
                     .Where(m => !m.IsDeleted && m.OwnerUserId == currentUser.Id);
@@ -133,48 +120,78 @@ public class HomeController : Controller
                     .ToListAsync();
             }
 
-            // Fetch risks where user is the owner (by email)
-            var risksQuery = _context.Risks
-                .Include(r => r.Objective)
-                .Where(r => !r.IsDeleted && 
-                    r.OwnerEmail != null && 
-                    r.OwnerEmail.ToLower() == userEmail.ToLower());
-
-            // Apply filters for risks view
-            if (view == "risks")
-            {
-                if (!string.IsNullOrEmpty(statusFilter))
-                {
-                    risksQuery = risksQuery.Where(r => r.Status == statusFilter);
-                }
-                if (!string.IsNullOrEmpty(priorityFilter))
-                {
-                    risksQuery = risksQuery.Where(r => 
-                        (priorityFilter == "critical" && r.RiskScore >= 15) ||
-                        (priorityFilter == "high" && r.RiskScore >= 10 && r.RiskScore < 15) ||
-                        (priorityFilter == "medium" && r.RiskScore >= 5 && r.RiskScore < 10) ||
-                        (priorityFilter == "low" && r.RiskScore < 5));
-                }
-                risksQuery = ApplyDateFilter(risksQuery, dateFilter, r => r.TargetDate);
-            }
-
-            viewModel.MyRisks = await risksQuery
-                .OrderByDescending(r => r.RiskScore)
-                .Take(100)
-                .ToListAsync();
-
             _logger.LogInformation(
-                "Dashboard loaded for {Email}: {Products} products, {Issues} issues, {Risks} risks, {Actions} actions, {Milestones} milestones",
+                "Dashboard loaded for {Email}: {Projects} projects, {Products} products, {Issues} issues, {Milestones} milestones",
                 userEmail, 
+                viewModel.TotalProjects,
                 viewModel.TotalProducts, 
                 viewModel.TotalIssues, 
-                viewModel.TotalRisks, 
-                viewModel.TotalActions, 
                 viewModel.TotalMilestones);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading dashboard for user {Email}", userEmail);
+        }
+
+        // Calculate dashboard metrics for cards
+        try
+        {
+            // Tasks Due: count all overdue or due-this-week items
+            var overdueItemsCount = (viewModel.MyMilestones?.Count(m => 
+                m.Status != "complete" && 
+                m.Status != "cancelled" && 
+                m.DueDate < DateTime.UtcNow) ?? 0) +
+                (viewModel.MyIssues?.Count(i => 
+                    i.Status != "resolved" && 
+                    i.Status != "closed" && 
+                    i.TargetResolutionDate.HasValue &&
+                    i.TargetResolutionDate.Value < DateTime.UtcNow) ?? 0);
+            
+            var dueThisWeekCount = (viewModel.MyMilestones?.Count(m => 
+                m.Status != "complete" && 
+                m.Status != "cancelled" && 
+                m.DueDate >= DateTime.UtcNow && 
+                m.DueDate <= DateTime.UtcNow.AddDays(7)) ?? 0);
+            
+            var tasksDue = overdueItemsCount + dueThisWeekCount;
+
+            // Service Health: count products with overdue/late operational returns
+            var now = DateTime.UtcNow;
+            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            var serviceHealthIssues = 0;
+            foreach (var product in viewModel.MyProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+            {
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+                
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear, 
+                    currentMonth, 
+                    productReturn?.SubmittedDate);
+                
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    serviceHealthIssues++;
+                }
+            }
+
+            // Project Health: count at-risk projects (Red or Amber-Red RAG status)
+            var projectHealthIssues = (viewModel.MyProjects?.Count(p => 
+                p.RagStatus == "Red" || p.RagStatus == "Amber-Red") ?? 0);
+
+            ViewBag.TasksDue = tasksDue;
+            ViewBag.ServiceHealthIssues = serviceHealthIssues;
+            ViewBag.ProjectHealthIssues = projectHealthIssues;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calculating dashboard metrics");
+            ViewBag.TasksDue = 0;
+            ViewBag.ServiceHealthIssues = 0;
+            ViewBag.ProjectHealthIssues = 0;
         }
 
         ViewData["ActiveNav"] = "home";

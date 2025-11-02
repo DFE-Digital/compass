@@ -1,0 +1,290 @@
+@{
+    ViewData["Title"] = "Accessibility Report - DDT Reports";
+    
+    // Get data from ViewBag
+    var totalProducts = ViewBag.TotalProducts ?? 0;
+    var enrolledProductsCount = ViewBag.EnrolledProductsCount ?? 0;
+    var issuesByLevel = ViewBag.IssuesByLevel as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var topProductsWithIssues = ViewBag.TopProductsWithIssues as List<ProductAccessibility> ?? new List<ProductAccessibility>();
+    var overdueIssues = ViewBag.OverdueIssues as List<AccessibilityIssue> ?? new List<AccessibilityIssue>();
+    var wontFixIssues = ViewBag.WontFixIssues ?? 0;
+    var totalOpenIssues = ViewBag.TotalOpenIssues ?? 0;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active">Accessibility Report</li>
+                </ol>
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0"><i class="fas fa-universal-access mr-2"></i> Accessibility Report</h1>
+                <p class="text-muted mb-0">Summary of product accessibility enrollment and open issues</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Product Enrollment Summary -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-info"><i class="fas fa-clipboard-list"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Enrolled Products</span>
+                        <span class="info-box-number">@enrolledProductsCount</span>
+                        <span class="text-muted">of @totalProducts total products</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-danger"><i class="fas fa-exclamation-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total Open Issues</span>
+                        <span class="info-box-number">@totalOpenIssues</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issues by WCAG Level -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-danger"><i class="fas fa-times-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Level A Issues</span>
+                        <span class="info-box-number">@(issuesByLevel.ContainsKey("A") ? issuesByLevel["A"] : 0)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Level AA Issues</span>
+                        <span class="info-box-number">@(issuesByLevel.ContainsKey("AA") ? issuesByLevel["AA"] : 0)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-info"><i class="fas fa-info-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Level AAA Issues</span>
+                        <span class="info-box-number">@(issuesByLevel.ContainsKey("AAA") ? issuesByLevel["AAA"] : 0)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-secondary"><i class="fas fa-star"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Best Practice Issues</span>
+                        <span class="info-box-number">@(issuesByLevel.ContainsKey("Best Practice") ? issuesByLevel["Best Practice"] : 0)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Issue Summary -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Overdue Issues</span>
+                        <span class="info-box-number">@overdueIssues.Count</span>
+                        <span class="text-muted">Past planned resolution date</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-secondary"><i class="fas fa-ban"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Won't Fix Issues</span>
+                        <span class="info-box-number">@wontFixIssues</span>
+                        <span class="text-muted">Not intended to be closed</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Top Products with Issues -->
+            <div class="col-lg-8">
+                @if (topProductsWithIssues.Any())
+                {
+                    <div class="card mb-4">
+                        <div class="card-header bg-danger text-white">
+                            <h3 class="card-title mb-0"><i class="fas fa-list-ol mr-2"></i> Top 10 Products with Most Open Issues</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>FIPS ID</th>
+                                        <th>Phase</th>
+                                        <th>Open Issues</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in topProductsWithIssues)
+                                    {
+                                        var issueCount = product.Issues.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress"));
+                                        <tr>
+                                            <td>
+                                                <a href="/Apps/AccessibilityService/Product/@product.FipsId">
+                                                    <strong>@(product.ProductName ?? "Unknown")</strong>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">@product.FipsId</small>
+                                            </td>
+                                            <td>@(product.ProductPhase ?? "Not set")</td>
+                                            <td>
+                                                <span class="badge badge-danger">@issueCount</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Overdue Issues -->
+                @if (overdueIssues.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-warning text-white">
+                            <h3 class="card-title mb-0"><i class="fas fa-clock mr-2"></i> Overdue Issues (@overdueIssues.Count)</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Issue</th>
+                                        <th>Product</th>
+                                        <th>Planned Resolution</th>
+                                        <th>Days Overdue</th>
+                                        <th>Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in overdueIssues.OrderBy(i => i.PlannedResolutionDate))
+                                    {
+                                        var daysOverdue = (DateTime.Today - issue.PlannedResolutionDate.Value).Days;
+                                        var product = issue.ProductAccessibility;
+                                        
+                                        // Determine level
+                                        string level = "—";
+                                        if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks != null && issue.WcagCriteriaLinks.Any())
+                                        {
+                                            var levels = issue.WcagCriteriaLinks.Select(w => w.WcagCriterion.Level).Distinct().ToList();
+                                            if (levels.Contains("AAA"))
+                                                level = "AAA";
+                                            else if (levels.Contains("AA"))
+                                                level = "AA";
+                                            else if (levels.Contains("A"))
+                                                level = "A";
+                                        }
+                                        else if (issue.IssueType == "Best Practice")
+                                        {
+                                            level = "Best Practice";
+                                        }
+                                        
+                                        <tr>
+                                            <td>
+                                                <a href="/Apps/AccessibilityService/Product/@(product?.FipsId ?? "")">
+                                                    <strong>@(issue.IssueTitle ?? issue.WcagCriteria ?? "Issue")</strong>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <a href="/Apps/AccessibilityService/Product/@(product?.FipsId ?? "")">
+                                                    @(product?.ProductName ?? "Unknown")
+                                                </a><br>
+                                                <small class="text-muted">@(product?.FipsId ?? "")</small>
+                                            </td>
+                                            <td>
+                                                <span class="text-danger">
+                                                    @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-danger">@daysOverdue days</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-info">@level</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Right Column: Summary Stats -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="card-title mb-0"><i class="fas fa-chart-pie mr-2"></i> Quick Stats</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            <strong>Product Enrollment Rate:</strong><br>
+                            <span class="text-muted">@enrolledProductsCount of @totalProducts products enrolled</span><br>
+                            <span class="text-muted">@((totalProducts > 0 ? (enrolledProductsCount * 100.0 / totalProducts) : 0).ToString("F1"))% coverage</span>
+                        </p>
+                        <hr>
+                        <p class="mb-3">
+                            <strong>Issue Distribution:</strong><br>
+                            @if (totalOpenIssues > 0)
+                            {
+                                <small class="text-muted">
+                                    Level A: @((issuesByLevel.ContainsKey("A") ? issuesByLevel["A"] * 100.0 / totalOpenIssues : 0).ToString("F1"))%<br>
+                                    Level AA: @((issuesByLevel.ContainsKey("AA") ? issuesByLevel["AA"] * 100.0 / totalOpenIssues : 0).ToString("F1"))%<br>
+                                    Level AAA: @((issuesByLevel.ContainsKey("AAA") ? issuesByLevel["AAA"] * 100.0 / totalOpenIssues : 0).ToString("F1"))%<br>
+                                    Best Practice: @((issuesByLevel.ContainsKey("Best Practice") ? issuesByLevel["Best Practice"] * 100.0 / totalOpenIssues : 0).ToString("F1"))%
+                                </small>
+                            }
+                            else
+                            {
+                                <small class="text-muted">No open issues</small>
+                            }
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
