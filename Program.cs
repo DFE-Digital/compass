@@ -114,6 +114,7 @@ builder.Services.AddDbContext<CompassDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorNumbersToAdd: null);
         sqlServerOptions.CommandTimeout(60);
+        sqlServerOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
     }));
 
 // Register HTTP clients for API services
@@ -227,7 +228,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Configure HTTPS redirection
+// Skip in development since we're running on HTTP only (localhost:5500)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 
 // Add security headers
