@@ -1,0 +1,373 @@
+@{
+    ViewData["Title"] = "My Reports - DDT Reports";
+    
+    var myProjects = ViewBag.MyProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var myProducts = ViewBag.MyProducts as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var currentUser = ViewBag.CurrentUser as Compass.Models.User;
+    
+    var allActiveMilestones = ViewBag.AllActiveMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
+    var overdueMilestones = ViewBag.OverdueMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
+    
+    var allActiveIssues = ViewBag.AllActiveIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
+    var highPriorityIssues = ViewBag.HighPriorityIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
+    
+    var redProjects = ViewBag.RedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var amberRedProjects = ViewBag.AmberRedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var amberProjects = ViewBag.AmberProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var greenProjects = ViewBag.GreenProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    
+    var productsNeedingReturns = ViewBag.ProductsNeedingReturns as List<(Compass.Models.ProductDto Product, Compass.Models.ReturnStatus Status, System.DateTime DueDate)> ?? new List<(Compass.Models.ProductDto, Compass.Models.ReturnStatus, System.DateTime)>();
+    
+    // Calculate delivery metrics
+    var totalProjects = myProjects.Count;
+    var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
+    var atRiskCount = atRiskProjects.Count;
+    var overdueMilestoneCount = overdueMilestones.Count;
+    var highPriorityIssueCount = highPriorityIssues.Count;
+    
+    // Calculate products and services metrics
+    var totalProducts = myProducts.Count;
+    var productsWithReturnsDue = productsNeedingReturns.Count;
+    var productsNeedingAttention = productsNeedingReturns.Where(p => p.Status == Compass.Models.ReturnStatus.Late).Count();
+    
+    // Extract first name from full name
+    var firstName = "User";
+    if (currentUser?.Name != null)
+    {
+        var nameParts = currentUser.Name.Split(' ');
+        firstName = nameParts.Length > 0 ? nameParts[0] : currentUser.Name;
+    }
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">My Reports</li>
+                </ol>
+                <h1 class="m-0">My Reports</h1>
+                <p class="text-muted mb-0">Summary view of your reporting data</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Delivery Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-3">Delivery</h3>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Summary Cards -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-project-diagram text-primary mr-2"></i>
+                            Total Projects
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@totalProjects</h2>
+                        <p class="text-muted mb-0 small">Projects you're involved in</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i>
+                            At Risk Projects
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@atRiskCount</h2>
+                        <p class="text-muted mb-0 small">Red or Amber-Red status</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-flag-checkered text-danger mr-2"></i>
+                            Overdue Milestones
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@overdueMilestoneCount</h2>
+                        <p class="text-muted mb-0 small">Past due date</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-bug text-danger mr-2"></i>
+                            High Priority Issues
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@highPriorityIssueCount</h2>
+                        <p class="text-muted mb-0 small">Requiring attention</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAG Status Breakdown -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">RAG Status Overview</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #28a745;">@greenProjects.Count</h2>
+                                    <p class="text-muted mb-0">Green</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #ffc107;">@amberProjects.Count</h2>
+                                    <p class="text-muted mb-0">Amber</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #fd7e14;">@amberRedProjects.Count</h2>
+                                    <p class="text-muted mb-0">Amber-Red</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #dc3545;">@redProjects.Count</h2>
+                                    <p class="text-muted mb-0">Red</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Quick Actions</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <a href="@Url.Action("Index", "Project")" class="btn btn-primary btn-block">
+                                    <i class="fas fa-hammer mr-2"></i>
+                                    View Delivery Reporting
+                                </a>
+                            </div>
+                            @if (atRiskCount > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("Index", "Project")" class="btn btn-warning btn-block">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        Review At Risk Projects (@atRiskCount)
+                                    </a>
+                                </div>
+                            }
+                            @if (overdueMilestoneCount > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("Index", "Project")" class="btn btn-danger btn-block">
+                                        <i class="fas fa-flag-checkered mr-2"></i>
+                                        Update Overdue Milestones (@overdueMilestoneCount)
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products and Services Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-3">Products and Services</h3>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Summary Cards -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-box text-primary mr-2"></i>
+                            Total Products
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@totalProducts</h2>
+                        <p class="text-muted mb-0 small">Products you're involved in</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-clipboard-list text-warning mr-2"></i>
+                            Returns Due
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@productsWithReturnsDue</h2>
+                        <p class="text-muted mb-0 small">Requiring submission</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-exclamation-circle text-danger mr-2"></i>
+                            Returns Late
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@productsNeedingAttention</h2>
+                        <p class="text-muted mb-0 small">Past due date</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-check-circle text-success mr-2"></i>
+                            Up to Date
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@(totalProducts - productsWithReturnsDue)</h2>
+                        <p class="text-muted mb-0 small">No returns due</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Needing Returns -->
+        @if (productsNeedingReturns.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Products Requiring Returns</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Status</th>
+                                        <th>Due Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var (product, status, dueDate) in productsNeedingReturns.OrderBy(p => p.Status == Compass.Models.ReturnStatus.Late ? 0 : 1))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@product.Title</strong><br>
+                                                <small class="text-muted">@product.FipsId</small>
+                                            </td>
+                                            <td>
+                                                @if (status == Compass.Models.ReturnStatus.Late)
+                                                {
+                                                    <span class="badge badge-danger">Late</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-warning">Due</span>
+                                                }
+                                            </td>
+                                            <td>@dueDate.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })" class="btn btn-primary btn-sm">
+                                                    Submit Return
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Quick Actions for Products -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Quick Actions</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-primary btn-block">
+                                    <i class="fas fa-square-check mr-2"></i>
+                                    View Operational Reporting
+                                </a>
+                            </div>
+                            @if (productsNeedingAttention > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-danger btn-block">
+                                        <i class="fas fa-exclamation-circle mr-2"></i>
+                                        Submit Late Returns (@productsNeedingAttention)
+                                    </a>
+                                </div>
+                            }
+                            @if (productsWithReturnsDue > 0 && productsNeedingAttention == 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-warning btn-block">
+                                        <i class="fas fa-clipboard-list mr-2"></i>
+                                        Submit Due Returns (@productsWithReturnsDue)
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

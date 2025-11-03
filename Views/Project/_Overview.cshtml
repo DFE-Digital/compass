@@ -25,8 +25,16 @@
                     <tbody>
                         <tr>
                             <td class="summary-label"><strong>Project Code</strong></td>
-                            <td class="summary-value">@Model.ProjectCode</td>
-                            <td class="text-right"></td>
+                            <td class="summary-value">
+                                @Model.ProjectCode
+                                @if (!string.IsNullOrEmpty(Model.HistoricBuRTId))
+                                {
+                                    <text> (BuRT: @Model.HistoricBuRTId)</text>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editBuRTIdModal">Change</a>
+                            </td>
                         </tr>
                         <tr>
                             <td class="summary-label"><strong>Business Area</strong></td>
@@ -72,7 +80,14 @@
                         <tr>
                             <td class="summary-label"><strong>RAG Status</strong></td>
                             <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.RagStatus))
+                                {
                                 <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Not set</span>
+                                }
                             </td>
                             <td class="text-right">
                                 <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="rag">View</a>
@@ -97,7 +112,7 @@
                         <tr>
                             <td class="summary-label"><strong>Start Date</strong></td>
                             <td class="summary-value">
-                                @if (Model.StartDate.HasValue)
+                                @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
                                 {
                                     @Model.StartDate.Value.ToString("dd MMM yyyy")
                                 }
@@ -113,13 +128,13 @@
                         <tr>
                             <td class="summary-label"><strong>Target End Date</strong></td>
                             <td class="summary-value">
-                                @if (Model.TargetDeliveryDate.HasValue)
+                                @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
                                 {
                                     @Model.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
                                 }
                                 else
                                 {
-                                    <span class="text-muted">Not set</span>
+                                    <span class="text-muted">No end date</span>
                                 }
                             </td>
                             <td class="text-right">
@@ -191,7 +206,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">Not set</span>
+                                                    <span class="badge badge-secondary">Not set</span>
                                                 }
                                             </td>
                                             <td>@(project.Phase ?? "Not set")</td>
@@ -867,6 +882,39 @@
                         <label for="targetDeliveryDate">Target End Date</label>
                         <input type="date" class="form-control" id="targetDeliveryDate" name="targetDeliveryDate" value="@(Model.TargetDeliveryDate?.ToString("yyyy-MM-dd") ?? "")" />
                         <small class="form-text text-muted">Leave blank to remove the target end date</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit BuRT ID Modal -->
+<div class="modal fade" id="editBuRTIdModal" tabindex="-1" role="dialog" aria-labelledby="editBuRTIdModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editBuRTIdModalLabel">Edit Historic BuRT ID</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateHistoricBuRTId" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="projectCode">Project Code</label>
+                        <input type="text" class="form-control" id="projectCode" value="@Model.ProjectCode" readonly />
+                        <small class="form-text text-muted">Project code is auto-generated and cannot be changed</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="historicBuRTId">Historic BuRT ID</label>
+                        <input type="text" class="form-control" id="historicBuRTId" name="historicBuRTId" value="@Model.HistoricBuRTId" placeholder="Enter historic BuRT ID" maxlength="100" />
+                        <small class="form-text text-muted">The historic BuRT (Business Risk Tracking) ID for this project</small>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -651,7 +651,7 @@ namespace Compass.Controllers
         // POST: Project/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,Aim,Phase,IsMultiDepartmentProject,OtherDepartments")] Project project)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments")] Project project)
         {
             if (id != project.Id)
             {
@@ -685,6 +685,7 @@ namespace Compass.Controllers
 
                     existingProject.Title = project.Title;
                     existingProject.BusinessArea = project.BusinessArea;
+                    existingProject.HistoricBuRTId = project.HistoricBuRTId;
                     existingProject.Aim = project.Aim;
                     existingProject.Phase = project.Phase;
                     existingProject.IsMultiDepartmentProject = project.IsMultiDepartmentProject;
@@ -728,7 +729,7 @@ namespace Compass.Controllers
         // POST: Project/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,TotalPermFte,TotalMspFte,Status,IsMultiDepartmentProject,OtherDepartments")] Project project)
+        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,HistoricBuRTId,TotalPermFte,TotalMspFte,Status,IsMultiDepartmentProject,OtherDepartments")] Project project)
         {
             _logger.LogInformation("Create POST called - Title: {Title}, Aim: {Aim}", project.Title, project.Aim);
             _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
@@ -740,6 +741,27 @@ namespace Compass.Controllers
                 _logger.LogInformation("  {Key}: {Value}", key, Request.Form[key]);
             }
             
+            // Additional server-side validation for required fields
+            if (string.IsNullOrWhiteSpace(project.Aim))
+            {
+                ModelState.AddModelError(nameof(project.Aim), "The Project Aim field is required.");
+            }
+            
+            if (!project.StartDate.HasValue)
+            {
+                ModelState.AddModelError(nameof(project.StartDate), "The Start Date field is required.");
+            }
+            
+            if (string.IsNullOrWhiteSpace(project.RagStatus))
+            {
+                ModelState.AddModelError(nameof(project.RagStatus), "The RAG Status field is required.");
+            }
+            
+            if (string.IsNullOrWhiteSpace(project.Status))
+            {
+                ModelState.AddModelError(nameof(project.Status), "The Project Status field is required.");
+            }
+
             if (!ModelState.IsValid)
             {
                 _logger.LogWarning("ModelState is invalid. Errors: {Errors}", 
@@ -759,13 +781,13 @@ namespace Compass.Controllers
                     if (lastProject != null && !string.IsNullOrEmpty(lastProject.ProjectCode))
                     {
                         var parts = lastProject.ProjectCode.Split('-');
-                        if (parts.Length == 2 && int.TryParse(parts[1], out int lastNumber))
+                        if (parts.Length >= 2 && int.TryParse(parts.Last(), out int lastNumber))
                         {
                             nextNumber = lastNumber + 1;
                         }
                     }
                     
-                    project.ProjectCode = $"DEL-{nextNumber:D4}";
+                    project.ProjectCode = $"DDTDEL-{nextNumber:D4}";
                     project.CreatedAt = DateTime.UtcNow;
                     project.UpdatedAt = DateTime.UtcNow;
 
@@ -2121,6 +2143,35 @@ namespace Compass.Controllers
             {
                 _logger.LogError(ex, "Error updating phase");
                 TempData["ErrorMessage"] = "An error occurred while updating the phase.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateHistoricBuRTId
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateHistoricBuRTId(int id, string? historicBuRTId)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.HistoricBuRTId = historicBuRTId;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Historic BuRT ID updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating historic BuRT ID");
+                TempData["ErrorMessage"] = "An error occurred while updating the historic BuRT ID.";
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });

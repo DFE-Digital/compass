@@ -13,177 +13,171 @@ public class HomeController : Controller
     private readonly ILogger<HomeController> _logger;
     private readonly ICmsApiService _cmsApiService;
     private readonly IProductsApiService _productsApiService;
+    private readonly IReturnStatusService _returnStatusService;
     private readonly CompassDbContext _context;
 
     public HomeController(
         ILogger<HomeController> logger, 
         ICmsApiService cmsApiService,
         IProductsApiService productsApiService,
+        IReturnStatusService returnStatusService,
         CompassDbContext context)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
         _productsApiService = productsApiService;
+        _returnStatusService = returnStatusService;
         _context = context;
     }
 
-    public async Task<IActionResult> Index(
-        string? view = "overview",
-        string? statusFilter = null,
-        string? priorityFilter = null,
-        string? dateFilter = "all")
+    public async Task<IActionResult> Index()
     {
-        var userEmail = User.Identity?.Name;
-        
-        if (string.IsNullOrEmpty(userEmail))
-        {
-            return RedirectToAction("Error");
-        }
-
-        // Get or create the current user
-        var currentUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
-
-        var viewModel = new DashboardViewModel
-        {
-            PageTitle = "Dashboard",
-            PageDescription = "Your personalised overview of products, risks, issues, actions and milestones",
-            IsHomepage = true,
-            CurrentUser = currentUser
-        };
-
         try
         {
-            // Fetch products where user is a product contact
+            var userEmail = User.Identity?.Name;
+            
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                _logger.LogWarning("Index: No user email found");
+                TempData["ErrorMessage"] = "Unable to identify the current user.";
+                return View();
+            }
+
+            // Get or create the current user
+            var currentUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+
+            if (currentUser == null)
+            {
+                _logger.LogWarning("Index: User not found in database for email: {Email}", userEmail);
+                TempData["ErrorMessage"] = "User account not found. Please contact an administrator.";
+                return View();
+            }
+
+            // Get projects where user is a project contact
+            var myProjects = await _context.Projects
+                .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
+                .Include(p => p.ProjectContacts)
+                .Include(p => p.Milestones)
+                .Include(p => p.Issues)
+                .Include(p => p.Risks)
+                .Include(p => p.ProjectProducts)
+                .Include(p => p.Successes)
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
+            // Get products where user is a product contact
             var allProducts = await _productsApiService.GetProductsAsync();
-            viewModel.MyProducts = allProducts
+            var myProducts = allProducts
                 .Where(p => p.ProductContacts?.Any(pc => 
                     pc.UsersPermissionsUser?.Email?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true) == true)
                 .OrderBy(p => p.Title)
                 .ToList();
 
-            if (currentUser != null)
+            // Calculate summary statistics
+            var allActiveMilestones = myProjects.SelectMany(p => p.Milestones.Where(m => !m.IsDeleted)).ToList();
+            var milestonesDueThisWeek = allActiveMilestones.Where(m => m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(7)).ToList();
+            var overdueMilestones = allActiveMilestones.Where(m => m.DueDate < DateTime.Today && m.Status != "complete").ToList();
+
+            var allActiveIssues = myProjects.SelectMany(p => p.Issues.Where(i => !i.IsDeleted)).ToList();
+            var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
+            var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
+
+            // Get RAG status breakdown
+            var redProjects = myProjects.Where(p => p.RagStatus == "Red").ToList();
+            var amberRedProjects = myProjects.Where(p => p.RagStatus == "Amber-Red").ToList();
+            var amberProjects = myProjects.Where(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green").ToList();
+            var greenProjects = myProjects.Where(p => p.RagStatus == "Green").ToList();
+
+            // Get recent successes (last 30 days)
+            var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+            var recentSuccesses = myProjects.SelectMany(p => p.Successes.Where(s => s.RecordedAt >= thirtyDaysAgo))
+                .OrderByDescending(s => s.RecordedAt)
+                .Take(10)
+                .ToList();
+
+            // Calculate Your Tasks
+            // First, combine all at-risk projects (Red and Amber-Red)
+            var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
+            
+            // Task 1: Projects needing Path to Green documented (at risk projects without path to green)
+            var projectsNeedingPathToGreen = atRiskProjects.Where(p => string.IsNullOrWhiteSpace(p.PathToGreen)).ToList();
+            
+            // Task 2: Expired open milestones (milestones due in the past that are not complete or cancelled)
+            var expiredOpenMilestones = allActiveMilestones
+                .Where(m => m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled")
+                .ToList();
+            
+            // Task 3: Products with operational returns that are Due or Late
+            var now = DateTime.UtcNow;
+            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            var productsNeedingReturns = new List<(Compass.Models.ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
+            foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
-                // Fetch issues owned by the user
-                var issuesQuery = _context.Issues
-                    .Include(i => i.Objective)
-                    .Where(i => !i.IsDeleted && i.OwnerUserId == currentUser.Id);
-
-                // Apply filters for issues view
-                if (view == "issues")
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+                
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear, 
+                    currentMonth, 
+                    productReturn?.SubmittedDate);
+                
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
                 {
-                    if (!string.IsNullOrEmpty(statusFilter))
-                    {
-                        issuesQuery = issuesQuery.Where(i => i.Status == statusFilter);
-                    }
-                    if (!string.IsNullOrEmpty(priorityFilter))
-                    {
-                        issuesQuery = issuesQuery.Where(i => i.Severity == priorityFilter);
-                    }
-                    issuesQuery = ApplyDateFilter(issuesQuery, dateFilter, i => i.TargetResolutionDate);
+                    var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+                    productsNeedingReturns.Add((product, status, dueDate));
                 }
-
-                viewModel.MyIssues = await issuesQuery
-                    .OrderByDescending(i => i.CreatedAt)
-                    .Take(100)
-                    .ToListAsync();
-
-                // Fetch actions assigned to the user
-                var actionsQuery = _context.Actions
-                    .Include(a => a.Objective)
-                    .Where(a => !a.IsDeleted && a.AssignedToEmail != null && a.AssignedToEmail.ToLower() == currentUser.Email.ToLower());
-
-                // Apply filters for actions view
-                if (view == "actions")
-                {
-                    if (!string.IsNullOrEmpty(statusFilter))
-                    {
-                        actionsQuery = actionsQuery.Where(a => a.Status == statusFilter);
-                    }
-                    if (!string.IsNullOrEmpty(priorityFilter))
-                    {
-                        actionsQuery = actionsQuery.Where(a => a.Priority == priorityFilter);
-                    }
-                    actionsQuery = ApplyDateFilter(actionsQuery, dateFilter, a => a.DueDate);
-                }
-
-                viewModel.MyActions = await actionsQuery
-                    .OrderBy(a => a.DueDate)
-                    .Take(100)
-                    .ToListAsync();
-
-                // Fetch milestones owned by the user
-                var milestonesQuery = _context.Milestones
-                    .Include(m => m.Objective)
-                    .Where(m => !m.IsDeleted && m.OwnerUserId == currentUser.Id);
-
-                // Apply filters for milestones view
-                if (view == "milestones")
-                {
-                    if (!string.IsNullOrEmpty(statusFilter))
-                    {
-                        milestonesQuery = milestonesQuery.Where(m => m.Status == statusFilter);
-                    }
-                    milestonesQuery = ApplyMilestoneDateFilter(milestonesQuery, dateFilter);
-                }
-
-                viewModel.MyMilestones = await milestonesQuery
-                    .OrderBy(m => m.DueDate)
-                    .Take(100)
-                    .ToListAsync();
             }
-
-            // Fetch risks where user is the owner (by email)
-            var risksQuery = _context.Risks
-                .Include(r => r.Objective)
-                .Where(r => !r.IsDeleted && 
-                    r.OwnerEmail != null && 
-                    r.OwnerEmail.ToLower() == userEmail.ToLower());
-
-            // Apply filters for risks view
-            if (view == "risks")
-            {
-                if (!string.IsNullOrEmpty(statusFilter))
-                {
-                    risksQuery = risksQuery.Where(r => r.Status == statusFilter);
-                }
-                if (!string.IsNullOrEmpty(priorityFilter))
-                {
-                    risksQuery = risksQuery.Where(r => 
-                        (priorityFilter == "critical" && r.RiskScore >= 15) ||
-                        (priorityFilter == "high" && r.RiskScore >= 10 && r.RiskScore < 15) ||
-                        (priorityFilter == "medium" && r.RiskScore >= 5 && r.RiskScore < 10) ||
-                        (priorityFilter == "low" && r.RiskScore < 5));
-                }
-                risksQuery = ApplyDateFilter(risksQuery, dateFilter, r => r.TargetDate);
-            }
-
-            viewModel.MyRisks = await risksQuery
-                .OrderByDescending(r => r.RiskScore)
-                .Take(100)
-                .ToListAsync();
+            
+            // Task 4: High priority issues (already calculated above)
+            
+            // Calculate dashboard metrics
+            var tasksDue = projectsNeedingPathToGreen.Count + expiredOpenMilestones.Count + productsNeedingReturns.Count + highPriorityIssues.Count;
+            var serviceHealthIssues = productsNeedingReturns.Count;
+            var projectHealthIssues = atRiskProjects.Count;
+            
+            // Pass all data to ViewBag
+            ViewBag.CurrentUser = currentUser;
+            ViewBag.MyProjects = myProjects;
+            ViewBag.MyProducts = myProducts;
+            ViewBag.AllActiveMilestones = allActiveMilestones;
+            ViewBag.MilestonesDueThisWeek = milestonesDueThisWeek;
+            ViewBag.OverdueMilestones = overdueMilestones;
+            ViewBag.AllActiveIssues = allActiveIssues;
+            ViewBag.HighPriorityIssues = highPriorityIssues;
+            ViewBag.OpenIssues = openIssues;
+            ViewBag.RedProjects = redProjects;
+            ViewBag.AmberRedProjects = amberRedProjects;
+            ViewBag.AmberProjects = amberProjects;
+            ViewBag.GreenProjects = greenProjects;
+            ViewBag.RecentSuccesses = recentSuccesses;
+            
+            // Task data
+            ViewBag.AtRiskProjects = atRiskProjects;
+            ViewBag.ProjectsNeedingPathToGreen = projectsNeedingPathToGreen;
+            ViewBag.ExpiredOpenMilestones = expiredOpenMilestones;
+            ViewBag.ProductsNeedingReturns = productsNeedingReturns;
+            
+            // Dashboard metrics
+            ViewBag.TasksDue = tasksDue;
+            ViewBag.ServiceHealthIssues = serviceHealthIssues;
+            ViewBag.ProjectHealthIssues = projectHealthIssues;
 
             _logger.LogInformation(
-                "Dashboard loaded for {Email}: {Products} products, {Issues} issues, {Risks} risks, {Actions} actions, {Milestones} milestones",
-                userEmail, 
-                viewModel.TotalProducts, 
-                viewModel.TotalIssues, 
-                viewModel.TotalRisks, 
-                viewModel.TotalActions, 
-                viewModel.TotalMilestones);
+                "Index loaded for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues",
+                userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count);
+
+            return View();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading dashboard for user {Email}", userEmail);
+            _logger.LogError(ex, "Error loading Index");
+            TempData["ErrorMessage"] = "An error occurred while loading the dashboard.";
+            return View();
         }
-
-        ViewData["ActiveNav"] = "home";
-        ViewBag.CurrentView = view;
-        ViewBag.StatusFilter = statusFilter;
-        ViewBag.PriorityFilter = priorityFilter;
-        ViewBag.DateFilter = dateFilter;
-        
-        return View(viewModel);
     }
 
     private IQueryable<T> ApplyDateFilter<T>(IQueryable<T> query, string? dateFilter, System.Linq.Expressions.Expression<Func<T, DateTime?>> dateSelector)
@@ -268,6 +262,11 @@ public class HomeController : Controller
     }
 
     public IActionResult Error()
+    {
+        return View();
+    }
+
+    public IActionResult Roadmap()
     {
         return View();
     }

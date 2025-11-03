@@ -53,6 +53,7 @@
             <table class="table table-hover text-nowrap sortable-table milestones-table">
                 <thead>
                     <tr>
+                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
                         <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
                         <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">Due Date</th>
@@ -61,9 +62,19 @@
                     </tr>
                 </thead>
                 <tbody>
+                    @{
+                        var milestonesOrderedByCreatedAt = Model.Milestones.OrderBy(m => m.CreatedAt).ToList();
+                    }
                     @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate))
                     {
+                        var milestoneYear = milestone.CreatedAt.Year;
+                        var milestonesInYear = milestonesOrderedByCreatedAt.Where(m => m.CreatedAt.Year == milestoneYear).OrderBy(m => m.CreatedAt).ToList();
+                        var milestoneSequence = milestonesInYear.IndexOf(milestone) + 1;
+                        var formattedMilestoneId = $"{milestoneYear}-MIL-{milestoneSequence}";
                         <tr>
+                            <td>
+                                <span class="text-muted small">@formattedMilestoneId</span>
+                            </td>
                             <td>
                                 <a href="#" class="view-milestone-link" 
                                    data-milestone-id="@milestone.Id" 

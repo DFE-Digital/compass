@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
+using Compass.Services;
 
 namespace Compass.Controllers;
 
@@ -11,11 +12,15 @@ public class DdtReportsController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly ILogger<DdtReportsController> _logger;
+    private readonly IProductsApiService _productsApiService;
+    private readonly IReturnStatusService _returnStatusService;
 
-    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger)
+    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService)
     {
         _context = context;
         _logger = logger;
+        _productsApiService = productsApiService;
+        _returnStatusService = returnStatusService;
     }
 
     // GET: DdtReports/Index - Landing page
@@ -24,34 +29,247 @@ public class DdtReportsController : Controller
         return View();
     }
 
+    // GET: DdtReports/MyReports
+    public async Task<IActionResult> MyReports()
+    {
+        try
+        {
+            var userEmail = User.Identity?.Name;
+            
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                _logger.LogWarning("MyReports: No user email found");
+                TempData["ErrorMessage"] = "Unable to identify the current user.";
+                return RedirectToAction("Index");
+            }
+
+            // Get or create the current user
+            var currentUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+
+            if (currentUser == null)
+            {
+                _logger.LogWarning("MyReports: User not found in database for email: {Email}", userEmail);
+                TempData["ErrorMessage"] = "User account not found. Please contact an administrator.";
+                return RedirectToAction("Index");
+            }
+
+            // Get projects where user is a project contact
+            var myProjects = await _context.Projects
+                .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
+                .Include(p => p.ProjectContacts)
+                .Include(p => p.Milestones)
+                .Include(p => p.Issues)
+                .Include(p => p.Risks)
+                .Include(p => p.ProjectProducts)
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
+            // Get products where user is a product contact
+            var allProducts = await _productsApiService.GetProductsAsync();
+            var myProducts = allProducts
+                .Where(p => p.ProductContacts?.Any(pc => 
+                    pc.UsersPermissionsUser?.Email?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true) == true)
+                .OrderBy(p => p.Title)
+                .ToList();
+
+            // Calculate summary statistics
+            var allActiveMilestones = myProjects.SelectMany(p => p.Milestones.Where(m => !m.IsDeleted)).ToList();
+            var milestonesDueThisWeek = allActiveMilestones.Where(m => m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(7)).ToList();
+            var overdueMilestones = allActiveMilestones.Where(m => m.DueDate < DateTime.Today && m.Status != "complete").ToList();
+
+            var allActiveIssues = myProjects.SelectMany(p => p.Issues.Where(i => !i.IsDeleted)).ToList();
+            var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
+            var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
+
+            // Get RAG status breakdown
+            var redProjects = myProjects.Where(p => p.RagStatus == "Red").ToList();
+            var amberRedProjects = myProjects.Where(p => p.RagStatus == "Amber-Red").ToList();
+            var amberProjects = myProjects.Where(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green").ToList();
+            var greenProjects = myProjects.Where(p => p.RagStatus == "Green").ToList();
+
+            // Get recent successes (last 30 days)
+            var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+            var recentSuccesses = myProjects.SelectMany(p => p.Successes.Where(s => s.RecordedAt >= thirtyDaysAgo))
+                .OrderByDescending(s => s.RecordedAt)
+                .Take(10)
+                .ToList();
+
+            // Calculate Your Tasks
+            // First, combine all at-risk projects (Red and Amber-Red)
+            var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
+            
+            // Task 1: Projects needing Path to Green documented (at risk projects without path to green)
+            var projectsNeedingPathToGreen = atRiskProjects.Where(p => string.IsNullOrWhiteSpace(p.PathToGreen)).ToList();
+            
+            // Task 2: Expired open milestones (milestones due in the past that are not complete or cancelled)
+            var expiredOpenMilestones = allActiveMilestones
+                .Where(m => m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled")
+                .ToList();
+            
+            // Task 3: Products with operational returns that are Due or Late
+            var now = DateTime.UtcNow;
+            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            var productsNeedingReturns = new List<(Compass.Models.ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
+            foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+            {
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+                
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear, 
+                    currentMonth, 
+                    productReturn?.SubmittedDate);
+                
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+                    productsNeedingReturns.Add((product, status, dueDate));
+                }
+            }
+            
+            // Task 4: High priority issues (already calculated above)
+            
+            // Calculate dashboard metrics
+            var tasksDue = projectsNeedingPathToGreen.Count + expiredOpenMilestones.Count + productsNeedingReturns.Count + highPriorityIssues.Count;
+            var serviceHealthIssues = productsNeedingReturns.Count;
+            var projectHealthIssues = atRiskProjects.Count;
+            
+            // Pass all data to ViewBag
+            ViewBag.CurrentUser = currentUser;
+            ViewBag.MyProjects = myProjects;
+            ViewBag.MyProducts = myProducts;
+            ViewBag.AllActiveMilestones = allActiveMilestones;
+            ViewBag.MilestonesDueThisWeek = milestonesDueThisWeek;
+            ViewBag.OverdueMilestones = overdueMilestones;
+            ViewBag.AllActiveIssues = allActiveIssues;
+            ViewBag.HighPriorityIssues = highPriorityIssues;
+            ViewBag.OpenIssues = openIssues;
+            ViewBag.RedProjects = redProjects;
+            ViewBag.AmberRedProjects = amberRedProjects;
+            ViewBag.AmberProjects = amberProjects;
+            ViewBag.GreenProjects = greenProjects;
+            ViewBag.RecentSuccesses = recentSuccesses;
+            
+            // Task data
+            ViewBag.AtRiskProjects = atRiskProjects;
+            ViewBag.ProjectsNeedingPathToGreen = projectsNeedingPathToGreen;
+            ViewBag.ExpiredOpenMilestones = expiredOpenMilestones;
+            ViewBag.ProductsNeedingReturns = productsNeedingReturns;
+            
+            // Dashboard metrics
+            ViewBag.TasksDue = tasksDue;
+            ViewBag.ServiceHealthIssues = serviceHealthIssues;
+            ViewBag.ProjectHealthIssues = projectHealthIssues;
+
+            _logger.LogInformation(
+                "MyReports loaded for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues",
+                userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count);
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading My Reports");
+            TempData["ErrorMessage"] = "An error occurred while loading your reports.";
+            return RedirectToAction("Index");
+        }
+    }
+
     // GET: DdtReports/ViewReport
     public async Task<IActionResult> ViewReport(DateTime? weekStart, string section = "summary")
     {
         try
         {
-            // Calculate week start if not provided
-            if (!weekStart.HasValue)
-            {
-                var today = DateTime.Today;
-                var dayOfWeek = (int)today.DayOfWeek;
-                var diff = dayOfWeek == 0 ? -6 : 1 - dayOfWeek; // Monday = start of week
-                weekStart = today.AddDays(diff);
-            }
-
             // Get all active projects with their related data
             var projects = await _context.Projects
                 .Include(p => p.Successes)
                 .Include(p => p.Milestones)
+                .Include(p => p.Issues)
                 .Include(p => p.RagHistory)
                 .Where(p => !p.IsDeleted && p.Status == "Active")
                 .OrderBy(p => p.Title)
                 .ToListAsync();
 
-            ViewBag.CurrentSection = section;
-            ViewBag.WeekStart = weekStart.Value;
-            ViewBag.WeekEnd = weekStart.Value.AddDays(6);
+            // Get all products
+            var allProducts = await _productsApiService.GetProductsAsync();
             
-            return View(projects);
+            // Calculate organization-wide metrics
+            var allActiveMilestones = projects.SelectMany(p => p.Milestones.Where(m => !m.IsDeleted)).ToList();
+            var overdueMilestones = allActiveMilestones.Where(m => m.DueDate < DateTime.Today && m.Status != "complete" && m.Status != "cancelled").ToList();
+            var allActiveIssues = projects.SelectMany(p => p.Issues.Where(i => !i.IsDeleted)).ToList();
+            var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
+            var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
+            
+            // RAG status breakdown
+            var redProjects = projects.Where(p => p.RagStatus == "Red").ToList();
+            var amberRedProjects = projects.Where(p => p.RagStatus == "Amber-Red").ToList();
+            var amberProjects = projects.Where(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green").ToList();
+            var greenProjects = projects.Where(p => p.RagStatus == "Green").ToList();
+            var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
+            
+            // Projects needing Path to Green
+            var projectsNeedingPathToGreen = atRiskProjects.Where(p => string.IsNullOrWhiteSpace(p.PathToGreen)).ToList();
+            
+            // Calculate organization health metrics
+            var tasksDue = projectsNeedingPathToGreen.Count + overdueMilestones.Count + highPriorityIssues.Count;
+            var serviceHealthIssues = 0; // We'd need to calculate this from products
+            
+            // Operational returns health check
+            var now = DateTime.UtcNow;
+            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            foreach (var product in allProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+            {
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+                
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear, 
+                    currentMonth, 
+                    productReturn?.SubmittedDate);
+                
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    serviceHealthIssues++;
+                }
+            }
+            
+            var projectHealthIssues = atRiskProjects.Count;
+            
+            // Pass all data to ViewBag
+            ViewBag.CurrentSection = section;
+            ViewBag.AllProjects = projects;
+            ViewBag.AllProducts = allProducts;
+            ViewBag.AllActiveMilestones = allActiveMilestones;
+            ViewBag.OverdueMilestones = overdueMilestones;
+            ViewBag.AllActiveIssues = allActiveIssues;
+            ViewBag.HighPriorityIssues = highPriorityIssues;
+            ViewBag.OpenIssues = openIssues;
+            ViewBag.RedProjects = redProjects;
+            ViewBag.AmberRedProjects = amberRedProjects;
+            ViewBag.AmberProjects = amberProjects;
+            ViewBag.GreenProjects = greenProjects;
+            ViewBag.AtRiskProjects = atRiskProjects;
+            ViewBag.ProjectsNeedingPathToGreen = projectsNeedingPathToGreen;
+            
+            // Dashboard metrics
+            ViewBag.TasksDue = tasksDue;
+            ViewBag.ServiceHealthIssues = serviceHealthIssues;
+            ViewBag.ProjectHealthIssues = projectHealthIssues;
+            ViewBag.TotalProjects = projects.Count;
+            ViewBag.TotalProducts = allProducts.Count;
+            
+            _logger.LogInformation(
+                "DDT ViewReport loaded: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues",
+                projects.Count, allProducts.Count, allActiveMilestones.Count, allActiveIssues.Count);
+            
+            return View();
         }
         catch (Exception ex)
         {
@@ -107,6 +325,7 @@ public class DdtReportsController : Controller
             // Get all active flagship projects with their deliverables
             var flagshipProjects = await _context.Projects
                 .Include(p => p.Milestones)
+                .Include(p => p.Issues)
                 .Include(p => p.DependenciesAsSource)
                 .Where(p => !p.IsDeleted && p.Status == "Active" && p.IsFlagship)
                 .OrderBy(p => p.Title)
@@ -122,6 +341,7 @@ public class DdtReportsController : Controller
 
                 var deliverables = await _context.Projects
                     .Include(p => p.Milestones)
+                    .Include(p => p.Issues)
                     .Where(p => deliverableIds.Contains(p.Id) && !p.IsDeleted)
                     .ToListAsync();
 
@@ -136,6 +356,101 @@ public class DdtReportsController : Controller
         {
             _logger.LogError(ex, "Error loading Flagship Projects for DDT Reports");
             TempData["ErrorMessage"] = "An error occurred while loading the flagship projects report.";
+            return RedirectToAction("Index");
+        }
+    }
+    
+    // GET: DdtReports/AccessibilityReport
+    public async Task<IActionResult> AccessibilityReport()
+    {
+        try
+        {
+            // Get all enrolled products
+            var enrolledProducts = await _context.ProductAccessibilities
+                .Where(pa => !pa.IsDeleted && pa.IsActive)
+                .Include(pa => pa.Issues)
+                    .ThenInclude(i => i.WcagCriteriaLinks)
+                    .ThenInclude(w => w.WcagCriterion)
+                .ToListAsync();
+            
+            // Get total products from CMS
+            var allProducts = await _productsApiService.GetProductsAsync();
+            
+            // Calculate metrics
+            var totalProducts = allProducts.Count;
+            var enrolledProductsCount = enrolledProducts.Count;
+            
+            // Count issues by WCAG level (using the new WcagCriteriaLinks)
+            var issuesByLevel = new Dictionary<string, int>
+            {
+                { "A", 0 },
+                { "AA", 0 },
+                { "AAA", 0 },
+                { "Best Practice", 0 }
+            };
+            
+            var allIssues = enrolledProducts.SelectMany(pa => pa.Issues)
+                .Where(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress"))
+                .ToList();
+            
+            foreach (var issue in allIssues)
+            {
+                if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks != null && issue.WcagCriteriaLinks.Any())
+                {
+                    // Use the most stringent level from the linked criteria
+                    var levels = issue.WcagCriteriaLinks.Select(w => w.WcagCriterion.Level).Distinct().ToList();
+                    if (levels.Contains("AAA"))
+                        issuesByLevel["AAA"]++;
+                    else if (levels.Contains("AA"))
+                        issuesByLevel["AA"]++;
+                    else if (levels.Contains("A"))
+                        issuesByLevel["A"]++;
+                }
+                else if (issue.IssueType == "Best Practice")
+                {
+                    issuesByLevel["Best Practice"]++;
+                }
+            }
+            
+            // Top 10 products with most issues (just the products, sorted by issue count)
+            var topProductsWithIssues = enrolledProducts
+                .Where(pa => pa.Issues.Any(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")))
+                .OrderByDescending(pa => pa.Issues.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")))
+                .Take(10)
+                .ToList();
+            
+            // Issues open but where planned resolution date is in the past
+            var overdueIssues = allIssues
+                .Where(i => i.IsResolving && 
+                           i.PlannedResolutionDate.HasValue && 
+                           i.PlannedResolutionDate.Value < DateTime.Today &&
+                           (i.Status == "open" || i.Status == "in_progress"))
+                .ToList();
+            
+            // Count issues not intended to be closed
+            var wontFixIssues = allIssues
+                .Where(i => !i.IsResolving && (i.Status == "open" || i.Status == "in_progress"))
+                .Count();
+            
+            // Pass data to ViewBag
+            ViewBag.TotalProducts = totalProducts;
+            ViewBag.EnrolledProductsCount = enrolledProductsCount;
+            ViewBag.IssuesByLevel = issuesByLevel;
+            ViewBag.TopProductsWithIssues = topProductsWithIssues;
+            ViewBag.OverdueIssues = overdueIssues;
+            ViewBag.WontFixIssues = wontFixIssues;
+            ViewBag.TotalOpenIssues = allIssues.Count;
+            
+            _logger.LogInformation(
+                "Accessibility Report loaded: {Enrolled}/{Total} products enrolled, {Issues} open issues",
+                enrolledProductsCount, totalProducts, allIssues.Count);
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading Accessibility Report");
+            TempData["ErrorMessage"] = "An error occurred while loading the accessibility report.";
             return RedirectToAction("Index");
         }
     }

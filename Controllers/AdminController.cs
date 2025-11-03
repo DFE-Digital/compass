@@ -22,6 +22,12 @@ public class AdminController : Controller
         _apiTokenService = apiTokenService;
     }
 
+    // GET: Admin/Index
+    public IActionResult Index()
+    {
+        return View("~/Views/Admin/Index.cshtml");
+    }
+
     // GET: Admin/Users
     public async Task<IActionResult> Users()
     {
@@ -782,6 +788,8 @@ public class AdminController : Controller
         ViewBag.WcagCriteria = await _context.WcagCriteria.OrderBy(w => w.Criterion).ToListAsync();
         ViewBag.BusinessAreas = await _context.BusinessAreaLookups.OrderBy(ba => ba.SortOrder).ThenBy(ba => ba.Name).ToListAsync();
         ViewBag.Phases = await _context.PhaseLookups.OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
+        ViewBag.GddRoles = await _context.GddRoles.OrderBy(r => r.RoleFamily).ThenBy(r => r.RoleName).ThenBy(r => r.RoleLevel).ToListAsync();
+        ViewBag.Skills = await _context.Skills.OrderBy(s => s.SkillName).ToListAsync();
         
         return View("~/Views/Admin/Settings/Index.cshtml");
     }
@@ -2066,10 +2074,15 @@ public class AdminController : Controller
     // SETTINGS - Business Areas
     // ========================================
 
-    // GET: Admin/BusinessAreas - Redirects to Settings page with business areas tab
-    public IActionResult BusinessAreas()
+    // GET: Admin/BusinessAreas
+    public async Task<IActionResult> BusinessAreas()
     {
-        return RedirectToAction(nameof(Settings));
+        var businessAreas = await _context.BusinessAreaLookups
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/BusinessAreas.cshtml", businessAreas);
     }
 
     // POST: Admin/CreateBusinessArea
@@ -2103,7 +2116,7 @@ public class AdminController : Controller
             }
         }
 
-        return RedirectToAction(nameof(Settings));
+        return RedirectToAction(nameof(BusinessAreas));
     }
 
     // POST: Admin/EditBusinessArea
@@ -2151,7 +2164,7 @@ public class AdminController : Controller
             }
         }
 
-        return RedirectToAction(nameof(Settings));
+        return RedirectToAction(nameof(BusinessAreas));
     }
 
     // POST: Admin/DeleteBusinessArea
@@ -2185,17 +2198,22 @@ public class AdminController : Controller
             TempData["ErrorMessage"] = "An error occurred while deleting the business area. Please try again.";
         }
 
-        return RedirectToAction(nameof(Settings));
+        return RedirectToAction(nameof(BusinessAreas));
     }
 
     // ========================================
     // SETTINGS - Phases
     // ========================================
 
-    // GET: Admin/Phases - Redirects to Settings page with phases tab
-    public IActionResult Phases()
+    // GET: Admin/Phases
+    public async Task<IActionResult> Phases()
     {
-        return RedirectToAction(nameof(Settings));
+        var phases = await _context.PhaseLookups
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/Phases.cshtml", phases);
     }
 
     // POST: Admin/CreatePhase
@@ -2229,7 +2247,7 @@ public class AdminController : Controller
             }
         }
 
-        return RedirectToAction(nameof(Settings));
+        return RedirectToAction(nameof(Phases));
     }
 
     // POST: Admin/EditPhase
@@ -2279,7 +2297,7 @@ public class AdminController : Controller
             {
                 _logger.LogWarning("Phase not found with ID: {Id}", id);
                 TempData["ErrorMessage"] = "Phase not found.";
-                return RedirectToAction(nameof(Settings));
+                return RedirectToAction(nameof(Phases));
             }
 
             // Check if name already exists for a different record
@@ -2343,7 +2361,278 @@ public class AdminController : Controller
             TempData["ErrorMessage"] = "An error occurred while deleting the phase. Please try again.";
         }
 
-        return RedirectToAction(nameof(Settings));
+        return RedirectToAction(nameof(Phases));
+    }
+
+    // ========================================
+    // SETTINGS - GDD Roles
+    // ========================================
+
+    // GET: Admin/GddRoles
+    public async Task<IActionResult> GddRoles()
+    {
+        var roles = await _context.GddRoles
+            .OrderBy(r => r.RoleFamily)
+            .ThenBy(r => r.SortOrder)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/GddRoles.cshtml", roles);
+    }
+
+    // GET: Admin/CreateGddRole
+    public IActionResult CreateGddRole()
+    {
+        return View("~/Views/Admin/Settings/CreateGddRole.cshtml");
+    }
+
+    // POST: Admin/CreateGddRole
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateGddRole([Bind("RoleFamily,RoleName,RoleLevel,Description,DisplayName,IsActive,SortOrder")] GddRole role)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                _context.GddRoles.Add(role);
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"GDD Role '{role.DisplayName}' has been created successfully.";
+                _logger.LogInformation("GDD Role created: {DisplayName}", role.DisplayName);
+                return RedirectToAction(nameof(GddRoles));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating GDD role");
+                TempData["ErrorMessage"] = "An error occurred while creating the GDD role. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/Settings/CreateGddRole.cshtml", role);
+    }
+
+    // GET: Admin/EditGddRole/5
+    public async Task<IActionResult> EditGddRole(int id)
+    {
+        var role = await _context.GddRoles.FindAsync(id);
+        if (role == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/Settings/EditGddRole.cshtml", role);
+    }
+
+    // POST: Admin/EditGddRole/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditGddRole(int id, [Bind("Id,RoleFamily,RoleName,RoleLevel,Description,DisplayName,IsActive,SortOrder")] GddRole role)
+    {
+        if (id != role.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                var existingRole = await _context.GddRoles.FindAsync(id);
+                if (existingRole != null)
+                {
+                    existingRole.RoleFamily = role.RoleFamily;
+                    existingRole.RoleName = role.RoleName;
+                    existingRole.RoleLevel = role.RoleLevel;
+                    existingRole.Description = role.Description;
+                    existingRole.DisplayName = role.DisplayName;
+                    existingRole.IsActive = role.IsActive;
+                    existingRole.SortOrder = role.SortOrder;
+                    existingRole.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"GDD Role '{role.DisplayName}' has been updated successfully.";
+                    _logger.LogInformation("GDD Role {Id} updated successfully", id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating GDD role {RoleId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the GDD role. Please try again.";
+            }
+
+            return RedirectToAction(nameof(GddRoles));
+        }
+
+        return View("~/Views/Admin/Settings/EditGddRole.cshtml", role);
+    }
+
+    // POST: Admin/DeleteGddRole
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteGddRole(int id)
+    {
+        try
+        {
+            var role = await _context.GddRoles.FindAsync(id);
+            if (role != null)
+            {
+                // Check if any staff role returns are using this role
+                var usageCount = await _context.StaffRoleReturns.CountAsync(srr => srr.GddRoleId == id);
+                if (usageCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete GDD role '{role.DisplayName}' as it is being used by {usageCount} staff role return(s).";
+                }
+                else
+                {
+                    _context.GddRoles.Remove(role);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"GDD Role '{role.DisplayName}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting GDD role");
+            TempData["ErrorMessage"] = "An error occurred while deleting the GDD role. Please try again.";
+        }
+
+        return RedirectToAction(nameof(GddRoles));
+    }
+
+    // ========================================
+    // SETTINGS - Skills
+    // ========================================
+
+    // GET: Admin/Skills
+    public async Task<IActionResult> Skills()
+    {
+        var skills = await _context.Skills
+            .OrderBy(s => s.SkillName)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/Skills.cshtml", skills);
+    }
+
+    // GET: Admin/CreateSkill
+    public IActionResult CreateSkill()
+    {
+        return View("~/Views/Admin/Settings/CreateSkill.cshtml");
+    }
+
+    // POST: Admin/CreateSkill
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateSkill([Bind("SkillName,Description,Category,IsActive,SortOrder")] Skill skill)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                _context.Skills.Add(skill);
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Skill '{skill.SkillName}' has been created successfully.";
+                _logger.LogInformation("Skill created: {SkillName}", skill.SkillName);
+                return RedirectToAction(nameof(Skills));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating skill");
+                TempData["ErrorMessage"] = "An error occurred while creating the skill. Please try again.";
+            }
+        }
+
+        return View("~/Views/Admin/Settings/CreateSkill.cshtml", skill);
+    }
+
+    // GET: Admin/EditSkill/5
+    public async Task<IActionResult> EditSkill(int id)
+    {
+        var skill = await _context.Skills.FindAsync(id);
+        if (skill == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/Settings/EditSkill.cshtml", skill);
+    }
+
+    // POST: Admin/EditSkill/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditSkill(int id, [Bind("Id,SkillName,Description,Category,IsActive,SortOrder")] Skill skill)
+    {
+        if (id != skill.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                var existingSkill = await _context.Skills.FindAsync(id);
+                if (existingSkill != null)
+                {
+                    existingSkill.SkillName = skill.SkillName;
+                    existingSkill.Description = skill.Description;
+                    existingSkill.Category = skill.Category;
+                    existingSkill.IsActive = skill.IsActive;
+                    existingSkill.SortOrder = skill.SortOrder;
+                    existingSkill.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Skill '{skill.SkillName}' has been updated successfully.";
+                    _logger.LogInformation("Skill {Id} updated successfully", id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating skill {SkillId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the skill. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Skills));
+        }
+
+        return View("~/Views/Admin/Settings/EditSkill.cshtml", skill);
+    }
+
+    // POST: Admin/DeleteSkill
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteSkill(int id)
+    {
+        try
+        {
+            var skill = await _context.Skills.FindAsync(id);
+            if (skill != null)
+            {
+                // Check if any staff role returns are using this skill
+                var usageCount = await _context.StaffRoleReturnSkills.CountAsync(srs => srs.SkillId == id);
+                if (usageCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete skill '{skill.SkillName}' as it is being used by {usageCount} staff role return(s).";
+                }
+                else
+                {
+                    _context.Skills.Remove(skill);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Skill '{skill.SkillName}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting skill");
+            TempData["ErrorMessage"] = "An error occurred while deleting the skill. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Skills));
     }
 }
 
