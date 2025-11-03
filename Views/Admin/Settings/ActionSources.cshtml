@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "Action sources";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
 }
 
 <div class="content-header">
@@ -22,7 +23,7 @@
                             Actions
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="CreateActionSource">
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#actionSourceModal" onclick="openCreateActionSourceModal()">
                                 Create new action source
                             </a>
                         </div>
@@ -52,7 +53,60 @@
 
         <div class="row">
             <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
-                <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PerformanceMetric" ? "active" : "")">
+                                Operational reports
+                            </a>
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseMetric" ? "active" : "")">
+                                Enterprise metrics
+                            </a>
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "FunctionalStandard" ? "active" : "")">
+                                Functional standards
+                            </a>
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
+                                Strategic objectives
+                            </a>
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
+                                Missions
+                            </a>
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(currentAction.Contains("FundingSource") ? "active" : "")">
+                                Funding sources
+                            </a>
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GovernmentDepartment" ? "active" : "")">
+                                Government departments
+                            </a>
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Organizational" ? "active" : "")">
+                                Organizational
+                            </a>
+                            <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(currentAction.Contains("RiskType") ? "active" : "")">
+                                Risk types
+                            </a>
+                            <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(currentAction.Contains("RiskTier") ? "active" : "")">
+                                Risk tiers
+                            </a>
+                            <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(currentAction.Contains("ActionSource") ? "active" : "")">
+                                Action sources
+                            </a>
+                            <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(currentAction.Contains("WcagCriterion") || currentAction.Contains("WcagCriteria") ? "active" : "")">
+                                WCAG Criteria
+                            </a>
+                            <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
+                                GDD Roles
+                            </a>
+                            <a href="@Url.Action("Skills", "Admin")" class="nav-link @(currentAction.Contains("Skill") ? "active" : "")">
+                                Skills
+                            </a>
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(currentAction.Contains("ApiToken") ? "active" : "")">
+                                API tokens
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
@@ -64,10 +118,11 @@
                         <table class="table table-hover text-nowrap">
                             <thead>
                                 <tr>
-                                    <th style="width: 10%;">Order</th>
-                                    <th style="width: 15%;">Code</th>
+                                    <th style="width: 10%;">ID</th>
                                     <th style="width: 25%;">Name</th>
-                                    <th style="width: 40%;">Summary</th>
+                                    <th style="width: 15%;">Code</th>
+                                    <th style="width: 10%;">Sort Order</th>
+                                    <th style="width: 30%;">Summary</th>
                                     <th style="width: 10%;">Status</th>
                                 </tr>
                             </thead>
@@ -77,21 +132,29 @@
                                     @foreach (var item in Model)
                                     {
                                         <tr class="@(!item.IsActive ? "text-muted" : "")">
-                                            <td class="text-center"><span class="badge badge-secondary">@item.SortOrder</span></td>
-                                            <td>@item.Code</td>
+                                            <td>@item.Id</td>
                                             <td>
-                                                <a asp-action="EditActionSource" asp-route-id="@item.Id" class="font-weight-bold">
+                                                <a href="#" class="edit-action-source font-weight-bold" 
+                                                   data-id="@item.Id" 
+                                                   data-code="@item.Code" 
+                                                   data-name="@item.Name" 
+                                                   data-summary="@(item.Summary ?? "")" 
+                                                   data-description="@(item.Description ?? "")" 
+                                                   data-sortorder="@item.SortOrder" 
+                                                   data-isactive="@item.IsActive.ToString().ToLower()">
                                                     @item.Name
                                                 </a>
-                                                @if (!item.IsActive)
-                                                {
-                                                    <span class="badge badge-secondary ml-2">Disabled</span>
-                                                }
                                             </td>
+                                            <td>@item.Code</td>
+                                            <td>@item.SortOrder</td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(item.Summary))
                                                 {
                                                     <small class="text-muted">@item.Summary</small>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
                                                 }
                                             </td>
                                             <td>
@@ -110,7 +173,7 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="5" class="text-center text-muted">No action sources found.</td>
+                                        <td colspan="6" class="text-center text-muted">No action sources found.</td>
                                     </tr>
                                 }
                             </tbody>
@@ -121,4 +184,121 @@
         </div>
     </div>
 </section>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="actionSourceModal" tabindex="-1" role="dialog" aria-labelledby="actionSourceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionSourceModalLabel">Create action source</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="actionSourceForm" method="post">
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    
+                    <input type="hidden" id="actionSourceId" name="Id" />
+                    
+                    <div class="form-group">
+                        <label for="actionSourceCode" class="control-label">Code <span class="text-danger">*</span></label>
+                        <input type="text" id="actionSourceCode" name="Code" class="form-control" maxlength="50" style="font-family: monospace;" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Code" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Unique identifier (uppercase, underscores allowed).</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="actionSourceName" class="control-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" id="actionSourceName" name="Name" class="form-control" maxlength="100" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Name" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="actionSourceSummary" class="control-label">Summary</label>
+                        <input type="text" id="actionSourceSummary" name="Summary" class="form-control" maxlength="200" />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Summary" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Concise one-line description.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="actionSourceDescription" class="control-label">Description</label>
+                        <textarea id="actionSourceDescription" name="Description" class="form-control" rows="4"></textarea>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Description" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Detailed explanation and examples.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="actionSourceSortOrder" class="control-label">Sort order <span class="text-danger">*</span></label>
+                        <input type="number" id="actionSourceSortOrder" name="SortOrder" class="form-control" min="0" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="SortOrder" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Display order (lower numbers appear first).</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" id="actionSourceIsActive" name="IsActive" class="custom-control-input" checked />
+                            <label class="custom-control-label" for="actionSourceIsActive">Active</label>
+                        </div>
+                        <small class="form-text text-muted">Inactive action sources will not appear in dropdowns.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script nonce="@Context.Items["Nonce"]">
+        function openCreateActionSourceModal() {
+            $('#actionSourceModalLabel').text('Create action source');
+            $('#actionSourceForm').attr('action', '@Url.Action("CreateActionSource", "Admin")');
+            $('#actionSourceId').val('');
+            $('#actionSourceCode').val('').prop('readonly', false);
+            $('#actionSourceName').val('');
+            $('#actionSourceSummary').val('');
+            $('#actionSourceDescription').val('');
+            $('#actionSourceSortOrder').val('0');
+            $('#actionSourceIsActive').prop('checked', true);
+            $('#actionSourceModal').modal('show');
+        }
+
+        function openEditActionSourceModal(id, code, name, summary, description, sortOrder, isActive) {
+            $('#actionSourceModalLabel').text('Edit action source');
+            $('#actionSourceForm').attr('action', '@Url.Action("EditActionSource", "Admin")');
+            $('#actionSourceId').val(id);
+            $('#actionSourceCode').val(code).prop('readonly', true);
+            $('#actionSourceName').val(name);
+            $('#actionSourceSummary').val(summary || '');
+            $('#actionSourceDescription').val(description || '');
+            $('#actionSourceSortOrder').val(sortOrder || '0');
+            $('#actionSourceIsActive').prop('checked', isActive === 'true' || isActive === true);
+            $('#actionSourceModal').modal('show');
+        }
+
+        $(document).on('click', '.edit-action-source', function(e) {
+            e.preventDefault();
+            var $item = $(this);
+            openEditActionSourceModal(
+                $item.data('id'),
+                $item.data('code'),
+                $item.data('name'),
+                $item.data('summary'),
+                $item.data('description'),
+                $item.data('sortorder'),
+                $item.data('isactive')
+            );
+        });
+
+        $('#actionSourceModal').on('hidden.bs.modal', function () {
+            $('#actionSourceForm')[0].reset();
+            $('.field-validation-valid').text('');
+        });
+    </script>
+}
 

@@ -325,6 +325,7 @@ public class DdtReportsController : Controller
             // Get all active flagship projects with their deliverables
             var flagshipProjects = await _context.Projects
                 .Include(p => p.Milestones)
+                .Include(p => p.Issues)
                 .Include(p => p.DependenciesAsSource)
                 .Where(p => !p.IsDeleted && p.Status == "Active" && p.IsFlagship)
                 .OrderBy(p => p.Title)
@@ -340,6 +341,7 @@ public class DdtReportsController : Controller
 
                 var deliverables = await _context.Projects
                     .Include(p => p.Milestones)
+                    .Include(p => p.Issues)
                     .Where(p => deliverableIds.Contains(p.Id) && !p.IsDeleted)
                     .ToListAsync();
 

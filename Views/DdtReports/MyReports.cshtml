@@ -6,33 +6,29 @@
     var currentUser = ViewBag.CurrentUser as Compass.Models.User;
     
     var allActiveMilestones = ViewBag.AllActiveMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
-    var milestonesDueThisWeek = ViewBag.MilestonesDueThisWeek as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
     var overdueMilestones = ViewBag.OverdueMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
     
     var allActiveIssues = ViewBag.AllActiveIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
     var highPriorityIssues = ViewBag.HighPriorityIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
-    var openIssues = ViewBag.OpenIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
     
     var redProjects = ViewBag.RedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     var amberRedProjects = ViewBag.AmberRedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     var amberProjects = ViewBag.AmberProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     var greenProjects = ViewBag.GreenProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     
-    var recentSuccesses = ViewBag.RecentSuccesses as List<Compass.Models.ProjectSuccess> ?? new List<Compass.Models.ProjectSuccess>();
-    
-    // Task data
-    var atRiskProjects = ViewBag.AtRiskProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var projectsNeedingPathToGreen = ViewBag.ProjectsNeedingPathToGreen as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var expiredOpenMilestones = ViewBag.ExpiredOpenMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
     var productsNeedingReturns = ViewBag.ProductsNeedingReturns as List<(Compass.Models.ProductDto Product, Compass.Models.ReturnStatus Status, System.DateTime DueDate)> ?? new List<(Compass.Models.ProductDto, Compass.Models.ReturnStatus, System.DateTime)>();
     
-    // Calculate total tasks
-    var totalTasks = projectsNeedingPathToGreen.Count + expiredOpenMilestones.Count + productsNeedingReturns.Count + highPriorityIssues.Count;
+    // Calculate delivery metrics
+    var totalProjects = myProjects.Count;
+    var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
+    var atRiskCount = atRiskProjects.Count;
+    var overdueMilestoneCount = overdueMilestones.Count;
+    var highPriorityIssueCount = highPriorityIssues.Count;
     
-    // Dashboard metrics
-    var tasksDue = ViewBag.TasksDue ?? 0;
-    var serviceHealthIssues = ViewBag.ServiceHealthIssues ?? 0;
-    var projectHealthIssues = ViewBag.ProjectHealthIssues ?? 0;
+    // Calculate products and services metrics
+    var totalProducts = myProducts.Count;
+    var productsWithReturnsDue = productsNeedingReturns.Count;
+    var productsNeedingAttention = productsNeedingReturns.Where(p => p.Status == Compass.Models.ReturnStatus.Late).Count();
     
     // Extract first name from full name
     var firstName = "User";
@@ -43,22 +39,17 @@
     }
 }
 
-<style>
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }
-</style>
-
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-12">
+            <div class="col-sm-6">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
                     <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
-                    <li class="breadcrumb-item active">My Reports</li>
+                    <li class="breadcrumb-item active" aria-current="page">My Reports</li>
                 </ol>
+                <h1 class="m-0">My Reports</h1>
+                <p class="text-muted mb-0">Summary view of your reporting data</p>
             </div>
         </div>
     </div>
@@ -68,173 +59,250 @@
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
-            <div class="alert alert-success alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
                 @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
         }
         @if (TempData["ErrorMessage"] != null)
         {
-            <div class="alert alert-danger alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
         }
 
-        <!-- Dashboard Header with Welcome and Metrics -->
-        <div class="row mb-4" style="display: flex;">
-            <!-- Left side: Welcome message and three metric cards -->
-            <div class="col-lg-8" style="display: flex;">
-                <!-- Welcome Banner -->
-                <div class="card border-0 w-100" style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 12px;">
-                    <div class="card-body p-4">
-                        <div class="row align-items-center" style="height: 100%;">
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1" style="font-size: 0.9rem;">@DateTime.Now.ToString("dddd, dd MMMM yyyy")</p>
-                                <h2 class="mb-2" style="font-weight: 600; color: #1976D2;">Hello, @firstName!</h2>
-                                <p class="text-muted mb-0" style="font-size: 0.95rem;">Track & manage your team progress here</p>
+        <!-- Delivery Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-3">Delivery</h3>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Summary Cards -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-project-diagram text-primary mr-2"></i>
+                            Total Projects
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@totalProjects</h2>
+                        <p class="text-muted mb-0 small">Projects you're involved in</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i>
+                            At Risk Projects
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@atRiskCount</h2>
+                        <p class="text-muted mb-0 small">Red or Amber-Red status</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-flag-checkered text-danger mr-2"></i>
+                            Overdue Milestones
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@overdueMilestoneCount</h2>
+                        <p class="text-muted mb-0 small">Past due date</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-bug text-danger mr-2"></i>
+                            High Priority Issues
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@highPriorityIssueCount</h2>
+                        <p class="text-muted mb-0 small">Requiring attention</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAG Status Breakdown -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">RAG Status Overview</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #28a745;">@greenProjects.Count</h2>
+                                    <p class="text-muted mb-0">Green</p>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-start">
-                                    <!-- Tasks Due Card -->
-                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@tasksDue</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Tasks due</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Service Health Card -->
-                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                    
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@serviceHealthIssues</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Service health</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Project Health Card -->
-                                    <div style="flex: 0 0 33.333%;">
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@projectHealthIssues</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Project health</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #ffc107;">@amberProjects.Count</h2>
+                                    <p class="text-muted mb-0">Amber</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #fd7e14;">@amberRedProjects.Count</h2>
+                                    <p class="text-muted mb-0">Amber-Red</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center">
+                                    <h2 class="mb-0" style="font-weight: 700; color: #dc3545;">@redProjects.Count</h2>
+                                    <p class="text-muted mb-0">Red</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Right side: What's New card -->
-            <div class="col-lg-4" style="display: flex;">
-                <div class="card border-0 shadow-sm w-100 metric-card" style="border-radius: 12px; background: white;">
-                    <div class="card-body p-4">
-                        <div style="height: 100%;">
-                            <h5 class="mb-2" style="font-weight: 600;">What's new in COMPASS</h5>
-                            <p class="text-muted mb-3" style="font-size: 0.9rem;">Dive into our advanced analytics and customizable reports—designed to streamline your workflow.</p>
-                            <a href="@Url.Action("Index", "DdtReports")" class="btn" style="background: #FF6B35; color: white; border-radius: 6px; font-weight: 500;">
-                                Explore Reports
-                            </a>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Quick Actions</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <a href="@Url.Action("Index", "Project")" class="btn btn-primary btn-block">
+                                    <i class="fas fa-hammer mr-2"></i>
+                                    View Delivery Reporting
+                                </a>
+                            </div>
+                            @if (atRiskCount > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("Index", "Project")" class="btn btn-warning btn-block">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        Review At Risk Projects (@atRiskCount)
+                                    </a>
+                                </div>
+                            }
+                            @if (overdueMilestoneCount > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("Index", "Project")" class="btn btn-danger btn-block">
+                                        <i class="fas fa-flag-checkered mr-2"></i>
+                                        Update Overdue Milestones (@overdueMilestoneCount)
+                                    </a>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Your Tasks Section -->
-        @if (totalTasks > 0)
+        <!-- Products and Services Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-3">Products and Services</h3>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Summary Cards -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-box text-primary mr-2"></i>
+                            Total Products
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@totalProducts</h2>
+                        <p class="text-muted mb-0 small">Products you're involved in</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-clipboard-list text-warning mr-2"></i>
+                            Returns Due
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@productsWithReturnsDue</h2>
+                        <p class="text-muted mb-0 small">Requiring submission</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-exclamation-circle text-danger mr-2"></i>
+                            Returns Late
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@productsNeedingAttention</h2>
+                        <p class="text-muted mb-0 small">Past due date</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-check-circle text-success mr-2"></i>
+                            Up to Date
+                        </h5>
+                        <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;">@(totalProducts - productsWithReturnsDue)</h2>
+                        <p class="text-muted mb-0 small">No returns due</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Needing Returns -->
+        @if (productsNeedingReturns.Any())
         {
             <div class="row mb-4">
                 <div class="col-12">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h3 class="card-title mb-0"><i class="fas fa-tasks mr-2"></i> Your Tasks (@totalTasks)</h3>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Products Requiring Returns</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
                             <table class="table table-hover mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Task Type</th>
-                                        <th>Product / Project</th>
+                                        <th>Product</th>
                                         <th>Status</th>
                                         <th>Due Date</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- Task 1: Projects Needing Path to Green -->
-                                    @foreach (var project in projectsNeedingPathToGreen)
+                                    @foreach (var (product, status, dueDate) in productsNeedingReturns.OrderBy(p => p.Status == Compass.Models.ReturnStatus.Late ? 0 : 1))
                                     {
                                         <tr>
                                             <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "rag" })">
-                                                    <strong>Missing Path to Green</strong><br>
-                                                    <small class="text-muted">RAG Reporting</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "rag" })">
-                                                    <strong>@project.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@project.ProjectCode</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-warning">Incomplete</span>
-                                            </td>
-                                            <td>
-                                                <span class="text-muted">—</span>
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 2: Expired Open Milestones -->
-                                    @foreach (var milestone in expiredOpenMilestones.OrderBy(m => m.DueDate).Take(50))
-                                    {
-                                        var milestoneProject = myProjects.FirstOrDefault(p => p.Id == milestone.ProjectId);
-                                        var daysOverdue = (DateTime.Today - milestone.DueDate).Days;
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">
-                                                    <strong>Milestone @daysOverdue day@(daysOverdue != 1 ? "s" : "") over</strong><br>
-                                                    <small class="text-muted">Update milestone</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">
-                                                    <strong>@milestone.Name</strong>
-                                                </a><br>
-                                                @if (milestoneProject != null)
-                                                {
-                                                    <small class="text-muted">@milestoneProject.Title</small>
-                                                }
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-danger">Late</span>
-                                            </td>
-                                            <td>
-                                                @milestone.DueDate.ToString("dd MMM yyyy")
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 3: Products Needing Operational Returns -->
-                                    @foreach (var (product, status, dueDate) in productsNeedingReturns)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })">
-                                                    <strong>Return @(status == Compass.Models.ReturnStatus.Late ? "late" : "due")</strong><br>
-                                                    <small class="text-muted">Operational reporting</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })">
-                                                    <strong>@product.Title</strong>
-                                                </a><br>
+                                                <strong>@product.Title</strong><br>
                                                 <small class="text-muted">@product.FipsId</small>
                                             </td>
                                             <td>
@@ -247,93 +315,12 @@
                                                     <span class="badge badge-warning">Due</span>
                                                 }
                                             </td>
+                                            <td>@dueDate.ToString("dd MMM yyyy")</td>
                                             <td>
-                                                @dueDate.ToString("dd MMM yyyy")
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 4: High Priority Issues -->
-                                    @foreach (var issue in highPriorityIssues.OrderByDescending(i => i.DetectedDate).Take(50))
-                                    {
-                                        var issueProject = myProjects.FirstOrDefault(p => p.Id == issue.ProjectId);
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>Review issue</strong><br>
-                                                    <small class="text-muted">High priority</small>
+                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })" class="btn btn-primary btn-sm">
+                                                    Submit Return
                                                 </a>
                                             </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>@issue.Title</strong>
-                                                </a><br>
-                                                @if (issueProject != null)
-                                                {
-                                                    <small class="text-muted">@issueProject.Title</small>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (issue.Severity == "critical")
-                                                {
-                                                    <span class="badge badge-danger">Critical</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-warning">High</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (issue.TargetResolutionDate.HasValue)
-                                                {
-                                                    @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="card-footer">
-                           
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- My Products -->
-        @if (myProducts.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title"><i class="fas fa-box mr-2"></i> My Products (@myProducts.Count)</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Phase</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var product in myProducts)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="/Products/Dashboard/@product.FipsId">
-                                                    <strong>@product.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@product.FipsId</small>
-                                            </td>
-                                            <td>@(product.Phase ?? "Not set")</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -344,318 +331,43 @@
             </div>
         }
 
-        <!-- Projects Requiring Attention (Red & Amber-Red) -->
-        @{
-            var orderedAtRiskProjects = atRiskProjects.OrderBy(p => p.RagStatus == "Red" ? 0 : 1).ToList();
-        }
-        @if (orderedAtRiskProjects.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-danger text-white">
-                            <h3 class="card-title mb-0"><i class="fas fa-exclamation-triangle mr-2"></i> Projects Requiring Attention</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Project</th>
-                                        <th>RAG Status</th>
-                                        <th>Justification</th>
-                                        <th>Path to Green</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in orderedAtRiskProjects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                    <strong>@project.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@project.ProjectCode</small>
-                                            </td>
-                                            <td>
-                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagJustification))
-                                                {
-                                                    @project.RagJustification.Substring(0, Math.Min(150, project.RagJustification.Length))@(project.RagJustification.Length > 150 ? "..." : "")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No justification provided</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.PathToGreen))
-                                                {
-                                                    @project.PathToGreen.Substring(0, Math.Min(100, project.PathToGreen.Length))@(project.PathToGreen.Length > 100 ? "..." : "")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-warning">Not documented</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card border-success">
-                        <div class="card-body text-center p-4">
-                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                            <h5>All Projects On Track</h5>
-                            <p class="text-muted mb-0">No projects require immediate attention</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- High Priority Issues -->
-        @if (highPriorityIssues.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-danger text-white">
-                            <h3 class="card-title mb-0"><i class="fas fa-exclamation-circle mr-2"></i> High Priority Issues (@highPriorityIssues.Count)</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Issue</th>
-                                        <th>Project</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Target Resolution</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var issue in highPriorityIssues.OrderByDescending(i => i.DetectedDate))
-                                    {
-                                        var issueProject = myProjects.FirstOrDefault(p => p.Id == issue.ProjectId);
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>@issue.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@(issue.Description != null ? (issue.Description.Length > 100 ? issue.Description.Substring(0, 100) : issue.Description) : "")</small>
-                                            </td>
-                                            <td>
-                                                @if (issueProject != null)
-                                                {
-                                                    <a href="@Url.Action("Details", "Project", new { id = issueProject.Id })">@issueProject.Title</a>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">—</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-@(issue.Severity == "critical" ? "danger" : "warning")">
-                                                    @issue.Severity.ToUpper()
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-@(issue.Status == "open" ? "primary" : issue.Status == "in_progress" ? "info" : issue.Status == "blocked" ? "danger" : "secondary")">
-                                                    @issue.Status.Replace("_", " ")
-                                                </span>
-                                            </td>
-                                            <td>
-                                                @if (issue.TargetResolutionDate.HasValue)
-                                                {
-                                                    var isOverdue = issue.TargetResolutionDate.Value < DateTime.Today;
-                                                    <span class="@(isOverdue ? "text-danger" : "text-muted")">
-                                                        @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                                        @if (isOverdue && issue.Status != "resolved" && issue.Status != "closed")
-                                                        {
-                                                            <i class="fas fa-exclamation-triangle"></i>
-                                                        }
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- All My Projects -->
-        <div class="row mb-4">
+        <!-- Quick Actions for Products -->
+        <div class="row mb-5">
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-project-diagram mr-2"></i> All My Projects (@myProjects.Count)</h3>
+                        <h3 class="card-title mb-0">Quick Actions</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
-                            <thead>
-                                <tr>
-                                    <th>Project</th>
-                                    <th>RAG Status</th>
-                                    <th>Phase</th>
-                                    <th>Milestones</th>
-                                    <th>Issues</th>
-                                    <th>Products</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var project in myProjects)
-                                {
-                                    var projectMilestones = project.Milestones?.Where(m => !m.IsDeleted).ToList() ?? new List<Compass.Models.Milestone>();
-                                    var projectIssues = project.Issues?.Where(i => !i.IsDeleted).ToList() ?? new List<Compass.Models.Issue>();
-                                    var projectProducts = project.ProjectProducts?.ToList() ?? new List<Compass.Models.ProjectProduct>();
-                                    var overdueMilestoneCount = projectMilestones.Count(m => m.DueDate < DateTime.Today && m.Status != "complete");
-                                    var openIssueCount = projectIssues.Count(i => i.Status != "resolved" && i.Status != "closed");
-                                    
-                                    <tr>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                <strong>@project.Title</strong>
-                                            </a><br>
-                                            <small class="text-muted">@project.ProjectCode</small>
-                                        </td>
-                                        <td>
-                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                        </td>
-                                        <td>@(project.Phase ?? "Not set")</td>
-                                        <td>
-                                            <span class="@(overdueMilestoneCount > 0 ? "text-danger" : "")">
-                                                @projectMilestones.Count
-                                                @if (overdueMilestoneCount > 0)
-                                                {
-                                                    <small>(@overdueMilestoneCount overdue)</small>
-                                                }
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="@(openIssueCount > 0 ? "text-danger" : "")">
-                                                @projectIssues.Count
-                                                @if (openIssueCount > 0)
-                                                {
-                                                    <small>(@openIssueCount open)</small>
-                                                }
-                                            </span>
-                                        </td>
-                                        <td>@projectProducts.Count</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-primary btn-block">
+                                    <i class="fas fa-square-check mr-2"></i>
+                                    View Operational Reporting
+                                </a>
+                            </div>
+                            @if (productsNeedingAttention > 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-danger btn-block">
+                                        <i class="fas fa-exclamation-circle mr-2"></i>
+                                        Submit Late Returns (@productsNeedingAttention)
+                                    </a>
+                                </div>
+                            }
+                            @if (productsWithReturnsDue > 0 && productsNeedingAttention == 0)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="btn btn-warning btn-block">
+                                        <i class="fas fa-clipboard-list mr-2"></i>
+                                        Submit Due Returns (@productsWithReturnsDue)
+                                    </a>
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Right Column: Milestones, Recent Activity -->
-            <div class="col-lg-4">
-                <!-- Milestones Due This Week -->
-                @if (milestonesDueThisWeek.Any())
-                {
-                    <div class="card mb-4">
-                        <div class="card-header bg-info text-white">
-                            <h3 class="card-title mb-0"><i class="fas fa-calendar-week mr-2"></i> Milestones Due This Week</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="list-group list-group-flush">
-                                @foreach (var milestone in milestonesDueThisWeek.OrderBy(m => m.DueDate))
-                                {
-                                    var milestoneProject = myProjects.FirstOrDefault(p => p.Id == milestone.ProjectId);
-                                    <div class="list-group-item px-0 py-2">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">
-                                                    <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">@milestone.Name</a>
-                                                </h6>
-                                                @if (milestoneProject != null)
-                                                {
-                                                    <small class="text-muted">@milestoneProject.Title</small>
-                                                }
-                                            </div>
-                                            <small class="text-muted">@milestone.DueDate.ToString("dd MMM")</small>
-                                        </div>
-                                        @if (milestone.ProgressPercent.HasValue)
-                                        {
-                                            <div class="progress mt-2" style="height: 5px;">
-                                                <div class="progress-bar" role="progressbar" style="width: @milestone.ProgressPercent.Value%"></div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                }
-
-                <!-- Recent Successes -->
-                @if (recentSuccesses.Any())
-                {
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <h3 class="card-title mb-0"><i class="fas fa-trophy mr-2"></i> Recent Successes</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="list-group list-group-flush">
-                                @foreach (var success in recentSuccesses)
-                                {
-                                    var successProject = myProjects.FirstOrDefault(p => p.Id == success.ProjectId);
-                                    <div class="list-group-item px-0 py-2 border-bottom">
-                                        <p class="mb-1">@success.SuccessDescription</p>
-                                        @if (successProject != null)
-                                        {
-                                            <small class="text-muted">
-                                                <a href="@Url.Action("Details", "Project", new { id = successProject.Id })">@successProject.Title</a>
-                                            </small>
-                                        }
-                                        <br>
-                                        <small class="text-muted">
-                                            @success.RecordedAt.ToString("dd MMM yyyy") • @success.RecordedByName
-                                        </small>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                }
             </div>
         </div>
     </div>
 </section>
-
-@functions {
-    string GetRagBadgeClass(string ragStatus)
-    {
-        return ragStatus switch
-        {
-            "Green" => "badge badge-success",
-            "Amber-Green" => "badge badge-info",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-warning",
-            "Red" => "badge badge-danger",
-            _ => "badge badge-secondary"
-        };
-    }
-}
-

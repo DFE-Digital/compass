@@ -1,0 +1,119 @@
+@model IEnumerable<Compass.Models.Group>
+@{
+    ViewData["Title"] = "Groups";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Admin">Admin</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">User Management</a></li>
+                    <li class="breadcrumb-item active">Manage Groups</li>
+                </ol>
+                <h1 class="m-0">Manage Groups</h1>
+            </div>
+            <div class="col-sm-6">
+                <a asp-action="CreateGroup" class="btn btn-primary float-right">
+                    <i class="fas fa-plus"></i> Create Group
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["Error"]
+            </div>
+        }
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">All Groups</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Users</th>
+                            <th>Permissions</th>
+                            <th>Status</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var group in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        @group.Name
+                                        @if (group.IsSystemGroup)
+                                        {
+                                            <span class="badge badge-info">System</span>
+                                        }
+                                    </td>
+                                    <td>@(group.Description ?? "-")</td>
+                                    <td>
+                                        <span class="badge badge-secondary">@group.UserGroups.Count()</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-primary">@group.GroupFeaturePermissions.Count()</span>
+                                    </td>
+                                    <td>
+                                        @if (group.IsActive)
+                                        {
+                                            <span class="badge badge-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-danger">Inactive</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="EditGroup" asp-route-id="@group.Id" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                        <a asp-action="ManageUsers" asp-route-id="@group.Id" class="btn btn-sm btn-info">
+                                            <i class="fas fa-users"></i> Users
+                                        </a>
+                                        @if (!group.IsSystemGroup)
+                                        {
+                                            <a asp-action="DeleteGroup" asp-route-id="@group.Id" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center">No groups found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+

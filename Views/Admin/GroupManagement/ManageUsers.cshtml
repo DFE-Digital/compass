@@ -1,0 +1,118 @@
+@model Compass.Models.Group
+@{
+    ViewData["Title"] = "Manage Users";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Admin">Admin</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">User Management</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Groups">Manage Groups</a></li>
+                    <li class="breadcrumb-item active">Manage Users</li>
+                </ol>
+                <h1 class="m-0">Manage Users - @Model.Name</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Add User to Group</h3>
+            </div>
+            <form asp-action="AddUserToGroup" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="groupId" value="@Model.Id" />
+                <div class="card-body">
+                    <p class="text-muted">Add a user to this group by entering their name and email address. The user will be created if they don't already exist.</p>
+                    
+                    <div class="form-group">
+                        <label for="userName">Name</label>
+                        <input type="text" name="userName" id="userName" class="form-control" placeholder="e.g., John Smith" required />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userEmail">Email Address</label>
+                        <input type="email" name="userEmail" id="userEmail" class="form-control" placeholder="e.g., john.smith@education.gov.uk" required />
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Add User to Group
+                    </button>
+                    <a asp-action="Groups" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Groups
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Users in this Group</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.UserGroups.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Assigned</th>
+                                    <th class="col-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var userGroup in Model.UserGroups.OrderBy(ug => ug.User.Name))
+                                {
+                                    <tr>
+                                        <td>@userGroup.User.Name</td>
+                                        <td>@userGroup.User.Email</td>
+                                        <td>@userGroup.AssignedAt.ToString("dd/MM/yyyy")</td>
+                                        <td class="col-actions">
+                                            <form asp-action="RemoveUserFromGroup" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="groupId" value="@Model.Id" />
+                                                <input type="hidden" name="userId" value="@userGroup.UserId" />
+                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to remove @userGroup.User.Name from this group?');">
+                                                    <i class="fas fa-trash"></i> Remove
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No users are currently assigned to this group.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>
