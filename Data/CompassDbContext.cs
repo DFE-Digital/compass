@@ -27,6 +27,12 @@ public class CompassDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
     
+    // Role-based access control
+    public DbSet<Group> Groups { get; set; }
+    public DbSet<Feature> Features { get; set; }
+    public DbSet<UserGroup> UserGroups { get; set; }
+    public DbSet<GroupFeaturePermission> GroupFeaturePermissions { get; set; }
+    
     // API Management
     public DbSet<ApiToken> ApiTokens { get; set; }
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
@@ -65,11 +71,18 @@ public class CompassDbContext : DbContext
     public DbSet<IssueWcagCriterion> IssueWcagCriteria { get; set; }
     public DbSet<AccessibilityRetestRequest> AccessibilityRetestRequests { get; set; }
     public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
+    public DbSet<StatementTemplate> StatementTemplates { get; set; }
     
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
     public DbSet<EnterpriseReturn> EnterpriseReturns { get; set; }
     public DbSet<EnterpriseMetricValue> EnterpriseMetricValues { get; set; }
+    
+    // Staff Role Return
+    public DbSet<StaffRoleReturn> StaffRoleReturns { get; set; }
+    public DbSet<StaffRoleReturnSkill> StaffRoleReturnSkills { get; set; }
+    public DbSet<GddRole> GddRoles { get; set; }
+    public DbSet<Skill> Skills { get; set; }
     
     // Product Governance
     public DbSet<Objective> Objectives { get; set; }
@@ -679,6 +692,25 @@ public class CompassDbContext : DbContext
             .HasIndex(ec => new { ec.Purpose, ec.EmailAddress })
             .IsUnique();
 
+        // StatementTemplate configuration
+        modelBuilder.Entity<StatementTemplate>()
+            .HasIndex(st => new { st.Name, st.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<StatementTemplate>()
+            .HasIndex(st => st.Name);
+
+        modelBuilder.Entity<StatementTemplate>()
+            .HasIndex(st => st.IsActive);
+
+        modelBuilder.Entity<StatementTemplate>()
+            .HasIndex(st => st.CreatedAt);
+
+        modelBuilder.Entity<StatementTemplate>()
+            .Property(st => st.Content)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("nvarchar(max)");
+
         // ========================================
         // PROJECT MANAGEMENT CONFIGURATION
         // ========================================
@@ -935,6 +967,140 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<Objective>()
             .HasIndex(o => o.MissionId);
+        
+        // Configure StaffRoleReturn
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasOne(srr => srr.User)
+            .WithMany()
+            .HasForeignKey(srr => srr.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasOne(srr => srr.GddRole)
+            .WithMany(role => role.StaffRoleReturns)
+            .HasForeignKey(srr => srr.GddRoleId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasIndex(srr => srr.UserId);
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasIndex(srr => new { srr.UserId, srr.Year })
+            .IsUnique();
+        
+        modelBuilder.Entity<StaffRoleReturn>()
+            .HasMany(srr => srr.SecondarySkills)
+            .WithOne(srr => srr.StaffRoleReturn)
+            .HasForeignKey(srr => srr.StaffRoleReturnId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        // Configure StaffRoleReturnSkill
+        modelBuilder.Entity<StaffRoleReturnSkill>()
+            .HasOne(srs => srs.Skill)
+            .WithMany(s => s.StaffRoleReturns)
+            .HasForeignKey(srs => srs.SkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<StaffRoleReturnSkill>()
+            .HasIndex(srs => new { srs.StaffRoleReturnId, srs.SkillId })
+            .IsUnique();
+        
+        // Configure GddRole
+        modelBuilder.Entity<GddRole>()
+            .HasIndex(role => new { role.RoleFamily, role.RoleName, role.RoleLevel })
+            .IsUnique();
+        
+        // GddRole.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
+        modelBuilder.Entity<GddRole>()
+            .Property(r => r.Description)
+            .HasMaxLength(int.MaxValue) // Override default MaxLength(450)
+            .HasColumnType("nvarchar(max)");
+        
+        // Configure Skill
+        modelBuilder.Entity<Skill>()
+            .HasIndex(s => s.SkillName)
+            .IsUnique();
+        
+        // Skill.Description needs to be unlimited (nvarchar(max)) for long descriptions from CSV
+        modelBuilder.Entity<Skill>()
+            .Property(s => s.Description)
+            .HasMaxLength(int.MaxValue) // Override default MaxLength(450)
+            .HasColumnType("nvarchar(max)");
+
+        // ========================================
+        // ROLE-BASED ACCESS CONTROL CONFIGURATION
+        // ========================================
+
+        // Group configuration
+        modelBuilder.Entity<Group>()
+            .HasIndex(g => g.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<Group>()
+            .HasIndex(g => g.IsActive);
+
+        modelBuilder.Entity<Group>()
+            .HasIndex(g => g.IsSystemGroup);
+
+        // Feature configuration
+        modelBuilder.Entity<Feature>()
+            .HasIndex(f => f.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<Feature>()
+            .HasIndex(f => f.Name);
+
+        modelBuilder.Entity<Feature>()
+            .HasIndex(f => f.IsActive);
+
+        // UserGroup configuration (many-to-many: User ↔ Group)
+        modelBuilder.Entity<UserGroup>()
+            .HasIndex(ug => new { ug.UserId, ug.GroupId })
+            .IsUnique();
+
+        modelBuilder.Entity<UserGroup>()
+            .HasOne(ug => ug.User)
+            .WithMany(u => u.UserGroups)
+            .HasForeignKey(ug => ug.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserGroup>()
+            .HasOne(ug => ug.Group)
+            .WithMany(g => g.UserGroups)
+            .HasForeignKey(ug => ug.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserGroup>()
+            .HasIndex(ug => ug.UserId);
+
+        modelBuilder.Entity<UserGroup>()
+            .HasIndex(ug => ug.GroupId);
+
+        // GroupFeaturePermission configuration (many-to-many: Group ↔ Feature with Permission)
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasIndex(gfp => new { gfp.GroupId, gfp.FeatureId, gfp.Permission })
+            .IsUnique();
+
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasOne(gfp => gfp.Group)
+            .WithMany(g => g.GroupFeaturePermissions)
+            .HasForeignKey(gfp => gfp.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasOne(gfp => gfp.Feature)
+            .WithMany(f => f.GroupFeaturePermissions)
+            .HasForeignKey(gfp => gfp.FeatureId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasIndex(gfp => gfp.GroupId);
+
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasIndex(gfp => gfp.FeatureId);
+
+        modelBuilder.Entity<GroupFeaturePermission>()
+            .HasIndex(gfp => gfp.Permission);
     }
 }
 

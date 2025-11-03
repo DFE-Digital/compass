@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "WCAG Criteria";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
 }
 
 <div class="content-header">
@@ -22,7 +23,7 @@
                             Actions
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="CreateWcagCriterion">
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#wcagCriterionModal" onclick="openCreateWcagCriterionModal()">
                                 Create new WCAG criterion
                             </a>
                         </div>
@@ -52,7 +53,60 @@
 
         <div class="row">
             <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
-                <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PerformanceMetric" ? "active" : "")">
+                                Operational reports
+                            </a>
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseMetric" ? "active" : "")">
+                                Enterprise metrics
+                            </a>
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "FunctionalStandard" ? "active" : "")">
+                                Functional standards
+                            </a>
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
+                                Strategic objectives
+                            </a>
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
+                                Missions
+                            </a>
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(currentAction.Contains("FundingSource") ? "active" : "")">
+                                Funding sources
+                            </a>
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GovernmentDepartment" ? "active" : "")">
+                                Government departments
+                            </a>
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Organizational" ? "active" : "")">
+                                Organizational
+                            </a>
+                            <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(currentAction.Contains("RiskType") ? "active" : "")">
+                                Risk types
+                            </a>
+                            <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(currentAction.Contains("RiskTier") ? "active" : "")">
+                                Risk tiers
+                            </a>
+                            <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(currentAction.Contains("ActionSource") ? "active" : "")">
+                                Action sources
+                            </a>
+                            <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(currentAction.Contains("WcagCriterion") || currentAction.Contains("WcagCriteria") ? "active" : "")">
+                                WCAG Criteria
+                            </a>
+                            <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
+                                GDD Roles
+                            </a>
+                            <a href="@Url.Action("Skills", "Admin")" class="nav-link @(currentAction.Contains("Skill") ? "active" : "")">
+                                Skills
+                            </a>
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(currentAction.Contains("ApiToken") ? "active" : "")">
+                                API tokens
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
@@ -64,11 +118,12 @@
                         <table class="table table-hover text-nowrap">
                             <thead>
                                 <tr>
+                                    <th style="width: 10%;">ID</th>
+                                    <th style="width: 30%;">Title</th>
                                     <th style="width: 10%;">Criterion</th>
-                                    <th style="width: 35%;">Title</th>
                                     <th style="width: 10%;">Level</th>
                                     <th style="width: 10%;">Version</th>
-                                    <th style="width: 25%;">URL</th>
+                                    <th style="width: 20%;">URL</th>
                                     <th style="width: 10%;">Status</th>
                                 </tr>
                             </thead>
@@ -78,17 +133,23 @@
                                     @foreach (var item in Model)
                                     {
                                         <tr class="@(!item.IsActive ? "text-muted" : "")">
-                                            <td><code>@item.Criterion</code></td>
+                                            <td>@item.Id</td>
                                             <td>
-                                                <a asp-action="EditWcagCriterion" asp-route-id="@item.Id" class="font-weight-bold">
+                                                <a href="#" class="edit-wcag-criterion font-weight-bold" 
+                                                   data-id="@item.Id" 
+                                                   data-criterion="@item.Criterion" 
+                                                   data-title="@item.Title" 
+                                                   data-description="@(item.Description ?? "")" 
+                                                   data-url="@(item.Url ?? "")" 
+                                                   data-level="@item.Level" 
+                                                   data-version="@item.Version" 
+                                                   data-sortorder="@item.SortOrder" 
+                                                   data-isactive="@item.IsActive.ToString().ToLower()">
                                                     @item.Title
                                                 </a>
-                                                @if (!item.IsActive)
-                                                {
-                                                    <span class="badge badge-secondary ml-2">Disabled</span>
-                                                }
                                             </td>
-                                            <td><span class="badge badge-@(item.Level == "AAA" ? "primary" : item.Level == "AA" ? "info" : "secondary")">@item.Level</span></td>
+                                            <td><code>@item.Criterion</code></td>
+                                            <td>@item.Level</td>
                                             <td>WCAG @item.Version</td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(item.Url))
@@ -116,7 +177,7 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted">No WCAG criteria found.</td>
+                                        <td colspan="7" class="text-center text-muted">No WCAG criteria found.</td>
                                     </tr>
                                 }
                             </tbody>
@@ -127,5 +188,156 @@
         </div>
     </div>
 </section>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="wcagCriterionModal" tabindex="-1" role="dialog" aria-labelledby="wcagCriterionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="wcagCriterionModalLabel">Create WCAG criterion</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="wcagCriterionForm" method="post">
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    
+                    <input type="hidden" id="wcagCriterionId" name="Id" />
+                    
+                    <div class="form-group">
+                        <label for="wcagCriterionCriterion" class="control-label">Criterion Reference <span class="text-danger">*</span></label>
+                        <input type="text" id="wcagCriterionCriterion" name="Criterion" class="form-control" maxlength="20" style="font-family: monospace;" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Criterion" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">The WCAG criterion reference number (e.g., 1.1.1, 2.4.3)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wcagCriterionTitle" class="control-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" id="wcagCriterionTitle" name="Title" class="form-control" maxlength="200" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Title" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Display name of the criterion</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wcagCriterionDescription" class="control-label">Description</label>
+                        <textarea id="wcagCriterionDescription" name="Description" class="form-control" rows="4"></textarea>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Description" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Detailed explanation of what this criterion requires</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wcagCriterionUrl" class="control-label">URL</label>
+                        <input type="url" id="wcagCriterionUrl" name="Url" class="form-control" />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Url" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Link to the official WCAG documentation page</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="wcagCriterionLevel" class="control-label">Level <span class="text-danger">*</span></label>
+                                <select id="wcagCriterionLevel" name="Level" class="form-control" required>
+                                    <option value="">Select level...</option>
+                                    <option value="A">Level A</option>
+                                    <option value="AA">Level AA</option>
+                                    <option value="AAA">Level AAA</option>
+                                </select>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="Level" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="wcagCriterionVersion" class="control-label">WCAG Version <span class="text-danger">*</span></label>
+                                <select id="wcagCriterionVersion" name="Version" class="form-control" required>
+                                    <option value="">Select version...</option>
+                                    <option value="2.1">WCAG 2.1</option>
+                                    <option value="2.2">WCAG 2.2</option>
+                                    <option value="3.0">WCAG 3.0</option>
+                                </select>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="Version" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wcagCriterionSortOrder" class="control-label">Sort order</label>
+                        <input type="number" id="wcagCriterionSortOrder" name="SortOrder" class="form-control" min="0" />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="SortOrder" data-valmsg-replace="true"></span>
+                        <small class="form-text text-muted">Display order in autocomplete (lower numbers appear first)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" id="wcagCriterionIsActive" name="IsActive" class="custom-control-input" checked />
+                            <label class="custom-control-label" for="wcagCriterionIsActive">Active</label>
+                        </div>
+                        <small class="form-text text-muted">Inactive criteria will not appear in autocomplete when adding issues</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script nonce="@Context.Items["Nonce"]">
+        function openCreateWcagCriterionModal() {
+            $('#wcagCriterionModalLabel').text('Create WCAG criterion');
+            $('#wcagCriterionForm').attr('action', '@Url.Action("CreateWcagCriterion", "Admin")');
+            $('#wcagCriterionId').val('');
+            $('#wcagCriterionCriterion').val('').prop('readonly', false);
+            $('#wcagCriterionTitle').val('');
+            $('#wcagCriterionDescription').val('');
+            $('#wcagCriterionUrl').val('');
+            $('#wcagCriterionLevel').val('');
+            $('#wcagCriterionVersion').val('');
+            $('#wcagCriterionSortOrder').val('0');
+            $('#wcagCriterionIsActive').prop('checked', true);
+            $('#wcagCriterionModal').modal('show');
+        }
+
+        function openEditWcagCriterionModal(id, criterion, title, description, url, level, version, sortOrder, isActive) {
+            $('#wcagCriterionModalLabel').text('Edit WCAG criterion');
+            $('#wcagCriterionForm').attr('action', '@Url.Action("EditWcagCriterion", "Admin")');
+            $('#wcagCriterionId').val(id);
+            $('#wcagCriterionCriterion').val(criterion).prop('readonly', true);
+            $('#wcagCriterionTitle').val(title);
+            $('#wcagCriterionDescription').val(description || '');
+            $('#wcagCriterionUrl').val(url || '');
+            $('#wcagCriterionLevel').val(level || '');
+            $('#wcagCriterionVersion').val(version || '');
+            $('#wcagCriterionSortOrder').val(sortOrder || '0');
+            $('#wcagCriterionIsActive').prop('checked', isActive === 'true' || isActive === true);
+            $('#wcagCriterionModal').modal('show');
+        }
+
+        $(document).on('click', '.edit-wcag-criterion', function(e) {
+            e.preventDefault();
+            var $item = $(this);
+            openEditWcagCriterionModal(
+                $item.data('id'),
+                $item.data('criterion'),
+                $item.data('title'),
+                $item.data('description'),
+                $item.data('url'),
+                $item.data('level'),
+                $item.data('version'),
+                $item.data('sortorder'),
+                $item.data('isactive')
+            );
+        });
+
+        $('#wcagCriterionModal').on('hidden.bs.modal', function () {
+            $('#wcagCriterionForm')[0].reset();
+            $('.field-validation-valid').text('');
+        });
+    </script>
+}
 
 

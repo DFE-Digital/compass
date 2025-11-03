@@ -6,6 +6,10 @@
     
     // Get dependencies where this project is the target
     var incomingDependencies = Model.DependenciesAsTarget.OrderByDescending(d => d.CreatedAt).ToList();
+    
+    // Combine all dependencies for sequence calculation
+    var allProjectDependencies = Model.DependenciesAsSource.Concat(Model.DependenciesAsTarget)
+        .OrderBy(d => d.CreatedAt).ToList();
 }
 
 <div class="card mb-4" id="outgoing-dependencies">
@@ -21,6 +25,7 @@
             <table class="table table-hover text-nowrap sortable-table dependencies-table">
                 <thead>
                     <tr>
+                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
                         <th class="col-target sortable" data-column="Target" tabindex="0" role="button" aria-label="Sort by Target">Depends On</th>
                         <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
@@ -30,7 +35,14 @@
                 <tbody>
                     @foreach (var dependency in outgoingDependencies)
                     {
+                        var dependencyYear = dependency.CreatedAt.Year;
+                        var dependenciesInYear = allProjectDependencies.Where(d => d.CreatedAt.Year == dependencyYear).OrderBy(d => d.CreatedAt).ToList();
+                        var dependencySequence = dependenciesInYear.IndexOf(dependency) + 1;
+                        var formattedDependencyId = $"{dependencyYear}-DEP-{dependencySequence}";
                         <tr>
+                            <td>
+                                <span class="text-muted small">@formattedDependencyId</span>
+                            </td>
                             <td>
                                 <a href="#" class="view-dependency-link" 
                                    data-dependency-id="@dependency.Id" 
@@ -76,6 +88,7 @@
             <table class="table table-hover text-nowrap sortable-table dependencies-table">
                 <thead>
                     <tr>
+                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
                         <th class="col-source sortable" data-column="Source" tabindex="0" role="button" aria-label="Sort by Source">Dependent On This</th>
                         <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
@@ -85,7 +98,14 @@
                 <tbody>
                     @foreach (var dependency in incomingDependencies)
                     {
+                        var dependencyYear = dependency.CreatedAt.Year;
+                        var dependenciesInYear = allProjectDependencies.Where(d => d.CreatedAt.Year == dependencyYear).OrderBy(d => d.CreatedAt).ToList();
+                        var dependencySequence = dependenciesInYear.IndexOf(dependency) + 1;
+                        var formattedDependencyId = $"{dependencyYear}-DEP-{dependencySequence}";
                         <tr>
+                            <td>
+                                <span class="text-muted small">@formattedDependencyId</span>
+                            </td>
                             <td>
                                 <a href="#" class="view-dependency-link" 
                                    data-dependency-id="@dependency.Id" 
@@ -364,7 +384,7 @@
                 
                 searchTimeout = setTimeout(function() {
                     $.ajax({
-                        url: '/api/entities/search',
+                        url: '/entities/search',
                         data: { entityType: entityType, q: searchTerm },
                         dataType: 'json',
                         success: function(data) {

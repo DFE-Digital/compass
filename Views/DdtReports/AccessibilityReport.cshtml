@@ -1,0 +1,326 @@
+@{
+    ViewData["Title"] = "Accessibility report - DDT Reports";
+    
+    // Get data from ViewBag
+    var totalProducts = ViewBag.TotalProducts ?? 0;
+    var enrolledProductsCount = ViewBag.EnrolledProductsCount ?? 0;
+    var issuesByLevel = ViewBag.IssuesByLevel as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var topProductsWithIssues = ViewBag.TopProductsWithIssues as List<ProductAccessibility> ?? new List<ProductAccessibility>();
+    var totalOpenIssues = ViewBag.TotalOpenIssues ?? 0;
+    
+    // Calculate percentages
+    var enrollmentRate = totalProducts > 0 ? (enrolledProductsCount * 100.0 / totalProducts) : 0;
+    var levelACount = issuesByLevel.ContainsKey("A") ? issuesByLevel["A"] : 0;
+    var levelAACount = issuesByLevel.ContainsKey("AA") ? issuesByLevel["AA"] : 0;
+    var levelAAACount = issuesByLevel.ContainsKey("AAA") ? issuesByLevel["AAA"] : 0;
+    var bestPracticeCount = issuesByLevel.ContainsKey("Best Practice") ? issuesByLevel["Best Practice"] : 0;
+}
+
+<style>
+    .metric-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    }
+    .progress-bar-custom {
+        height: 8px;
+        border-radius: 4px;
+    }
+    .wcag-badge {
+        font-weight: 600;
+        padding: 0.35rem 0.65rem;
+    }
+    .wcag-level-a { background-color: #dc3545; color: white; }
+    .wcag-level-aa { background-color: #ffc107; color: #212529; }
+    .wcag-level-aaa { background-color: #17a2b8; color: white; }
+    .wcag-level-bp { background-color: #6c757d; color: white; }
+    .wcag-level-card {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .wcag-level-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Accessibility report</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Header Banner with Key Metrics -->
+        <div class="row mb-4" style="display: flex;">
+            <!-- Left side: Title and three metric cards -->
+            <div class="col-lg-8" style="display: flex;">
+                <!-- Summary Banner -->
+                <div class="card border-0 w-100" style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 12px;">
+                    <div class="card-body p-4">
+                        <div class="row align-items-center" style="height: 100%;">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1" style="font-size: 0.9rem;">@DateTime.Now.ToString("dddd, dd MMMM yyyy")</p>
+                                <h2 class="mb-2" style="font-weight: 600; color: #1976D2;">Accessibility report</h2>
+                                <p class="text-muted mb-0" style="font-size: 0.95rem;">Summary of product accessibility enrollment and open issues</p>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-start align-items-stretch">
+                                    <!-- Enrollment Card -->
+                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
+                                        <div class="card border-0 shadow-sm metric-card h-100" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
+                                            <div class="card-body p-3">
+                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@enrolledProductsCount</h3>
+                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Enrolled</p>
+                                                <small class="text-muted">Of @totalProducts products</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Issues Card -->
+                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
+                                        <div class="card border-0 shadow-sm metric-card h-100" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
+                                            <div class="card-body p-3">
+                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@totalOpenIssues</h3>
+                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Open issues</p>
+                                                <small class="text-muted">&nbsp;</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Enrollment Rate Card -->
+                                    <div style="flex: 0 0 33.333%;">
+                                        <div class="card border-0 shadow-sm metric-card h-100" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
+                                            <div class="card-body p-3">
+                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@enrollmentRate.ToString("F1")%</h3>
+                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Coverage</p>
+                                                <small class="text-muted">enrollment rate</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Right side: Enrollment Progress -->
+            <div class="col-lg-4" style="display: flex;">
+                <div class="card border-0 shadow-sm w-100 metric-card" style="border-radius: 12px; background: white; transition: transform 0.2s, box-shadow 0.2s;">
+                    <div class="card-body p-4">
+                        <div style="height: 100%;">
+                            <h5 class="mb-2" style="font-weight: 600;">Enrollment progress</h5>
+                            <div class="mb-3">
+                                <div class="progress progress-bar-custom" style="height: 10px;">
+                                    <div class="progress-bar @(enrollmentRate >= 75 ? "bg-success" : enrollmentRate >= 50 ? "bg-warning" : "bg-danger")" 
+                                         role="progressbar" 
+                                         style="width: @enrollmentRate%"
+                                         aria-valuenow="@enrollmentRate" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            <p class="text-muted mb-0" style="font-size: 0.9rem;">
+                                @(totalProducts - enrolledProductsCount) products not yet enrolled
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WCAG Level Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <a href="@Url.Action("Index", "Accessibility", new { tab = "issues", issueLevel = "A" })" class="text-decoration-none">
+                    <div class="card h-100 metric-card wcag-level-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="wcag-badge wcag-level-a mr-2">A</span>
+                                Level A
+                            </h5>
+                            <h2 class="mb-0" style="font-weight: 700; color: #dc3545;">@levelACount</h2>
+                            @if (totalOpenIssues > 0)
+                            {
+                                <p class="text-muted mb-0">@((levelACount * 100.0 / totalOpenIssues).ToString("F1"))% of total issues</p>
+                            }
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <a href="@Url.Action("Index", "Accessibility", new { tab = "issues", issueLevel = "AA" })" class="text-decoration-none">
+                    <div class="card h-100 metric-card wcag-level-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="wcag-badge wcag-level-aa mr-2">AA</span>
+                                Level AA
+                            </h5>
+                            <h2 class="mb-0" style="font-weight: 700; color: #ffc107;">@levelAACount</h2>
+                            @if (totalOpenIssues > 0)
+                            {
+                                <p class="text-muted mb-0">@((levelAACount * 100.0 / totalOpenIssues).ToString("F1"))% of total issues</p>
+                            }
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <a href="@Url.Action("Index", "Accessibility", new { tab = "issues", issueLevel = "AAA" })" class="text-decoration-none">
+                    <div class="card h-100 metric-card wcag-level-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="wcag-badge wcag-level-aaa mr-2">AAA</span>
+                                Level AAA
+                            </h5>
+                            <h2 class="mb-0" style="font-weight: 700; color: #17a2b8;">@levelAAACount</h2>
+                            @if (totalOpenIssues > 0)
+                            {
+                                <p class="text-muted mb-0">@((levelAAACount * 100.0 / totalOpenIssues).ToString("F1"))% of total issues</p>
+                            }
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <a href="@Url.Action("Index", "Accessibility", new { tab = "issues", issueLevel = "Best Practice" })" class="text-decoration-none">
+                    <div class="card h-100 metric-card wcag-level-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="wcag-badge wcag-level-bp mr-2">BP</span>
+                                Best practice
+                            </h5>
+                            <h2 class="mb-0" style="font-weight: 700; color: #6c757d;">@bestPracticeCount</h2>
+                            @if (totalOpenIssues > 0)
+                            {
+                                <p class="text-muted mb-0">@((bestPracticeCount * 100.0 / totalOpenIssues).ToString("F1"))% of total issues</p>
+                            }
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Top Products with Issues -->
+        <div class="row mb-4">
+            <div class="col-12">
+                @if (topProductsWithIssues.Any())
+                {
+                    <div class="card">
+                        <div class="card-header bg-danger text-white">
+                            <h3 class="card-title mb-0">Top 10 products with most open issues</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40%;">Product</th>
+                                        <th style="width: 15%;">FIPS ID</th>
+                                        <th style="width: 15%;">Phase</th>
+                                        <th style="width: 15%;">Open issues</th>
+                                        <th style="width: 15%;">WCAG levels</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in topProductsWithIssues)
+                                    {
+                                        var openIssues = product.Issues.Where(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")).ToList();
+                                        var issueCount = openIssues.Count;
+                                        
+                                        // Get WCAG levels for this product
+                                        var levels = new HashSet<string>();
+                                        foreach (var issue in openIssues)
+                                        {
+                                            if (issue.IssueType == "WCAG" && issue.WcagCriteriaLinks != null && issue.WcagCriteriaLinks.Any())
+                                            {
+                                                foreach (var link in issue.WcagCriteriaLinks)
+                                                {
+                                                    if (!string.IsNullOrEmpty(link.WcagCriterion?.Level))
+                                                    {
+                                                        levels.Add(link.WcagCriterion.Level);
+                                                    }
+                                                }
+                                            }
+                                            else if (issue.IssueType == "Best Practice")
+                                            {
+                                                levels.Add("BP");
+                                            }
+                                        }
+                                        
+                                        <tr>
+                                            <td>
+                                                <a href="/Apps/AccessibilityService/Product/@product.FipsId" class="text-decoration-none">
+                                                    <strong>@(product.ProductName ?? "Unknown")</strong>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">@product.FipsId</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">@(product.ProductPhase ?? "Not set")</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-danger badge-pill" style="font-size: 1rem;">@issueCount</span>
+                                            </td>
+                                            <td>
+                                                @if (levels.Any())
+                                                {
+                                                    @foreach (var level in levels.OrderBy(l => l == "A" ? 1 : l == "AA" ? 2 : l == "AAA" ? 3 : 4))
+                                                    {
+                                                        var badgeClass = level == "A" ? "wcag-level-a" : level == "AA" ? "wcag-level-aa" : level == "AAA" ? "wcag-level-aaa" : "wcag-level-bp";
+                                                        <span class="wcag-badge @badgeClass" style="font-size: 0.75rem; margin-right: 0.25rem;">@level</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <h4>No products with open issues</h4>
+                            <p class="text-muted">All enrolled products have no open accessibility issues.</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
