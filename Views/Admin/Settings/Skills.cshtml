@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "Skills";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
 }
 
 <div class="content-header">
@@ -22,7 +23,7 @@
                             Actions
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="CreateSkill">
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#skillModal" onclick="openCreateSkillModal()">
                                 Create new skill
                             </a>
                         </div>
@@ -52,7 +53,69 @@
 
         <div class="row">
             <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
-                <partial name="~/Views/Admin/Settings/_SettingsSidebar.cshtml" />
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PerformanceMetric" ? "active" : "")">
+                                Operational reports
+                            </a>
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseMetric" ? "active" : "")">
+                                Enterprise metrics
+                            </a>
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "FunctionalStandard" ? "active" : "")">
+                                Functional standards
+                            </a>
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
+                                Strategic objectives
+                            </a>
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
+                                Missions
+                            </a>
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(currentAction.Contains("FundingSource") ? "active" : "")">
+                                Funding sources
+                            </a>
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GovernmentDepartment" ? "active" : "")">
+                                Government departments
+                            </a>
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Organizational" ? "active" : "")">
+                                Organizational
+                            </a>
+                            <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(currentAction.Contains("RiskType") ? "active" : "")">
+                                Risk types
+                            </a>
+                            <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(currentAction.Contains("RiskTier") ? "active" : "")">
+                                Risk tiers
+                            </a>
+                            <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(currentAction.Contains("ActionSource") ? "active" : "")">
+                                Action sources
+                            </a>
+                            <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(currentAction.Contains("WcagCriterion") || currentAction.Contains("WcagCriteria") ? "active" : "")">
+                                WCAG Criteria
+                            </a>
+                            <a href="@Url.Action("BusinessAreas", "Admin")" class="nav-link @(currentAction.Contains("BusinessArea") ? "active" : "")">
+                                Business areas
+                            </a>
+                            <a href="@Url.Action("Phases", "Admin")" class="nav-link @(currentAction.Contains("Phase") ? "active" : "")">
+                                Phases
+                            </a>
+                            <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
+                                GDD Roles
+                            </a>
+                            <a href="@Url.Action("Skills", "Admin")" class="nav-link @(currentAction.Contains("Skill") ? "active" : "")">
+                                Skills
+                            </a>
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(currentAction.Contains("ApiToken") ? "active" : "")">
+                                API tokens
+                            </a>
+                            <a href="@Url.Action("Index", "Admin", new { area = "" })" class="nav-link @(currentAction == "Settings" ? "active" : "")">
+                                User management
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
@@ -64,9 +127,10 @@
                         <table class="table table-hover text-nowrap">
                             <thead>
                                 <tr>
-                                    <th style="width: 35%;">Skill Name</th>
+                                    <th style="width: 10%;">ID</th>
+                                    <th style="width: 30%;">Skill Name</th>
                                     <th style="width: 20%;">Category</th>
-                                    <th style="width: 35%;">Description</th>
+                                    <th style="width: 30%;">Description</th>
                                     <th style="width: 10%;">Status</th>
                                 </tr>
                             </thead>
@@ -76,14 +140,17 @@
                                     @foreach (var item in Model)
                                     {
                                         <tr class="@(!item.IsActive ? "text-muted" : "")">
+                                            <td>@item.Id</td>
                                             <td>
-                                                <a asp-action="EditSkill" asp-route-id="@item.Id" class="font-weight-bold">
+                                                <a href="#" class="edit-skill font-weight-bold" 
+                                                   data-id="@item.Id" 
+                                                   data-skillname="@item.SkillName" 
+                                                   data-category="@(item.Category ?? "")" 
+                                                   data-description="@(item.Description ?? "")" 
+                                                   data-sortorder="@item.SortOrder" 
+                                                   data-isactive="@item.IsActive.ToString().ToLower()">
                                                     @item.SkillName
                                                 </a>
-                                                @if (!item.IsActive)
-                                                {
-                                                    <span class="badge badge-secondary ml-2">Disabled</span>
-                                                }
                                             </td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(item.Category))
@@ -92,7 +159,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">-</span>
+                                                    <span class="text-muted">—</span>
                                                 }
                                             </td>
                                             <td>
@@ -102,7 +169,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">-</span>
+                                                    <span class="text-muted">—</span>
                                                 }
                                             </td>
                                             <td>
@@ -121,7 +188,7 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="4" class="text-center text-muted">No skills found.</td>
+                                        <td colspan="5" class="text-center text-muted">No skills found.</td>
                                     </tr>
                                 }
                             </tbody>
@@ -132,4 +199,107 @@
         </div>
     </div>
 </section>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="skillModal" tabindex="-1" role="dialog" aria-labelledby="skillModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="skillModalLabel">Create skill</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="skillForm" method="post">
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    
+                    <input type="hidden" id="skillId" name="Id" />
+                    
+                    <div class="form-group">
+                        <label for="skillSkillName" class="control-label">Skill Name <span class="text-danger">*</span></label>
+                        <input type="text" id="skillSkillName" name="SkillName" class="form-control" maxlength="200" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="SkillName" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="skillCategory" class="control-label">Category</label>
+                        <input type="text" id="skillCategory" name="Category" class="form-control" maxlength="100" />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Category" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="skillDescription" class="control-label">Description</label>
+                        <textarea id="skillDescription" name="Description" class="form-control" rows="4"></textarea>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Description" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="skillSortOrder" class="control-label">Sort Order</label>
+                        <input type="number" id="skillSortOrder" name="SortOrder" class="form-control" />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="SortOrder" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" id="skillIsActive" name="IsActive" class="custom-control-input" checked />
+                            <label class="custom-control-label" for="skillIsActive">Active</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script nonce="@Context.Items["Nonce"]">
+        function openCreateSkillModal() {
+            $('#skillModalLabel').text('Create skill');
+            $('#skillForm').attr('action', '@Url.Action("CreateSkill", "Admin")');
+            $('#skillId').val('');
+            $('#skillSkillName').val('');
+            $('#skillCategory').val('');
+            $('#skillDescription').val('');
+            $('#skillSortOrder').val('0');
+            $('#skillIsActive').prop('checked', true);
+            $('#skillModal').modal('show');
+        }
+
+        function openEditSkillModal(id, skillName, category, description, sortOrder, isActive) {
+            $('#skillModalLabel').text('Edit skill');
+            $('#skillForm').attr('action', '@Url.Action("EditSkill", "Admin")');
+            $('#skillId').val(id);
+            $('#skillSkillName').val(skillName);
+            $('#skillCategory').val(category || '');
+            $('#skillDescription').val(description || '');
+            $('#skillSortOrder').val(sortOrder || '0');
+            $('#skillIsActive').prop('checked', isActive === 'true' || isActive === true);
+            $('#skillModal').modal('show');
+        }
+
+        $(document).on('click', '.edit-skill', function(e) {
+            e.preventDefault();
+            var $item = $(this);
+            openEditSkillModal(
+                $item.data('id'),
+                $item.data('skillname'),
+                $item.data('category'),
+                $item.data('description'),
+                $item.data('sortorder'),
+                $item.data('isactive')
+            );
+        });
+
+        $('#skillModal').on('hidden.bs.modal', function () {
+            $('#skillForm')[0].reset();
+            $('.field-validation-valid').text('');
+        });
+    </script>
+}
 

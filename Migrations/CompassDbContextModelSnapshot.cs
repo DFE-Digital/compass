@@ -1101,6 +1101,49 @@ namespace Compass.Migrations
                     b.ToTable("EnterpriseReturns");
                 });
 
+            modelBuilder.Entity("Compass.Models.Feature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Features");
+                });
+
             modelBuilder.Entity("Compass.Models.FipsService", b =>
                 {
                     b.Property<int>("ServiceId")
@@ -1408,6 +1451,93 @@ namespace Compass.Migrations
                     b.HasIndex("ParentDepartmentId");
 
                     b.ToTable("GovernmentDepartments");
+                });
+
+            modelBuilder.Entity("Compass.Models.Group", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystemGroup")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("IsSystemGroup");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Groups");
+                });
+
+            modelBuilder.Entity("Compass.Models.GroupFeaturePermission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("FeatureId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Permission")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeatureId");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("Permission");
+
+                    b.HasIndex("GroupId", "FeatureId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("GroupFeaturePermissions");
                 });
 
             modelBuilder.Entity("Compass.Models.Issue", b =>
@@ -2230,6 +2360,9 @@ namespace Compass.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("LegacyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ProductName")
                         .HasMaxLength(450)
@@ -3494,6 +3627,65 @@ namespace Compass.Migrations
                     b.ToTable("StaffRoleReturnSkills");
                 });
 
+            modelBuilder.Entity("Compass.Models.StatementTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("Name", "Version")
+                        .IsUnique();
+
+                    b.ToTable("StatementTemplates");
+                });
+
             modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
                 {
                     b.Property<Guid>("SurveyInstanceId")
@@ -3718,6 +3910,39 @@ namespace Compass.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("Compass.Models.UserGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AssignedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "GroupId")
+                        .IsUnique();
+
+                    b.ToTable("UserGroups");
                 });
 
             modelBuilder.Entity("Compass.Models.UserPreference", b =>
@@ -4024,6 +4249,25 @@ namespace Compass.Migrations
                         .HasForeignKey("ParentDepartmentId");
 
                     b.Navigation("ParentDepartment");
+                });
+
+            modelBuilder.Entity("Compass.Models.GroupFeaturePermission", b =>
+                {
+                    b.HasOne("Compass.Models.Feature", "Feature")
+                        .WithMany("GroupFeaturePermissions")
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Group", "Group")
+                        .WithMany("GroupFeaturePermissions")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Feature");
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("Compass.Models.Issue", b =>
@@ -4637,6 +4881,25 @@ namespace Compass.Migrations
                     b.Navigation("SurveyInstance");
                 });
 
+            modelBuilder.Entity("Compass.Models.UserGroup", b =>
+                {
+                    b.HasOne("Compass.Models.Group", "Group")
+                        .WithMany("UserGroups")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany("UserGroups")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Compass.Models.UserPreference", b =>
                 {
                     b.HasOne("Compass.Models.User", "User")
@@ -4686,6 +4949,11 @@ namespace Compass.Migrations
                     b.Navigation("MetricValues");
                 });
 
+            modelBuilder.Entity("Compass.Models.Feature", b =>
+                {
+                    b.Navigation("GroupFeaturePermissions");
+                });
+
             modelBuilder.Entity("Compass.Models.FipsService", b =>
                 {
                     b.Navigation("SurveyInstances");
@@ -4719,6 +4987,13 @@ namespace Compass.Migrations
             modelBuilder.Entity("Compass.Models.GovernmentDepartment", b =>
                 {
                     b.Navigation("ChildDepartments");
+                });
+
+            modelBuilder.Entity("Compass.Models.Group", b =>
+                {
+                    b.Navigation("GroupFeaturePermissions");
+
+                    b.Navigation("UserGroups");
                 });
 
             modelBuilder.Entity("Compass.Models.Issue", b =>
@@ -4876,6 +5151,11 @@ namespace Compass.Migrations
                     b.Navigation("JourneySteps");
 
                     b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("Compass.Models.User", b =>
+                {
+                    b.Navigation("UserGroups");
                 });
 #pragma warning restore 612, 618
         }

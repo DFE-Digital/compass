@@ -1,0 +1,380 @@
+@model Compass.Models.AccessibilityIssue
+
+<!-- Close Issue Modal -->
+<div class="modal fade" id="closeIssueModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Close Issue</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="CloseIssue" method="post">
+                <input type="hidden" id="closeIssueId" name="id" />
+                <div class="modal-body">
+                    <p class="mb-3">Close this issue by providing a closure date and explanation.</p>
+                    
+                    <div class="form-group">
+                        <label for="closureDate">Date Closed *</label>
+                        <input type="date" class="form-control" id="closureDate" name="closureDate" required value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                        <small class="form-text text-muted">The date this issue was closed</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="closureExplanation">Closure Explanation *</label>
+                        <textarea class="form-control preserve-formatting" id="closureExplanation" name="closureExplanation" rows="5" placeholder="Explain why this issue is being closed..." required></textarea>
+                        <small class="form-text text-muted">Provide a clear explanation for closing this issue</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="changeNote">Change Note (Optional)</label>
+                        <input type="text" class="form-control" id="changeNote" name="changeNote" placeholder="Optional note about this change..." />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Close Issue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Request Retest Modal -->
+<div class="modal fade" id="requestRetestModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Retest</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="RequestRetest" method="post">
+                <input type="hidden" id="requestRetestIssueId" name="issueId" />
+                <div class="modal-body">
+                    <p class="mb-3">Submit a request for an administrator to retest this accessibility issue.</p>
+                    
+                    <div class="form-group">
+                        <label for="requestorEmail">Your Email Address</label>
+                        <input type="email" class="form-control" id="requestorEmail" name="requestorEmail" value="@User.Identity?.Name" />
+                        <small class="form-text text-muted">Email address to receive retest confirmation and results</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="requestNotes">Notes (Optional)</label>
+                        <textarea class="form-control" id="requestNotes" name="requestNotes" rows="3" placeholder="Any additional information about why you're requesting a retest..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Description Modal -->
+<div class="modal fade" id="editDescriptionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Description</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="issueDescription">Description</label>
+                        <textarea class="form-control preserve-formatting" id="issueDescription" name="issueDescription" rows="5">@Model.IssueDescription</textarea>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Status Modal -->
+<div class="modal fade" id="editStatusModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="status">Status *</label>
+                        <select class="form-control" id="status" name="status" required>
+                            <option value="open" selected="@(Model.Status == "open")">Open</option>
+                            <option value="in_progress" selected="@(Model.Status == "in_progress")">In Progress</option>
+                            <option value="resolved" selected="@(Model.Status == "resolved")">Resolved</option>
+                            <option value="closed" selected="@(Model.Status == "closed")">Closed</option>
+                            <option value="wont_fix" selected="@(Model.Status == "wont_fix")">Won't Fix</option>
+                        </select>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Resolving Modal -->
+<div class="modal fade" id="editResolvingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Resolving</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="editIsResolving" name="isResolving" value="true" checked="@Model.IsResolving" />
+                            <label class="form-check-label" for="editIsResolving">
+                                We plan to resolve this issue
+                            </label>
+                        </div>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Planned Resolution Modal -->
+<div class="modal fade" id="editPlannedResolutionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Planned Resolution Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="plannedResolutionDate">Planned Resolution Date</label>
+                        <input type="date" class="form-control" id="plannedResolutionDate" name="plannedResolutionDate" value="@(Model.PlannedResolutionDate?.ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Non-Resolution Reason Modal -->
+<div class="modal fade" id="editNonResolutionReasonModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Reason Not Resolving</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="nonResolutionReason">Reason Not Resolving</label>
+                        <textarea class="form-control preserve-formatting" id="nonResolutionReason" name="nonResolutionReason" rows="5">@Model.NonResolutionReason</textarea>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Closure Date Modal -->
+<div class="modal fade" id="editClosureDateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Closure Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="actualResolutionDate">Date Closed</label>
+                        <input type="date" class="form-control" id="actualResolutionDate" name="actualResolutionDate" value="@(Model.ActualResolutionDate?.ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Closure Explanation Modal -->
+<div class="modal fade" id="editClosureExplanationModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Closure Explanation</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="closureExplanation">Closure Explanation</label>
+                        <textarea class="form-control preserve-formatting" id="closureExplanation" name="resolutionNotes" rows="5">@Model.ResolutionNotes</textarea>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Resolution Notes Modal -->
+<div class="modal fade" id="editResolutionNotesModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit How it was resolved</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="resolutionNotes">How it was resolved</label>
+                        <textarea class="form-control preserve-formatting" id="resolutionNotes" name="resolutionNotes" rows="5">@Model.ResolutionNotes</textarea>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Verification Notes Modal -->
+<div class="modal fade" id="editVerificationNotesModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit How it was tested</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateIssue" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="verificationNotes">How it was tested</label>
+                        <textarea class="form-control preserve-formatting" id="verificationNotes" name="verificationNotes" rows="5">@Model.VerificationNotes</textarea>
+                    </div>
+                    <input type="hidden" name="changeNote" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Issue Type Modal - Placeholder (complex as it affects WCAG criteria) -->
+<div class="modal fade" id="editIssueTypeModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Issue Type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Issue type editing requires updating WCAG criteria relationships. Please use the full Edit Issue form.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit WCAG Criteria Modal - Placeholder (complex as it involves multiple relationships) -->
+<div class="modal fade" id="editWcagCriteriaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit WCAG Criteria</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">WCAG criteria editing involves updating relationships with criteria records. Please use the full Edit Issue form.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+

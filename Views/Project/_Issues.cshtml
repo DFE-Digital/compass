@@ -13,6 +13,7 @@
             <table class="table table-hover text-nowrap sortable-table issues-table">
                 <thead>
                     <tr>
+                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
                         <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
                         <th class="col-severity sortable" data-column="Severity" tabindex="0" role="button" aria-label="Sort by Severity">Severity</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
@@ -21,9 +22,19 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var issue in Model.Issues.Where(i => !i.IsDeleted).OrderByDescending(i => i.DetectedDate))
+                    @{
+                        var issues = Model.Issues.Where(i => !i.IsDeleted).OrderBy(i => i.CreatedAt).ToList();
+                    }
+                    @foreach (var issue in issues.OrderByDescending(i => i.DetectedDate))
                     {
+                        var issueYear = issue.CreatedAt.Year;
+                        var issuesInYear = issues.Where(i => i.CreatedAt.Year == issueYear).OrderBy(i => i.CreatedAt).ToList();
+                        var issueSequence = issuesInYear.IndexOf(issue) + 1;
+                        var formattedIssueId = $"{issueYear}-ISS-{issueSequence}";
                         <tr>
+                            <td>
+                                <span class="text-muted small">@formattedIssueId</span>
+                            </td>
                             <td>
                                 <a href="#" class="view-issue-link" 
                                    data-issue-id="@issue.Id" 

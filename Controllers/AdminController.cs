@@ -22,6 +22,12 @@ public class AdminController : Controller
         _apiTokenService = apiTokenService;
     }
 
+    // GET: Admin/Index
+    public IActionResult Index()
+    {
+        return View("~/Views/Admin/Index.cshtml");
+    }
+
     // GET: Admin/Users
     public async Task<IActionResult> Users()
     {

@@ -16,6 +16,25 @@
                 </ol>
                 <h1 class="m-0">@standard.Title</h1>
             </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    @{
+                        var hasInProgress = ViewBag.HasInProgressAssessment as bool? ?? false;
+                    }
+                    @if (hasInProgress)
+                    {
+                        <button type="button" class="btn btn-success" data-toggle="modal" data-target="#inProgressWarningModal">
+                            Start new assessment
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-success" data-toggle="modal" data-target="#startAssessmentModal">
+                            Start new assessment
+                        </button>
+                    }
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -37,17 +56,6 @@
             </div>
         }
 
-        <div class="row mb-3">
-            <div class="col-12">
-                <button type="button" class="btn btn-success btn-lg" data-toggle="modal" data-target="#startAssessmentModal">
-                    Start new assessment
-                </button>
-                <a asp-action="FunctionalStandards" class="btn btn-default btn-lg">
-                    Back to standards
-                </a>
-            </div>
-        </div>
-
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">In progress assessments</h3>
@@ -56,9 +64,10 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th style="width: 50%;">Assessment name</th>
-                            <th style="width: 25%;">Started</th>
-                            <th style="width: 25%;">Criteria</th>
+                            <th style="width: 40%;">Assessment name</th>
+                            <th style="width: 20%;">Started by</th>
+                            <th style="width: 20%;">Started</th>
+                            <th style="width: 20%;">Criteria</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -70,6 +79,7 @@
                                 int completedCount = item.CompletedCount;
                                 int totalCount = item.TotalCount;
                                 bool isComplete = item.IsComplete;
+                                string userName = item.UserName ?? assessment.AssessedBy;
                                 
                                 <tr>
                                     <td>
@@ -77,6 +87,7 @@
                                             @assessment.AssessmentName
                                         </a>
                                     </td>
+                                    <td>@userName</td>
                                     <td>@assessment.AssessmentDate.ToString("d MMM yyyy HH:mm")</td>
                                     <td>
                                         @completedCount of @totalCount <span class="sr-only">criteria completed</span>
@@ -87,7 +98,7 @@
                         else
                         {
                             <tr>
-                                <td colspan="3" class="text-center text-muted">No assessments in progress</td>
+                                <td colspan="4" class="text-center text-muted">No assessments in progress</td>
                             </tr>
                         }
                     </tbody>
@@ -138,6 +149,27 @@
         </div>
     </div>
 </section>
+
+<!-- In Progress Warning Modal -->
+<div class="modal fade" id="inProgressWarningModal" tabindex="-1" role="dialog" aria-labelledby="inProgressWarningModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="inProgressWarningModalLabel">Cannot start new assessment</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>You cannot start a new assessment as one is already in progress.</p>
+                <p class="mb-0">Please complete or submit the existing assessment before starting a new one.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Start Assessment Modal -->
 <div class="modal fade" id="startAssessmentModal" tabindex="-1" role="dialog" aria-labelledby="startAssessmentModalLabel" aria-hidden="true">

@@ -1,6 +1,8 @@
 @model IEnumerable<Compass.Models.EnterpriseMetric>
 @{
     ViewData["Title"] = "Enterprise metrics";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
 }
 
 <div class="content-header">
@@ -20,7 +22,7 @@
                             Actions
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Create">
+                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#enterpriseMetricModal" onclick="openCreateEnterpriseMetricModal()">
                                 Add new metric
                             </a>
                         </div>
@@ -48,58 +50,317 @@
             </div>
         }
 
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Enterprise metrics</h3>
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(currentController == "PerformanceMetric" ? "active" : "")">
+                                Operational reports
+                            </a>
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(currentController == "EnterpriseMetric" ? "active" : "")">
+                                Enterprise metrics
+                            </a>
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(currentController == "FunctionalStandard" ? "active" : "")">
+                                Functional standards
+                            </a>
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
+                                Strategic objectives
+                            </a>
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
+                                Missions
+                            </a>
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(currentAction.Contains("FundingSource") ? "active" : "")">
+                                Funding sources
+                            </a>
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(currentController == "GovernmentDepartment" ? "active" : "")">
+                                Government departments
+                            </a>
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(currentController == "Organizational" ? "active" : "")">
+                                Organizational
+                            </a>
+                            <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(currentAction.Contains("RiskType") ? "active" : "")">
+                                Risk types
+                            </a>
+                            <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(currentAction.Contains("RiskTier") ? "active" : "")">
+                                Risk tiers
+                            </a>
+                            <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(currentAction.Contains("ActionSource") ? "active" : "")">
+                                Action sources
+                            </a>
+                            <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(currentAction.Contains("WcagCriterion") || currentAction.Contains("WcagCriteria") ? "active" : "")">
+                                WCAG Criteria
+                            </a>
+                            <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
+                                GDD Roles
+                            </a>
+                            <a href="@Url.Action("Skills", "Admin")" class="nav-link @(currentAction.Contains("Skill") ? "active" : "")">
+                                Skills
+                            </a>
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(currentAction.Contains("ApiToken") ? "active" : "")">
+                                API tokens
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-hover text-nowrap">
-                    <thead>
-                        <tr>
-                            <th>Identifier</th>
-                            <th>Title</th>
-                            <th>Value type</th>
-                            <th>Valid from</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (Model != null && Model.Any())
-                        {
-                            @foreach (var metric in Model)
-                            {
+
+            <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Enterprise metrics</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
                                 <tr>
-                                    <td>@metric.Identifier</td>
-                                    <td>
-                                        <a asp-action="Edit" asp-route-id="@metric.Id">@metric.Title</a>
-                                    </td>
-                                    <td>
-                                        @switch (metric.ValueType)
-                                        {
-                                            case Compass.Models.ValueType.Text:
-                                                <span class="badge badge-info">Text</span>
-                                                break;
-                                            case Compass.Models.ValueType.Number:
-                                                <span class="badge badge-success">Number</span>
-                                                break;
-                                            case Compass.Models.ValueType.Decimal:
-                                                <span class="badge badge-warning">Decimal</span>
-                                                break;
-                                        }
-                                    </td>
-                                    <td>@(new DateTime(metric.ValidFromYear, metric.ValidFromMonth, 1).ToString("MMMM yyyy"))</td>
+                                    <th style="width: 10%;">ID</th>
+                                    <th style="width: 30%;">Title</th>
+                                    <th style="width: 20%;">Identifier</th>
+                                    <th style="width: 20%;">Value type</th>
+                                    <th style="width: 20%;">Valid from</th>
                                 </tr>
-                            }
-                        }
-                        else
-                        {
-                            <tr>
-                                <td colspan="4" class="text-center text-muted py-3">No enterprise metrics found</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody>
+                                @if (Model != null && Model.Any())
+                                {
+                                    @foreach (var metric in Model)
+                                    {
+                                        <tr>
+                                            <td>@metric.Id</td>
+                                            <td>
+                                                <a href="#" class="edit-enterprise-metric font-weight-bold" 
+                                                   data-id="@metric.Id" 
+                                                   data-identifier="@metric.Identifier" 
+                                                   data-title="@metric.Title" 
+                                                   data-description="@(metric.Description ?? "")" 
+                                                   data-hinttext="@(metric.HintText ?? "")" 
+                                                   data-valuetype="@((int)metric.ValueType)" 
+                                                   data-validfrommonth="@metric.ValidFromMonth" 
+                                                   data-validfromyear="@metric.ValidFromYear" 
+                                                   data-validationrules="@(metric.ValidationRules ?? "{\"required\": true, \"allowNull\": false}")">
+                                                    @metric.Title
+                                                </a>
+                                            </td>
+                                            <td>@metric.Identifier</td>
+                                            <td>
+                                                @switch (metric.ValueType)
+                                                {
+                                                    case Compass.Models.ValueType.Text:
+                                                        <span>Text</span>
+                                                        break;
+                                                    case Compass.Models.ValueType.Number:
+                                                        <span>Number</span>
+                                                        break;
+                                                    case Compass.Models.ValueType.Decimal:
+                                                        <span>Decimal</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@(new DateTime(metric.ValidFromYear, metric.ValidFromMonth, 1).ToString("MMMM yyyy"))</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-3">No enterprise metrics found</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </section>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="enterpriseMetricModal" tabindex="-1" role="dialog" aria-labelledby="enterpriseMetricModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="enterpriseMetricModalLabel">Create enterprise metric</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="enterpriseMetricForm" method="post">
+                <input type="hidden" id="enterpriseMetricId" name="Id" />
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    
+                    <div class="form-group">
+                        <label for="enterpriseMetricIdentifier" class="control-label">Identifier</label>
+                        <input type="text" id="enterpriseMetricIdentifier" name="Identifier" class="form-control" placeholder="e.g. ent-1" />
+                        <small class="form-text text-muted">Format: ent-x where x is a unique incremental ID</small>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Identifier" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enterpriseMetricTitle" class="control-label">Title</label>
+                        <input type="text" id="enterpriseMetricTitle" name="Title" class="form-control" placeholder="Enter title" required />
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Title" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enterpriseMetricDescription" class="control-label">Description</label>
+                        <textarea id="enterpriseMetricDescription" name="Description" class="form-control" rows="4"></textarea>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="Description" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enterpriseMetricHintText" class="control-label">Hint text</label>
+                        <input type="text" id="enterpriseMetricHintText" name="HintText" class="form-control" placeholder="e.g. Enter the total across all departments" />
+                        <small class="form-text text-muted">Optional hint text to guide users when entering data</small>
+                        <span class="text-danger field-validation-valid" data-valmsg-for="HintText" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enterpriseMetricValueType" class="control-label">Value type</label>
+                        <select id="enterpriseMetricValueType" name="ValueType" class="form-control custom-select">
+                            <option value="@((int)Compass.Models.ValueType.Text)">Text</option>
+                            <option value="@((int)Compass.Models.ValueType.Number)">Number</option>
+                            <option value="@((int)Compass.Models.ValueType.Decimal)">Decimal</option>
+                            <option value="@((int)Compass.Models.ValueType.Percentage)">Percentage</option>
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="enterpriseMetricValidFromMonth" class="control-label">Valid for reporting from (Month)</label>
+                                <select id="enterpriseMetricValidFromMonth" name="ValidFromMonth" class="form-control custom-select">
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9" selected>September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="ValidFromMonth" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="enterpriseMetricValidFromYear" class="control-label">Valid for reporting from (Year)</label>
+                                <input type="number" id="enterpriseMetricValidFromYear" name="ValidFromYear" class="form-control" min="2025" max="2099" />
+                                <span class="text-danger field-validation-valid" data-valmsg-for="ValidFromYear" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        This metric will only appear in returns from the specified month onwards
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enterpriseMetricValidationRules" class="control-label">Validation rules</label>
+                        <textarea id="enterpriseMetricValidationRules" name="validationRulesJson" class="form-control" rows="6">{"required": true, "allowNull": false}</textarea>
+                        <small class="form-text text-muted">JSON format for validation rules</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script nonce="@Context.Items["Nonce"]">
+        function openCreateEnterpriseMetricModal() {
+            $('#enterpriseMetricModalLabel').text('Create enterprise metric');
+            $('#enterpriseMetricForm').attr('action', '@Url.Action("Create", "EnterpriseMetric")');
+            $('#enterpriseMetricId').val('');
+            $('#enterpriseMetricIdentifier').val('').prop('readonly', false);
+            $('#enterpriseMetricTitle').val('');
+            $('#enterpriseMetricDescription').val('');
+            $('#enterpriseMetricHintText').val('');
+            $('#enterpriseMetricValueType').val('@((int)Compass.Models.ValueType.Text)');
+            $('#enterpriseMetricValidFromMonth').val('9');
+            $('#enterpriseMetricValidFromYear').val('');
+            $('#enterpriseMetricValidationRules').val('{"required": true, "allowNull": false}');
+            $('#enterpriseMetricModal').modal('show');
+        }
+
+        function openEditEnterpriseMetricModal(id, identifier, title, description, hintText, valueType, validFromMonth, validFromYear, validationRules) {
+            $('#enterpriseMetricModalLabel').text('Edit enterprise metric');
+            $('#enterpriseMetricForm').attr('action', '@Url.Action("Edit", "EnterpriseMetric")');
+            $('#enterpriseMetricId').val(id);
+            $('#enterpriseMetricIdentifier').val(identifier).prop('readonly', true);
+            $('#enterpriseMetricTitle').val(title);
+            $('#enterpriseMetricDescription').val(description || '');
+            $('#enterpriseMetricHintText').val(hintText || '');
+            $('#enterpriseMetricValueType').val(valueType);
+            $('#enterpriseMetricValidFromMonth').val(validFromMonth);
+            $('#enterpriseMetricValidFromYear').val(validFromYear);
+            $('#enterpriseMetricValidationRules').val(validationRules || '{"required": true, "allowNull": false}');
+            $('#enterpriseMetricModal').modal('show');
+        }
+
+        $(document).on('click', '.edit-enterprise-metric', function(e) {
+            e.preventDefault();
+            var $item = $(this);
+            openEditEnterpriseMetricModal(
+                $item.data('id'),
+                $item.data('identifier'),
+                $item.data('title'),
+                $item.data('description'),
+                $item.data('hinttext'),
+                $item.data('valuetype'),
+                $item.data('validfrommonth'),
+                $item.data('validfromyear'),
+                $item.data('validationrules')
+            );
+        });
+
+        $('#enterpriseMetricValueType').on('change', function() {
+            var valueType = $(this).val();
+            var rulesTextarea = $('#enterpriseMetricValidationRules');
+            var currentRules = {};
+            
+            try {
+                currentRules = JSON.parse(rulesTextarea.val());
+            } catch (e) {
+                currentRules = {"required": true, "allowNull": false};
+            }
+            
+            if (valueType == '@((int)Compass.Models.ValueType.Number)') {
+                currentRules.minimumValue = 0;
+                currentRules.maximumValue = 100000000;
+                delete currentRules.decimalPlaces;
+            } else if (valueType == '@((int)Compass.Models.ValueType.Decimal)') {
+                currentRules.minimumValue = 0;
+                currentRules.maximumValue = 100000000;
+            } else if (valueType == '@((int)Compass.Models.ValueType.Percentage)') {
+                currentRules.minimumValue = 0;
+                currentRules.maximumValue = 100;
+            } else {
+                delete currentRules.minimumValue;
+                delete currentRules.maximumValue;
+                delete currentRules.decimalPlaces;
+            }
+            
+            rulesTextarea.val(JSON.stringify(currentRules, null, 2));
+        });
+
+        $('#enterpriseMetricModal').on('hidden.bs.modal', function () {
+            $('#enterpriseMetricForm')[0].reset();
+            $('.field-validation-valid').text('');
+        });
+    </script>
+}
 

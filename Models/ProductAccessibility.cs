@@ -43,6 +43,9 @@ namespace Compass.Models
         public bool IsActive { get; set; } = true;
         public bool IsDeleted { get; set; } = false;
         
+        // Legacy ID from old accessibility service
+        public int? LegacyId { get; set; } // Legacy product ID from old accessibility issues and statement service
+        
         // Navigation properties
         public ICollection<ContactMethod> ContactMethods { get; set; } = new List<ContactMethod>();
         public ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
