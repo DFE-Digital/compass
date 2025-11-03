@@ -22,6 +22,9 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation properties for role-based access control
+    public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
 }
 
 public enum UserRole

@@ -5,24 +5,11 @@
     var openIssues = Model.Issues.Count(i => i.Status != "resolved" && !i.IsDeleted);
     var resolvedIssues = Model.Issues.Count(i => i.Status == "resolved" && !i.IsDeleted);
     var totalIssues = Model.Issues.Count(i => !i.IsDeleted);
-    var levelAAIssues = Model.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
     
-    var complianceStatus = "Compliant";
-    var complianceBadge = "badge-success";
-    var complianceBgClass = "bg-success";
-    
-    if (levelAAIssues > 0)
-    {
-        complianceStatus = "Non-compliant";
-        complianceBadge = "badge-danger";
-        complianceBgClass = "bg-danger";
-    }
-    else if (openIssues > 0)
-    {
-        complianceStatus = "Partially compliant";
-        complianceBadge = "badge-warning";
-        complianceBgClass = "bg-warning";
-    }
+    // Get compliance status from ViewBag (calculated in controller)
+    var complianceStatus = ViewBag.ComplianceStatus as string ?? "Compliant";
+    var complianceBadge = ViewBag.ComplianceBadge as string ?? "badge-success";
+    var complianceBgClass = ViewBag.ComplianceBgClass as string ?? "bg-success";
     
     var statementStatus = (Model.StatementInstalled && Model.VerifiedAt.HasValue) ? "Verified" : "Not Verified";
     var statementBgClass = (Model.StatementInstalled && Model.VerifiedAt.HasValue) ? "bg-success" : "bg-warning";
@@ -30,6 +17,18 @@
 
 <!-- Summary Cards -->
 <div class="row">
+    <div class="col-lg-4 col-12">
+        <div class="small-box @complianceBgClass">
+            <div class="inner">
+                <h3 class="small-box-text-heading">@complianceStatus</h3>
+                <p>Compliance Status</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-clipboard-check"></i>
+            </div>
+            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "settings" })" class="small-box-footer">View settings <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
     <div class="col-lg-4 col-12">
         @{
             var issuesBgClass = openIssues == 0 ? "bg-success" : (openIssues < 5 ? "bg-warning" : "bg-danger");
@@ -44,18 +43,6 @@
                 <i class="fas @issuesIcon"></i>
             </div>
             <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" class="small-box-footer">View issues <i class="fas fa-arrow-circle-right"></i></a>
-        </div>
-    </div>
-    <div class="col-lg-4 col-12">
-        <div class="small-box @complianceBgClass">
-            <div class="inner">
-                <h3 class="small-box-text-heading">@complianceStatus</h3>
-                <p>Compliance Status</p>
-            </div>
-            <div class="icon">
-                <i class="fas fa-clipboard-check"></i>
-            </div>
-            <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "settings" })" class="small-box-footer">View settings <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     <div class="col-lg-4 col-12">
@@ -120,7 +107,7 @@
                             </td>
                               <td>
                                
-                                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })">View statement settings</a>
+                                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })">Manage</a>
                               
                                
                             </td>
@@ -139,7 +126,7 @@
                             </td>
                             <td>
                                
-                                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })">View statement settings</a>
+                                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "statement" })">Manage</a>
                                
                             </td>
                         </tr>
@@ -149,11 +136,12 @@
         </div>
 
         <!-- Recent Changes to Issues -->
-        <div class="card mb-4">
+        <div class="card collapsed-card mb-4">
             <div class="card-header">
                 <h3 class="card-title">Recent Changes to Issues</h3>
-                <div class="card-tools">
-                    <a asp-action="Details" asp-route-fipsId="@Model.FipsId" asp-route-tab="issues">View all issues</a>
+              <div class="card-tools">
+                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse"><i class="fas fa-plus"></i>
+                  </button>
                 </div>
             </div>
             <div class="card-body table-responsive p-0">
@@ -252,23 +240,6 @@
     
     <!-- Right Column -->
     <div class="col-lg-4">
-        <!-- Critical Issues Alert -->
-        @if (levelAAIssues > 0)
-        {
-            <div class="card bg-danger mb-4">
-                <div class="card-header border-0">
-                    <h3 class="card-title text-white">Critical Issues</h3>
-                </div>
-                <div class="card-body text-white">
-                    <h4 class="mb-2">@levelAAIssues Level A/AA Issue@(levelAAIssues != 1 ? "s" : "")</h4>
-                    <p class="mb-0">These must be resolved for WCAG @Model.WcagVersion Level @Model.WcagLevel compliance.</p>
-                </div>
-                <div class="card-footer bg-danger border-0">
-                    <a href="@Url.Action("Details", new { fipsId = Model.FipsId, tab = "issues" })" class="text-white">View all issues <i class="fas fa-arrow-circle-right"></i></a>
-                </div>
-            </div>
-        }
-        
         <!-- Recent Audits -->
         @if (Model.AuditHistories.Any(a => !a.IsDeleted))
         {
@@ -279,23 +250,37 @@
                         <a asp-action="Details" asp-route-fipsId="@Model.FipsId" asp-route-tab="audits">View all audits</a>
                     </div>
                 </div>
-                <div class="card-body">
-                    @foreach (var audit in Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3))
-                    {
-                        <div class="mb-3 pb-3 @(audit != Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3).Last() ? "border-bottom" : "")">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <strong class="d-block">@audit.AuditDate.ToString("dd MMM yyyy")</strong>
-                                    <span class="badge badge-@(audit.AuditType == "External" ? "primary" : "secondary")">@audit.AuditType</span>
-                                    <small class="text-muted d-block mt-1">@audit.AuditedBy</small>
-                                    @if (audit.Cost.HasValue)
-                                    {
-                                        <small class="text-muted">Cost: £@audit.Cost.Value.ToString("N2")</small>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
+                <div class="card-body p-0">
+                    <table class="table table-borderless mb-0 project-overview-summary">
+                        <tbody>
+                            @foreach (var audit in Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3))
+                            {
+                                <tr>
+                                    <td class="summary-label"><strong>@audit.AuditDate.ToString("dd MMM yyyy")</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-@(audit.AuditType == "External" ? "primary" : "secondary")">@audit.AuditType</span>
+                                    </td>
+                                </tr>
+                                @if (audit.Cost.HasValue)
+                                {
+                                    <tr>
+                                        <td class="summary-label"><strong>Cost</strong></td>
+                                        <td class="summary-value">£@audit.Cost.Value.ToString("N2")</td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <td class="summary-label"><strong>Audited By</strong></td>
+                                    <td class="summary-value"><small class="text-muted">@audit.AuditedBy</small></td>
+                                </tr>
+                                @if (audit != Model.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).Take(3).Last())
+                                {
+                                    <tr>
+                                        <td colspan="2"><hr class="my-2"></td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
                 </div>
             </div>
         }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using System.Text;
 
 namespace Compass.Controllers;
 
@@ -365,6 +366,10 @@ public class EnterpriseReportingController : Controller
             .OrderByDescending(fsa => fsa.AssessmentDate)
             .ToListAsync();
 
+        // Get all users to map AssessedBy email to Name
+        var allUsers = await _context.Users.ToListAsync();
+        var userMap = allUsers.ToDictionary(u => u.Email.ToLowerInvariant(), u => u.Name);
+
         // Calculate total criteria count for this standard
         var totalCriteria = standard.Themes?
             .Sum(t => t.PracticeAreas?.Sum(pa => pa.Criteria?.Count ?? 0) ?? 0) ?? 0;
@@ -378,12 +383,17 @@ public class EnterpriseReportingController : Controller
             var completedCount = assessment.CriteriaResponses.Count(r => r.Attainment.HasValue);
             var isComplete = completedCount == totalCriteria && totalCriteria > 0;
             
+            // Get user name from AssessedBy (which is email) or fall back to AssessedBy value
+            var assessedByEmail = assessment.AssessedBy.ToLowerInvariant();
+            var userName = userMap.ContainsKey(assessedByEmail) ? userMap[assessedByEmail] : assessment.AssessedBy;
+            
             var assessmentInfo = new
             {
                 Assessment = assessment,
                 CompletedCount = completedCount,
                 TotalCount = totalCriteria,
-                IsComplete = isComplete
+                IsComplete = isComplete,
+                UserName = userName
             };
 
             if (assessment.SubmittedAt.HasValue)
@@ -399,6 +409,7 @@ public class EnterpriseReportingController : Controller
         ViewBag.Standard = standard;
         ViewBag.InProgressAssessments = inProgressAssessments;
         ViewBag.SubmittedAssessments = submittedAssessments;
+        ViewBag.HasInProgressAssessment = inProgressAssessments.Any();
 
         return View("~/Views/EnterpriseReporting/FunctionalStandards/SelectStandard.cshtml");
     }
@@ -426,14 +437,43 @@ public class EnterpriseReportingController : Controller
             return RedirectToAction(nameof(FunctionalStandards));
         }
 
+        // Check if there's already an in-progress assessment
+        var existingInProgress = await _context.FunctionalStandardAssessments
+            .Where(fsa => fsa.FunctionalStandardId == standardId && !fsa.SubmittedAt.HasValue)
+            .AnyAsync();
+
+        if (existingInProgress)
+        {
+            TempData["ErrorMessage"] = "You cannot start a new assessment as one is already in progress";
+            return RedirectToAction(nameof(SelectStandard), new { standardId });
+        }
+
         try
         {
+            // Get current user email
+            var userEmail = User.Identity?.Name 
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+                ?? User.FindFirst("preferred_username")?.Value
+                ?? User.FindFirst("email")?.Value
+                ?? string.Empty;
+
+            // Get user name if available
+            var userName = userEmail;
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
+                if (user != null)
+                {
+                    userName = user.Name;
+                }
+            }
+
             // Create new assessment
             var assessment = new FunctionalStandardAssessment
             {
                 FunctionalStandardId = standardId,
                 AssessmentName = assessmentName,
-                AssessedBy = "Current User", // TODO: Get from authentication
+                AssessedBy = userEmail, // Store email for lookup
                 AssessmentDate = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -645,6 +685,101 @@ public class EnterpriseReportingController : Controller
         }
 
         return View("~/Views/EnterpriseReporting/FunctionalStandards/Summary.cshtml", assessment);
+    }
+
+    // GET: EnterpriseReporting/ExportAssessmentToExcel/5
+    public async Task<IActionResult> ExportAssessmentToExcel(int assessmentId)
+    {
+        var assessment = await _context.FunctionalStandardAssessments
+            .Include(fsa => fsa.FunctionalStandard)
+                .ThenInclude(fs => fs.Themes)
+                    .ThenInclude(t => t.PracticeAreas)
+                        .ThenInclude(pa => pa.Criteria)
+            .Include(fsa => fsa.CriteriaResponses)
+            .FirstOrDefaultAsync(fsa => fsa.Id == assessmentId);
+
+        if (assessment == null)
+        {
+            TempData["ErrorMessage"] = "Assessment not found";
+            return RedirectToAction(nameof(FunctionalStandards));
+        }
+
+        // Create CSV content
+        var csv = new StringBuilder();
+        
+        // Add header rows
+        csv.AppendLine("Functional Standard Assessment Export");
+        csv.AppendLine($"Assessment Name,{assessment.AssessmentName}");
+        csv.AppendLine($"Standard,{assessment.FunctionalStandard?.Title ?? "N/A"}");
+        csv.AppendLine($"Assessed By,{assessment.AssessedBy}");
+        csv.AppendLine($"Assessment Date,{assessment.AssessmentDate:yyyy-MM-dd HH:mm}");
+        if (assessment.SubmittedAt.HasValue)
+        {
+            csv.AppendLine($"Submitted Date,{assessment.SubmittedAt.Value:yyyy-MM-dd HH:mm}");
+        }
+        csv.AppendLine();
+        
+        // Add column headers
+        csv.AppendLine("Theme,Theme Title,Practice Area,Practice Area Title,Rating,Criteria Code,Criteria,Attainment,Notes");
+        
+        // Add data rows
+        if (assessment.FunctionalStandard?.Themes != null)
+        {
+            foreach (var theme in assessment.FunctionalStandard.Themes.OrderBy(t => t.ThemeId))
+            {
+                if (theme.PracticeAreas != null)
+                {
+                    foreach (var practiceArea in theme.PracticeAreas.OrderBy(pa => pa.PracticeAreaId))
+                    {
+                        if (practiceArea.Criteria != null)
+                        {
+                            foreach (var criterion in practiceArea.Criteria.OrderBy(c => c.CriteriaCode))
+                            {
+                                var response = assessment.CriteriaResponses
+                                    .FirstOrDefault(r => r.ThemeId == theme.ThemeId && 
+                                                        r.PracticeAreaId == practiceArea.PracticeAreaId &&
+                                                        r.CriteriaCode == criterion.CriteriaCode);
+                                
+                                var attainment = response?.Attainment switch
+                                {
+                                    AttainmentLevel.NotOrSeldomMet => "Not, or seldom met",
+                                    AttainmentLevel.PartiallyMet => "Partially met",
+                                    AttainmentLevel.FullyMet => "Fully met",
+                                    _ => ""
+                                };
+                                
+                                var notes = response?.Notes ?? "";
+                                
+                                // Escape quotes and commas in CSV
+                                var escapeCsv = new Func<string, string>(s => 
+                                {
+                                    if (string.IsNullOrEmpty(s)) return "";
+                                    if (s.Contains(",") || s.Contains("\"") || s.Contains("\n"))
+                                    {
+                                        return "\"" + s.Replace("\"", "\"\"") + "\"";
+                                    }
+                                    return s;
+                                });
+                                
+                                csv.AppendLine($"{theme.ThemeId},{escapeCsv(theme.Title)},{practiceArea.PracticeAreaId},{escapeCsv(practiceArea.Title)},{criterion.Rating},{criterion.CriteriaCode},{escapeCsv(criterion.Criteria)},{escapeCsv(attainment)},{escapeCsv(notes)}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Return as Excel-compatible CSV
+        var fileName = $"Assessment_{assessment.AssessmentName.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+        
+        // Add UTF-8 BOM for Excel compatibility
+        var bom = Encoding.UTF8.GetPreamble();
+        var fileBytes = new byte[bom.Length + bytes.Length];
+        Buffer.BlockCopy(bom, 0, fileBytes, 0, bom.Length);
+        Buffer.BlockCopy(bytes, 0, fileBytes, bom.Length, bytes.Length);
+        
+        return File(fileBytes, "text/csv", fileName);
     }
 
     #region Enterprise Metrics

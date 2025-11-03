@@ -9,6 +9,7 @@ using Compass.Data;
 using Compass.Middlewares;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +33,90 @@ if (args.Length > 0 && args[0] == "--seed-from-sqlite")
         ? args[2] 
         : "Development";
     await Compass.SeedFromSQLite.RunAsync(environment);
+    return;
+}
+
+// Check for GDD Framework seeding command
+if (args.Length > 0 && args[0] == "--seed-gdd-framework")
+{
+    var environment = "Development";
+    string? csvFilePath = null;
+
+    for (int i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--environment") environment = args[i + 1];
+        if (args[i] == "--csv-file") csvFilePath = args[i + 1];
+    }
+
+    await Compass.SeedGddFramework.RunAsync(environment, csvFilePath);
+    return;
+}
+
+// Check for query GDD roles command
+if (args.Length > 0 && args[0] == "--query-gdd-roles")
+{
+    var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
+    
+    var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
+    builder2.AddJsonFile("appsettings.json", optional: false);
+    builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
+    var config = builder2.Build();
+    
+    var options = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlServer(config.GetConnectionString("DefaultConnection"))
+        .Options;
+    using var db = new CompassDbContext(options);
+    
+    var roles = await db.GddRoles.OrderBy(r => r.RoleFamily).ThenBy(r => r.RoleName).ThenBy(r => r.RoleLevel).ToListAsync();
+    Console.WriteLine($"Total GDD Roles: {roles.Count}\n");
+    
+    Console.WriteLine("By Role Family:\n");
+    foreach (var family in roles.GroupBy(r => r.RoleFamily))
+    {
+        Console.WriteLine($"{family.Key}: {family.Count()} roles");
+        foreach (var role in family.Take(8))
+        {
+            Console.WriteLine($"  - {role.DisplayName}");
+        }
+        if (family.Count() > 8) Console.WriteLine($"  ... and {family.Count() - 8} more");
+        Console.WriteLine();
+    }
+    
+    Console.WriteLine("\nUnique Role Levels:");
+    var uniqueLevels = roles.Select(r => r.RoleLevel).Where(r => !string.IsNullOrEmpty(r)).Distinct().OrderBy(l => l).ToList();
+    Console.WriteLine($"Total unique levels: {uniqueLevels.Count}");
+    foreach (var level in uniqueLevels.Take(40))
+    {
+        Console.WriteLine($"  - {level}");
+    }
+    
+    return;
+}
+
+// Check for query Skills command
+if (args.Length > 0 && args[0] == "--query-skills")
+{
+    var environment = args.Length > 2 && args[1] == "--environment" ? args[2] : "Development";
+    
+    var builder2 = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
+    builder2.AddJsonFile("appsettings.json", optional: false);
+    builder2.AddJsonFile($"appsettings.{environment}.json", optional: true);
+    var config = builder2.Build();
+    
+    var options = new DbContextOptionsBuilder<CompassDbContext>()
+        .UseSqlServer(config.GetConnectionString("DefaultConnection"))
+        .Options;
+    using var db = new CompassDbContext(options);
+    
+    var skills = await db.Skills.OrderBy(s => s.SkillName).ToListAsync();
+    Console.WriteLine($"Total Skills: {skills.Count}\n");
+    
+    Console.WriteLine("First 20 Skills:\n");
+    foreach (var skill in skills.Take(20))
+    {
+        Console.WriteLine($"  - {skill.SkillName}");
+    }
+    
     return;
 }
 
@@ -114,6 +199,7 @@ builder.Services.AddDbContext<CompassDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorNumbersToAdd: null);
         sqlServerOptions.CommandTimeout(60);
+        sqlServerOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
     }));
 
 // Register HTTP clients for API services
@@ -143,6 +229,7 @@ builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -227,7 +314,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Configure HTTPS redirection
+// Skip in development since we're running on HTTP only (localhost:5500)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 
 // Add security headers
@@ -278,7 +370,10 @@ app.UseAuthorization();
 app.UseSession();
 app.UseRateLimiter();
 
-// API routes
+// Map controllers with attribute routing (must be called to enable attribute routing)
+app.MapControllers();
+
+// API routes (conventional routing for non-attribute controllers)
 app.MapControllerRoute(
     name: "api",
     pattern: "api/{controller}/{action=Index}/{id?}");
@@ -300,6 +395,12 @@ using (var scope = app.Services.CreateScope())
         // Apply any pending migrations
         await context.Database.MigrateAsync();
         
+        // Seed statement templates if they don't exist
+        await SeedStatementTemplatesAsync(context);
+        
+        // Seed RBAC initial data (groups, features, super admin)
+        await SeedRbacInitialDataAsync(context);
+        
         Console.WriteLine("Compass database initialized successfully");
     }
     catch (Exception ex)
@@ -310,6 +411,191 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context)
+{
+    const string superAdminEmail = "andy.jones@education.gov.uk";
+    const string centralOpsAdminGroupName = "Central Operations Admin";
+
+    // Check if already seeded
+    var centralOpsGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == centralOpsAdminGroupName);
+    
+    if (centralOpsGroup != null)
+    {
+        return; // Already seeded
+    }
+
+    Console.WriteLine("Seeding RBAC initial data...");
+
+    // Create or get super admin user
+    var superAdmin = await context.Users
+        .FirstOrDefaultAsync(u => u.Email.ToLower() == superAdminEmail.ToLower());
+
+    if (superAdmin == null)
+    {
+        superAdmin = new Compass.Models.User
+        {
+            Email = superAdminEmail,
+            Name = "Andy Jones",
+            Role = Compass.Models.UserRole.SuperAdmin,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Users.Add(superAdmin);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created super admin user: {superAdminEmail}");
+    }
+
+    // Create Central Operations Admin group
+    centralOpsGroup = new Compass.Models.Group
+    {
+        Name = centralOpsAdminGroupName,
+        Description = "Default administrative group with full access to all features",
+        IsActive = true,
+        IsSystemGroup = true,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        CreatedBy = "System",
+        UpdatedBy = "System"
+    };
+    context.Groups.Add(centralOpsGroup);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Created group: {centralOpsAdminGroupName}");
+
+    // Create default features if they don't exist
+    var defaultFeatures = new[]
+    {
+        new { Code = "delivery_reporting", Name = "Delivery Reporting", Description = "Delivery reporting functionality" },
+        new { Code = "risks", Name = "Risks", Description = "Risk management functionality" },
+        new { Code = "issues", Name = "Issues", Description = "Issue management functionality" },
+        new { Code = "actions", Name = "Actions", Description = "Action management functionality" },
+        new { Code = "objectives", Name = "Objectives", Description = "Objective management functionality" },
+        new { Code = "projects", Name = "Projects", Description = "Project management functionality" },
+        new { Code = "accessibility", Name = "Accessibility", Description = "Accessibility management functionality" },
+        new { Code = "surveys", Name = "Surveys", Description = "Survey management functionality" },
+        new { Code = "enterprise_reporting", Name = "Enterprise Reporting", Description = "Enterprise reporting functionality" },
+        new { Code = "group_management", Name = "Group Management", Description = "Group and permission management functionality" }
+    };
+
+    foreach (var featureData in defaultFeatures)
+    {
+        var feature = await context.Features
+            .FirstOrDefaultAsync(f => f.Code == featureData.Code);
+
+        if (feature == null)
+        {
+            feature = new Compass.Models.Feature
+            {
+                Name = featureData.Name,
+                Code = featureData.Code,
+                Description = featureData.Description,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            context.Features.Add(feature);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Created feature: {featureData.Name}");
+        }
+
+        // Grant all permissions to Central Operations Admin group for this feature
+        foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
+        {
+            // Check if permission already exists
+            var exists = await context.GroupFeaturePermissions
+                .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id && 
+                                gfp.FeatureId == feature.Id && 
+                                gfp.Permission == permission);
+            
+            if (!exists)
+            {
+                var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
+                {
+                    GroupId = centralOpsGroup.Id,
+                    FeatureId = feature.Id,
+                    Permission = permission,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = "System"
+                };
+                context.GroupFeaturePermissions.Add(groupFeaturePermission);
+            }
+        }
+    }
+
+    await context.SaveChangesAsync();
+
+    // Assign super admin to Central Operations Admin group
+    var userGroup = new Compass.Models.UserGroup
+    {
+        UserId = superAdmin.Id,
+        GroupId = centralOpsGroup.Id,
+        AssignedAt = DateTime.UtcNow,
+        AssignedBy = "System"
+    };
+    context.UserGroups.Add(userGroup);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Assigned super admin to {centralOpsAdminGroupName} group");
+    Console.WriteLine("✓ RBAC initial data seeding completed");
+}
+
+static async Task SeedStatementTemplatesAsync(Compass.Data.CompassDbContext context)
+{
+    // Check if templates already exist
+    if (await context.StatementTemplates.AnyAsync())
+    {
+        return; // Templates already seeded
+    }
+
+    // Get the markdown template files
+    var docsPath = Path.Combine(Directory.GetCurrentDirectory(), "docs");
+    var compliantPath = Path.Combine(docsPath, "statement.md");
+    var nonCompliantPath = Path.Combine(docsPath, "non-compliant.md");
+
+    // Seed compliant template
+    if (File.Exists(compliantPath))
+    {
+        var compliantContent = await File.ReadAllTextAsync(compliantPath);
+        var compliantTemplate = new Compass.Models.StatementTemplate
+        {
+            Name = "Compliant",
+            Version = 1,
+            Content = compliantContent,
+            Description = "Accessibility statement template for fully compliant products",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedAt = DateTime.UtcNow,
+            UpdatedBy = "System"
+        };
+        context.StatementTemplates.Add(compliantTemplate);
+    }
+
+    // Seed non-compliant template (used for both partially-compliant and non-compliant)
+    if (File.Exists(nonCompliantPath))
+    {
+        var nonCompliantContent = await File.ReadAllTextAsync(nonCompliantPath);
+        var nonCompliantTemplate = new Compass.Models.StatementTemplate
+        {
+            Name = "Non-compliant",
+            Version = 1,
+            Content = nonCompliantContent,
+            Description = "Accessibility statement template for partially-compliant and non-compliant products",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedAt = DateTime.UtcNow,
+            UpdatedBy = "System"
+        };
+        context.StatementTemplates.Add(nonCompliantTemplate);
+    }
+
+    if (context.ChangeTracker.HasChanges())
+    {
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Statement templates seeded successfully");
+    }
+}
 
 static async Task RunDataMigration(WebApplicationBuilder builder)
 {

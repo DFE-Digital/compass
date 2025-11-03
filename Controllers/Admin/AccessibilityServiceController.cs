@@ -894,6 +894,251 @@ namespace Compass.Controllers.Admin
 
             return View("~/Views/Admin/AccessibilityService/ProductDetails.cshtml", product);
         }
+
+        // GET: Admin/AccessibilityService/StatementTemplates
+        [HttpGet]
+        [Route("StatementTemplates")]
+        public async Task<IActionResult> StatementTemplates()
+        {
+            // Check authorization
+            if (!await IsAuthorizedAsync())
+            {
+                TempData["ErrorMessage"] = "You do not have permission to access this section.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            var templates = await _context.StatementTemplates
+                .Where(st => !st.IsDeleted)
+                .OrderBy(st => st.Name)
+                .ThenByDescending(st => st.Version)
+                .ToListAsync();
+
+            // Get pending retest count for navigation
+            var pendingRetestCount = await _context.AccessibilityRetestRequests
+                .CountAsync(rr => rr.IsCompleted == null);
+            ViewBag.PendingRetestCount = pendingRetestCount;
+
+            return View("~/Views/Admin/AccessibilityService/StatementTemplates.cshtml", templates);
+        }
+
+        // GET: Admin/AccessibilityService/StatementTemplateDetails/{id}
+        [HttpGet]
+        [Route("StatementTemplateDetails/{id}")]
+        public async Task<IActionResult> StatementTemplateDetails(int id)
+        {
+            // Check authorization
+            if (!await IsAuthorizedAsync())
+            {
+                TempData["ErrorMessage"] = "You do not have permission to access this section.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            var template = await _context.StatementTemplates
+                .FirstOrDefaultAsync(st => st.Id == id && !st.IsDeleted);
+
+            if (template == null)
+            {
+                TempData["ErrorMessage"] = "Statement template not found.";
+                return RedirectToAction(nameof(StatementTemplates));
+            }
+
+            // Get all versions of this template
+            var allVersions = await _context.StatementTemplates
+                .Where(st => st.Name == template.Name && !st.IsDeleted)
+                .OrderByDescending(st => st.Version)
+                .ToListAsync();
+
+            // Get pending retest count for navigation
+            var pendingRetestCount = await _context.AccessibilityRetestRequests
+                .CountAsync(rr => rr.IsCompleted == null);
+            ViewBag.PendingRetestCount = pendingRetestCount;
+            ViewBag.AllVersions = allVersions;
+
+            return View("~/Views/Admin/AccessibilityService/StatementTemplateDetails.cshtml", template);
+        }
+
+        // GET: Admin/AccessibilityService/EditStatementTemplate/{id}
+        [HttpGet]
+        [Route("EditStatementTemplate/{id}")]
+        public async Task<IActionResult> EditStatementTemplate(int id)
+        {
+            // Check authorization
+            if (!await IsAuthorizedAsync())
+            {
+                TempData["ErrorMessage"] = "You do not have permission to access this section.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            var template = await _context.StatementTemplates
+                .FirstOrDefaultAsync(st => st.Id == id && !st.IsDeleted);
+
+            if (template == null)
+            {
+                TempData["ErrorMessage"] = "Statement template not found.";
+                return RedirectToAction(nameof(StatementTemplates));
+            }
+
+            // Get pending retest count for navigation
+            var pendingRetestCount = await _context.AccessibilityRetestRequests
+                .CountAsync(rr => rr.IsCompleted == null);
+            ViewBag.PendingRetestCount = pendingRetestCount;
+
+            return View("~/Views/Admin/AccessibilityService/EditStatementTemplate.cshtml", template);
+        }
+
+        // POST: Admin/AccessibilityService/UpdateStatementTemplate
+        [HttpPost]
+        [Route("UpdateStatementTemplate")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateStatementTemplate(
+            int id,
+            string content,
+            string? description)
+        {
+            // Check authorization
+            if (!await IsAuthorizedAsync())
+            {
+                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            try
+            {
+                var existingTemplate = await _context.StatementTemplates
+                    .FirstOrDefaultAsync(st => st.Id == id && !st.IsDeleted);
+
+                if (existingTemplate == null)
+                {
+                    TempData["ErrorMessage"] = "Statement template not found.";
+                    return RedirectToAction(nameof(StatementTemplates));
+                }
+
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    TempData["ErrorMessage"] = "Template content is required.";
+                    return RedirectToAction(nameof(EditStatementTemplate), new { id });
+                }
+
+                // Check if content has changed
+                var contentChanged = existingTemplate.Content != content.Trim();
+                var descriptionChanged = existingTemplate.Description != description?.Trim();
+
+                if (!contentChanged && !descriptionChanged)
+                {
+                    TempData["SuccessMessage"] = "No changes were made.";
+                    return RedirectToAction(nameof(StatementTemplateDetails), new { id });
+                }
+
+                // If content changed, create a new version
+                if (contentChanged)
+                {
+                    // Deactivate old version
+                    existingTemplate.IsActive = false;
+                    existingTemplate.UpdatedAt = DateTime.UtcNow;
+                    existingTemplate.UpdatedBy = User.Identity?.Name;
+
+                    // Create new version
+                    var newVersion = new StatementTemplate
+                    {
+                        Name = existingTemplate.Name,
+                        Version = existingTemplate.Version + 1,
+                        Content = content.Trim(),
+                        Description = description?.Trim() ?? existingTemplate.Description,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = User.Identity?.Name,
+                        UpdatedAt = DateTime.UtcNow,
+                        UpdatedBy = User.Identity?.Name
+                    };
+
+                    _context.StatementTemplates.Add(newVersion);
+                    await _context.SaveChangesAsync();
+
+                    TempData["SuccessMessage"] = $"Statement template updated successfully. New version {newVersion.Version} created.";
+                    return RedirectToAction(nameof(StatementTemplateDetails), new { id = newVersion.Id });
+                }
+                else
+                {
+                    // Only description changed, update existing version
+                    existingTemplate.Description = description?.Trim();
+                    existingTemplate.UpdatedAt = DateTime.UtcNow;
+                    existingTemplate.UpdatedBy = User.Identity?.Name;
+
+                    await _context.SaveChangesAsync();
+
+                    TempData["SuccessMessage"] = "Statement template description updated successfully.";
+                    return RedirectToAction(nameof(StatementTemplateDetails), new { id });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating statement template {TemplateId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the statement template.";
+                return RedirectToAction(nameof(EditStatementTemplate), new { id });
+            }
+        }
+
+        // POST: Admin/AccessibilityService/CreateStatementTemplate
+        [HttpPost]
+        [Route("CreateStatementTemplate")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateStatementTemplate(
+            string name,
+            string content,
+            string? description)
+        {
+            // Check authorization
+            if (!await IsAuthorizedAsync())
+            {
+                TempData["ErrorMessage"] = "You do not have permission to perform this action.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(content))
+                {
+                    TempData["ErrorMessage"] = "Template name and content are required.";
+                    return RedirectToAction(nameof(StatementTemplates));
+                }
+
+                // Check if template name already exists
+                var existing = await _context.StatementTemplates
+                    .Where(st => st.Name == name.Trim() && !st.IsDeleted)
+                    .FirstOrDefaultAsync();
+
+                if (existing != null)
+                {
+                    TempData["ErrorMessage"] = $"A template with the name '{name.Trim()}' already exists.";
+                    return RedirectToAction(nameof(StatementTemplates));
+                }
+
+                var template = new StatementTemplate
+                {
+                    Name = name.Trim(),
+                    Version = 1,
+                    Content = content.Trim(),
+                    Description = description?.Trim(),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = User.Identity?.Name,
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedBy = User.Identity?.Name
+                };
+
+                _context.StatementTemplates.Add(template);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Statement template created successfully.";
+                return RedirectToAction(nameof(StatementTemplateDetails), new { id = template.Id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating statement template");
+                TempData["ErrorMessage"] = "An error occurred while creating the statement template.";
+                return RedirectToAction(nameof(StatementTemplates));
+            }
+        }
     }
 }
 

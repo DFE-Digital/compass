@@ -47,6 +47,9 @@ public class Project
     [MaxLength(100)]
     public string? BusinessArea { get; set; }
 
+    [MaxLength(100)]
+    public string? HistoricBuRTId { get; set; }
+
     // Organizational structure fields
     public int? PrimaryOrganizationalGroupId { get; set; }
     public OrganizationalGroup? PrimaryOrganizationalGroup { get; set; }

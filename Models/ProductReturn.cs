@@ -38,6 +38,7 @@ public enum ReturnStatus
     Upcoming = 0,
     Due = 1,
     Late = 2,
-    Submitted = 3
+    Submitted = 3,
+    Draft = 4
 }
 

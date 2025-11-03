@@ -1,0 +1,159 @@
+@model IEnumerable<Compass.Models.User>
+@{
+    ViewData["Title"] = "Manage User Permissions";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Admin">Admin</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">User Management</a></li>
+                    <li class="breadcrumb-item active">Manage User Permissions</li>
+                </ol>
+                <h1 class="m-0">Manage User Permissions</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Users and Their Permissions</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model != null && Model.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Groups</th>
+                                <th>Permissions Summary</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in Model)
+                            {
+                                var userGroups = user.UserGroups.Where(ug => ug.Group.IsActive).ToList();
+                                var groups = userGroups.Select(ug => ug.Group).ToList();
+                                var isSuperAdmin = user.Email.Equals("andy.jones@education.gov.uk", StringComparison.OrdinalIgnoreCase);
+                                var hasCentralOpsAdmin = groups.Any(g => g.Name.Equals("Central Operations Admin", StringComparison.OrdinalIgnoreCase));
+                                
+                                <tr>
+                                    <td>
+                                        <strong>@user.Name</strong>
+                                        @if (isSuperAdmin)
+                                        {
+                                            <span class="badge badge-danger ml-2">Super Admin</span>
+                                        }
+                                    </td>
+                                    <td>@user.Email</td>
+                                    <td>
+                                        @if (groups.Any())
+                                        {
+                                            @foreach (var userGroup in userGroups.OrderBy(ug => ug.Group.Name))
+                                            {
+                                                <div class="mb-2 d-flex align-items-center">
+                                                    <span class="badge badge-primary mr-2">@userGroup.Group.Name</span>
+                                                    <form asp-action="RemoveUserFromGroupFromPermissions" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove @user.Name from the @userGroup.Group.Name group?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="groupId" value="@userGroup.GroupId" />
+                                                        <input type="hidden" name="userId" value="@user.Id" />
+                                                        <button type="submit" class="btn btn-xs btn-danger" style="padding: 1px 5px; font-size: 0.7rem;" title="Remove from @userGroup.Group.Name">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </form>
+                                                    @if (userGroup.Group.IsSystemGroup)
+                                                    {
+                                                        <small class="text-muted ml-2"><i class="fas fa-lock"></i> System group</small>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No groups assigned</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isSuperAdmin || hasCentralOpsAdmin)
+                                        {
+                                            <span class="badge badge-success">Full Access (All Features)</span>
+                                        }
+                                        else if (groups.Any())
+                                        {
+                                            var allPermissions = groups
+                                                .SelectMany(g => g.GroupFeaturePermissions)
+                                                .Where(gfp => gfp.Feature.IsActive)
+                                                .GroupBy(gfp => gfp.Feature.Name)
+                                                .Select(g => new { Feature = g.Key, Permissions = g.Select(p => p.Permission).Distinct() })
+                                                .OrderBy(f => f.Feature)
+                                                .ToList();
+                                            
+                                            if (allPermissions.Any())
+                                            {
+                                                <div class="small">
+                                                    @foreach (var perm in allPermissions)
+                                                    {
+                                                        <div class="mb-1">
+                                                            <strong>@perm.Feature:</strong>
+                                                            @foreach (var pType in perm.Permissions)
+                                                            {
+                                                                <span class="badge badge-secondary">@pType</span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">No permissions assigned</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No permissions</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        <a asp-action="Groups" class="btn btn-sm btn-primary" title="Manage groups">
+                                            <i class="fas fa-users-cog"></i> Manage Groups
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="alert alert-info m-3">
+                        <i class="fas fa-info-circle"></i> No users found.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>

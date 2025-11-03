@@ -73,6 +73,8 @@ namespace Compass.Controllers
             // Load all products with issues and audits for summary calculations
             var allProducts = await _context.ProductAccessibilities
                 .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
+                    .ThenInclude(i => i.WcagCriteriaLinks)
+                        .ThenInclude(link => link.WcagCriterion)
                 .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
                 .Where(pa => !pa.IsDeleted && pa.IsActive)
                 .ToListAsync();
@@ -153,16 +155,67 @@ namespace Compass.Controllers
                             i.PlannedResolutionDate.Value < DateTime.UtcNow.Date);
                         isVerified = enrolled.StatementInstalled && enrolled.VerifiedAt.HasValue;
                         
-                        var levelAAIssues = enrolled.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
-                        if (levelAAIssues > 0)
+                        // Calculate compliance status with WCAG criteria percentage
+                        var openIssues = enrolled.Issues.Where(i => i.Status != "resolved" && !i.IsDeleted).ToList();
+                        if (!openIssues.Any())
                         {
-                            complianceStatus = "non-compliant";
-                            complianceBadge = "badge-danger";
+                            complianceStatus = "compliant";
+                            complianceBadge = "badge-success";
                         }
-                        else if (openIssuesCount > 0)
+                        else
                         {
-                            complianceStatus = "partially compliant";
-                            complianceBadge = "badge-warning";
+                            // Get distinct WCAG criteria that have issues
+                            var distinctCriteriaWithIssues = openIssues
+                                .Where(i => i.IssueType == "WCAG" && 
+                                            (i.WcagCriteriaLinks.Any() || !string.IsNullOrEmpty(i.WcagCriteria)))
+                                .SelectMany(i => i.WcagCriteriaLinks.Any() 
+                                    ? i.WcagCriteriaLinks.Select(link => link.WcagCriterion.Criterion)
+                                    : new[] { i.WcagCriteria ?? "" })
+                                .Where(c => !string.IsNullOrEmpty(c))
+                                .Distinct()
+                                .ToList();
+
+                            var distinctCriteriaCount = distinctCriteriaWithIssues.Count;
+
+                            // Get total distinct WCAG criteria for the product's WCAG version and level
+                            var totalDistinctCriteria = await _context.WcagCriteria
+                                .Where(wc => wc.Version == enrolled.WcagVersion && 
+                                            wc.Level == enrolled.WcagLevel && 
+                                            wc.IsActive)
+                                .Select(wc => wc.Criterion)
+                                .Distinct()
+                                .CountAsync();
+
+                            if (totalDistinctCriteria == 0)
+                            {
+                                // Fallback if no criteria found - treat any open issue as partially compliant
+                                complianceStatus = openIssues.Any() ? "partially compliant" : "compliant";
+                                complianceBadge = openIssues.Any() ? "badge-warning" : "badge-success";
+                            }
+                            else
+                            {
+                                // Calculate percentage: more than 50% = non-compliant
+                                var threshold = totalDistinctCriteria / 2.0;
+                                
+                                if (distinctCriteriaCount > threshold)
+                                {
+                                    // More than half of distinct criteria have issues = non-compliant
+                                    complianceStatus = "non-compliant";
+                                    complianceBadge = "badge-danger";
+                                }
+                                else if (distinctCriteriaCount > 0)
+                                {
+                                    // 1 or more but less than or equal to half = partially-compliant
+                                    complianceStatus = "partially compliant";
+                                    complianceBadge = "badge-warning";
+                                }
+                                else
+                                {
+                                    // 0 distinct criteria with issues = compliant
+                                    complianceStatus = "compliant";
+                                    complianceBadge = "badge-success";
+                                }
+                            }
                         }
                         
                         lastAudit = enrolled.AuditHistories.Where(a => !a.IsDeleted).OrderByDescending(a => a.AuditDate).FirstOrDefault();
@@ -447,11 +500,113 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
             }
             
+            // Calculate compliance status with WCAG criteria percentage
+            var complianceStatus = "compliant";
+            var complianceBadge = "badge-success";
+            var complianceBgClass = "bg-success";
+            
+            var openIssues = productAccessibility.Issues.Where(i => i.Status != "resolved" && !i.IsDeleted).ToList();
+            if (!openIssues.Any())
+            {
+                complianceStatus = "Compliant";
+                complianceBadge = "badge-success";
+                complianceBgClass = "bg-success";
+            }
+            else
+            {
+                // Get distinct WCAG criteria that have issues
+                var distinctCriteriaWithIssues = openIssues
+                    .Where(i => i.IssueType == "WCAG" && 
+                                (i.WcagCriteriaLinks.Any() || !string.IsNullOrEmpty(i.WcagCriteria)))
+                    .SelectMany(i => i.WcagCriteriaLinks.Any() 
+                        ? i.WcagCriteriaLinks.Select(link => link.WcagCriterion.Criterion)
+                        : new[] { i.WcagCriteria ?? "" })
+                    .Where(c => !string.IsNullOrEmpty(c))
+                    .Distinct()
+                    .ToList();
+
+                var distinctCriteriaCount = distinctCriteriaWithIssues.Count;
+
+                // Get total distinct WCAG criteria for the product's WCAG version and level
+                var totalDistinctCriteria = await _context.WcagCriteria
+                    .Where(wc => wc.Version == productAccessibility.WcagVersion && 
+                                wc.Level == productAccessibility.WcagLevel && 
+                                wc.IsActive)
+                    .Select(wc => wc.Criterion)
+                    .Distinct()
+                    .CountAsync();
+
+                if (totalDistinctCriteria == 0)
+                {
+                    // Fallback if no criteria found - treat any open issue as partially compliant
+                    complianceStatus = openIssues.Any() ? "Partially compliant" : "Compliant";
+                    complianceBadge = openIssues.Any() ? "badge-warning" : "badge-success";
+                    complianceBgClass = openIssues.Any() ? "bg-warning" : "bg-success";
+                }
+                else
+                {
+                    // Calculate percentage: more than 50% = non-compliant
+                    var threshold = totalDistinctCriteria / 2.0;
+                    
+                    if (distinctCriteriaCount > threshold)
+                    {
+                        // More than half of distinct criteria have issues = non-compliant
+                        complianceStatus = "Non-compliant";
+                        complianceBadge = "badge-danger";
+                        complianceBgClass = "bg-danger";
+                    }
+                    else if (distinctCriteriaCount > 0)
+                    {
+                        // 1 or more but less than or equal to half = partially-compliant
+                        complianceStatus = "Partially compliant";
+                        complianceBadge = "badge-warning";
+                        complianceBgClass = "bg-warning";
+                    }
+                    else
+                    {
+                        // 0 distinct criteria with issues = compliant
+                        complianceStatus = "Compliant";
+                        complianceBadge = "badge-success";
+                        complianceBgClass = "bg-success";
+                    }
+                }
+            }
+            
             // Pass CMS product data to view (for Product URL)
             ViewBag.CmsProduct = productInfo;
+            ViewBag.ComplianceStatus = complianceStatus;
+            ViewBag.ComplianceBadge = complianceBadge;
+            ViewBag.ComplianceBgClass = complianceBgClass;
             
             ViewBag.CurrentTab = tab;
             return View("~/Views/Apps/Accessibility/Details.cshtml", productAccessibility);
+        }
+
+        // GET: Accessibility/ViewIssue/{id}?fipsId={fipsId}
+        public async Task<IActionResult> ViewIssue(int id, string fipsId)
+        {
+            var issue = await _context.AccessibilityIssues
+                .Include(i => i.ProductAccessibility)
+                .Include(i => i.Comments.Where(c => !c.IsDeleted))
+                .Include(i => i.History.OrderByDescending(h => h.ChangedAt))
+                .Include(i => i.WcagCriteriaLinks)
+                    .ThenInclude(link => link.WcagCriterion)
+                .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+            
+            if (issue == null)
+            {
+                return NotFound();
+            }
+            
+            // Verify the issue belongs to the correct product
+            if (issue.ProductAccessibility.FipsId != fipsId)
+            {
+                return NotFound();
+            }
+            
+            ViewBag.FipsId = fipsId;
+            ViewBag.ProductName = issue.ProductAccessibility.ProductName;
+            return View("~/Views/Apps/Accessibility/IssueDetails.cshtml", issue);
         }
 
         // GET: Accessibility/Enroll
@@ -788,14 +943,24 @@ namespace Compass.Controllers
                 // Track changes
                 var changes = new List<IssueHistory>();
                 
-                if (issue.WcagCriteria != updatedIssue.WcagCriteria)
+                if (issue.IssueDescription != updatedIssue.IssueDescription)
                 {
                     changes.Add(new IssueHistory { 
-                        FieldChanged = "WCAG Criteria", 
-                        OldValue = issue.WcagCriteria, 
-                        NewValue = updatedIssue.WcagCriteria 
+                        FieldChanged = "Description", 
+                        OldValue = issue.IssueDescription ?? "", 
+                        NewValue = updatedIssue.IssueDescription ?? "" 
                     });
-                    issue.WcagCriteria = updatedIssue.WcagCriteria;
+                    issue.IssueDescription = updatedIssue.IssueDescription;
+                }
+                
+                if (issue.Status != updatedIssue.Status)
+                {
+                    changes.Add(new IssueHistory { 
+                        FieldChanged = "Status", 
+                        OldValue = issue.Status, 
+                        NewValue = updatedIssue.Status 
+                    });
+                    issue.Status = updatedIssue.Status;
                 }
                 
                 if (issue.IsResolving != updatedIssue.IsResolving)
@@ -818,26 +983,53 @@ namespace Compass.Controllers
                     issue.PlannedResolutionDate = updatedIssue.PlannedResolutionDate;
                 }
                 
-                if (issue.Status != updatedIssue.Status)
+                if (issue.NonResolutionReason != updatedIssue.NonResolutionReason)
                 {
                     changes.Add(new IssueHistory { 
-                        FieldChanged = "Status", 
-                        OldValue = issue.Status, 
-                        NewValue = updatedIssue.Status 
+                        FieldChanged = "Reason Not Resolving", 
+                        OldValue = issue.NonResolutionReason ?? "", 
+                        NewValue = updatedIssue.NonResolutionReason ?? "" 
                     });
-                    issue.Status = updatedIssue.Status;
+                    issue.NonResolutionReason = updatedIssue.NonResolutionReason;
                 }
                 
-                // Update other fields
+                if (issue.ActualResolutionDate != updatedIssue.ActualResolutionDate)
+                {
+                    changes.Add(new IssueHistory { 
+                        FieldChanged = "Closure Date", 
+                        OldValue = issue.ActualResolutionDate?.ToString("yyyy-MM-dd"), 
+                        NewValue = updatedIssue.ActualResolutionDate?.ToString("yyyy-MM-dd") 
+                    });
+                    issue.ActualResolutionDate = updatedIssue.ActualResolutionDate;
+                }
+                
+                if (issue.ResolutionNotes != updatedIssue.ResolutionNotes)
+                {
+                    changes.Add(new IssueHistory { 
+                        FieldChanged = issue.Status == "closed" ? "Closure Explanation" : "Resolution Notes", 
+                        OldValue = issue.ResolutionNotes ?? "", 
+                        NewValue = updatedIssue.ResolutionNotes ?? "" 
+                    });
+                    issue.ResolutionNotes = updatedIssue.ResolutionNotes;
+                }
+                
+                if (issue.VerificationNotes != updatedIssue.VerificationNotes)
+                {
+                    changes.Add(new IssueHistory { 
+                        FieldChanged = "Verification Notes", 
+                        OldValue = issue.VerificationNotes ?? "", 
+                        NewValue = updatedIssue.VerificationNotes ?? "" 
+                    });
+                    issue.VerificationNotes = updatedIssue.VerificationNotes;
+                }
+                
+                // Update other fields (no history tracking needed for these)
+                issue.IssueTitle = updatedIssue.IssueTitle;
+                issue.WcagCriteria = updatedIssue.WcagCriteria;
                 issue.WcagLevel = updatedIssue.WcagLevel;
                 issue.WcagVersion = updatedIssue.WcagVersion;
                 issue.IdentifiedDate = updatedIssue.IdentifiedDate;
                 issue.IdentifiedVia = updatedIssue.IdentifiedVia;
-                issue.IssueDescription = updatedIssue.IssueDescription;
-                issue.NonResolutionReason = updatedIssue.NonResolutionReason;
-                issue.ActualResolutionDate = updatedIssue.ActualResolutionDate;
-                issue.ResolutionNotes = updatedIssue.ResolutionNotes;
-                issue.VerificationNotes = updatedIssue.VerificationNotes;
                 issue.UpdatedAt = DateTime.UtcNow;
                 issue.UpdatedBy = User.Identity?.Name;
                 
@@ -854,12 +1046,13 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue updated successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating accessibility issue");
-                return Json(new { success = false, message = "Error updating issue" });
+                TempData["ErrorMessage"] = "An error occurred while updating the issue.";
+                return RedirectToAction(nameof(ViewIssue), new { id });
             }
         }
 
@@ -893,6 +1086,72 @@ namespace Compass.Controllers
             {
                 _logger.LogError(ex, "Error deleting accessibility issue");
                 return Json(new { success = false, message = "Error deleting issue" });
+            }
+        }
+
+        // POST: Accessibility/CloseIssue
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CloseIssue(int id, DateTime closureDate, string closureExplanation, string? changeNote)
+        {
+            try
+            {
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+                
+                if (issue == null)
+                {
+                    return NotFound();
+                }
+                
+                var oldStatus = issue.Status;
+                issue.Status = "closed";
+                issue.ActualResolutionDate = closureDate;
+                issue.ResolutionNotes = closureExplanation;
+                issue.UpdatedAt = DateTime.UtcNow;
+                issue.UpdatedBy = User.Identity?.Name;
+                
+                // Add history entry
+                var history = new IssueHistory
+                {
+                    AccessibilityIssueId = issue.Id,
+                    FieldChanged = "Status",
+                    OldValue = oldStatus,
+                    NewValue = "closed",
+                    ChangeNote = changeNote,
+                    ChangedAt = DateTime.UtcNow,
+                    ChangedBy = User.Identity?.Name
+                };
+                _context.IssueHistories.Add(history);
+                
+                // Also track closure date change
+                var oldActualResolutionDate = issue.ActualResolutionDate;
+                if (!oldActualResolutionDate.HasValue || oldActualResolutionDate.Value != closureDate)
+                {
+                    var dateHistory = new IssueHistory
+                    {
+                        AccessibilityIssueId = issue.Id,
+                        FieldChanged = "Closure Date",
+                        OldValue = oldActualResolutionDate?.ToString("yyyy-MM-dd"),
+                        NewValue = closureDate.ToString("yyyy-MM-dd"),
+                        ChangeNote = null,
+                        ChangedAt = DateTime.UtcNow,
+                        ChangedBy = User.Identity?.Name
+                    };
+                    _context.IssueHistories.Add(dateHistory);
+                }
+                
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = "Issue closed successfully.";
+                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error closing accessibility issue");
+                TempData["ErrorMessage"] = "An error occurred while closing the issue.";
+                return RedirectToAction(nameof(ViewIssue), new { id });
             }
         }
 
@@ -955,7 +1214,7 @@ namespace Compass.Controllers
         // POST: Accessibility/AddComment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddComment(int issueId, string commentText)
+        public async Task<IActionResult> AddComment(int issueId, string commentText, string? fipsId)
         {
             try
             {
@@ -979,13 +1238,17 @@ namespace Compass.Controllers
                 _context.IssueComments.Add(comment);
                 await _context.SaveChangesAsync();
                 
+                // Use provided fipsId or get from issue
+                var redirectFipsId = fipsId ?? issue.ProductAccessibility.FipsId;
                 TempData["SuccessMessage"] = "Comment added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding comment");
-                return Json(new { success = false, message = "Error adding comment" });
+                TempData["ErrorMessage"] = "An error occurred while adding the comment.";
+                var redirectFipsId = fipsId ?? "unknown";
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
             }
         }
 
@@ -1082,6 +1345,53 @@ namespace Compass.Controllers
             {
                 _logger.LogError(ex, "Error updating WCAG compliance");
                 TempData["ErrorMessage"] = "An error occurred while updating WCAG compliance.";
+                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+            }
+        }
+
+        // POST: Accessibility/UpdateLegacyId
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateLegacyId(string fipsId, int? legacyId)
+        {
+            try
+            {
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                
+                if (productAccessibility == null)
+                {
+                    return NotFound();
+                }
+                
+                // If legacyId is provided, check if it's already used by another product
+                if (legacyId.HasValue)
+                {
+                    var existingProduct = await _context.ProductAccessibilities
+                        .FirstOrDefaultAsync(pa => pa.LegacyId == legacyId.Value && pa.Id != productAccessibility.Id && !pa.IsDeleted);
+                    
+                    if (existingProduct != null)
+                    {
+                        TempData["ErrorMessage"] = $"Legacy ID {legacyId.Value} is already assigned to another product.";
+                        return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+                    }
+                }
+                
+                productAccessibility.LegacyId = legacyId;
+                productAccessibility.UpdatedAt = DateTime.UtcNow;
+                productAccessibility.UpdatedBy = User.Identity?.Name;
+                
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = legacyId.HasValue 
+                    ? $"Legacy ID updated successfully to {legacyId.Value}."
+                    : "Legacy ID removed successfully.";
+                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating legacy ID");
+                TempData["ErrorMessage"] = "An error occurred while updating legacy ID.";
                 return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
             }
         }

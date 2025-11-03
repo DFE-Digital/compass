@@ -1,0 +1,225 @@
+@model Compass.Models.StatementTemplate
+@{
+    ViewData["Title"] = "Statement Template Details";
+    var allVersions = ViewBag.AllVersions as List<Compass.Models.StatementTemplate> ?? new List<Compass.Models.StatementTemplate>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Settings", "Admin")">Settings</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index")">Accessibility Issues Service</a></li>
+                        <li class="breadcrumb-item"><a href="@Url.Action("StatementTemplates")">Statement Templates</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">@Model.Name</li>
+                    </ol>
+                </nav>
+                <h1 class="m-0">@Model.Name - Version @Model.Version</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Navigation Pills -->
+            <div class="col-lg-3 col-md-4 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="nav nav-pills flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("Index")">
+                                    Products
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("RetestRequests")">
+                                    Retest Requests
+                                    @if (ViewBag.PendingRetestCount != null && (int)ViewBag.PendingRetestCount > 0)
+                                    {
+                                        <span class="badge bg-danger float-right ml-2">@ViewBag.PendingRetestCount</span>
+                                    }
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="@Url.Action("EmailConfigurations")">
+                                    Email Configuration
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link active" href="@Url.Action("StatementTemplates")">
+                                    Statement Templates
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-lg-9 col-md-8 col-12">
+                <!-- Template Information -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Template Information
+                            @if (Model.IsActive)
+                            {
+                                <a href="@Url.Action("EditStatementTemplate", new { id = Model.Id })" 
+                                   class="ml-2 text-decoration-none">
+                                    Edit Template
+                                </a>
+                            }
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th style="width: 200px;">Template Name:</th>
+                                <td><strong>@Model.Name</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Version:</th>
+                                <td>
+                                    <span class="badge bg-info">@Model.Version</span>
+                                    @if (Model.IsActive)
+                                    {
+                                        <span class="badge bg-success ml-2">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary ml-2">Inactive</span>
+                                    }
+                                </td>
+                            </tr>
+                            @if (!string.IsNullOrEmpty(Model.Description))
+                            {
+                                <tr>
+                                    <th>Description:</th>
+                                    <td>@Model.Description</td>
+                                </tr>
+                            }
+                            <tr>
+                                <th>Created:</th>
+                                <td>
+                                    @Model.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                    @if (!string.IsNullOrEmpty(Model.CreatedBy))
+                                    {
+                                        <span class="text-muted">by @Model.CreatedBy</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Last Updated:</th>
+                                <td>
+                                    @Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")
+                                    @if (!string.IsNullOrEmpty(Model.UpdatedBy))
+                                    {
+                                        <span class="text-muted">by @Model.UpdatedBy</span>
+                                    }
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Template Content -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Template Content</h3>
+                    </div>
+                    <div class="card-body">
+                        <pre class="bg-light p-3" style="white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto;">@Model.Content</pre>
+                    </div>
+                </div>
+
+                <!-- Version History -->
+                @if (allVersions.Count > 1)
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Version History</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Version</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Updated</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var version in allVersions)
+                                    {
+                                        <tr class="@(version.Id == Model.Id ? "table-active" : "")">
+                                            <td>
+                                                <span class="badge bg-info">v@(version.Version)</span>
+                                                @if (version.Id == Model.Id)
+                                                {
+                                                    <span class="badge bg-primary">Current</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (version.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Inactive</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <small>@version.CreatedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                                @if (!string.IsNullOrEmpty(version.CreatedBy))
+                                                {
+                                                    <br><small class="text-muted">@version.CreatedBy</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                <small>@version.UpdatedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("StatementTemplateDetails", new { id = version.Id })" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
