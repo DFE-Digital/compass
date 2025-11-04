@@ -24,9 +24,10 @@ public class GraphService : IGraphService
         _cache = cache;
 
         // Try to initialize Graph client
-        var tenantId = configuration["AzureAd:TenantId"];
-        var clientId = configuration["AzureAd:ClientId"];
-        var clientSecret = configuration["AzureAd:ClientSecret"];
+        // Use Entra section for Graph API credentials (separate from AzureAd auth)
+        var tenantId = configuration["Entra:TenantId"];
+        var clientId = configuration["Entra:ClientId"];
+        var clientSecret = configuration["Entra:ClientSecret"];
 
         if (!string.IsNullOrEmpty(tenantId) &&
             !string.IsNullOrEmpty(clientId) &&
@@ -67,31 +68,125 @@ public class GraphService : IGraphService
             {
                 _logger.LogInformation("Searching Entra ID for: {SearchTerm}", searchTerm);
 
-                // Search users in Entra ID
-                var users = await _graphClient.Users
-                    .GetAsync(requestConfiguration =>
-                    {
-                        // Build filter query
-                        if (!string.IsNullOrEmpty(searchTerm))
-                        {
-                            requestConfiguration.QueryParameters.Filter =
-                                $"startswith(displayName,'{searchTerm}') or startswith(givenName,'{searchTerm}') or startswith(surname,'{searchTerm}') or startswith(mail,'{searchTerm}') or startswith(userPrincipalName,'{searchTerm}')";
-                        }
-                        requestConfiguration.QueryParameters.Select = new[] { "displayName", "mail", "jobTitle", "department", "userPrincipalName" };
-                        requestConfiguration.QueryParameters.Top = maxResults;
-                        // Note: Orderby not supported with complex filters, so we sort in-memory instead
-                    });
+                var allResults = new List<Microsoft.Graph.Models.User>();
 
-                if (users?.Value == null || users.Value.Count == 0)
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    // Use startswith filters with multiple case variations for better matching
+                    // User.ReadBasic.All supports startswith but not contains
+                    var escapedTerm = searchTerm.Replace("'", "''");
+                    
+                    // Build filter with startswith (case-sensitive, so we try multiple variations)
+                    // We'll also search across multiple fields
+                    var searchLower = searchTerm.ToLower();
+                    var searchUpper = searchTerm.ToUpper();
+                    var searchTitleCase = char.ToUpper(searchTerm[0]) + searchTerm.Substring(1).ToLower();
+                    
+                    var filterParts = new List<string>();
+                    
+                    // Try different case variations for each field
+                    foreach (var field in new[] { "displayName", "givenName", "surname", "mail", "userPrincipalName" })
+                    {
+                        filterParts.Add($"startswith({field},'{escapedTerm}')");
+                        filterParts.Add($"startswith({field},'{searchLower}')");
+                        filterParts.Add($"startswith({field},'{searchUpper}')");
+                        filterParts.Add($"startswith({field},'{searchTitleCase}')");
+                    }
+                    
+                    var filter = string.Join(" or ", filterParts.Distinct());
+                    
+                    try
+                    {
+                        // Get users matching the filter
+                        var users = await _graphClient.Users
+                            .GetAsync(requestConfiguration =>
+                            {
+                                requestConfiguration.QueryParameters.Filter = filter;
+                                requestConfiguration.QueryParameters.Select = new[] { "displayName", "mail", "jobTitle", "department", "userPrincipalName", "givenName", "surname" };
+                                requestConfiguration.QueryParameters.Top = maxResults * 2; // Get more to filter client-side
+                            });
+
+                        if (users?.Value != null && users.Value.Count > 0)
+                        {
+                            // Filter client-side for partial matches (since contains isn't supported)
+                            var searchLowerForFilter = searchTerm.ToLower();
+                            var filtered = users.Value.Where(u =>
+                                (u.DisplayName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                (u.GivenName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                (u.Surname?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                (u.Mail?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                (u.UserPrincipalName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+                            ).ToList();
+                            
+                            allResults.AddRange(filtered);
+                        }
+                    }
+                    catch (Exception filterEx)
+                    {
+                        _logger.LogWarning(filterEx, "Filter query failed, trying simpler approach");
+                        
+                        // Fallback: Try simpler single-case startswith
+                        try
+                        {
+                            var simpleFilter = $"startswith(displayName,'{escapedTerm}') or startswith(givenName,'{escapedTerm}') or startswith(surname,'{escapedTerm}') or startswith(mail,'{escapedTerm}') or startswith(userPrincipalName,'{escapedTerm}')";
+                            
+                            var users = await _graphClient.Users
+                                .GetAsync(requestConfiguration =>
+                                {
+                                    requestConfiguration.QueryParameters.Filter = simpleFilter;
+                                    requestConfiguration.QueryParameters.Select = new[] { "displayName", "mail", "jobTitle", "department", "userPrincipalName", "givenName", "surname" };
+                                    requestConfiguration.QueryParameters.Top = maxResults * 2;
+                                });
+
+                            if (users?.Value != null && users.Value.Count > 0)
+                            {
+                                // Filter client-side for partial matches
+                                var filtered = users.Value.Where(u =>
+                                    (u.DisplayName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                    (u.GivenName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                    (u.Surname?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                    (u.Mail?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                                    (u.UserPrincipalName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+                                ).ToList();
+                                
+                                allResults.AddRange(filtered);
+                            }
+                        }
+                        catch (Exception simpleEx)
+                        {
+                            _logger.LogWarning(simpleEx, "Simple filter also failed");
+                            throw;
+                        }
+                    }
+                }
+                else
+                {
+                    // No search term - get all users (limited)
+                    var users = await _graphClient.Users
+                        .GetAsync(requestConfiguration =>
+                        {
+                            requestConfiguration.QueryParameters.Select = new[] { "displayName", "mail", "jobTitle", "department", "userPrincipalName", "givenName", "surname" };
+                            requestConfiguration.QueryParameters.Top = maxResults;
+                        });
+
+                    if (users?.Value != null && users.Value.Count > 0)
+                    {
+                        allResults.AddRange(users.Value);
+                    }
+                }
+
+                if (allResults.Count == 0)
                 {
                     _logger.LogInformation("No users found in Entra ID for: {SearchTerm}", searchTerm);
                     return new List<StaffMember>();
                 }
 
-                _logger.LogInformation("Found {Count} users in Entra ID", users.Value.Count);
+                _logger.LogInformation("Found {Count} users in Entra ID", allResults.Count);
 
-                // Sort results in-memory by display name (since API doesn't support orderby with filters)
-                return users.Value
+                // Sort results in-memory by display name and remove duplicates
+                return allResults
+                    .GroupBy(u => u.Id)
+                    .Select(g => g.First())
                     .Select(u => new StaffMember
                     {
                         DisplayName = u.DisplayName ?? "",
@@ -100,6 +195,7 @@ public class GraphService : IGraphService
                         Department = u.Department
                     })
                     .OrderBy(s => s.DisplayName)
+                    .Take(maxResults)
                     .ToList();
             }
             catch (Exception ex)
