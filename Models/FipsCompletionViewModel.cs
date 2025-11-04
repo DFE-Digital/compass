@@ -6,6 +6,10 @@ public class FipsCompletionViewModel
     public double AverageCompletionPercentage { get; set; }
     public List<BusinessAreaCompletion> BusinessAreaCompletions { get; set; } = new();
     public int ZeroCompletionCount { get; set; }
+    public int FullCompletionCount { get; set; }
+    public int CompletedPhaseCount { get; set; }
+    public int CompletedBusinessAreaCount { get; set; }
+    public int CompletedUrlCount { get; set; }
 }
 
 public class ProductCompletionItem
