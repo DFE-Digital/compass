@@ -110,7 +110,7 @@
                 </div>
 
                 <!-- Zero Completion Count -->
-                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success")">
+                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success") mb-3">
                     <div class="card-header">
                         <h3 class="card-title">
                             Products at 0% completion
@@ -119,6 +119,9 @@
                     <div class="card-body text-center">
                         <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.ZeroCompletionCount</h2>
                         <p class="text-muted mb-0 mt-2">
+                            @{
+                                var zeroPercentage = Model.Products.Any() ? (Model.ZeroCompletionCount / (double)Model.Products.Count) * 100 : 0;
+                            }
                             @if (Model.ZeroCompletionCount == 0)
                             {
                                 <span>All products have at least some completion data</span>
@@ -131,15 +134,113 @@
                             {
                                 <span>products have no completion data</span>
                             }
+                            (@zeroPercentage.ToString("F1")%)
                         </p>
-                        @if (Model.ZeroCompletionCount > 0)
-                        {
-                            <div class="mt-3">
-                                <a href="#" onclick="filterZeroCompletion(); return false;" class="btn btn-danger btn-sm">
-                                    <i class="fas fa-filter"></i> View products
-                                </a>
-                            </div>
-                        }
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.ZeroCompletionCount > 0 ? "bg-danger" : "bg-success")" 
+                                 style="width: @zeroPercentage%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Full Completion Count -->
+                <div class="card @(Model.FullCompletionCount == Model.Products.Count ? "card-success" : "card-info")">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Products with 100% completion
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.FullCompletionCount</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @{
+                                var fullPercentage = Model.Products.Any() ? (Model.FullCompletionCount / (double)Model.Products.Count) * 100 : 0;
+                                var fullColorClass = fullPercentage >= 80 ? "success" : fullPercentage >= 50 ? "warning" : "info";
+                            }
+                            @if (Model.FullCompletionCount == 0)
+                            {
+                                <span>No products fully complete yet</span>
+                            }
+                            else if (Model.FullCompletionCount == 1)
+                            {
+                                <span>product is fully complete</span>
+                            }
+                            else
+                            {
+                                <span>products are fully complete</span>
+                            }
+                            (@fullPercentage.ToString("F1")%)
+                        </p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@fullColorClass" 
+                                 style="width: @fullPercentage%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Stats -->
+        <div class="row mb-3">
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var phasePercentage = Model.Products.Any() ? (Model.CompletedPhaseCount / (double)Model.Products.Count) * 100 : 0;
+                    var phaseColorClass = phasePercentage >= 80 ? "success" : phasePercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@phaseColorClass">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed Phase
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedPhaseCount</h2>
+                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@phasePercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@phaseColorClass" style="width: @phasePercentage%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var businessAreaPercentage = Model.Products.Any() ? (Model.CompletedBusinessAreaCount / (double)Model.Products.Count) * 100 : 0;
+                    var businessAreaColorClass = businessAreaPercentage >= 80 ? "success" : businessAreaPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@businessAreaColorClass">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed Business Area
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedBusinessAreaCount</h2>
+                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@businessAreaPercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-4 col-12">
+                @{
+                    var urlPercentage = Model.Products.Any() ? (Model.CompletedUrlCount / (double)Model.Products.Count) * 100 : 0;
+                    var urlColorClass = urlPercentage >= 80 ? "success" : urlPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@urlColorClass">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completed URL
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedUrlCount</h2>
+                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@urlPercentage.ToString("F1")%)</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@urlColorClass" style="width: @urlPercentage%"></div>
+                        </div>
                     </div>
                 </div>
             </div>
