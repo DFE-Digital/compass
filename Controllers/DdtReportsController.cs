@@ -454,5 +454,233 @@ public class DdtReportsController : Controller
             return RedirectToAction("Index");
         }
     }
+
+    // GET: DdtReports/FipsCompletion
+    public async Task<IActionResult> FipsCompletion()
+    {
+        try
+        {
+            var products = await _productsApiService.GetProductsAsync(null);
+            var completionItems = new List<ProductCompletionItem>();
+            
+            // User group category type name variations
+            var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
+            
+            foreach (var product in products.OrderBy(p => p.Title))
+            {
+                if (string.IsNullOrEmpty(product.FipsId)) continue;
+                
+                // Check Phase
+                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                              (product.CategoryValues?.Any(cv => 
+                                  cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+                
+                // Check Business Area
+                var hasBusinessArea = product.CategoryValues?.Any(cv => 
+                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
+                
+                // Extract Business Area name
+                var businessAreaName = product.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name ?? "Unassigned";
+                
+                // Count Contacts
+                var contactsCount = product.ProductContacts?.Count ?? 0;
+                
+                // Check Product URL
+                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
+                
+                // Count User Groups
+                var userGroupsCount = product.CategoryValues?
+                    .Count(cv => cv.CategoryType != null && 
+                                userGroupVariations.Any(v => 
+                                    cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
+                
+                // Calculate completion percentage (5 criteria, 20% each)
+                var completedCriteria = 0;
+                if (hasPhase) completedCriteria++;
+                if (hasBusinessArea) completedCriteria++;
+                if (contactsCount > 0) completedCriteria++;
+                if (hasProductUrl) completedCriteria++;
+                if (userGroupsCount > 0) completedCriteria++;
+                
+                var completionPercentage = (completedCriteria / 5.0) * 100;
+                
+                completionItems.Add(new ProductCompletionItem
+                {
+                    FipsId = product.FipsId,
+                    ProductTitle = product.Title,
+                    BusinessArea = businessAreaName,
+                    HasPhase = hasPhase,
+                    HasBusinessArea = hasBusinessArea,
+                    ContactsCount = contactsCount,
+                    HasProductUrl = hasProductUrl,
+                    UserGroupsCount = userGroupsCount,
+                    CompletionPercentage = completionPercentage
+                });
+            }
+            
+            // Calculate average completion percentage
+            var averageCompletion = completionItems.Any() 
+                ? completionItems.Average(p => p.CompletionPercentage) 
+                : 0;
+            
+            // Calculate business area completions
+            var businessAreaCompletions = completionItems
+                .GroupBy(p => p.BusinessArea)
+                .Select(g => new BusinessAreaCompletion
+                {
+                    BusinessArea = g.Key,
+                    ProductCount = g.Count(),
+                    AverageCompletionPercentage = g.Average(p => p.CompletionPercentage)
+                })
+                .OrderByDescending(ba => ba.AverageCompletionPercentage)
+                .ToList();
+            
+            // Count products with 0% completion
+            var zeroCompletionCount = completionItems.Count(p => p.CompletionPercentage == 0);
+            
+            // Get category values for dropdowns
+            var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            
+            var viewModel = new FipsCompletionViewModel
+            {
+                Products = completionItems,
+                AverageCompletionPercentage = averageCompletion,
+                BusinessAreaCompletions = businessAreaCompletions,
+                ZeroCompletionCount = zeroCompletionCount
+            };
+            
+            ViewBag.PhaseCategoryValues = phaseCategoryValues;
+            ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating FIPS completion report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new FipsCompletionViewModel());
+        }
+    }
+
+    // POST: DdtReports/UpdateProductPhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductPhase(string fipsId, int phaseCategoryValueId)
+    {
+        try
+        {
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+            
+            // Get phase name
+            var phases = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var phaseName = phases.FirstOrDefault(p => p.Id == phaseCategoryValueId)?.Name ?? "Phase";
+            
+            var success = await _productsApiService.UpdateProductPhaseAsync(fipsId, phaseCategoryValueId);
+            
+            if (success)
+            {
+                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Phase updated to <strong>{phaseName}</strong>.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Failed to update product Phase. Please try again.";
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product Phase for {FipsId}", fipsId);
+            TempData["ErrorMessage"] = "An error occurred while updating the product Phase.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProductBusinessArea
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductBusinessArea(string fipsId, int businessAreaCategoryValueId)
+    {
+        try
+        {
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+            
+            // Get business area name
+            var businessAreas = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            var businessAreaName = businessAreas.FirstOrDefault(ba => ba.Id == businessAreaCategoryValueId)?.Name ?? "Business Area";
+            
+            var success = await _productsApiService.UpdateProductBusinessAreaAsync(fipsId, businessAreaCategoryValueId);
+            
+            if (success)
+            {
+                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business Area updated to <strong>{businessAreaName}</strong>.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Failed to update product Business Area. Please try again.";
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product Business Area for {FipsId}", fipsId);
+            TempData["ErrorMessage"] = "An error occurred while updating the product Business Area.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProductUrl
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductUrl(string fipsId, string productUrl)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(productUrl))
+            {
+                TempData["ErrorMessage"] = "Product URL cannot be empty.";
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Validate URL format
+            if (!Uri.TryCreate(productUrl, UriKind.Absolute, out var uri) || 
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                TempData["ErrorMessage"] = "Please provide a valid HTTP or HTTPS URL.";
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+
+            var success = await _productsApiService.UpdateProductUrlAsync(fipsId, productUrl);
+            
+            if (success)
+            {
+                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Product URL updated to <strong>{productUrl}</strong>.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Failed to update product URL. Please try again.";
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product URL for {FipsId}", fipsId);
+            TempData["ErrorMessage"] = "An error occurred while updating the product URL.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
 }
 

@@ -9,5 +9,9 @@ public interface IProductsApiService
     Task<List<string>> GetPhasesAsync();
     Task<List<string>> GetBusinessAreasAsync();
     Task<bool> UpdateProductUrlAsync(string fipsId, string productUrl);
+    Task<List<CategoryValueDto>> GetPhaseCategoryValuesAsync();
+    Task<List<CategoryValueDto>> GetBusinessAreaCategoryValuesAsync();
+    Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
+    Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
 }
 
