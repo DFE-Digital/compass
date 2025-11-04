@@ -537,8 +537,14 @@ public class DdtReportsController : Controller
                 .OrderByDescending(ba => ba.AverageCompletionPercentage)
                 .ToList();
             
-            // Count products with 0% completion
+            // Count products with 0% and 100% completion
             var zeroCompletionCount = completionItems.Count(p => p.CompletionPercentage == 0);
+            var fullCompletionCount = completionItems.Count(p => p.CompletionPercentage == 100);
+            
+            // Count completed fields
+            var completedPhaseCount = completionItems.Count(p => p.HasPhase);
+            var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
+            var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
             
             // Get category values for dropdowns
             var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
@@ -549,7 +555,11 @@ public class DdtReportsController : Controller
                 Products = completionItems,
                 AverageCompletionPercentage = averageCompletion,
                 BusinessAreaCompletions = businessAreaCompletions,
-                ZeroCompletionCount = zeroCompletionCount
+                ZeroCompletionCount = zeroCompletionCount,
+                FullCompletionCount = fullCompletionCount,
+                CompletedPhaseCount = completedPhaseCount,
+                CompletedBusinessAreaCount = completedBusinessAreaCount,
+                CompletedUrlCount = completedProductUrlCount
             };
             
             ViewBag.PhaseCategoryValues = phaseCategoryValues;
