@@ -1,0 +1,731 @@
+@model Compass.Models.FipsCompletionViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "FIPS Completion %";
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active">FIPS Completion %</li>
+                </ol>
+                <h1 class="m-0">FIPS Completion %</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <!-- Business Area Completion -->
+            <div class="col-lg-8 col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Completion by business area
+                        </h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Business area</th>
+                                        <th class="text-center">Products</th>
+                                        <th class="text-center">Average completion</th>
+                                        <th class="text-center" style="width: 200px;">Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var area in Model.BusinessAreaCompletions)
+                                    {
+                                        var completionClass = area.AverageCompletionPercentage >= 80 ? "success" : 
+                                                            area.AverageCompletionPercentage >= 60 ? "warning" : "danger";
+                                        <tr>
+                                            <td>
+                                                <strong>@area.BusinessArea</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-info">@area.ProductCount</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@completionClass badge-lg">
+                                                    @area.AverageCompletionPercentage.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="progress progress-sm">
+                                                    <div class="progress-bar bg-@completionClass" 
+                                                         style="width: @area.AverageCompletionPercentage%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side Cards -->
+            <div class="col-lg-4 col-md-12">
+                <!-- Average Completion Summary -->
+                <div class="card @(Model.AverageCompletionPercentage >= 80 ? "card-success" : Model.AverageCompletionPercentage >= 60 ? "card-warning" : "card-danger") mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Average completion across all products
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2">Based on @Model.Products.Count products</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.AverageCompletionPercentage >= 80 ? "bg-success" : Model.AverageCompletionPercentage >= 60 ? "bg-warning" : "bg-danger")" 
+                                 style="width: @Model.AverageCompletionPercentage%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zero Completion Count -->
+                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success")">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Products at 0% completion
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.ZeroCompletionCount</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @if (Model.ZeroCompletionCount == 0)
+                            {
+                                <span>All products have at least some completion data</span>
+                            }
+                            else if (Model.ZeroCompletionCount == 1)
+                            {
+                                <span>product has no completion data</span>
+                            }
+                            else
+                            {
+                                <span>products have no completion data</span>
+                            }
+                        </p>
+                        @if (Model.ZeroCompletionCount > 0)
+                        {
+                            <div class="mt-3">
+                                <a href="#" onclick="filterZeroCompletion(); return false;" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-filter"></i> View products
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Filter products
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="searchInput">Search by product name or FIPS ID</label>
+                                    <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="businessAreaFilter">Business area</label>
+                                    <select class="form-control" id="businessAreaFilter">
+                                        <option value="">All business areas</option>
+                                        @foreach (var area in Model.BusinessAreaCompletions.OrderBy(a => a.BusinessArea))
+                                        {
+                                            <option value="@area.BusinessArea">@area.BusinessArea</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="completionFilter">Filter by completion %</label>
+                                    <select class="form-control" id="completionFilter">
+                                        <option value="">All products</option>
+                                        <option value="100">100% Complete</option>
+                                        <option value="80-99">80-99%</option>
+                                        <option value="60-79">60-79%</option>
+                                        <option value="40-59">40-59%</option>
+                                        <option value="0-39">0-39%</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="statusFilter">Filter by status</label>
+                                    <select class="form-control" id="statusFilter">
+                                        <option value="">All products</option>
+                                        <option value="complete">Complete (100%)</option>
+                                        <option value="incomplete">Incomplete (&lt;100%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Table -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Product completion status
+                        </h3>
+                        <div class="card-tools">
+                            <span class="badge badge-info" id="productCount">@Model.Products.Count products</span>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover table-striped mb-0 sortable-table" id="completionTable">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-column="ProductTitle" style="cursor: pointer;">
+                                        Product <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="FipsId" style="cursor: pointer;">
+                                        FIPS ID <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="Phase" style="cursor: pointer;">
+                                        Phase <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="BusinessArea" style="cursor: pointer;">
+                                        Business area <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="Contacts" style="cursor: pointer;">
+                                        Contacts <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="ProductUrl" style="cursor: pointer;">
+                                        Product URL <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="UserGroups" style="cursor: pointer;">
+                                        User groups <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="CompletionPercentage" style="cursor: pointer;">
+                                        Completion % <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center" style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model.Products)
+                                {
+                                    <tr data-product-title="@product.ProductTitle.ToLower()" 
+                                        data-fips-id="@product.FipsId.ToLower()"
+                                        data-completion="@product.CompletionPercentage"
+                                        data-business-area="@product.BusinessArea">
+                                        <td>
+                                            <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" target="_blank" rel="noopener noreferrer" class="font-weight-bold">
+                                                @product.ProductTitle
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @product.FipsId
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasPhase)
+                                            {
+                                                <i class="fas fa-check-circle text-success" title="Phase assigned"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-circle text-danger" title="Phase missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasBusinessArea)
+                                            {
+                                                <i class="fas fa-check-circle text-success" title="Business area assigned"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-circle text-danger" title="Business area missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.ContactsCount > 0)
+                                            {
+                                                <i class="fas fa-check-circle text-success" title="@product.ContactsCount contact(s)"> @product.ContactsCount</i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-circle text-danger" title="No contacts"> 0</i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.HasProductUrl)
+                                            {
+                                                <i class="fas fa-check-circle text-success" title="Product URL provided"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-circle text-danger" title="Product URL missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (product.UserGroupsCount > 0)
+                                            {
+                                                <i class="fas fa-check-circle text-success" title="@product.UserGroupsCount user group(s)"> @product.UserGroupsCount</i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-circle text-danger" title="No user groups"> 0</i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @product.CompletionPercentage.ToString("F1")%
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    <i class="fas fa-cog"></i>
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-right">
+                                                    <a class="dropdown-item" href="#" data-action="set-phase" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-layer-group mr-2"></i> Set Phase
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-building mr-2"></i> Set Business Area
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-product-url" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-link mr-2"></i> Set Product URL
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (!Model.Products.Any())
+                        {
+                            <div class="text-center text-muted p-5">
+                                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                                <p class="mb-0">No products found</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@{
+    var phaseCategoryValues = ViewBag.PhaseCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var businessAreaCategoryValues = ViewBag.BusinessAreaCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+}
+
+<!-- Update Phase Modal -->
+<div class="modal fade" id="updatePhaseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductPhase" method="post">
+                <input type="hidden" name="fipsId" id="phaseFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Phase for this product.</p>
+                    <div class="form-group">
+                        <label for="phaseCategoryValueId" class="form-label">Phase *</label>
+                        <select class="form-control" id="phaseCategoryValueId" name="phaseCategoryValueId" required>
+                            <option value="">-- Select Phase --</option>
+                            @foreach (var phase in phaseCategoryValues.OrderBy(p => p.SortOrder ?? int.MaxValue).ThenBy(p => p.Name))
+                            {
+                                <option value="@phase.Id">@phase.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Phase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Business Area Modal -->
+<div class="modal fade" id="updateBusinessAreaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductBusinessArea" method="post">
+                <input type="hidden" name="fipsId" id="businessAreaFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Business Area for this product.</p>
+                    <div class="form-group">
+                        <label for="businessAreaCategoryValueId" class="form-label">Business Area *</label>
+                        <select class="form-control" id="businessAreaCategoryValueId" name="businessAreaCategoryValueId" required>
+                            <option value="">-- Select Business Area --</option>
+                            @foreach (var area in businessAreaCategoryValues.OrderBy(a => a.SortOrder ?? int.MaxValue).ThenBy(a => a.Name))
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Product URL Modal -->
+<div class="modal fade" id="updateProductUrlModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Product URL</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductUrl" method="post">
+                <input type="hidden" name="fipsId" id="productUrlFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">The Product URL should be the main URL of the product website.</p>
+                    <div class="form-group">
+                        <label for="productUrl" class="form-label">Product URL *</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="productUrl" 
+                               name="productUrl"
+                               placeholder="https://example.gov.uk" 
+                               required />
+                        <small class="form-text text-muted">
+                            Enter the main URL of the product website (must start with http:// or https://)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Product URL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+.badge-lg {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var allProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products.Select(p => new {
+                ProductTitle = p.ProductTitle,
+                FipsId = p.FipsId,
+                HasPhase = p.HasPhase,
+                HasBusinessArea = p.HasBusinessArea,
+                ContactsCount = p.ContactsCount,
+                HasProductUrl = p.HasProductUrl,
+                UserGroupsCount = p.UserGroupsCount,
+                CompletionPercentage = p.CompletionPercentage
+            })));
+            
+            // Initialize sortable table
+            initializeSortableTable($('#completionTable'));
+            
+            // Modal functions
+            function openUpdatePhaseModal(fipsId) {
+                $('#phaseFipsId').val(fipsId);
+                $('#phaseCategoryValueId').val('');
+                $('#updatePhaseModal').modal('show');
+            }
+            
+            function openUpdateBusinessAreaModal(fipsId) {
+                $('#businessAreaFipsId').val(fipsId);
+                $('#businessAreaCategoryValueId').val('');
+                $('#updateBusinessAreaModal').modal('show');
+            }
+            
+            function openUpdateProductUrlModal(fipsId) {
+                $('#productUrlFipsId').val(fipsId);
+                $('#productUrl').val('');
+                $('#updateProductUrlModal').modal('show');
+            }
+            
+            // Handle dropdown menu clicks
+            $(document).on('click', '[data-action="set-phase"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                openUpdatePhaseModal(fipsId);
+                return false;
+            });
+            
+            $(document).on('click', '[data-action="set-business-area"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                openUpdateBusinessAreaModal(fipsId);
+                return false;
+            });
+            
+            $(document).on('click', '[data-action="set-product-url"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                openUpdateProductUrlModal(fipsId);
+                return false;
+            });
+            
+            // Filter functionality
+            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter').on('input change', function() {
+                filterTable();
+            });
+            
+            // Function to filter zero completion products
+            window.filterZeroCompletion = function() {
+                $('#completionFilter').val('');
+                $('#statusFilter').val('');
+                $('#businessAreaFilter').val('');
+                $('#searchInput').val('');
+                
+                // Filter to show only 0% completion products
+                var visibleCount = 0;
+                $('#completionTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var completion = parseFloat($row.data('completion')) || 0;
+                    
+                    if (completion === 0) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+                
+                $('#productCount').text(visibleCount + ' products');
+                
+                // Scroll to table
+                $('html, body').animate({
+                    scrollTop: $('#completionTable').offset().top - 100
+                }, 500);
+            };
+            
+            function filterTable() {
+                var searchTerm = $('#searchInput').val().toLowerCase();
+                var completionFilter = $('#completionFilter').val();
+                var statusFilter = $('#statusFilter').val();
+                var businessAreaFilter = $('#businessAreaFilter').val();
+                
+                var visibleCount = 0;
+                
+                $('#completionTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var productTitle = $row.data('product-title') || '';
+                    var fipsId = $row.data('fips-id') || '';
+                    var completion = parseFloat($row.data('completion')) || 0;
+                    var businessArea = $row.data('business-area') || '';
+                    
+                    var matchesSearch = productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
+                    
+                    var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
+                    
+                    var matchesCompletion = true;
+                    if (completionFilter) {
+                        if (completionFilter === '100') {
+                            matchesCompletion = completion === 100;
+                        } else if (completionFilter === '80-99') {
+                            matchesCompletion = completion >= 80 && completion < 100;
+                        } else if (completionFilter === '60-79') {
+                            matchesCompletion = completion >= 60 && completion < 80;
+                        } else if (completionFilter === '40-59') {
+                            matchesCompletion = completion >= 40 && completion < 60;
+                        } else if (completionFilter === '0-39') {
+                            matchesCompletion = completion >= 0 && completion < 40;
+                        }
+                    }
+                    
+                    var matchesStatus = true;
+                    if (statusFilter === 'complete') {
+                        matchesStatus = completion === 100;
+                    } else if (statusFilter === 'incomplete') {
+                        matchesStatus = completion < 100;
+                    }
+                    
+                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+                
+                $('#productCount').text(visibleCount + ' products');
+            }
+            
+            function initializeSortableTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+                
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+                
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr:visible').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        
+                        if (column === 'ProductTitle') {
+                            aVal = $(a).find('td').eq(0).find('a').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).find('a').text().trim().toLowerCase();
+                        } else if (column === 'FipsId') {
+                            aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
+                        } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(2).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(2).find('.fa-check-circle').length > 0 ? 1 : 0;
+                        } else if (column === 'BusinessArea') {
+                            aVal = $(a).find('td').eq(3).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(3).find('.fa-check-circle').length > 0 ? 1 : 0;
+                        } else if (column === 'Contacts') {
+                            var aText = $(a).find('td').eq(4).text().trim();
+                            var bText = $(b).find('td').eq(4).text().trim();
+                            aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
+                            bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
+                        } else if (column === 'ProductUrl') {
+                            aVal = $(a).find('td').eq(5).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(5).find('.fa-check-circle').length > 0 ? 1 : 0;
+                        } else if (column === 'UserGroups') {
+                            var aText = $(a).find('td').eq(6).text().trim();
+                            var bText = $(b).find('td').eq(6).text().trim();
+                            aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
+                            bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
+                        } else if (column === 'CompletionPercentage') {
+                            aVal = parseFloat($(a).data('completion')) || 0;
+                            bVal = parseFloat($(b).data('completion')) || 0;
+                        } else {
+                            aVal = $(a).find('td').eq(0).text().trim();
+                            bVal = $(b).find('td').eq(0).text().trim();
+                        }
+                        
+                        if (typeof aVal === 'string') {
+                            if (direction === 'asc') {
+                                return aVal.localeCompare(bVal);
+                            } else {
+                                return bVal.localeCompare(aVal);
+                            }
+                        } else {
+                            if (direction === 'asc') {
+                                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                            } else {
+                                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                            }
+                        }
+                    });
+                    
+                    // Store hidden rows
+                    var hiddenRows = tbody.find('tr:hidden').detach();
+                    
+                    // Clear tbody and append sorted visible rows
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    // Re-append hidden rows
+                    tbody.append(hiddenRows);
+                    
+                    // Update sort icons
+                    updateSortIcons(table, column, direction);
+                }
+                
+                function updateSortIcons(table, column, direction) {
+                    // Remove all sort icons
+                    table.find('.sortable i').remove();
+                    
+                    // Add sort icon to current column
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    header.append(' <i class="fas ' + iconClass + '"></i>');
+                }
+            }
+        });
+    </script>
+}
+
