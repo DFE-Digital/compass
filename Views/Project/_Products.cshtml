@@ -1,12 +1,21 @@
 @model Compass.Models.Project
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
 
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Associated Products</h3>
+                <h3 class="card-title">Associated products</h3>
                 <div class="card-tools">
-                    <a href="#" id="addProductBtn">Add product</a>
+                    <a asp-action="CreateProduct" asp-route-projectId="@Model.Id" class="btn btn-sm btn-success mr-2">
+                        <i class="fas fa-plus"></i> Create product in FIPS
+                    </a>
+                    <a href="#" id="addProductBtn" class="btn btn-sm btn-primary">
+                        <i class="fas fa-link"></i> Link existing product
+                    </a>
                 </div>
             </div>
             <div class="card-body table-responsive p-0">
@@ -24,14 +33,11 @@
                         <tbody>
                             @foreach (var product in Model.ProjectProducts.OrderBy(p => p.ProductTitle))
                             {
+                                var productUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{product.ProductFipsId}";
                                 <tr>
                                     <td>@product.ProductFipsId</td>
                                     <td>
-                                        <a href="#" class="view-product-link" 
-                                           data-product-id="@product.Id" 
-                                           data-product-fips-id="@product.ProductFipsId" 
-                                           data-product-title="@product.ProductTitle" 
-                                           data-product-linked="@product.CreatedAt.ToString("dd MMM yyyy")">@product.ProductTitle</a>
+                                        <a href="@productUrl" target="_blank" rel="noopener noreferrer">@product.ProductTitle</a>
                                     </td>
                                     <td>@product.CreatedAt.ToString("dd MMM yyyy")</td>
                                     <td>
@@ -58,7 +64,7 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addProductModalLabel">Add Product</h5>
+                <h5 class="modal-title" id="addProductModalLabel">Link existing product</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -69,7 +75,9 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="productSearchInput">Search for Product</label>
-                        <input type="text" class="form-control product-autocomplete" id="productSearchInput" autocomplete="off" placeholder="Start typing product name or FIPS ID..." required>
+                        <div style="position: relative;">
+                            <input type="text" class="form-control product-autocomplete" id="productSearchInput" autocomplete="off" placeholder="Start typing product name or FIPS ID..." required>
+                        </div>
                         <small class="form-text text-muted">Type to search for products from the FIPS CMS</small>
                     </div>
                     <div id="selectedProductDisplay" class="alert alert-success mt-3" style="display: none;">
@@ -80,39 +88,9 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="addProductSubmitBtn" disabled>Add Product</button>
+                    <button type="submit" class="btn btn-primary" id="addProductSubmitBtn" disabled>Link product</button>
                 </div>
             </form>
-        </div>
-    </div>
-</div>
-
-<!-- View Product Modal -->
-<div class="modal fade" id="viewProductModal" tabindex="-1" role="dialog" aria-labelledby="viewProductModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewProductModalLabel">Product Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <dl class="row">
-                    <dt class="col-sm-4">FIPS ID</dt>
-                    <dd class="col-sm-8" id="viewProductFipsId"></dd>
-                    
-                    <dt class="col-sm-4">Product Title</dt>
-                    <dd class="col-sm-8" id="viewProductTitle"></dd>
-                    
-                    <dt class="col-sm-4">Linked Date</dt>
-                    <dd class="col-sm-8" id="viewProductLinked"></dd>
-                </dl>
-            </div>
-            <div class="modal-footer d-flex justify-content-between">
-                <button type="button" class="btn btn-danger" id="removeProductFromViewBtn">Remove Product</button>
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-            </div>
         </div>
     </div>
 </div>
@@ -145,7 +123,6 @@
 
 <script nonce="@Context.Items["Nonce"]">
     (function() {
-        var currentProductId = null;
         var searchTimeout = null;
 
         function initProductsPage() {
@@ -164,17 +141,6 @@
             // Initialize product autocomplete
             initProductAutocomplete();
 
-            // Handle view product link clicks
-            $(document).on('click', '.view-product-link', function(e) {
-                e.preventDefault();
-                currentProductId = $(this).attr('data-product-id');
-                var fipsId = $(this).attr('data-product-fips-id');
-                var title = $(this).attr('data-product-title');
-                var linked = $(this).attr('data-product-linked');
-                
-                viewProduct(currentProductId, fipsId, title, linked);
-            });
-
             // Handle remove product button clicks (from table)
             $(document).on('click', '.remove-product-btn', function(e) {
                 e.preventDefault();
@@ -182,13 +148,6 @@
                 var productTitle = $(this).attr('data-product-title');
                 
                 removeProduct(productId, productTitle);
-            });
-
-            // Handle remove product from view modal
-            $('#removeProductFromViewBtn').on('click', function() {
-                var productTitle = $('#viewProductTitle').text();
-                $('#viewProductModal').modal('hide');
-                removeProduct(currentProductId, productTitle);
             });
         }
 
@@ -313,13 +272,6 @@
             $('#selectedProductDetails').text(product.fipsId + ' • ' + product.phase);
             $('#selectedProductDisplay').show();
             $('#addProductSubmitBtn').prop('disabled', false);
-        }
-
-        function viewProduct(productId, fipsId, title, linked) {
-            $('#viewProductFipsId').text(fipsId);
-            $('#viewProductTitle').text(title);
-            $('#viewProductLinked').text(linked);
-            $('#viewProductModal').modal('show');
         }
 
         function removeProduct(productId, productTitle) {
