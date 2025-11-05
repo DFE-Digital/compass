@@ -227,13 +227,14 @@ public class ProductReportingController : Controller
         // Get all performance metrics that are valid for this reporting period
         // A metric is valid if ValidFromYear/Month is <= the reporting period
         var allMetrics = await _context.PerformanceMetrics
-            .Where(m => m.ValidFromYear < year || 
-                       (m.ValidFromYear == year && m.ValidFromMonth <= month))
+            .Where(m => !m.IsDisabled && // Exclude disabled metrics
+                   (m.ValidFromYear < year || 
+                   (m.ValidFromYear == year && m.ValidFromMonth <= month)))
             .OrderBy(m => m.Identifier)
             .ToListAsync();
         
         // Filter by phase - only include metrics that apply to the product's phase
-        var metrics = allMetrics.Where(m => 
+        var phaseFilteredMetrics = allMetrics.Where(m => 
         {
             // If no phases specified, metric applies to all phases
             if (string.IsNullOrEmpty(m.ApplicablePhases))
@@ -251,16 +252,31 @@ public class ProductReportingController : Controller
             return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
         }).ToList();
 
-        // Get or create metric values for this return
-        var metricValues = await _context.ProductMetricValues
+        // Get existing metric values for this return to check conditional dependencies
+        var existingMetricValues = await _context.ProductMetricValues
             .Include(mv => mv.PerformanceMetric)
             .Where(mv => mv.ProductReturnId == productReturn.Id)
             .ToListAsync();
 
+        // Filter by conditional dependencies - only show metrics whose conditions are met
+        var metrics = phaseFilteredMetrics.Where(m => 
+        {
+            // If no conditional dependency, always show
+            if (!m.ConditionalOnMetricId.HasValue)
+                return true;
+            
+            // Check if the parent metric has a value
+            var parentMetricValue = existingMetricValues
+                .FirstOrDefault(mv => mv.PerformanceMetricId == m.ConditionalOnMetricId.Value);
+            
+            // Show if parent metric exists and has a value
+            return parentMetricValue != null && !string.IsNullOrWhiteSpace(parentMetricValue.Value);
+        }).ToList();
+
         // Ensure we have a metric value entry for each valid metric
         foreach (var metric in metrics)
         {
-            if (!metricValues.Any(mv => mv.PerformanceMetricId == metric.Id))
+            if (!existingMetricValues.Any(mv => mv.PerformanceMetricId == metric.Id))
             {
                 var newValue = new ProductMetricValue
                 {
@@ -269,9 +285,14 @@ public class ProductReportingController : Controller
                     IsComplete = false
                 };
                 _context.ProductMetricValues.Add(newValue);
-                metricValues.Add(newValue);
+                existingMetricValues.Add(newValue);
             }
         }
+        
+        // Use only the metrics that passed all filters
+        var metricValues = existingMetricValues
+            .Where(mv => metrics.Any(m => m.Id == mv.PerformanceMetricId))
+            .ToList();
 
         await _context.SaveChangesAsync();
 
