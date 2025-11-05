@@ -629,4 +629,68 @@ public class ProductsApiService : IProductsApiService
             return false;
         }
     }
+
+    public async Task<bool> UpdateProductStateAsync(string fipsId, string state)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId,
+                    state = state
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _logger.LogInformation("Successfully updated product state to {State} for {FipsId}", state, fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update product state for {FipsId}. Status: {StatusCode}, Error: {Error}", 
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product state for {FipsId}", fipsId);
+            return false;
+        }
+    }
 }
