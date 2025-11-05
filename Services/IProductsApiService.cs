@@ -16,5 +16,7 @@ public interface IProductsApiService
     Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
     Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
     Task<bool> UpdateProductStateAsync(string fipsId, string state);
+    Task<ProductDto?> CreateProductAsync(string title, string? shortDescription, string? longDescription, List<int> categoryValueIds, string state = "Active");
+    Task<List<ProductDto>> SearchProductsByTitleAsync(string searchTerm);
 }
 

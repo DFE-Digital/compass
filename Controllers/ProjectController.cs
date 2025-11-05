@@ -101,13 +101,8 @@ namespace Compass.Controllers
             ViewBag.CurrentPhase = phase;
             ViewBag.CurrentFlagship = flagship;
 
-            // Get business areas and phases from lookup tables
-            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
-                .Select(ba => ba.Name)
-                .ToListAsync();
+            // Get business areas from CMS and phases from lookup tables
+            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
 
             ViewBag.Phases = await _context.PhaseLookups
                 .Where(p => p.IsActive)
@@ -199,13 +194,8 @@ namespace Compass.Controllers
                 .ThenBy(m => m.Title)
                 .ToListAsync();
 
-            // Get business areas and phases from lookup tables
-            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
-                .Select(ba => ba.Name)
-                .ToListAsync();
+            // Get business areas from CMS and phases from lookup tables
+            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
 
             ViewBag.Phases = await _context.PhaseLookups
                 .Where(p => p.IsActive)
@@ -461,6 +451,152 @@ namespace Compass.Controllers
             return RedirectToAction(nameof(Details), new { id = projectId, tab = "products" });
         }
 
+        // GET: Project/CreateProduct
+        public async Task<IActionResult> CreateProduct(int projectId)
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            // Get business areas and phases for dropdowns
+            var businessAreas = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            var phases = await _productsApiService.GetPhaseCategoryValuesAsync();
+
+            ViewBag.BusinessAreas = businessAreas;
+            ViewBag.Phases = phases;
+            ViewBag.ProjectId = projectId;
+            ViewBag.ProjectTitle = project.Title;
+            ViewBag.ProjectAim = project.Aim;
+            ViewBag.ProjectBusinessArea = project.BusinessArea;
+            ViewBag.ProjectPhase = project.Phase;
+
+            return View(project);
+        }
+
+        // POST: Project/CreateProduct
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateProduct(
+            int projectId, 
+            string productTitle, 
+            string? shortDescription, 
+            string? longDescription,
+            int? businessAreaCategoryValueId,
+            int? phaseCategoryValueId,
+            bool confirmNotDuplicate = false)
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            // Check for similar products if not confirmed
+            if (!confirmNotDuplicate)
+            {
+                var similarProducts = await _productsApiService.SearchProductsByTitleAsync(productTitle);
+                if (similarProducts.Any())
+                {
+                    // Get business areas and phases for dropdowns
+                    var businessAreas = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+                    var phases = await _productsApiService.GetPhaseCategoryValuesAsync();
+
+                    ViewBag.BusinessAreas = businessAreas;
+                    ViewBag.Phases = phases;
+                    ViewBag.ProjectId = projectId;
+                    ViewBag.ProjectTitle = project.Title;
+                    ViewBag.ProjectAim = project.Aim;
+                    ViewBag.ProjectBusinessArea = project.BusinessArea;
+                    ViewBag.ProjectPhase = project.Phase;
+                    ViewBag.SimilarProducts = similarProducts;
+                    ViewBag.ProductTitle = productTitle;
+                    ViewBag.ShortDescription = shortDescription;
+                    ViewBag.LongDescription = longDescription;
+                    ViewBag.BusinessAreaCategoryValueId = businessAreaCategoryValueId;
+                    ViewBag.PhaseCategoryValueId = phaseCategoryValueId;
+
+                    TempData["WarningMessage"] = "Similar products found in FIPS CMS. Please confirm this is not a duplicate.";
+                    return View(project);
+                }
+            }
+
+            try
+            {
+                // Build category values list
+                var categoryValueIds = new List<int>();
+                if (businessAreaCategoryValueId.HasValue)
+                {
+                    categoryValueIds.Add(businessAreaCategoryValueId.Value);
+                }
+                if (phaseCategoryValueId.HasValue)
+                {
+                    categoryValueIds.Add(phaseCategoryValueId.Value);
+                }
+
+                // Create product in CMS
+                var createdProduct = await _productsApiService.CreateProductAsync(
+                    productTitle,
+                    shortDescription,
+                    longDescription,
+                    categoryValueIds,
+                    "Active"
+                );
+
+                if (createdProduct == null || string.IsNullOrEmpty(createdProduct.FipsId))
+                {
+                    TempData["ErrorMessage"] = "Failed to create product in FIPS CMS.";
+                    return RedirectToAction(nameof(CreateProduct), new { projectId });
+                }
+
+                // Link the newly created product to the project
+                var projectProduct = new ProjectProduct
+                {
+                    ProjectId = projectId,
+                    ProductFipsId = createdProduct.FipsId,
+                    ProductTitle = createdProduct.Title,
+                    ProductDescription = shortDescription,
+                    ProductUrl = null,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.ProjectProducts.Add(projectProduct);
+                await _context.SaveChangesAsync();
+
+                // Redirect to confirmation page
+                return RedirectToAction(nameof(CreateProductConfirmation), new { 
+                    projectId, 
+                    fipsId = createdProduct.FipsId,
+                    productTitle = createdProduct.Title
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating product in FIPS CMS");
+                TempData["ErrorMessage"] = "An error occurred while creating the product.";
+                return RedirectToAction(nameof(CreateProduct), new { projectId });
+            }
+        }
+
+        // GET: Project/CreateProductConfirmation
+        public async Task<IActionResult> CreateProductConfirmation(int projectId, string fipsId, string productTitle)
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            ViewBag.ProjectId = projectId;
+            ViewBag.ProjectTitle = project.Title;
+            ViewBag.FipsId = fipsId;
+            ViewBag.ProductTitle = productTitle;
+
+            return View();
+        }
+
         // POST: Project/AddContact
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -584,13 +720,8 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            // Use Compass-specific lookups instead of CMS
-            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
-                .Select(ba => ba.Name)
-                .ToListAsync();
+            // Get business areas from CMS and phases from lookup tables
+            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
 
             ViewBag.Phases = await _context.PhaseLookups
                 .Where(p => p.IsActive)
@@ -916,13 +1047,8 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            // Use Compass-specific lookups instead of CMS
-            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
-                .Select(ba => ba.Name)
-                .ToListAsync();
+            // Get business areas from CMS and phases from lookup tables
+            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
 
             ViewBag.Phases = await _context.PhaseLookups
                 .Where(p => p.IsActive)

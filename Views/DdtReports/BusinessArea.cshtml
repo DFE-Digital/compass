@@ -1,11 +1,25 @@
 @model List<Compass.Models.Project>
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
-    ViewData["Title"] = $"DDT Reports - {ViewBag.BusinessArea}";
+    ViewData["Title"] = "Business area reports";
     var currentSection = ViewBag.CurrentSection as string ?? "summary";
     var weekStart = (DateTime)ViewBag.WeekStart;
     var weekEnd = (DateTime)ViewBag.WeekEnd;
     var businessArea = ViewBag.BusinessArea as string;
+    var selectedBusinessArea = ViewBag.SelectedBusinessArea as string;
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+    
+    // Product data
+    var businessAreaProducts = ViewBag.BusinessAreaProducts as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var totalProducts = ViewBag.TotalProducts as int? ?? 0;
+    var enrolledProducts = ViewBag.EnrolledProducts as int? ?? 0;
+    var totalAccessibilityIssues = ViewBag.TotalAccessibilityIssues as int? ?? 0;
+    var accessibilityEnrollments = ViewBag.AccessibilityEnrollments as Dictionary<string, Compass.Models.ProductAccessibility> ?? new Dictionary<string, Compass.Models.ProductAccessibility>();
+    var perfUx1Metric = ViewBag.PerfUx1Metric as Compass.Models.PerformanceMetric;
+    var perfAcc3Metric = ViewBag.PerfAcc3Metric as Compass.Models.PerformanceMetric;
+    var latestReturns = ViewBag.LatestReturns as Dictionary<string, Compass.Models.ProductReturn> ?? new Dictionary<string, Compass.Models.ProductReturn>();
     
     // Get recent successes (last 30 days)
     var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
@@ -42,6 +56,26 @@
     
     // Get projects with non-green RAG status
     var atRiskProjects = Model.Where(p => p.RagStatus != "Green").ToList();
+    
+    // Overdue milestones
+    var overdueMilestones = Model
+        .SelectMany(p => p.Milestones
+            .Where(m => !m.IsDeleted && 
+                       m.DueDate < today &&
+                       m.Status != "complete" && 
+                       m.Status != "cancelled")
+            .Select(m => new { Project = p, Milestone = m }))
+        .ToList();
+        
+    // Get view mode from query string (default to projects)
+    var viewMode = Context.Request.Query["view"].ToString();
+    if (string.IsNullOrEmpty(viewMode))
+    {
+        viewMode = "projects";
+    }
+    
+    // User group category type name variations (shared across views)
+    var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
 }
 
 <div class="content-header">
@@ -51,14 +85,28 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
-                    <li class="breadcrumb-item active">@businessArea</li>
+                    <li class="breadcrumb-item active">Business area reports</li>
                 </ol>
             </div>
         </div>
-        <div class="row mb-2 align-items-center">
-            <div class="col-sm-12">
-                <h1 class="m-0">@businessArea - DDT Report</h1>
-                <p class="text-muted mb-0">Snapshot as of @DateTime.Now.ToString("dd MMMM yyyy HH:mm")</p>
+        <div class="row mb-3 align-items-center">
+            <div class="col-md-6">
+                <h1 class="m-0">@(businessArea ?? "Business Area Reports")</h1>
+                <p class="text-muted mb-0">@DateTime.Now.ToString("dd MMMM yyyy")</p>
+            </div>
+            <div class="col-md-6 text-right">
+                @if (businessAreas.Any())
+                {
+                    <div class="form-inline justify-content-end">
+                        <label for="businessAreaSelect" class="mr-2 mb-0 font-weight-bold">Business area:</label>
+                        <select class="form-control" id="businessAreaSelect" style="min-width: 250px;">
+                            @foreach (var area in businessAreas.OrderBy(a => a))
+                            {
+                                <option value="@area" selected="@(area == selectedBusinessArea)">@area</option>
+                            }
+                        </select>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -70,7 +118,7 @@
         {
             <div class="alert alert-success alert-dismissible fade show">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["SuccessMessage"]
+                @Html.Raw(TempData["SuccessMessage"])
             </div>
         }
         @if (TempData["ErrorMessage"] != null)
@@ -81,261 +129,1149 @@
             </div>
         }
 
-        @if (!Model.Any())
+        @if (!businessAreas.Any())
         {
             <div class="card">
                 <div class="card-body text-center p-5">
                     <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                    <h4>No Active Projects</h4>
-                    <p class="text-muted">There are no active projects in the @businessArea business area.</p>
-                    <a asp-action="Index" class="btn btn-primary mt-3">
-                        Back to DDT Reports
-                    </a>
+                    <h4>No business areas available</h4>
+                    <p class="text-muted">There are no business areas configured in the system.</p>
+                    <a asp-action="Index" class="btn btn-primary mt-3">Back to DDT Reports</a>
+                </div>
+            </div>
+        }
+        else if (!Model.Any())
+        {
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                    <h4>No active projects</h4>
+                    <p class="text-muted">There are no active projects in this business area.</p>
                 </div>
             </div>
         }
         else
         {
-            <!-- Header Banner with Key Metrics -->
-            <div class="row mb-4" style="display: flex;">
-                <!-- Left side: Title and three metric cards -->
-                <div class="col-lg-8" style="display: flex;">
-                    <!-- Summary Banner -->
-                    <div class="card border-0 w-100" style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 12px;">
-                        <div class="card-body p-4">
-                            <div class="row align-items-center" style="height: 100%;">
-                                <div class="col-md-6">
-                                    <p class="text-muted mb-1" style="font-size: 0.9rem;">Snapshot as of @DateTime.Now.ToString("dddd, dd MMMM yyyy")</p>
-                                    <h2 class="mb-2" style="font-weight: 600; color: #1976D2;">@businessArea</h2>
-                                    <p class="text-muted mb-0" style="font-size: 0.95rem;">Current state of projects and milestones</p>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-start">
-                                        <!-- Projects Card -->
-                                        <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@Model.Count</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Projects</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <!-- At Risk Card -->
-                                        <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@atRiskProjects.Count</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">At risk</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <!-- Milestones Card -->
-                                        <div style="flex: 0 0 33.333%;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@allActiveMilestones.Count</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Milestones</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+            <div class="row">
+                <!-- Left Column - Navigation -->
+                <div class="col-md-2 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">View</h3>
                         </div>
-                    </div>
-                </div>
-                <!-- Right side: What's New card -->
-                <div class="col-lg-4" style="display: flex;">
-                    <div class="card border-0 shadow-sm w-100 metric-card" style="border-radius: 12px; background: white; transition: transform 0.2s, box-shadow 0.2s;">
-                        <div class="card-body p-4">
-                            <div style="height: 100%;">
-                                <h5 class="mb-2" style="font-weight: 600;">Current status</h5>
-                                <p class="text-muted mb-2" style="font-size: 0.9rem;">
-                                    <strong>@milestonesDueSoon.Count</strong> milestones due soon<br>
-                                    <strong>@allActiveMilestones.Count</strong> active milestones<br>
-                                    <strong>@allDdtSuccesses.Count</strong> recent successes
-                                </p>
-                                <a asp-action="Index" class="btn" style="background: #FF6B35; color: white; border-radius: 6px; font-weight: 500;">
-                                    Back to Reports
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=projects" 
+                                   class="list-group-item list-group-item-action @(viewMode == "projects" ? "active" : "")">
+                                    Projects
+                                </a>
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=products" 
+                                   class="list-group-item list-group-item-action @(viewMode == "products" ? "active" : "")">
+                                    Products
+                                </a>
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=milestones" 
+                                   class="list-group-item list-group-item-action @(viewMode == "milestones" ? "active" : "")">
+                                    Milestones
+                                </a>
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=delivery" 
+                                   class="list-group-item list-group-item-action @(viewMode == "delivery" ? "active" : "")">
+                                    Delivery reporting
+                                </a>
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=performance" 
+                                   class="list-group-item list-group-item-action @(viewMode == "performance" ? "active" : "")">
+                                    Performance metrics
+                                </a>
+                                <a href="?area=@Uri.EscapeDataString(businessArea ?? "")&view=risks" 
+                                   class="list-group-item list-group-item-action @(viewMode == "risks" ? "active" : "")">
+                                    At risk
                                 </a>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- RAG Status Summary -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">RAG Status Overview</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-lg-3 col-md-6 mb-3">
-                                    <div class="card border-left-success shadow-sm">
-                                        <div class="card-body">
-                                            <div class="d-flex align-items-center">
-                                                <div class="flex-grow-1">
-                                                    <div class="text-muted text-uppercase mb-1" style="font-size: 0.75rem; font-weight: 600;">Green RAG</div>
-                                                    <h2 class="mb-0" style="font-weight: 700; color: #28a745;">@Model.Count(p => p.RagStatus == "Green")</h2>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <i class="fas fa-check-circle fa-2x text-success"></i>
-                                                </div>
-                                            </div>
-                                        </div>
+                <!-- Right Column - Content -->
+                <div class="col-md-10">
+                    @if (viewMode == "projects")
+                    {
+                        <!-- Key Metrics Overview -->
+                        <div class="row mb-3">
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-info h-100">
+                                    <div class="inner">
+                                        <h3>@Model.Count</h3>
+                                        <p>Total projects</p>
                                     </div>
                                 </div>
-                                <div class="col-lg-3 col-md-6 mb-3">
-                                    <div class="card border-left-warning shadow-sm">
-                                        <div class="card-body">
-                                            <div class="d-flex align-items-center">
-                                                <div class="flex-grow-1">
-                                                    <div class="text-muted text-uppercase mb-1" style="font-size: 0.75rem; font-weight: 600;">Amber RAG</div>
-                                                    <h2 class="mb-0" style="font-weight: 700; color: #ffc107;">@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</h2>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
-                                                </div>
-                                            </div>
-                                        </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var atRiskBg = atRiskProjects.Count == 0 ? "success" : 
+                                                  atRiskProjects.Count <= 2 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@atRiskBg h-100">
+                                    <div class="inner">
+                                        <h3>@atRiskProjects.Count</h3>
+                                        <p>At risk</p>
                                     </div>
                                 </div>
-                                <div class="col-lg-3 col-md-6 mb-3">
-                                    <div class="card border-left-danger shadow-sm">
-                                        <div class="card-body">
-                                            <div class="d-flex align-items-center">
-                                                <div class="flex-grow-1">
-                                                    <div class="text-muted text-uppercase mb-1" style="font-size: 0.75rem; font-weight: 600;">Red RAG</div>
-                                                    <h2 class="mb-0" style="font-weight: 700; color: #dc3545;">@Model.Count(p => p.RagStatus == "Red")</h2>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <i class="fas fa-times-circle fa-2x text-danger"></i>
-                                                </div>
-                                            </div>
-                                        </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-primary h-100">
+                                    <div class="inner">
+                                        <h3>@allActiveMilestones.Count</h3>
+                                        <p>Active milestones</p>
                                     </div>
                                 </div>
-                                <div class="col-lg-3 col-md-6 mb-3">
-                                    <div class="card border-left-info shadow-sm">
-                                        <div class="card-body">
-                                            <div class="d-flex align-items-center">
-                                                <div class="flex-grow-1">
-                                                    <div class="text-muted text-uppercase mb-1" style="font-size: 0.75rem; font-weight: 600;">Active Milestones</div>
-                                                    <h2 class="mb-0" style="font-weight: 700; color: #17a2b8;">@allActiveMilestones.Count</h2>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <i class="fas fa-flag-checkered fa-2x text-info"></i>
-                                                </div>
-                                            </div>
-                                        </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var overdueBg = overdueMilestones.Count == 0 ? "success" : 
+                                                   overdueMilestones.Count <= 3 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@overdueBg h-100">
+                                    <div class="inner">
+                                        <h3>@overdueMilestones.Count</h3>
+                                        <p>Overdue</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Projects Requiring Attention -->
-            @if (atRiskProjects.Any())
-            {
-                <div class="card mb-4">
-                    <div class="card-header bg-danger text-white">
-                        <h3 class="card-title mb-0">Projects Requiring Attention</h3>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
-                            <thead>
-                                <tr>
-                                    <th>Project</th>
-                                    <th>RAG Status</th>
-                                    <th>Justification</th>
-                                    <th>Path to Green</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var project in atRiskProjects)
-                                {
-                                    <tr>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                <strong>@project.Title</strong>
-                                            </a><br>
-                                            <small class="text-muted">@project.ProjectCode</small>
-                                        </td>
-                                        <td>
-                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                        </td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(project.RagJustification))
-                                            {
-                                                @project.RagJustification.Substring(0, Math.Min(150, project.RagJustification.Length))@(project.RagJustification.Length > 150 ? "..." : "")
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">No justification provided</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(project.PathToGreen))
-                                            {
-                                                @project.PathToGreen.Substring(0, Math.Min(100, project.PathToGreen.Length))@(project.PathToGreen.Length > 100 ? "..." : "")
-                                            }
-                                            else
-                                            {
-                                                <span class="text-warning">Not documented</span>
-                                            }
-                                        </td>
-                                    </tr>
+                        <!-- All Projects -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">All projects</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>RAG</th>
+                                            <th>Phase</th>
+                                            <th>Target delivery</th>
+                                            <th class="text-center">Active milestones</th>
+                                            <th class="text-center">Overdue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.OrderBy(p => p.Title))
+                                        {
+                                            var projectMilestones = project.Milestones.Where(m => !m.IsDeleted && m.Status != "complete").Count();
+                                            var projectOverdue = project.Milestones.Where(m => !m.IsDeleted && m.DueDate < today && m.Status != "complete" && m.Status != "cancelled").Count();
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                        <strong>@project.Title</strong>
+                                                    </a><br>
+                                                    <small class="text-muted">@project.ProjectCode</small>
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                    {
+                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(project.Phase))
+                                                    {
+                                                        @project.Phase
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (project.TargetDeliveryDate.HasValue)
+                                                    {
+                                                        @project.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (projectMilestones > 0)
+                                                    {
+                                                        <span class="badge badge-info">@projectMilestones</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (projectOverdue > 0)
+                                                    {
+                                                        <span class="badge badge-danger">@projectOverdue</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-success">0</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (viewMode == "products")
+                    {
+                        <!-- Products View -->
+                        <div class="row mb-3">
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-info h-100">
+                                    <div class="inner">
+                                        <h3>@totalProducts</h3>
+                                        <p>Total products</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var enrolledPercentage = totalProducts > 0 ? (enrolledProducts / (double)totalProducts) * 100 : 0;
+                                    var enrolledBg = enrolledPercentage >= 80 ? "success" : enrolledPercentage >= 50 ? "warning" : "danger";
                                 }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            }
+                                <div class="small-box bg-@enrolledBg h-100">
+                                    <div class="inner">
+                                        <h3>@enrolledProducts</h3>
+                                        <p>Accessibility enrolled</p>
+                                    </div>
+                                </div>
+                            </div>
 
-            <!-- All Projects in Business Area -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">All Projects in @businessArea</h3>
-                </div>
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap">
-                        <thead>
-                            <tr>
-                                <th>Project</th>
-                                <th>RAG Status</th>
-                                <th>Phase</th>
-                                <th>Target Delivery</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var project in Model.OrderBy(p => p.Title))
-                            {
-                                <tr>
-                                    <td>
-                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                            <strong>@project.Title</strong>
-                                        </a><br>
-                                        <small class="text-muted">@project.ProjectCode</small>
-                                    </td>
-                                    <td>
-                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                    </td>
-                                    <td>@project.Phase</td>
-                                    <td>@(project.TargetDeliveryDate?.ToString("dd MMM yyyy") ?? "")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var issuesBg = totalAccessibilityIssues == 0 ? "success" : 
+                                                  totalAccessibilityIssues <= 5 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@issuesBg h-100">
+                                    <div class="inner">
+                                        <h3>@totalAccessibilityIssues</h3>
+                                        <p>Open accessibility issues</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    // Calculate average FIPS completion
+                                    var completionPercentages = new List<double>();
+                                    foreach (var product in businessAreaProducts)
+                                    {
+                                        var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                                                      (product.CategoryValues?.Any(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+                                        var hasBusinessArea = product.CategoryValues?.Any(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
+                                        var contactsCount = product.ProductContacts?.Count ?? 0;
+                                        var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
+                                        var userGroupsCount = product.CategoryValues?
+                                            .Count(cv => cv.CategoryType != null && 
+                                                        userGroupVariations.Any(v => cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
+                                        
+                                        var completedCriteria = 0;
+                                        if (hasPhase) completedCriteria++;
+                                        if (hasBusinessArea) completedCriteria++;
+                                        if (contactsCount > 0) completedCriteria++;
+                                        if (hasProductUrl) completedCriteria++;
+                                        if (userGroupsCount > 0) completedCriteria++;
+                                        
+                                        completionPercentages.Add((completedCriteria / 5.0) * 100);
+                                    }
+                                    
+                                    var avgCompletion = completionPercentages.Any() ? completionPercentages.Average() : 0;
+                                    var completionBg = avgCompletion >= 80 ? "success" : avgCompletion >= 60 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@completionBg h-100">
+                                    <div class="inner">
+                                        <h3>@avgCompletion.ToString("F0")%</h3>
+                                        <p>Avg FIPS completion</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Products Table -->
+                        @if (businessAreaProducts.Any())
+                        {
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">Product details</h3>
+                                </div>
+                                <div class="card-body table-responsive p-0">
+                                    <table class="table table-hover text-nowrap mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th>Phase</th>
+                                                <th class="text-center">FIPS completion</th>
+                                                <th class="text-center">Accessibility</th>
+                                                <th class="text-center">Open issues</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var product in businessAreaProducts.OrderBy(p => p.Title))
+                                            {
+                                                if (string.IsNullOrEmpty(product.FipsId)) continue;
+                                                
+                                                // Calculate completion
+                                                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                                                              (product.CategoryValues?.Any(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+                                                var hasBusinessArea = product.CategoryValues?.Any(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
+                                                var contactsCount = product.ProductContacts?.Count ?? 0;
+                                                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
+                                                var userGroupsCount = product.CategoryValues?
+                                                    .Count(cv => cv.CategoryType != null && 
+                                                                userGroupVariations.Any(v => cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
+                                                
+                                                var completedCriteria = 0;
+                                                if (hasPhase) completedCriteria++;
+                                                if (hasBusinessArea) completedCriteria++;
+                                                if (contactsCount > 0) completedCriteria++;
+                                                if (hasProductUrl) completedCriteria++;
+                                                if (userGroupsCount > 0) completedCriteria++;
+                                                
+                                                var completionPercentage = (completedCriteria / 5.0) * 100;
+                                                var completionBadgeClass = completionPercentage >= 80 ? "badge-success" : 
+                                                                          completionPercentage >= 60 ? "badge-warning" : "badge-danger";
+                                                
+                                                // Get accessibility data
+                                                var isEnrolled = accessibilityEnrollments.ContainsKey(product.FipsId);
+                                                var openIssues = isEnrolled ? accessibilityEnrollments[product.FipsId].Issues?.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")) ?? 0 : 0;
+                                                
+                                                var complianceStatus = "Not enrolled";
+                                                var complianceBadgeClass = "badge-secondary";
+                                                if (isEnrolled)
+                                                {
+                                                    if (openIssues == 0)
+                                                    {
+                                                        complianceStatus = "Compliant";
+                                                        complianceBadgeClass = "badge-success";
+                                                    }
+                                                    else if (openIssues <= 5)
+                                                    {
+                                                        complianceStatus = "Partially compliant";
+                                                        complianceBadgeClass = "badge-warning";
+                                                    }
+                                                    else
+                                                    {
+                                                        complianceStatus = "Non-compliant";
+                                                        complianceBadgeClass = "badge-danger";
+                                                    }
+                                                }
+                                                
+                                                <tr>
+                                                    <td>
+                                                        <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                           target="_blank" 
+                                                           rel="noopener noreferrer">
+                                                            <strong>@product.Title</strong>
+                                                        </a><br>
+                                                        <small class="text-muted">@product.FipsId</small>
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(product.Phase))
+                                                        {
+                                                            @product.Phase
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge @completionBadgeClass">
+                                                            @completionPercentage.ToString("F0")%
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge @complianceBadgeClass">
+                                                            @complianceStatus
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        @if (isEnrolled)
+                                                        {
+                                                            var issuesBadgeClass = openIssues == 0 ? "badge-success" : 
+                                                                                  openIssues <= 5 ? "badge-warning" : "badge-danger";
+                                                            <span class="badge @issuesBadgeClass">@openIssues</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="card">
+                                <div class="card-body text-center p-5">
+                                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                                    <h4>No products</h4>
+                                    <p class="text-muted">There are no products assigned to this business area.</p>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (viewMode == "milestones")
+                    {
+                        <!-- Milestones View -->
+                        <div class="row mb-3">
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="small-box bg-primary h-100">
+                                    <div class="inner">
+                                        <h3>@allActiveMilestones.Count</h3>
+                                        <p>Active milestones</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="small-box bg-warning h-100">
+                                    <div class="inner">
+                                        <h3>@milestonesDueSoon.Count</h3>
+                                        <p>Due within 14 days</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                @{
+                                    var overdueBg = overdueMilestones.Count == 0 ? "success" : 
+                                                   overdueMilestones.Count <= 3 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@overdueBg h-100">
+                                    <div class="inner">
+                                        <h3>@overdueMilestones.Count</h3>
+                                        <p>Overdue</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- All Milestones Table -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">All milestones</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap mb-0 sortable-table" id="milestonesTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="milestone" style="cursor: pointer;">
+                                                Milestone <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="sortable" data-column="project" style="cursor: pointer;">
+                                                Project <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="sortable" data-column="duedate" style="cursor: pointer;">
+                                                Due date <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="sortable" data-column="status" style="cursor: pointer;">
+                                                Status <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="progress" style="cursor: pointer;">
+                                                Progress <i class="fas fa-sort"></i>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in allActiveMilestones.OrderBy(x => x.Milestone.DueDate))
+                                        {
+                                            var isOverdue = item.Milestone.DueDate < today;
+                                            var daysUntilDue = (item.Milestone.DueDate - today).Days;
+                                            var rowClass = isOverdue ? "table-danger" : 
+                                                          daysUntilDue <= 3 ? "table-warning" : "";
+                                            <tr class="@rowClass"
+                                                data-milestone="@item.Milestone.Name.ToLower()"
+                                                data-project="@item.Project.Title.ToLower()"
+                                                data-duedate="@item.Milestone.DueDate.ToString("yyyy-MM-dd")"
+                                                data-status="@item.Milestone.Status"
+                                                data-progress="@(item.Milestone.ProgressPercent ?? 0)">
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = item.Project.Id })">
+                                                        <strong>@item.Milestone.Name</strong>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">@item.Project.Title</small>
+                                                </td>
+                                                <td>
+                                                    @item.Milestone.DueDate.ToString("dd MMM yyyy")
+                                                    @if (isOverdue)
+                                                    {
+                                                        <br />
+                                                        <small class="text-danger font-weight-bold">
+                                                            <i class="fas fa-exclamation-circle"></i>
+                                                            @Math.Abs(daysUntilDue) days overdue
+                                                        </small>
+                                                    }
+                                                    else if (daysUntilDue <= 7)
+                                                    {
+                                                        <br />
+                                                        <small>
+                                                            @if (daysUntilDue == 0)
+                                                            {
+                                                                <span class="badge badge-danger">Due today</span>
+                                                            }
+                                                            else if (daysUntilDue == 1)
+                                                            {
+                                                                <span class="badge badge-warning">Due tomorrow</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>Due in @daysUntilDue days</text>
+                                                            }
+                                                        </small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(item.Milestone.Status == "complete" ? "success" : item.Milestone.Status == "at_risk" ? "warning" : "info")">
+                                                        @item.Milestone.Status.Replace("_", " ")
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (item.Milestone.ProgressPercent.HasValue)
+                                                    {
+                                                        <span>@item.Milestone.ProgressPercent%</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (viewMode == "delivery")
+                    {
+                        <!-- Delivery Reporting View -->
+                        var projectsWithTargetDate = Model.Where(p => p.TargetDeliveryDate.HasValue).ToList();
+                        var upcomingDeliveries = projectsWithTargetDate.Where(p => p.TargetDeliveryDate >= today && p.TargetDeliveryDate <= today.AddDays(90)).ToList();
+                        var completedMilestones = Model.SelectMany(p => p.Milestones.Where(m => !m.IsDeleted && m.Status == "complete")).Count();
+                        var totalMilestones = Model.SelectMany(p => p.Milestones.Where(m => !m.IsDeleted)).Count();
+                        var milestoneCompletionRate = totalMilestones > 0 ? (completedMilestones / (double)totalMilestones) * 100 : 0;
+                        
+                        <div class="row mb-3">
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-info h-100">
+                                    <div class="inner">
+                                        <h3>@projectsWithTargetDate.Count</h3>
+                                        <p>Projects with target date</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-warning h-100">
+                                    <div class="inner">
+                                        <h3>@upcomingDeliveries.Count</h3>
+                                        <p>Due within 90 days</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var completionBg = milestoneCompletionRate >= 80 ? "success" : 
+                                                      milestoneCompletionRate >= 60 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@completionBg h-100">
+                                    <div class="inner">
+                                        <h3>@milestoneCompletionRate.ToString("F0")%</h3>
+                                        <p>Milestone completion</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-primary h-100">
+                                    <div class="inner">
+                                        <h3>@completedMilestones / @totalMilestones</h3>
+                                        <p>Milestones completed</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project Delivery Timeline -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Project delivery timeline</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>RAG</th>
+                                            <th>Phase</th>
+                                            <th>Start date</th>
+                                            <th>Target delivery</th>
+                                            <th class="text-center">Milestones</th>
+                                            <th class="text-center">Completion %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.OrderBy(p => p.TargetDeliveryDate ?? DateTime.MaxValue))
+                                        {
+                                            var projectTotalMilestones = project.Milestones.Where(m => !m.IsDeleted).Count();
+                                            var projectCompletedMilestones = project.Milestones.Where(m => !m.IsDeleted && m.Status == "complete").Count();
+                                            var projectCompletionRate = projectTotalMilestones > 0 ? (projectCompletedMilestones / (double)projectTotalMilestones) * 100 : 0;
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                        <strong>@project.Title</strong>
+                                                    </a><br>
+                                                    <small class="text-muted">@project.ProjectCode</small>
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                    {
+                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(project.Phase))
+                                                    {
+                                                        @project.Phase
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (project.StartDate.HasValue)
+                                                    {
+                                                        @project.StartDate.Value.ToString("dd MMM yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (project.TargetDeliveryDate.HasValue)
+                                                    {
+                                                        @project.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                                        var daysUntilDelivery = (project.TargetDeliveryDate.Value - today).Days;
+                                                        if (daysUntilDelivery >= 0 && daysUntilDelivery <= 90)
+                                                        {
+                                                            <br />
+                                                            <small class="text-warning">@daysUntilDelivery days</small>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (projectTotalMilestones > 0)
+                                                    {
+                                                        <span>@projectCompletedMilestones / @projectTotalMilestones</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (projectTotalMilestones > 0)
+                                                    {
+                                                        var completionBadgeClass = projectCompletionRate >= 80 ? "badge-success" : 
+                                                                                   projectCompletionRate >= 60 ? "badge-warning" : "badge-danger";
+                                                        <span class="badge @completionBadgeClass">@projectCompletionRate.ToString("F0")%</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (viewMode == "performance")
+                    {
+                        <!-- Performance Metrics View -->
+                        var productsWithReturns = businessAreaProducts.Where(p => 
+                            !string.IsNullOrEmpty(p.FipsId) && latestReturns.ContainsKey(p.FipsId)).Count();
+                        var productsWithoutReturns = totalProducts - productsWithReturns;
+                        
+                        <div class="row mb-3">
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <div class="small-box bg-info h-100">
+                                    <div class="inner">
+                                        <h3>@totalProducts</h3>
+                                        <p>Total products</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var returnsBg = productsWithReturns >= totalProducts * 0.8 ? "success" : 
+                                                   productsWithReturns >= totalProducts * 0.5 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@returnsBg h-100">
+                                    <div class="inner">
+                                        <h3>@productsWithReturns</h3>
+                                        <p>Reporting products</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var missingBg = productsWithoutReturns == 0 ? "success" : 
+                                                   productsWithoutReturns <= 3 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@missingBg h-100">
+                                    <div class="inner">
+                                        <h3>@productsWithoutReturns</h3>
+                                        <p>Missing data</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                @{
+                                    var reportingRate = totalProducts > 0 ? (productsWithReturns / (double)totalProducts) * 100 : 0;
+                                    var rateBg = reportingRate >= 80 ? "success" : reportingRate >= 50 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@rateBg h-100">
+                                    <div class="inner">
+                                        <h3>@reportingRate.ToString("F0")%</h3>
+                                        <p>Reporting rate</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Metrics Table -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Product performance metrics</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Phase</th>
+                                            <th class="text-center">@(perfUx1Metric?.Title ?? "User satisfaction")</th>
+                                            <th class="text-center">@(perfAcc3Metric?.Title ?? "Accessibility score")</th>
+                                            <th class="text-center">Last submission</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in businessAreaProducts.OrderBy(p => p.Title))
+                                        {
+                                            if (string.IsNullOrEmpty(product.FipsId)) continue;
+                                            
+                                            var hasReturn = latestReturns.ContainsKey(product.FipsId);
+                                            var productReturn = hasReturn ? latestReturns[product.FipsId] : null;
+                                            
+                                            string? perfUx1Value = null;
+                                            string? perfAcc3Value = null;
+                                            
+                                            if (productReturn != null)
+                                            {
+                                                if (perfUx1Metric != null)
+                                                {
+                                                    perfUx1Value = productReturn.MetricValues?
+                                                        .FirstOrDefault(mv => mv.PerformanceMetricId == perfUx1Metric.Id)?.Value;
+                                                }
+                                                
+                                                if (perfAcc3Metric != null)
+                                                {
+                                                    perfAcc3Value = productReturn.MetricValues?
+                                                        .FirstOrDefault(mv => mv.PerformanceMetricId == perfAcc3Metric.Id)?.Value;
+                                                }
+                                            }
+                                            
+                                            var rowClass = !hasReturn ? "table-warning" : "";
+                                            
+                                            <tr class="@rowClass">
+                                                <td>
+                                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                       target="_blank" 
+                                                       rel="noopener noreferrer">
+                                                        <strong>@product.Title</strong>
+                                                    </a><br>
+                                                    <small class="text-muted">@product.FipsId</small>
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(product.Phase))
+                                                    {
+                                                        @product.Phase
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (!string.IsNullOrEmpty(perfUx1Value))
+                                                    {
+                                                        if (decimal.TryParse(perfUx1Value, out var uxScore))
+                                                        {
+                                                            var uxBadgeClass = uxScore >= 90 ? "badge-success" :
+                                                                              uxScore >= 80 ? "badge-warning" : "badge-danger";
+                                                            <span class="badge @uxBadgeClass">@perfUx1Value</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-info">@perfUx1Value</span>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No data</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (!string.IsNullOrEmpty(perfAcc3Value))
+                                                    {
+                                                        <span class="badge badge-info">@perfAcc3Value</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No data</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (productReturn != null && productReturn.SubmittedDate.HasValue)
+                                                    {
+                                                        @productReturn.SubmittedDate.Value.ToString("MMM yyyy")
+                                                        <br />
+                                                        <small class="text-muted">by @productReturn.SubmittedBy</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-warning">
+                                                            <i class="fas fa-exclamation-circle"></i>
+                                                            Never submitted
+                                                        </span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        @if (perfUx1Metric == null || perfAcc3Metric == null)
+                        {
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                <strong>Note:</strong>
+                                @if (perfUx1Metric == null && perfAcc3Metric == null)
+                                {
+                                    <span>Performance metrics perf-ux-1 and perf-acc-3 have not been configured yet. Please add these metrics in the Performance Metrics administration area.</span>
+                                }
+                                else if (perfUx1Metric == null)
+                                {
+                                    <span>Performance metric perf-ux-1 has not been configured yet. Please add this metric in the Performance Metrics administration area.</span>
+                                }
+                                else
+                                {
+                                    <span>Performance metric perf-acc-3 has not been configured yet. Please add this metric in the Performance Metrics administration area.</span>
+                                }
+                            </div>
+                        }
+                    }
+                    else if (viewMode == "risks")
+                    {
+                        <!-- At Risk View -->
+                        <div class="row mb-3">
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                @{
+                                    var atRiskBg = atRiskProjects.Count == 0 ? "success" : 
+                                                  atRiskProjects.Count <= 2 ? "warning" : "danger";
+                                }
+                                <div class="small-box bg-@atRiskBg h-100">
+                                    <div class="inner">
+                                        <h3>@atRiskProjects.Count</h3>
+                                        <p>At risk projects</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="small-box bg-danger h-100">
+                                    <div class="inner">
+                                        <h3>@Model.Count(p => p.RagStatus == "Red")</h3>
+                                        <p>Red RAG</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="small-box bg-warning h-100">
+                                    <div class="inner">
+                                        <h3>@Model.Count(p => p.RagStatus == "Amber" || p.RagStatus == "Amber-Green" || p.RagStatus == "Amber-Red")</h3>
+                                        <p>Amber RAG</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (atRiskProjects.Any())
+                        {
+                            <div class="card">
+                                <div class="card-header bg-danger text-white">
+                                    <h3 class="card-title">Projects requiring attention</h3>
+                                </div>
+                                <div class="card-body table-responsive p-0">
+                                    <table class="table table-hover text-nowrap mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>RAG</th>
+                                                <th>Justification</th>
+                                                <th>Path to green</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var project in atRiskProjects.OrderBy(p => p.RagStatus == "Red" ? 0 : 1).ThenBy(p => p.Title))
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                            <strong>@project.Title</strong>
+                                                        </a><br>
+                                                        <small class="text-muted">@project.ProjectCode</small>
+                                                    </td>
+                                                    <td>
+                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(project.RagJustification))
+                                                        {
+                                                            @project.RagJustification.Substring(0, Math.Min(200, project.RagJustification.Length))@(project.RagJustification.Length > 200 ? "..." : "")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">No justification provided</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(project.PathToGreen))
+                                                        {
+                                                            @project.PathToGreen.Substring(0, Math.Min(150, project.PathToGreen.Length))@(project.PathToGreen.Length > 150 ? "..." : "")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-warning">
+                                                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                                                Not documented
+                                                            </span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="card">
+                                <div class="card-body text-center p-5">
+                                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                    <h4>No projects at risk</h4>
+                                    <p class="text-muted">All projects in this business area have a Green RAG status.</p>
+                                </div>
+                            </div>
+                        }
+                    }
                 </div>
             </div>
         }
     </div>
 </section>
+
+<style>
+.small-box {
+    border-radius: .25rem;
+    box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+    display: block;
+    margin-bottom: 0;
+    position: relative;
+    min-height: 100px;
+}
+
+.small-box > .inner {
+    padding: 15px;
+}
+
+.small-box h3 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 5px;
+    padding: 0;
+    color: #fff;
+}
+
+.small-box p {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0;
+}
+
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+@@media (max-width: 767px) {
+    .small-box h3 {
+        font-size: 2rem;
+    }
+    
+    .small-box > .inner {
+        padding: 10px;
+    }
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Handle business area dropdown change
+            $('#businessAreaSelect').on('change', function() {
+                var selectedArea = $(this).val();
+                if (selectedArea) {
+                    var currentView = '@viewMode';
+                    window.location.href = '@Url.Action("BusinessArea", "DdtReports")?area=' + encodeURIComponent(selectedArea) + '&view=' + currentView;
+                }
+            });
+            
+            // Initialize sortable table for milestones
+            initializeSortableTable($('#milestonesTable'));
+            
+            function initializeSortableTable(table) {
+                if (!table.length) return;
+                
+                var currentSort = { column: null, direction: 'asc' };
+                
+                table.find('.sortable').on('click keypress', function(e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+                    
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+                
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr').toArray();
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        
+                        if (column === 'milestone') {
+                            aVal = $(a).data('milestone') || '';
+                            bVal = $(b).data('milestone') || '';
+                        } else if (column === 'project') {
+                            aVal = $(a).data('project') || '';
+                            bVal = $(b).data('project') || '';
+                        } else if (column === 'duedate') {
+                            aVal = new Date($(a).data('duedate'));
+                            bVal = new Date($(b).data('duedate'));
+                        } else if (column === 'status') {
+                            aVal = $(a).data('status') || '';
+                            bVal = $(b).data('status') || '';
+                        } else if (column === 'progress') {
+                            aVal = parseFloat($(a).data('progress')) || 0;
+                            bVal = parseFloat($(b).data('progress')) || 0;
+                        }
+                        
+                        if (typeof aVal === 'string') {
+                            if (direction === 'asc') {
+                                return aVal.localeCompare(bVal);
+                            } else {
+                                return bVal.localeCompare(aVal);
+                            }
+                        } else {
+                            if (direction === 'asc') {
+                                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                            } else {
+                                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                            }
+                        }
+                    });
+                    
+                    tbody.empty();
+                    rows.forEach(function(row) {
+                        tbody.append(row);
+                    });
+                    
+                    updateSortIcons(table, column, direction);
+                }
+                
+                function updateSortIcons(table, column, direction) {
+                    // Remove all sort icons
+                    table.find('.sortable i').removeClass('fa-sort fa-sort-up fa-sort-down').addClass('fa-sort');
+                    
+                    // Add sort icon to current column
+                    var header = table.find('.sortable[data-column="' + column + '"]');
+                    var icon = header.find('i');
+                    icon.removeClass('fa-sort');
+                    var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                    icon.addClass(iconClass);
+                }
+            }
+        });
+    </script>
+}
 
 @functions {
     string GetRagBadgeClass(string ragStatus)
@@ -351,4 +1287,3 @@
         };
     }
 }
-
