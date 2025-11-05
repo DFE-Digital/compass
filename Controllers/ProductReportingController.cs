@@ -252,8 +252,8 @@ public class ProductReportingController : Controller
             return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
         }).ToList();
 
-        // Get product type from category values
-        string? productType = null;
+        // Get all product types from category values
+        var productTypes = new List<string>();
         if (product.CategoryValues != null)
         {
             _logger.LogInformation("Product {FipsId} has {Count} category values", fipsId, product.CategoryValues.Count);
@@ -262,16 +262,18 @@ public class ProductReportingController : Controller
                 _logger.LogInformation("  Category: {Name} (Type: {TypeName})", cv.Name, cv.CategoryType?.Name);
             }
             
-            var typeCategory = product.CategoryValues
-                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true);
-            if (typeCategory != null)
+            productTypes = product.CategoryValues
+                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList();
+                
+            if (productTypes.Any())
             {
-                productType = typeCategory.Name;
-                _logger.LogInformation("Product {FipsId} has Type: {Type}", fipsId, productType);
+                _logger.LogInformation("Product {FipsId} has Types: {Types}", fipsId, string.Join(", ", productTypes));
             }
             else
             {
-                _logger.LogWarning("Product {FipsId} does not have a Type category assigned", fipsId);
+                _logger.LogWarning("Product {FipsId} does not have any Type categories assigned", fipsId);
             }
         }
         else
@@ -279,7 +281,7 @@ public class ProductReportingController : Controller
             _logger.LogWarning("Product {FipsId} has no CategoryValues", fipsId);
         }
 
-        // Filter by type - only include metrics that apply to the product's type
+        // Filter by type - only include metrics where ANY of the product's types match ANY of the metric's applicable types
         var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
         {
             // If no types specified, metric applies to all types
@@ -289,27 +291,29 @@ public class ProductReportingController : Controller
                 return true;
             }
             
-            // If product has no type, show all metrics
-            if (string.IsNullOrEmpty(productType))
+            // If product has no types, show all metrics anyway
+            if (!productTypes.Any())
             {
-                _logger.LogInformation("Metric {MetricId} ({Title}) has type restriction but product has no type - including anyway", m.Id, m.Title);
+                _logger.LogInformation("Metric {MetricId} ({Title}) has type restriction but product has no types - including anyway", m.Id, m.Title);
                 return true;
             }
             
-            // Check if product's type is in the metric's applicable types
+            // Check if ANY of the product's types match ANY of the metric's applicable types
             var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim())
                 .ToList();
             
-            var matches = applicableTypes.Contains(productType, StringComparer.OrdinalIgnoreCase);
+            var matches = productTypes.Any(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase));
             if (matches)
             {
-                _logger.LogInformation("Metric {MetricId} ({Title}) matches product type '{ProductType}' - including", m.Id, m.Title, productType);
+                var matchingTypes = productTypes.Where(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase)).ToList();
+                _logger.LogInformation("Metric {MetricId} ({Title}) matches product types '{ProductTypes}' - including", 
+                    m.Id, m.Title, string.Join(", ", matchingTypes));
             }
             else
             {
-                _logger.LogInformation("Metric {MetricId} ({Title}) requires types [{Types}] but product has '{ProductType}' - excluding", 
-                    m.Id, m.Title, string.Join(", ", applicableTypes), productType);
+                _logger.LogInformation("Metric {MetricId} ({Title}) requires types [{MetricTypes}] but product has [{ProductTypes}] with no overlap - excluding", 
+                    m.Id, m.Title, string.Join(", ", applicableTypes), string.Join(", ", productTypes));
             }
             
             return matches;
