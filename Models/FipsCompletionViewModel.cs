@@ -17,6 +17,7 @@ public class ProductCompletionItem
     public string FipsId { get; set; } = string.Empty;
     public string ProductTitle { get; set; } = string.Empty;
     public string BusinessArea { get; set; } = string.Empty;
+    public string State { get; set; } = "New";
     
     // Completion criteria
     public bool HasPhase { get; set; }
