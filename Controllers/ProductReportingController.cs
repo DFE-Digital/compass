@@ -252,6 +252,37 @@ public class ProductReportingController : Controller
             return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
         }).ToList();
 
+        // Get product type from category values
+        string? productType = null;
+        if (product.CategoryValues != null)
+        {
+            var typeCategory = product.CategoryValues
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true);
+            if (typeCategory != null)
+            {
+                productType = typeCategory.Name;
+            }
+        }
+
+        // Filter by type - only include metrics that apply to the product's type
+        var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
+        {
+            // If no types specified, metric applies to all types
+            if (string.IsNullOrEmpty(m.ApplicableTypes))
+                return true;
+            
+            // If product has no type, show all metrics
+            if (string.IsNullOrEmpty(productType))
+                return true;
+            
+            // Check if product's type is in the metric's applicable types
+            var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .ToList();
+            
+            return applicableTypes.Contains(productType, StringComparer.OrdinalIgnoreCase);
+        }).ToList();
+
         // Get existing metric values for this return to check conditional dependencies
         var existingMetricValues = await _context.ProductMetricValues
             .Include(mv => mv.PerformanceMetric)
@@ -259,7 +290,7 @@ public class ProductReportingController : Controller
             .ToListAsync();
 
         // Filter by conditional dependencies - only show metrics whose conditions are met
-        var metrics = phaseFilteredMetrics.Where(m => 
+        var metrics = typeFilteredMetrics.Where(m => 
         {
             // If no conditional dependency, always show
             if (!m.ConditionalOnMetricId.HasValue)
