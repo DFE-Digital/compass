@@ -41,6 +41,12 @@ public class PerformanceMetric
     public string ApplicablePhases { get; set; } = string.Empty;
     
     /// <summary>
+    /// Comma-separated list of types this metric applies to (e.g., "Website,App,Mobile app")
+    /// Empty string means applies to all types
+    /// </summary>
+    public string ApplicableTypes { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Indicates if this metric is disabled and should not appear in new returns
     /// </summary>
     public bool IsDisabled { get; set; } = false;
