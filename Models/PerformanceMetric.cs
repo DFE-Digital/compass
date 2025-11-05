@@ -44,6 +44,12 @@ public class PerformanceMetric
     /// Indicates if this metric is disabled and should not appear in new returns
     /// </summary>
     public bool IsDisabled { get; set; } = false;
+    
+    /// <summary>
+    /// Optional ID of another metric that must have a value for this metric to be shown
+    /// If null, this metric is always shown (subject to other conditions)
+    /// </summary>
+    public int? ConditionalOnMetricId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
