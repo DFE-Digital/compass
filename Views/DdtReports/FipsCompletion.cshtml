@@ -317,7 +317,7 @@
                         </div>
                     </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover table-striped mb-0 sortable-table" id="completionTable">
+                        <table class="table table-hover mb-0 sortable-table" id="completionTable">
                             <thead>
                                 <tr>
                                     <th class="sortable" data-column="ProductTitle" style="cursor: pointer;">
@@ -365,51 +365,51 @@
                                         <td class="text-center">
                                             @if (product.HasPhase)
                                             {
-                                                <i class="fas fa-check-circle text-success" title="Phase assigned"></i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="Phase assigned"></i>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-circle text-danger" title="Phase missing"></i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Phase missing"></i>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (product.HasBusinessArea)
                                             {
-                                                <i class="fas fa-check-circle text-success" title="Business area assigned"></i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="Business area assigned"></i>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-circle text-danger" title="Business area missing"></i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Business area missing"></i>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (product.ContactsCount > 0)
                                             {
-                                                <i class="fas fa-check-circle text-success" title="@product.ContactsCount contact(s)"> @product.ContactsCount</i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="@product.ContactsCount contact(s)"></i><span class="completion-count">@product.ContactsCount</span>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-circle text-danger" title="No contacts"> 0</i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="No contacts"></i><span class="completion-count">0</span>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (product.HasProductUrl)
                                             {
-                                                <i class="fas fa-check-circle text-success" title="Product URL provided"></i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="Product URL provided"></i>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-circle text-danger" title="Product URL missing"></i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Product URL missing"></i>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (product.UserGroupsCount > 0)
                                             {
-                                                <i class="fas fa-check-circle text-success" title="@product.UserGroupsCount user group(s)"> @product.UserGroupsCount</i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="@product.UserGroupsCount user group(s)"></i><span class="completion-count">@product.UserGroupsCount</span>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-circle text-danger" title="No user groups"> 0</i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>
                                             }
                                         </td>
                                         <td class="text-center">
@@ -429,6 +429,10 @@
                                                     </a>
                                                     <a class="dropdown-item" href="#" data-action="set-product-url" data-fips-id="@product.FipsId">
                                                         <i class="fas fa-link mr-2"></i> Set Product URL
+                                                    </a>
+                                                    <div class="dropdown-divider"></div>
+                                                    <a class="dropdown-item text-danger" href="#" data-action="update-state-rejected" data-fips-id="@product.FipsId" data-product-title="@product.ProductTitle">
+                                                        <i class="fas fa-ban mr-2"></i> Update State to Rejected
                                                     </a>
                                                 </div>
                                             </div>
@@ -563,6 +567,37 @@
     </div>
 </div>
 
+<!-- Update State to Rejected Modal -->
+<div class="modal fade" id="updateStateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirm State Change</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductState" method="post">
+                <input type="hidden" name="fipsId" id="stateFipsId" />
+                <input type="hidden" name="state" value="Rejected" />
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Warning:</strong> This action will change the state of this product.
+                    </div>
+                    <p class="mb-3">Confirm state change from <strong>Active</strong> to <strong>Rejected</strong>. This will remove the entry from FIPS.</p>
+                    <p class="mb-0"><strong>Product:</strong> <span id="stateProductTitle"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">Confirm Change Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <style>
 .sortable {
     cursor: pointer;
@@ -576,6 +611,18 @@
 .badge-lg {
     font-size: 1rem;
     padding: 0.5rem 0.75rem;
+}
+
+.completion-icon {
+    font-size: 2rem;
+    vertical-align: middle;
+}
+
+.completion-count {
+    font-size: 1rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+    display: inline-block;
 }
 </style>
 
@@ -615,6 +662,12 @@
                 $('#updateProductUrlModal').modal('show');
             }
             
+            function openUpdateStateModal(fipsId, productTitle) {
+                $('#stateFipsId').val(fipsId);
+                $('#stateProductTitle').text(productTitle);
+                $('#updateStateModal').modal('show');
+            }
+            
             // Handle dropdown menu clicks
             $(document).on('click', '[data-action="set-phase"]', function(e) {
                 e.preventDefault();
@@ -637,6 +690,15 @@
                 e.stopPropagation();
                 var fipsId = $(this).data('fips-id');
                 openUpdateProductUrlModal(fipsId);
+                return false;
+            });
+            
+            $(document).on('click', '[data-action="update-state-rejected"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                var productTitle = $(this).data('product-title');
+                openUpdateStateModal(fipsId, productTitle);
                 return false;
             });
             
@@ -759,19 +821,19 @@
                             aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
                             bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
                         } else if (column === 'Phase') {
-                            aVal = $(a).find('td').eq(2).find('.fa-check-circle').length > 0 ? 1 : 0;
-                            bVal = $(b).find('td').eq(2).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            aVal = $(a).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(2).find('.fa-check-square').length > 0 ? 1 : 0;
                         } else if (column === 'BusinessArea') {
-                            aVal = $(a).find('td').eq(3).find('.fa-check-circle').length > 0 ? 1 : 0;
-                            bVal = $(b).find('td').eq(3).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            aVal = $(a).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(3).find('.fa-check-square').length > 0 ? 1 : 0;
                         } else if (column === 'Contacts') {
                             var aText = $(a).find('td').eq(4).text().trim();
                             var bText = $(b).find('td').eq(4).text().trim();
                             aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
                             bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
                         } else if (column === 'ProductUrl') {
-                            aVal = $(a).find('td').eq(5).find('.fa-check-circle').length > 0 ? 1 : 0;
-                            bVal = $(b).find('td').eq(5).find('.fa-check-circle').length > 0 ? 1 : 0;
+                            aVal = $(a).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
+                            bVal = $(b).find('td').eq(5).find('.fa-check-square').length > 0 ? 1 : 0;
                         } else if (column === 'UserGroups') {
                             var aText = $(a).find('td').eq(6).text().trim();
                             var bText = $(b).find('td').eq(6).text().trim();

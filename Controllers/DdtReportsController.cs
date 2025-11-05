@@ -692,5 +692,285 @@ public class DdtReportsController : Controller
             return RedirectToAction("FipsCompletion");
         }
     }
+
+    // POST: DdtReports/UpdateProductState
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductState(string fipsId, string state)
+    {
+        try
+        {
+            // Get product title and current state before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+            var currentState = product?.State ?? "Unknown";
+
+            var success = await _productsApiService.UpdateProductStateAsync(fipsId, state);
+            
+            if (success)
+            {
+                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - State updated from <strong>{currentState}</strong> to <strong>{state}</strong>.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Failed to update product state. Please try again.";
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product state for {FipsId}", fipsId);
+            TempData["ErrorMessage"] = "An error occurred while updating the product state.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+    
+    // GET: DdtReports/DesignAndRunBoard
+    public async Task<IActionResult> DesignAndRunBoard()
+    {
+        try
+        {
+            // Fetch all products from CMS
+            var products = await _productsApiService.GetProductsAsync(null);
+            
+            // Get all accessibility enrollments
+            var accessibilityEnrollments = await _context.ProductAccessibilities
+                .Where(pa => !pa.IsDeleted)
+                .Include(pa => pa.Issues)
+                .ToDictionaryAsync(pa => pa.FipsId);
+            
+            // Get performance metrics for perf-ux-1 and perf-acc-3
+            var perfUx1Metric = await _context.PerformanceMetrics
+                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-ux-1");
+            var perfAcc3Metric = await _context.PerformanceMetrics
+                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-acc-3");
+            
+            // Get latest product returns for all products
+            var latestReturns = await _context.ProductReturns
+                .Where(pr => pr.Status == ReturnStatus.Submitted)
+                .Include(pr => pr.MetricValues)
+                .GroupBy(pr => pr.FipsId)
+                .Select(g => g.OrderByDescending(pr => pr.Year)
+                               .ThenByDescending(pr => pr.Month)
+                               .First())
+                .ToDictionaryAsync(pr => pr.FipsId);
+            
+            var designAndRunBoardItems = new List<DesignAndRunBoardItem>();
+            
+            // User group category type name variations
+            var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
+            
+            foreach (var product in products.OrderBy(p => p.Title))
+            {
+                if (string.IsNullOrEmpty(product.FipsId)) continue;
+                
+                // Get business area from category values
+                var businessArea = product.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)?.Name 
+                    ?? "Not assigned";
+                
+                // Get user groups count
+                var userGroupsCount = product.CategoryValues?
+                    .Count(cv => cv.CategoryType != null && 
+                                userGroupVariations.Any(v => 
+                                    cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
+                
+                // Calculate completion data
+                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                              (product.CategoryValues?.Any(cv => 
+                                  cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+                var hasBusinessArea = businessArea != "Not assigned";
+                var contactsCount = product.ProductContacts?.Count ?? 0;
+                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
+                
+                // Calculate completion percentage (5 criteria, each worth 20%)
+                var completionPercentage = 0.0;
+                if (hasPhase) completionPercentage += 20;
+                if (hasBusinessArea) completionPercentage += 20;
+                if (contactsCount > 0) completionPercentage += 20;
+                if (hasProductUrl) completionPercentage += 20;
+                if (userGroupsCount > 0) completionPercentage += 20;
+                
+                // Get accessibility data
+                var isEnrolled = accessibilityEnrollments.ContainsKey(product.FipsId);
+                var accessibilityEnrollment = isEnrolled ? accessibilityEnrollments[product.FipsId] : null;
+                var openIssues = accessibilityEnrollment?.Issues?.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")) ?? 0;
+                var resolvedIssues = accessibilityEnrollment?.Issues?.Count(i => !i.IsDeleted && i.Status == "resolved") ?? 0;
+                var totalIssues = accessibilityEnrollment?.Issues?.Count(i => !i.IsDeleted) ?? 0;
+                
+                // Determine compliance status
+                var complianceStatus = "Not enrolled";
+                if (isEnrolled)
+                {
+                    if (openIssues == 0)
+                        complianceStatus = "Compliant";
+                    else if (openIssues > 0 && openIssues <= 5)
+                        complianceStatus = "Partially compliant";
+                    else if (openIssues > 5)
+                        complianceStatus = "Non-compliant";
+                }
+                
+                // Get performance metrics
+                string? perfUx1Value = null;
+                string? perfAcc3Value = null;
+                DateTime? lastSubmission = null;
+                string? lastSubmittedBy = null;
+                
+                if (latestReturns.ContainsKey(product.FipsId))
+                {
+                    var latestReturn = latestReturns[product.FipsId];
+                    lastSubmission = latestReturn.SubmittedDate;
+                    lastSubmittedBy = latestReturn.SubmittedBy;
+                    
+                    if (perfUx1Metric != null)
+                    {
+                        perfUx1Value = latestReturn.MetricValues?
+                            .FirstOrDefault(mv => mv.PerformanceMetricId == perfUx1Metric.Id)?.Value;
+                    }
+                    
+                    if (perfAcc3Metric != null)
+                    {
+                        perfAcc3Value = latestReturn.MetricValues?
+                            .FirstOrDefault(mv => mv.PerformanceMetricId == perfAcc3Metric.Id)?.Value;
+                    }
+                }
+                
+                // Calculate risk score
+                var riskScore = 0.0;
+                var riskFactors = new List<string>();
+                
+                // Accessibility risk factors
+                if (!isEnrolled)
+                {
+                    riskScore += 20;
+                    riskFactors.Add("Not enrolled in accessibility");
+                }
+                else if (openIssues > 0)
+                {
+                    var issueScore = Math.Min(openIssues * 5, 30);
+                    riskScore += issueScore;
+                    riskFactors.Add($"{openIssues} open accessibility issue{(openIssues > 1 ? "s" : "")}");
+                }
+                
+                // User satisfaction risk factors
+                if (!string.IsNullOrEmpty(perfUx1Value) && decimal.TryParse(perfUx1Value, out var uxScore))
+                {
+                    if (uxScore < 80)
+                    {
+                        var uxRisk = Math.Min(80 - uxScore, 30);
+                        riskScore += (double)uxRisk;
+                        riskFactors.Add($"Low user satisfaction ({uxScore})");
+                    }
+                }
+                else
+                {
+                    riskScore += 15;
+                    riskFactors.Add("No user satisfaction data");
+                }
+                
+                // FIPS completion risk factors
+                if (completionPercentage < 80)
+                {
+                    var completionRisk = Math.Min(80 - completionPercentage, 30);
+                    riskScore += completionRisk;
+                    riskFactors.Add($"Low FIPS completion ({completionPercentage:F0}%)");
+                }
+                
+                // Missing critical data
+                if (!hasPhase)
+                {
+                    riskScore += 10;
+                    riskFactors.Add("No phase assigned");
+                }
+                
+                if (!hasBusinessArea)
+                {
+                    riskScore += 10;
+                    riskFactors.Add("No business area assigned");
+                }
+                
+                if (contactsCount == 0)
+                {
+                    riskScore += 10;
+                    riskFactors.Add("No contacts assigned");
+                }
+                
+                designAndRunBoardItems.Add(new DesignAndRunBoardItem
+                {
+                    FipsId = product.FipsId,
+                    ProductTitle = product.Title,
+                    Phase = product.Phase ?? "Not set",
+                    BusinessArea = businessArea,
+                    HasPhase = hasPhase,
+                    HasBusinessArea = hasBusinessArea,
+                    ContactsCount = contactsCount,
+                    HasProductUrl = hasProductUrl,
+                    UserGroupsCount = userGroupsCount,
+                    CompletionPercentage = completionPercentage,
+                    IsEnrolledInAccessibility = isEnrolled,
+                    AccessibilityEnrolledAt = accessibilityEnrollment?.EnrolledAt,
+                    OpenAccessibilityIssuesCount = openIssues,
+                    ResolvedAccessibilityIssuesCount = resolvedIssues,
+                    TotalAccessibilityIssuesCount = totalIssues,
+                    AccessibilityComplianceStatus = complianceStatus,
+                    PerfUx1Value = perfUx1Value,
+                    PerfAcc3Value = perfAcc3Value,
+                    LastMetricSubmission = lastSubmission,
+                    LastSubmittedBy = lastSubmittedBy,
+                    RiskScore = riskScore,
+                    RiskFactors = riskFactors
+                });
+            }
+            
+            // Group products by risk score ranges for better visualization
+            var topAtRiskProducts = designAndRunBoardItems
+                .Where(item => item.RiskScore > 0)
+                .OrderByDescending(item => item.RiskScore)
+                .ToList();
+            
+            // Calculate business area summaries
+            var businessAreaSummaries = designAndRunBoardItems
+                .GroupBy(item => item.BusinessArea)
+                .Select(g => new BusinessAreaSummary
+                {
+                    BusinessArea = g.Key,
+                    ProductCount = g.Count(),
+                    AverageCompletionPercentage = g.Average(item => item.CompletionPercentage),
+                    EnrolledInAccessibilityCount = g.Count(item => item.IsEnrolledInAccessibility),
+                    TotalAccessibilityIssues = g.Sum(item => item.OpenAccessibilityIssuesCount),
+                    AverageRiskScore = g.Average(item => item.RiskScore)
+                })
+                .OrderByDescending(ba => ba.AverageRiskScore)
+                .ToList();
+            
+            var viewModel = new DesignAndRunBoardViewModel
+            {
+                Products = designAndRunBoardItems,
+                AverageCompletionPercentage = designAndRunBoardItems.Any() 
+                    ? designAndRunBoardItems.Average(item => item.CompletionPercentage) 
+                    : 0,
+                BusinessAreaSummaries = businessAreaSummaries,
+                TotalProducts = designAndRunBoardItems.Count,
+                EnrolledInAccessibilityCount = designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility),
+                TotalOpenAccessibilityIssues = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount),
+                TopAtRiskProducts = topAtRiskProducts
+            };
+            
+            // Pass metric info to view
+            ViewBag.PerfUx1Title = perfUx1Metric?.Title ?? "User experience metric (perf-ux-1)";
+            ViewBag.PerfAcc3Title = perfAcc3Metric?.Title ?? "Accessibility metric (perf-acc-3)";
+            ViewBag.PerfUx1Exists = perfUx1Metric != null;
+            ViewBag.PerfAcc3Exists = perfAcc3Metric != null;
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Design and Run Board report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new DesignAndRunBoardViewModel());
+        }
+    }
 }
 

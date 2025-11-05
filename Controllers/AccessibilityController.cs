@@ -117,7 +117,11 @@ namespace Compass.Controllers
                 // Create a dictionary for quick lookup of enrolled products
                 var enrolledDict = allProducts.ToDictionary(pa => pa.FipsId, pa => pa);
 
+                // Get current user's email for filtering "My Products"
+                var currentUserEmail = User.Identity?.Name?.ToLower();
+
                 // Create view model lists
+                var myProductViewModels = new List<dynamic>();
                 var enrolledProductViewModels = new List<dynamic>();
                 var allProductViewModels = new List<dynamic>();
 
@@ -236,6 +240,16 @@ namespace Compass.Controllers
                         LastAudit = lastAudit
                     };
 
+                    // Check if current user is responsible for this product
+                    var isMyProduct = false;
+                    if (!string.IsNullOrEmpty(currentUserEmail) && cmsProduct.ProductContacts != null)
+                    {
+                        isMyProduct = cmsProduct.ProductContacts.Any(pc => 
+                            pc.UsersPermissionsUser != null && 
+                            !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
+                            pc.UsersPermissionsUser.Email.ToLower() == currentUserEmail);
+                    }
+
                     if (isEnrolled)
                     {
                         // Apply filters for enrolled products
@@ -278,6 +292,12 @@ namespace Compass.Controllers
                         if (shouldInclude)
                         {
                             enrolledProductViewModels.Add(productViewModel);
+                            
+                            // Add to "My Products" if user is responsible
+                            if (isMyProduct)
+                            {
+                                myProductViewModels.Add(productViewModel);
+                            }
                         }
                     }
                     else
@@ -287,6 +307,11 @@ namespace Compass.Controllers
                     }
                 }
 
+                // Sort "My Products"
+                myProductViewModels = myProductViewModels
+                    .OrderBy(p => ((dynamic)p).ProductName)
+                    .ToList();
+                
                 // Sort enrolled products
                 enrolledProductViewModels = enrolledProductViewModels
                     .OrderBy(p => ((dynamic)p).ProductName)
@@ -301,6 +326,7 @@ namespace Compass.Controllers
                     .Take(pageSize)
                     .ToList();
 
+                ViewBag.MyProducts = myProductViewModels;
                 ViewBag.EnrolledProducts = enrolledProductViewModels;
                 ViewBag.NonEnrolledProducts = pagedNonEnrolledProducts;
                 ViewBag.ProductsPage = productsPage;
