@@ -198,6 +198,55 @@ public class ProductsApiService : IProductsApiService
         }
     }
 
+    public async Task<List<string>> GetTypesAsync()
+    {
+        var cacheKey = "AllTypes";
+        if (_cache.TryGetValue(cacheKey, out List<string>? types))
+        {
+            if (types != null) return types;
+        }
+
+        try
+        {
+            // Fetch all category values where category_type.name = "Type"
+            var queryParams = new List<string>
+            {
+                "filters[category_type][name][$eq]=Type",
+                "fields[0]=name",
+                "fields[1]=sort_order",
+                "sort[0]=sort_order:asc",
+                "pagination[pageSize]=100"
+            };
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"category-values?{queryString}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError($"Failed to fetch Type category values from CMS. Status: {response.StatusCode}");
+                return new List<string>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<CategoryValueDto>>(content, _jsonOptions);
+
+            var typeList = apiResponse?.Data?
+                .Where(cv => !string.IsNullOrEmpty(cv.Name))
+                .Select(cv => cv.Name!)
+                .ToList() ?? new List<string>();
+
+            _cache.Set(cacheKey, typeList, TimeSpan.FromHours(1));
+            return typeList;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching Type category values from CMS");
+            return new List<string>();
+        }
+    }
+
     public async Task<List<string>> GetPhasesAsync()
     {
         var cacheKey = "AllPhases";
