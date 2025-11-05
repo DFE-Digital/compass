@@ -35,7 +35,7 @@ public class EnterpriseMetricController : Controller
         var metric = new EnterpriseMetric
         {
             ValidFromYear = DateTime.UtcNow.Year,
-            ValidFromMonth = 9 // Default to September
+            ValidFromMonth = 10 // Default to October
         };
         
         return View("~/Views/Admin/EnterpriseMetric/Create.cshtml", metric);
