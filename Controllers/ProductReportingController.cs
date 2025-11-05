@@ -256,12 +256,27 @@ public class ProductReportingController : Controller
         string? productType = null;
         if (product.CategoryValues != null)
         {
+            _logger.LogInformation("Product {FipsId} has {Count} category values", fipsId, product.CategoryValues.Count);
+            foreach (var cv in product.CategoryValues)
+            {
+                _logger.LogInformation("  Category: {Name} (Type: {TypeName})", cv.Name, cv.CategoryType?.Name);
+            }
+            
             var typeCategory = product.CategoryValues
                 .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true);
             if (typeCategory != null)
             {
                 productType = typeCategory.Name;
+                _logger.LogInformation("Product {FipsId} has Type: {Type}", fipsId, productType);
             }
+            else
+            {
+                _logger.LogWarning("Product {FipsId} does not have a Type category assigned", fipsId);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Product {FipsId} has no CategoryValues", fipsId);
         }
 
         // Filter by type - only include metrics that apply to the product's type
@@ -269,19 +284,39 @@ public class ProductReportingController : Controller
         {
             // If no types specified, metric applies to all types
             if (string.IsNullOrEmpty(m.ApplicableTypes))
+            {
+                _logger.LogInformation("Metric {MetricId} ({Title}) has no type restriction - including", m.Id, m.Title);
                 return true;
+            }
             
             // If product has no type, show all metrics
             if (string.IsNullOrEmpty(productType))
+            {
+                _logger.LogInformation("Metric {MetricId} ({Title}) has type restriction but product has no type - including anyway", m.Id, m.Title);
                 return true;
+            }
             
             // Check if product's type is in the metric's applicable types
             var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim())
                 .ToList();
             
-            return applicableTypes.Contains(productType, StringComparer.OrdinalIgnoreCase);
+            var matches = applicableTypes.Contains(productType, StringComparer.OrdinalIgnoreCase);
+            if (matches)
+            {
+                _logger.LogInformation("Metric {MetricId} ({Title}) matches product type '{ProductType}' - including", m.Id, m.Title, productType);
+            }
+            else
+            {
+                _logger.LogInformation("Metric {MetricId} ({Title}) requires types [{Types}] but product has '{ProductType}' - excluding", 
+                    m.Id, m.Title, string.Join(", ", applicableTypes), productType);
+            }
+            
+            return matches;
         }).ToList();
+        
+        _logger.LogInformation("After phase filtering: {Count} metrics. After type filtering: {Count2} metrics", 
+            phaseFilteredMetrics.Count, typeFilteredMetrics.Count);
 
         // Get existing metric values for this return to check conditional dependencies
         var existingMetricValues = await _context.ProductMetricValues
