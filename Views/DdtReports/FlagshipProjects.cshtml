@@ -3,6 +3,11 @@
 @{
     ViewData["Title"] = "Flagship Projects - DDT Reports";
     var deliverablesDict = ViewBag.Deliverables as Dictionary<int, List<Compass.Models.Project>> ?? new Dictionary<int, List<Compass.Models.Project>>();
+    
+    // Calculate metrics
+    var totalDeliverables = deliverablesDict.Values.Sum(v => v.Count);
+    var greenFlagships = Model.Count(p => p.RagStatus == "Green");
+    var atRiskFlagships = Model.Count(p => p.RagStatus != "Green");
 }
 
 <div class="content-header">
@@ -14,6 +19,8 @@
                     <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
                     <li class="breadcrumb-item active" aria-current="page">Flagship Projects</li>
                 </ol>
+                <h1 class="m-0">Flagship Projects</h1>
+                <p class="text-muted mb-0">@DateTime.Now.ToString("dd MMMM yyyy")</p>
             </div>
         </div>
     </div>
@@ -45,150 +52,179 @@
             <div class="card">
                 <div class="card-body text-center p-5">
                     <i class="fas fa-flag fa-3x text-muted mb-3"></i>
-                    <h4>No Flagship Projects</h4>
+                    <h4>No flagship projects</h4>
                     <p class="text-muted">There are currently no active flagship projects to display.</p>
                 </div>
             </div>
         }
         else
         {
-            <!-- Header Banner with Key Metrics -->
-            <div class="row mb-4" style="display: flex;">
-                <!-- Left side: Title and three metric cards -->
-                <div class="col-lg-8" style="display: flex;">
-                    <!-- Summary Banner -->
-                    <div class="card border-0 w-100" style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 12px;">
-                        <div class="card-body p-4">
-                            <div class="row align-items-center" style="height: 100%;">
-                                <div class="col-md-6">
-                                    <p class="text-muted mb-1" style="font-size: 0.9rem;">@DateTime.Now.ToString("dddd, dd MMMM yyyy")</p>
-                                    <h2 class="mb-2" style="font-weight: 600; color: #1976D2;">Flagship Projects</h2>
-                                    <p class="text-muted mb-0" style="font-size: 0.95rem;">High-priority strategic initiatives with multiple deliverables</p>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-start">
-                                        <!-- Flagship Projects Card -->
-                                        <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@Model.Count</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Flagships</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <!-- Green RAG Card -->
-                                        <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@Model.Count(p => p.RagStatus == "Green")</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Green RAG</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <!-- At Risk Card -->
-                                        <div style="flex: 0 0 33.333%;">
-                                            <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s;">
-                                                <div class="card-body p-3">
-                                                    <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@Model.Count(p => p.RagStatus != "Green")</h3>
-                                                    <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">At risk</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="small-box bg-info h-100">
+                        <div class="inner">
+                            <h3>@Model.Count</h3>
+                            <p>Flagship projects</p>
                         </div>
                     </div>
                 </div>
-                <!-- Right side: What's New card -->
-                <div class="col-lg-4" style="display: flex;">
-                    <div class="card border-0 shadow-sm w-100 metric-card" style="border-radius: 12px; background: white; transition: transform 0.2s, box-shadow 0.2s;">
-                        <div class="card-body p-4">
-                            <div style="height: 100%;">
-                                <h5 class="mb-2" style="font-weight: 600;">What's new in COMPASS</h5>
-                                <p class="text-muted mb-3" style="font-size: 0.9rem;">Find out whats new and upcoming on the COMPASS roadmap.</p>
-                                <a href="@Url.Action("Roadmap", "Home")" class="btn" style="background: #FF6B35; color: white; border-radius: 6px; font-weight: 500;">
-                                    Explore COMPASS
-                                </a>
-                            </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="small-box bg-primary h-100">
+                        <div class="inner">
+                            <h3>@totalDeliverables</h3>
+                            <p>Total deliverables</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="small-box bg-success h-100">
+                        <div class="inner">
+                            <h3>@greenFlagships</h3>
+                            <p>Green RAG</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    @{
+                        var atRiskBg = atRiskFlagships == 0 ? "success" : 
+                                      atRiskFlagships <= 2 ? "warning" : "danger";
+                    }
+                    <div class="small-box bg-@atRiskBg h-100">
+                        <div class="inner">
+                            <h3>@atRiskFlagships</h3>
+                            <p>At risk</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Flagship Delivery Card -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title mb-0">Flagship delivery</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Flagship Project</th>
-                                        <th>RAG Status</th>
-                                        <th>Dependencies</th>
-                                        <th>Active Issues</th>
-                                        <th>Active Milestones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var flagship in Model)
-                                    {
-                                        var deliverables = deliverablesDict.ContainsKey(flagship.Id) 
-                                            ? deliverablesDict[flagship.Id] 
-                                            : new List<Compass.Models.Project>();
-                                        
-                                        // Count dependencies (deliverables)
-                                        var dependencyCount = deliverables.Count;
-                                        
-                                        // Sum active/open issues across flagship and all deliverables
-                                        var flagshipActiveIssues = flagship.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0;
-                                        var deliverableActiveIssues = deliverables.Sum(d => d.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0);
-                                        var totalActiveIssues = flagshipActiveIssues + deliverableActiveIssues;
-                                        
-                                        // Sum active milestones across flagship and all deliverables
-                                        var flagshipActiveMilestones = flagship.Milestones?.Count(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled") ?? 0;
-                                        var deliverableActiveMilestones = deliverables.Sum(d => d.Milestones?.Count(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled") ?? 0);
-                                        var totalActiveMilestones = flagshipActiveMilestones + deliverableActiveMilestones;
-                                        
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = flagship.Id })">
-                                                    <strong>@flagship.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@flagship.ProjectCode</small>
-                                            </td>
-                                            <td>
-                                                <span class="@GetRagBadgeClass(flagship.RagStatus)">@flagship.RagStatus</span>
-                                            </td>   
-                                            <td>@dependencyCount</td>
-                                            <td>@totalActiveIssues</td>
-                                            <td>@totalActiveMilestones</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+            <!-- Flagship Delivery Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Flagship delivery</h3>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Flagship project</th>
+                                <th>RAG</th>
+                                <th>Business area</th>
+                                <th class="text-center">Deliverables</th>
+                                <th class="text-center">Active issues</th>
+                                <th class="text-center">Active milestones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var flagship in Model.OrderBy(p => p.Title))
+                            {
+                                var deliverables = deliverablesDict.ContainsKey(flagship.Id) 
+                                    ? deliverablesDict[flagship.Id] 
+                                    : new List<Compass.Models.Project>();
+                                
+                                // Count dependencies (deliverables)
+                                var dependencyCount = deliverables.Count;
+                                
+                                // Sum active/open issues across flagship and all deliverables
+                                var flagshipActiveIssues = flagship.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0;
+                                var deliverableActiveIssues = deliverables.Sum(d => d.Issues?.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed") ?? 0);
+                                var totalActiveIssues = flagshipActiveIssues + deliverableActiveIssues;
+                                
+                                // Sum active milestones across flagship and all deliverables
+                                var flagshipActiveMilestones = flagship.Milestones?.Count(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled") ?? 0;
+                                var deliverableActiveMilestones = deliverables.Sum(d => d.Milestones?.Count(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled") ?? 0);
+                                var totalActiveMilestones = flagshipActiveMilestones + deliverableActiveMilestones;
+                                
+                                <tr>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Project", new { id = flagship.Id })">
+                                            <strong>@flagship.Title</strong>
+                                        </a><br>
+                                        <small class="text-muted">@flagship.ProjectCode</small>
+                                    </td>
+                                    <td>
+                                        <span class="@GetRagBadgeClass(flagship.RagStatus)">@flagship.RagStatus</span>
+                                    </td>
+                                    <td>@(flagship.BusinessArea ?? "-")</td>
+                                    <td class="text-center">
+                                        <span class="badge badge-info">@dependencyCount</span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (totalActiveIssues > 0)
+                                        {
+                                            <span class="badge badge-warning">@totalActiveIssues</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-success">0</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge badge-primary">@totalActiveMilestones</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
             </div>
         }
     </div>
 </section>
 
+<style>
+.small-box {
+    border-radius: .25rem;
+    box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+    display: block;
+    margin-bottom: 0;
+    position: relative;
+    min-height: 100px;
+}
+
+.small-box > .inner {
+    padding: 15px;
+}
+
+.small-box h3 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 5px;
+    padding: 0;
+    color: #fff;
+}
+
+.small-box p {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0;
+}
+
+@@media (max-width: 767px) {
+    .small-box h3 {
+        font-size: 2rem;
+    }
+    
+    .small-box > .inner {
+        padding: 10px;
+    }
+}
+</style>
+
 @functions {
     string GetRagBadgeClass(string ragStatus)
     {
         return ragStatus switch
         {
-            "Green" => "badge badge-success",
-            "Amber-Green" => "badge badge-info",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-warning",
-            "Red" => "badge badge-danger",
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
             _ => "badge badge-secondary"
         };
     }
