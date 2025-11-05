@@ -1,0 +1,413 @@
+@model Compass.Models.MultipleBusinessAreasViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Products with Multiple Business Areas";
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">DDT Reports</a></li>
+                    <li class="breadcrumb-item active">Products with Multiple Business Areas</li>
+                </ol>
+                <h1 class="m-0">Products with Multiple Business Areas</h1>
+                <p class="text-muted mb-0">
+                    <small>Data quality report showing products that have been assigned to more than one business area</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-lg-6 col-md-6 col-12">
+                <div class="card @(Model.TotalProductsWithMultipleBusinessAreas > 0 ? "card-warning" : "card-success")">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Products with Multiple Business Areas
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.TotalProductsWithMultipleBusinessAreas</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @{
+                                var percentage = Model.TotalProducts > 0 
+                                    ? (Model.TotalProductsWithMultipleBusinessAreas / (double)Model.TotalProducts) * 100 
+                                    : 0;
+                            }
+                            Out of @Model.TotalProducts total products (@percentage.ToString("F1")%)
+                        </p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.TotalProductsWithMultipleBusinessAreas > 0 ? "bg-warning" : "bg-success")" 
+                                 style="width: @percentage%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 col-md-6 col-12">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle"></i>
+                            Why This Matters
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">Each product should only belong to <strong>one</strong> business area for accurate reporting and accountability.</p>
+                        <p class="mb-0">Products with multiple business areas may:</p>
+                        <ul class="mb-0">
+                            <li>Cause duplicate counting in reports</li>
+                            <li>Create confusion about ownership</li>
+                            <li>Lead to inaccurate metrics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.TotalProductsWithMultipleBusinessAreas == 0)
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card card-success">
+                        <div class="card-body text-center p-5">
+                            <i class="fas fa-check-circle fa-5x text-success mb-3"></i>
+                            <h3>No Issues Found</h3>
+                            <p class="text-muted mb-0">All products have been correctly assigned to a single business area.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Filters -->
+            <div class="row mb-3">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                Filter products
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-lg-4 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="searchInput">Search by product name or FIPS ID</label>
+                                        <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
+                                    </div>
+                                </div>
+                                <div class="col-lg-3 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="stateFilter">State</label>
+                                        <select class="form-control" id="stateFilter">
+                                            <option value="">All states</option>
+                                            <option value="Active">Active</option>
+                                            <option value="New">New</option>
+                                            <option value="Rejected">Rejected</option>
+                                            <option value="Deleted">Deleted</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-3 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="businessAreaCountFilter">Number of business areas</label>
+                                        <select class="form-control" id="businessAreaCountFilter">
+                                            <option value="">All</option>
+                                            <option value="2">2 business areas</option>
+                                            <option value="3">3 business areas</option>
+                                            <option value="4+">4+ business areas</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="button" class="btn btn-secondary btn-block" id="clearFilters">
+                                            <i class="fas fa-times"></i> Clear Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Table -->
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                Products with multiple business areas
+                            </h3>
+                            <div class="card-tools">
+                                <span class="badge badge-warning" id="productCount">@Model.Products.Count products</span>
+                            </div>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0" id="multipleBusinessAreasTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%;">Product</th>
+                                        <th style="width: 10%;" class="text-center">FIPS ID</th>
+                                        <th style="width: 10%;" class="text-center">State</th>
+                                        <th style="width: 10%;" class="text-center">Count</th>
+                                        <th style="width: 30%;">Business Areas</th>
+                                        <th style="width: 10%;" class="text-center">Contacts</th>
+                                        <th style="width: 10%;" class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        <tr data-product-title="@product.ProductTitle.ToLower()" 
+                                            data-fips-id="@(string.IsNullOrEmpty(product.FipsId) ? "" : product.FipsId.ToLower())"
+                                            data-state="@product.State"
+                                            data-business-area-count="@product.BusinessAreaCount">
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                       target="_blank" 
+                                                       rel="noopener noreferrer" 
+                                                       class="font-weight-bold">
+                                                        @product.ProductTitle
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="font-weight-bold">@product.ProductTitle</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                                else
+                                                {
+                                                    @product.FipsId
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @{
+                                                    var stateBadgeClass = product.State switch
+                                                    {
+                                                        "Active" => "badge-success",
+                                                        "New" => "badge-info",
+                                                        "Rejected" => "badge-danger",
+                                                        "Deleted" => "badge-secondary",
+                                                        _ => "badge-warning"
+                                                    };
+                                                }
+                                                <span class="badge @stateBadgeClass">@product.State</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-warning badge-lg">
+                                                    @product.BusinessAreaCount
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @foreach (var businessArea in product.BusinessAreas)
+                                                {
+                                                    <span class="badge badge-secondary mr-1 mb-1">@businessArea</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (product.ContactsCount > 0)
+                                                {
+                                                    <span class="badge badge-info">@product.ContactsCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <div class="btn-group">
+                                                        <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                           target="_blank" 
+                                                           rel="noopener noreferrer"
+                                                           class="btn btn-sm btn-primary"
+                                                           title="View in FIPS">
+                                                            <i class="fas fa-external-link-alt"></i>
+                                                        </a>
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-warning" 
+                                                                data-action="set-business-area" 
+                                                                data-fips-id="@product.FipsId"
+                                                                title="Fix Business Area">
+                                                            <i class="fas fa-wrench"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@{
+    var businessAreaCategoryValues = ViewBag.BusinessAreaCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+}
+
+<!-- Update Business Area Modal -->
+<div class="modal fade" id="updateBusinessAreaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Fix Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductBusinessArea" method="post">
+                <input type="hidden" name="fipsId" id="businessAreaFipsId" />
+                <input type="hidden" name="returnUrl" value="@Url.Action("MultipleBusinessAreas")" />
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Note:</strong> This will remove all existing business areas and assign only the selected one.
+                    </div>
+                    <p class="mb-3">Select the correct Business Area for this product.</p>
+                    <div class="form-group">
+                        <label for="businessAreaCategoryValueId" class="form-label">Business Area *</label>
+                        <select class="form-control" id="businessAreaCategoryValueId" name="businessAreaCategoryValueId" required>
+                            <option value="">-- Select Business Area --</option>
+                            @foreach (var area in businessAreaCategoryValues.OrderBy(a => a.SortOrder ?? int.MaxValue).ThenBy(a => a.Name))
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.badge-lg {
+    font-size: 1.1rem;
+    padding: 0.5rem 0.75rem;
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Modal function
+            function openUpdateBusinessAreaModal(fipsId) {
+                $('#businessAreaFipsId').val(fipsId);
+                $('#businessAreaCategoryValueId').val('');
+                $('#updateBusinessAreaModal').modal('show');
+            }
+            
+            // Handle business area button clicks
+            $(document).on('click', '[data-action="set-business-area"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                openUpdateBusinessAreaModal(fipsId);
+                return false;
+            });
+            
+            // Filter functionality
+            $('#searchInput, #stateFilter, #businessAreaCountFilter').on('input change', function() {
+                filterTable();
+            });
+            
+            $('#clearFilters').on('click', function() {
+                $('#searchInput').val('');
+                $('#stateFilter').val('');
+                $('#businessAreaCountFilter').val('');
+                filterTable();
+            });
+            
+            function filterTable() {
+                var searchTerm = $('#searchInput').val().toLowerCase();
+                var stateFilter = $('#stateFilter').val();
+                var businessAreaCountFilter = $('#businessAreaCountFilter').val();
+                
+                var visibleCount = 0;
+                
+                $('#multipleBusinessAreasTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var productTitle = $row.data('product-title') || '';
+                    var fipsId = $row.data('fips-id') || '';
+                    var state = $row.data('state') || '';
+                    var businessAreaCount = parseInt($row.data('business-area-count')) || 0;
+                    
+                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
+                    var matchesState = !stateFilter || state === stateFilter;
+                    
+                    var matchesBusinessAreaCount = true;
+                    if (businessAreaCountFilter) {
+                        if (businessAreaCountFilter === '2') {
+                            matchesBusinessAreaCount = businessAreaCount === 2;
+                        } else if (businessAreaCountFilter === '3') {
+                            matchesBusinessAreaCount = businessAreaCount === 3;
+                        } else if (businessAreaCountFilter === '4+') {
+                            matchesBusinessAreaCount = businessAreaCount >= 4;
+                        }
+                    }
+                    
+                    if (matchesSearch && matchesState && matchesBusinessAreaCount) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+                
+                $('#productCount').text(visibleCount + ' products');
+            }
+        });
+    </script>
+}
+

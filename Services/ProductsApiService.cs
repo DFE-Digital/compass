@@ -45,42 +45,79 @@ public class ProductsApiService : IProductsApiService
 
         try
         {
-            var queryParams = new List<string>
+            var allProducts = new List<ProductDto>();
+            var currentPage = 1;
+            var pageSize = 100; // Use 100 per page for better performance
+            var hasMorePages = true;
+            int? totalCount = null;
+
+            while (hasMorePages)
             {
-                "sort=title:asc",
-                "filters[state][$eq]=Active",
-                "pagination[pageSize]=1000",
-                "fields[0]=id",
-                "fields[1]=title",
-                "fields[2]=fips_id",
-                "fields[3]=product_url",
-                "populate[category_values][fields][0]=name",
-                "populate[category_values][populate][category_type][fields][0]=name",
-                "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
-            };
+                var queryParams = new List<string>
+                {
+                    "sort=title:asc",
+                    "filters[state][$eq]=Active",
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "fields[0]=id",
+                    "fields[1]=title",
+                    "fields[2]=fips_id",
+                    "fields[3]=product_url",
+                    "populate[category_values][fields][0]=name",
+                    "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
+                };
 
-            var queryString = string.Join("&", queryParams);
-            var url = $"products?{queryString}";
+                var queryString = string.Join("&", queryParams);
+                var url = $"products?{queryString}";
 
-            var response = await _httpClient.GetAsync(url);
+                var response = await _httpClient.GetAsync(url);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError($"Failed to fetch products from CMS. Status: {response.StatusCode}, Error: {errorContent}");
-                return new List<ProductDto>();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch products from CMS (page {currentPage}). Status: {response.StatusCode}, Error: {errorContent}");
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+                
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allProducts.AddRange(apiResponse.Data);
+                    
+                    // Store total count from first page
+                    if (!totalCount.HasValue && apiResponse.Meta?.Pagination != null)
+                    {
+                        totalCount = apiResponse.Meta.Pagination.Total;
+                        _logger.LogInformation("Fetching {Total} Active products from CMS across {PageCount} pages", 
+                            totalCount, apiResponse.Meta.Pagination.PageCount);
+                    }
+                    
+                    // Check if there are more pages
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
             }
-
-            var content = await response.Content.ReadAsStringAsync();
-
-            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
-            var products = apiResponse?.Data ?? new List<ProductDto>();
             
-            _logger.LogInformation("Fetched {Count} products from CMS", products.Count);
+            _logger.LogInformation("Successfully fetched {Count} Active products from CMS (Total available: {Total})", 
+                allProducts.Count, totalCount ?? allProducts.Count);
 
             // Extract phase from category_values
-            foreach (var product in products)
+            foreach (var product in allProducts)
             {
                 if (product.CategoryValues != null)
                 {
@@ -97,7 +134,7 @@ public class ProductsApiService : IProductsApiService
             // Filter by user email if provided (case-insensitive)
             if (!string.IsNullOrEmpty(userEmail))
             {
-                var filteredProducts = products.Where(p => 
+                var filteredProducts = allProducts.Where(p => 
                     p.ProductContacts != null && 
                     p.ProductContacts.Any(pc => 
                         pc.UsersPermissionsUser != null &&
@@ -107,17 +144,145 @@ public class ProductsApiService : IProductsApiService
                 ).ToList();
                 
                 _logger.LogInformation("Filtered to {Count} products for user {Email}", filteredProducts.Count, userEmail);
-                products = filteredProducts;
+                allProducts = filteredProducts;
             }
 
             // Cache for 5 minutes
-            _cache.Set(cacheKey, products, TimeSpan.FromMinutes(5));
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
 
-            return products;
+            return allProducts;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching products from CMS");
+            return new List<ProductDto>();
+        }
+    }
+
+    public async Task<List<ProductDto>> GetAllProductsAsync(string? userEmail = null)
+    {
+        var cacheKey = string.IsNullOrEmpty(userEmail) 
+            ? "products_list_all_states" 
+            : $"products_list_all_states_{userEmail}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<ProductDto>? cachedProducts))
+        {
+            return cachedProducts ?? new List<ProductDto>();
+        }
+
+        try
+        {
+            var allProducts = new List<ProductDto>();
+            var currentPage = 1;
+            var pageSize = 100; // Use 100 per page for better performance
+            var hasMorePages = true;
+            int? totalCount = null;
+
+            while (hasMorePages)
+            {
+                var queryParams = new List<string>
+                {
+                    "sort=title:asc",
+                    // No state filter - get all products regardless of state
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "fields[0]=id",
+                    "fields[1]=title",
+                    "fields[2]=fips_id",
+                    "fields[3]=product_url",
+                    "fields[4]=state",
+                    "populate[category_values][fields][0]=name",
+                    "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
+                };
+
+                var queryString = string.Join("&", queryParams);
+                var url = $"products?{queryString}";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch all products from CMS (page {currentPage}). Status: {response.StatusCode}, Error: {errorContent}");
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+                
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allProducts.AddRange(apiResponse.Data);
+                    
+                    // Store total count from first page
+                    if (!totalCount.HasValue && apiResponse.Meta?.Pagination != null)
+                    {
+                        totalCount = apiResponse.Meta.Pagination.Total;
+                        _logger.LogInformation("Fetching {Total} products (all states) from CMS across {PageCount} pages", 
+                            totalCount, apiResponse.Meta.Pagination.PageCount);
+                    }
+                    
+                    // Check if there are more pages
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
+            }
+            
+            _logger.LogInformation("Successfully fetched {Count} products (all states) from CMS (Total available: {Total})", 
+                allProducts.Count, totalCount ?? allProducts.Count);
+
+            // Extract phase from category_values
+            foreach (var product in allProducts)
+            {
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null)
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
+            }
+
+            // Filter by user email if provided (case-insensitive)
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                var filteredProducts = allProducts.Where(p => 
+                    p.ProductContacts != null && 
+                    p.ProductContacts.Any(pc => 
+                        pc.UsersPermissionsUser != null &&
+                        !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) && 
+                        pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase)
+                    )
+                ).ToList();
+                
+                _logger.LogInformation("Filtered to {Count} products (all states) for user {Email}", filteredProducts.Count, userEmail);
+                allProducts = filteredProducts;
+            }
+
+            // Cache for 5 minutes
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
+
+            return allProducts;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching all products from CMS");
             return new List<ProductDto>();
         }
     }
@@ -608,13 +773,25 @@ public class ProductsApiService : IProductsApiService
                 return false;
             }
 
-            // Get all current category values
+            // Count existing business areas for logging
+            var existingBusinessAreas = product.CategoryValues?
+                .Where(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList() ?? new List<string>();
+            
+            if (existingBusinessAreas.Any())
+            {
+                _logger.LogInformation("Removing {Count} existing business area(s) from product {FipsId}: {BusinessAreas}", 
+                    existingBusinessAreas.Count, fipsId, string.Join(", ", existingBusinessAreas));
+            }
+
+            // Get all current category values EXCEPT Business Area (remove all existing business areas)
             var currentCategoryValues = new List<int>();
             if (product.CategoryValues != null)
             {
                 foreach (var cv in product.CategoryValues)
                 {
-                    // Skip the current Business Area value (if any) and add all others
+                    // Only keep non-Business Area category values (Phase, User Groups, etc.)
                     var categoryType = cv.CategoryType?.Name;
                     if (categoryType != null && !categoryType.Equals("Business area", StringComparison.OrdinalIgnoreCase))
                     {
@@ -623,8 +800,11 @@ public class ProductsApiService : IProductsApiService
                 }
             }
 
-            // Add the new Business Area value
+            // Add the new Business Area value (ensuring only ONE business area is assigned)
             currentCategoryValues.Add(businessAreaCategoryValueId);
+            
+            _logger.LogInformation("Assigning business area ID {BusinessAreaId} to product {FipsId}", 
+                businessAreaCategoryValueId, fipsId);
 
             var updateData = new
             {
@@ -659,9 +839,13 @@ public class ProductsApiService : IProductsApiService
             
             if (response.IsSuccessStatusCode)
             {
+                // Clear all relevant caches
                 _cache.Remove($"product_{fipsId}");
                 _cache.Remove("products_list_all");
-                _logger.LogInformation("Successfully updated product Business Area for {FipsId}", fipsId);
+                _cache.Remove("products_list_all_states");
+                
+                _logger.LogInformation("Successfully updated Business Area for product {FipsId}. Removed {RemovedCount} old business area(s), assigned 1 new business area.", 
+                    fipsId, existingBusinessAreas.Count);
                 return true;
             }
             else
