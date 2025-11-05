@@ -76,7 +76,7 @@ public class ProductReportingController : Controller
             {
                 // Check if this period has started yet
                 var periodStart = new DateTime(currentYear, currentMonth, 1);
-                if (periodStart >= new DateTime(2025, 9, 1))
+                if (periodStart >= new DateTime(2025, 10, 1))
                 {
                     status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, null);
                 }
@@ -139,7 +139,7 @@ public class ProductReportingController : Controller
             {
                 // Check if this period has started yet
                 var periodStart = new DateTime(currentYear, currentMonth, 1);
-                if (periodStart >= new DateTime(2025, 9, 1))
+                if (periodStart >= new DateTime(2025, 10, 1))
                 {
                     status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, null);
                 }
@@ -533,10 +533,10 @@ public class ProductReportingController : Controller
         var returns = new List<ProductReturn>();
         var now = DateTime.UtcNow;
 
-        // Start from September 2025
-        var startDate = new DateTime(2025, 9, 1);
+        // Start from October 2025
+        var startDate = new DateTime(2025, 10, 1);
         
-        // End date is current month + upcoming months, but not before September 2025
+        // End date is current month + upcoming months, but not before October 2025
         var endDate = now.AddMonths(upcomingMonths);
         if (endDate < startDate)
         {

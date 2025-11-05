@@ -787,7 +787,7 @@ public class EnterpriseReportingController : Controller
     // GET: EnterpriseReporting/EnterpriseMetrics
     public async Task<IActionResult> EnterpriseMetrics()
     {
-        // Get monthly returns starting from September 2025
+        // Get monthly returns starting from October 2025
         var returns = await GetOrCreateEnterpriseReturns(1); // 1 upcoming month
 
         return View("~/Views/EnterpriseReporting/EnterpriseMetrics/Index.cshtml", returns);
@@ -1007,8 +1007,8 @@ public class EnterpriseReportingController : Controller
         var returns = new List<EnterpriseReturn>();
         var now = DateTime.UtcNow;
 
-        // Start from September 2025
-        var startDate = new DateTime(2025, 9, 1);
+        // Start from October 2025
+        var startDate = new DateTime(2025, 10, 1);
         
         // End date is current month + upcoming months
         var endDate = now.AddMonths(upcomingMonths);
