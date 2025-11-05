@@ -45,6 +45,7 @@ public class PerformanceMetricController : Controller
         };
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.Types = await _productsApiService.GetTypesAsync();
         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
             .Where(m => !m.IsDisabled)
             .OrderBy(m => m.Title)
@@ -56,7 +57,7 @@ public class PerformanceMetricController : Controller
     // POST: PerformanceMetric/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(PerformanceMetric metric, string validationRulesJson, List<string>? selectedPhases)
+    public async Task<IActionResult> Create(PerformanceMetric metric, string validationRulesJson, List<string>? selectedPhases, List<string>? selectedTypes)
     {
         if (ModelState.IsValid)
         {
@@ -74,6 +75,7 @@ public class PerformanceMetricController : Controller
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
                         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+                        ViewBag.Types = await _productsApiService.GetTypesAsync();
                         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
                             .Where(m => !m.IsDisabled)
                             .OrderBy(m => m.Title)
@@ -85,6 +87,11 @@ public class PerformanceMetricController : Controller
                 // Store selected phases as comma-separated string
                 metric.ApplicablePhases = selectedPhases != null && selectedPhases.Any() 
                     ? string.Join(",", selectedPhases) 
+                    : string.Empty;
+                
+                // Store selected types as comma-separated string
+                metric.ApplicableTypes = selectedTypes != null && selectedTypes.Any() 
+                    ? string.Join(",", selectedTypes) 
                     : string.Empty;
                 
                 metric.CreatedAt = DateTime.UtcNow;
@@ -104,6 +111,7 @@ public class PerformanceMetricController : Controller
         }
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.Types = await _productsApiService.GetTypesAsync();
         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
             .Where(m => !m.IsDisabled)
             .OrderBy(m => m.Title)
@@ -127,6 +135,7 @@ public class PerformanceMetricController : Controller
         }
 
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.Types = await _productsApiService.GetTypesAsync();
         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
             .Where(m => !m.IsDisabled && m.Id != id) // Exclude self to prevent circular dependencies
             .OrderBy(m => m.Title)
@@ -138,7 +147,7 @@ public class PerformanceMetricController : Controller
     // POST: PerformanceMetric/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, PerformanceMetric metric, string validationRulesJson, List<string>? selectedPhases)
+    public async Task<IActionResult> Edit(int id, PerformanceMetric metric, string validationRulesJson, List<string>? selectedPhases, List<string>? selectedTypes)
     {
         if (id != metric.Id)
         {
@@ -161,6 +170,7 @@ public class PerformanceMetricController : Controller
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
                         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+                        ViewBag.Types = await _productsApiService.GetTypesAsync();
                         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
                             .Where(m => !m.IsDisabled && m.Id != id)
                             .OrderBy(m => m.Title)
@@ -172,6 +182,11 @@ public class PerformanceMetricController : Controller
                 // Store selected phases as comma-separated string
                 metric.ApplicablePhases = selectedPhases != null && selectedPhases.Any() 
                     ? string.Join(",", selectedPhases) 
+                    : string.Empty;
+                
+                // Store selected types as comma-separated string
+                metric.ApplicableTypes = selectedTypes != null && selectedTypes.Any() 
+                    ? string.Join(",", selectedTypes) 
                     : string.Empty;
                 
                 metric.UpdatedAt = DateTime.UtcNow;
@@ -201,6 +216,7 @@ public class PerformanceMetricController : Controller
         }
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.Types = await _productsApiService.GetTypesAsync();
         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
             .Where(m => !m.IsDisabled && m.Id != id)
             .OrderBy(m => m.Title)
