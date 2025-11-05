@@ -21,6 +21,8 @@ public class ProductDto
     [JsonPropertyName("product_url")]
     public string? ProductUrl { get; set; }
     
+    public string State { get; set; } = "New";
+    
     [JsonPropertyName("category_values")]
     public List<CategoryValueDto>? CategoryValues { get; set; }
     

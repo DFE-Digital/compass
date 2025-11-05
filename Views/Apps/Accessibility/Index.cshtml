@@ -248,14 +248,116 @@
             <div class="col-lg-9 col-md-8 col-12">
                 @if (activeTab == "products")
                 {
-                    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
-                    @if (enrolledProducts.Any())
+                    var myProducts = ViewBag.MyProducts as List<dynamic> ?? new List<dynamic>();
+                    @if (myProducts.Any())
                     {
                         <div class="card mb-3">
                             <div class="card-header">
-                                <h3 class="card-title">Enrolled Products (@enrolledProducts.Count)</h3>
+                                <h3 class="card-title">My Products (@myProducts.Count)</h3>
                             </div>
                             <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Product Name</th>
+                                            <th>Statement Status</th>
+                                            <th>Compliance Status</th>
+                                            <th>Open Issues</th>
+                                            <th>Last Audit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in myProducts)
+                                        {
+                                            var productAccessibility = product.ProductAccessibility as Compass.Models.ProductAccessibility;
+                                            var openIssues = (int)product.OpenIssuesCount;
+                                            var levelAAIssues = 0;
+                                            if (productAccessibility != null)
+                                            {
+                                                levelAAIssues = productAccessibility.Issues.Count(i => !i.IsDeleted && (i.WcagLevel == "A" || i.WcagLevel == "AA") && i.Status != "resolved");
+                                            }
+                                            
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
+                                                        <strong>@product.ProductName</strong>
+                                                    </a>
+                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    {
+                                                        <br><small class="text-muted mr-2">@product.FipsId</small>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(product.Phase))
+                                                    {
+                                                        <small class="text-muted">@product.Phase</small>
+                                                    }
+                                                </td>
+                                                
+                                                <td>
+                                                    @if (product.IsVerified)
+                                                    {
+                                                        <span class="badge bg-success">Verified</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Not Verified</span>
+                                                    }
+                                                </td>
+                                             
+                                                <td>
+                                                    <span class="badge @product.ComplianceBadge">
+                                                        @product.ComplianceStatus
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (openIssues > 0)
+                                                    {
+                                                        <span class="badge badge-warning">@openIssues open</span>
+                                                        if (levelAAIssues > 0)
+                                                        {
+                                                            <small class="text-danger ml-1">(@levelAAIssues Level A/AA)</small>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">None</span>
+                                                    }
+                                                </td>
+                                               
+                                                <td>
+                                                    @if (product.LastAudit != null)
+                                                    {
+                                                        var lastAudit = product.LastAudit as Compass.Models.AuditHistory;
+                                                        <small class="text-muted">
+                                                            @lastAudit.AuditDate.ToString("dd MMM yyyy")<br>
+                                                            <span class="badge badge-@(lastAudit.AuditType == "External" ? "primary" : "secondary")">@lastAudit.AuditType</span>
+                                                        </small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">None</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
+                    @if (enrolledProducts.Any())
+                    {
+                        <div class="card collapsed-card mb-3">
+                            <div class="card-header">
+                                <h3 class="card-title">Enrolled Products (@enrolledProducts.Count)</h3>
+                                <div class="card-tools">
+                                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0" style="display: none;">
                                 <table class="table table-hover text-nowrap">
                                     <thead>
                                         <tr>
@@ -347,11 +449,16 @@
 
                     var nonEnrolledProducts = ViewBag.NonEnrolledProducts as List<dynamic> ?? new List<dynamic>();
                     var productsTotalCount = (int)(ViewBag.ProductsTotalCount ?? 0);
-                    <div class="card">
+                    <div class="card collapsed-card">
                         <div class="card-header">
                             <h3 class="card-title">All Products (@productsTotalCount)</h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="card-body table-responsive p-0">
+                        <div class="card-body table-responsive p-0" style="display: none;">
                             @if (nonEnrolledProducts.Any())
                             {
                                 <table class="table table-hover text-nowrap">
@@ -389,7 +496,7 @@
 
                                 @if (ViewBag.ProductsTotalPages != null && (int)ViewBag.ProductsTotalPages > 1)
                                 {
-                                    <div class="card-footer">
+                                    <div class="card-footer" style="display: none;">
                                         <nav>
                                             <ul class="pagination pagination-sm justify-content-center mb-0">
                                                 @{
