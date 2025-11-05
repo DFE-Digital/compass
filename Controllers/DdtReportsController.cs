@@ -511,6 +511,7 @@ public class DdtReportsController : Controller
                     FipsId = product.FipsId,
                     ProductTitle = product.Title,
                     BusinessArea = businessAreaName,
+                    State = product.State,
                     HasPhase = hasPhase,
                     HasBusinessArea = hasBusinessArea,
                     ContactsCount = contactsCount,
@@ -575,6 +576,183 @@ public class DdtReportsController : Controller
         }
     }
 
+    // GET: DdtReports/MultipleBusinessAreas
+    public async Task<IActionResult> MultipleBusinessAreas()
+    {
+        try
+        {
+            var products = await _productsApiService.GetAllProductsAsync(null);
+            var productsWithMultipleBusinessAreas = new List<ProductWithMultipleBusinessAreas>();
+            
+            foreach (var product in products.OrderBy(p => p.Title))
+            {
+                // Get all business area category values for this product
+                var businessAreas = product.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name)
+                    .ToList() ?? new List<string>();
+                
+                // Only include products with multiple business areas
+                if (businessAreas.Count > 1)
+                {
+                    productsWithMultipleBusinessAreas.Add(new ProductWithMultipleBusinessAreas
+                    {
+                        FipsId = product.FipsId ?? string.Empty,
+                        ProductTitle = product.Title,
+                        State = product.State,
+                        BusinessAreas = businessAreas,
+                        BusinessAreaCount = businessAreas.Count,
+                        ContactsCount = product.ProductContacts?.Count ?? 0,
+                        ProductUrl = product.ProductUrl
+                    });
+                }
+            }
+            
+            var viewModel = new MultipleBusinessAreasViewModel
+            {
+                Products = productsWithMultipleBusinessAreas,
+                TotalProductsWithMultipleBusinessAreas = productsWithMultipleBusinessAreas.Count,
+                TotalProducts = products.Count
+            };
+            
+            // Get business area category values for the modal dropdown
+            var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            
+            _logger.LogInformation("Found {Count} products with multiple business areas out of {Total} total products", 
+                productsWithMultipleBusinessAreas.Count, products.Count);
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Multiple Business Areas report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new MultipleBusinessAreasViewModel());
+        }
+    }
+
+    // GET: DdtReports/AllCmsData
+    public async Task<IActionResult> AllCmsData()
+    {
+        try
+        {
+            var products = await _productsApiService.GetAllProductsAsync(null);
+            var completionItems = new List<ProductCompletionItem>();
+            
+            // User group category type name variations
+            var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
+            
+            foreach (var product in products.OrderBy(p => p.Title))
+            {
+                // Include products even without FipsId for full CMS visibility
+                
+                // Check Phase
+                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
+                              (product.CategoryValues?.Any(cv => 
+                                  cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
+                
+                // Check Business Area
+                var hasBusinessArea = product.CategoryValues?.Any(cv => 
+                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
+                
+                // Extract Business Area name
+                var businessAreaName = product.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name ?? "Unassigned";
+                
+                // Count Contacts
+                var contactsCount = product.ProductContacts?.Count ?? 0;
+                
+                // Check Product URL
+                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
+                
+                // Count User Groups
+                var userGroupsCount = product.CategoryValues?
+                    .Count(cv => cv.CategoryType != null && 
+                                userGroupVariations.Any(v => 
+                                    cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
+                
+                // Calculate completion percentage (5 criteria, 20% each)
+                var completedCriteria = 0;
+                if (hasPhase) completedCriteria++;
+                if (hasBusinessArea) completedCriteria++;
+                if (contactsCount > 0) completedCriteria++;
+                if (hasProductUrl) completedCriteria++;
+                if (userGroupsCount > 0) completedCriteria++;
+                
+                var completionPercentage = (completedCriteria / 5.0) * 100;
+                
+                completionItems.Add(new ProductCompletionItem
+                {
+                    FipsId = product.FipsId ?? string.Empty,
+                    ProductTitle = product.Title,
+                    BusinessArea = businessAreaName,
+                    State = product.State,
+                    HasPhase = hasPhase,
+                    HasBusinessArea = hasBusinessArea,
+                    ContactsCount = contactsCount,
+                    HasProductUrl = hasProductUrl,
+                    UserGroupsCount = userGroupsCount,
+                    CompletionPercentage = completionPercentage
+                });
+            }
+            
+            // Calculate average completion percentage
+            var averageCompletion = completionItems.Any() 
+                ? completionItems.Average(p => p.CompletionPercentage) 
+                : 0;
+            
+            // Calculate business area completions
+            var businessAreaCompletions = completionItems
+                .GroupBy(p => p.BusinessArea)
+                .Select(g => new BusinessAreaCompletion
+                {
+                    BusinessArea = g.Key,
+                    ProductCount = g.Count(),
+                    AverageCompletionPercentage = g.Average(p => p.CompletionPercentage)
+                })
+                .OrderByDescending(ba => ba.AverageCompletionPercentage)
+                .ToList();
+            
+            // Count products with 0% and 100% completion
+            var zeroCompletionCount = completionItems.Count(p => p.CompletionPercentage == 0);
+            var fullCompletionCount = completionItems.Count(p => p.CompletionPercentage == 100);
+            
+            // Count completed fields
+            var completedPhaseCount = completionItems.Count(p => p.HasPhase);
+            var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
+            var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
+            
+            // Get category values for dropdowns
+            var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            
+            var viewModel = new FipsCompletionViewModel
+            {
+                Products = completionItems,
+                AverageCompletionPercentage = averageCompletion,
+                BusinessAreaCompletions = businessAreaCompletions,
+                ZeroCompletionCount = zeroCompletionCount,
+                FullCompletionCount = fullCompletionCount,
+                CompletedPhaseCount = completedPhaseCount,
+                CompletedBusinessAreaCount = completedBusinessAreaCount,
+                CompletedUrlCount = completedProductUrlCount
+            };
+            
+            ViewBag.PhaseCategoryValues = phaseCategoryValues;
+            ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating All CMS Data report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new FipsCompletionViewModel());
+        }
+    }
+
     // POST: DdtReports/UpdateProductPhase
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -614,15 +792,21 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProductBusinessArea
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProductBusinessArea(string fipsId, int businessAreaCategoryValueId)
+    public async Task<IActionResult> UpdateProductBusinessArea(string fipsId, int businessAreaCategoryValueId, string? returnUrl = null)
     {
         try
         {
-            // Get product title before update
+            // Get product before update to check for multiple business areas
             var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
             var productTitle = product?.Title ?? fipsId;
             
-            // Get business area name
+            // Count existing business areas
+            var existingBusinessAreas = product?.CategoryValues?
+                .Where(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList() ?? new List<string>();
+            
+            // Get new business area name
             var businessAreas = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
             var businessAreaName = businessAreas.FirstOrDefault(ba => ba.Id == businessAreaCategoryValueId)?.Name ?? "Business Area";
             
@@ -630,11 +814,29 @@ public class DdtReportsController : Controller
             
             if (success)
             {
-                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business Area updated to <strong>{businessAreaName}</strong>.";
+                // Provide different messages based on whether multiple business areas were removed
+                if (existingBusinessAreas.Count > 1)
+                {
+                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Removed {existingBusinessAreas.Count} existing business area(s) ({string.Join(", ", existingBusinessAreas)}) and assigned <strong>{businessAreaName}</strong>.";
+                }
+                else if (existingBusinessAreas.Count == 1)
+                {
+                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business area updated from <strong>{existingBusinessAreas[0]}</strong> to <strong>{businessAreaName}</strong>.";
+                }
+                else
+                {
+                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business area assigned to <strong>{businessAreaName}</strong>.";
+                }
             }
             else
             {
                 TempData["ErrorMessage"] = "Failed to update product Business Area. Please try again.";
+            }
+            
+            // Redirect back to the referring page or default to FipsCompletion
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
             }
             
             return RedirectToAction("FipsCompletion");
