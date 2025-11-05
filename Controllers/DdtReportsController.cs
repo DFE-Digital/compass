@@ -216,23 +216,26 @@ public class DdtReportsController : Controller
             
             // Calculate organization health metrics
             var tasksDue = projectsNeedingPathToGreen.Count + overdueMilestones.Count + highPriorityIssues.Count;
-            var serviceHealthIssues = 0; // We'd need to calculate this from products
             
-            // Operational returns health check
+            // Operational returns health check - OPTIMIZED: Single query instead of N+1
             var now = DateTime.UtcNow;
             var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
             var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
             
+            var productFipsIds = allProducts
+                .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Select(p => p.FipsId)
+                .ToList();
+            
+            var currentMonthReturns = await _context.ProductReturns
+                .Where(pr => productFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+                .ToDictionaryAsync(pr => pr.FipsId);
+            
+            var serviceHealthIssues = 0;
             foreach (var product in allProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
-                var productReturn = await _context.ProductReturns
-                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
-                    .FirstOrDefaultAsync();
-                
-                var status = _returnStatusService.CalculateReturnStatus(
-                    currentYear, 
-                    currentMonth, 
-                    productReturn?.SubmittedDate);
+                var productReturn = currentMonthReturns.ContainsKey(product.FipsId) ? currentMonthReturns[product.FipsId] : null;
+                var status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, productReturn?.SubmittedDate);
                 
                 if (status == ReturnStatus.Due || status == ReturnStatus.Late)
                 {
@@ -280,10 +283,20 @@ public class DdtReportsController : Controller
     }
 
     // GET: DdtReports/BusinessArea
-    public async Task<IActionResult> BusinessArea(string area, DateTime? weekStart, string section = "summary")
+    public async Task<IActionResult> BusinessArea(string? area, DateTime? weekStart, string section = "summary")
     {
         try
         {
+            // Get all business areas
+            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            ViewBag.BusinessAreas = businessAreas;
+            
+            // If no area is selected, default to the first one
+            if (string.IsNullOrEmpty(area) && businessAreas.Any())
+            {
+                area = businessAreas.First();
+            }
+            
             // Calculate week start if not provided
             if (!weekStart.HasValue)
             {
@@ -302,10 +315,64 @@ public class DdtReportsController : Controller
                 .OrderBy(p => p.Title)
                 .ToListAsync();
 
+            // Get all products from CMS
+            var allProducts = await _productsApiService.GetProductsAsync(null);
+            
+            // Filter products by business area
+            var businessAreaProducts = allProducts
+                .Where(p => p.CategoryValues?.Any(cv => 
+                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                    cv.Name?.Equals(area, StringComparison.OrdinalIgnoreCase) == true) == true)
+                .ToList();
+            
+            // Get accessibility data for products
+            var accessibilityEnrollments = await _context.ProductAccessibilities
+                .Where(pa => !pa.IsDeleted)
+                .Include(pa => pa.Issues)
+                .ToDictionaryAsync(pa => pa.FipsId);
+            
+            // Calculate product metrics
+            var totalProducts = businessAreaProducts.Count;
+            var enrolledProducts = businessAreaProducts.Count(p => 
+                !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId));
+            var totalAccessibilityIssues = businessAreaProducts
+                .Where(p => !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId))
+                .Sum(p => accessibilityEnrollments[p.FipsId].Issues?.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")) ?? 0);
+
+            // Get performance metrics
+            var perfUx1Metric = await _context.PerformanceMetrics
+                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-ux-1");
+            var perfAcc3Metric = await _context.PerformanceMetrics
+                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-acc-3");
+            
+            // Get latest product returns for products in this business area
+            var productFipsIds = businessAreaProducts
+                .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Select(p => p.FipsId)
+                .ToList();
+                
+            var latestReturns = await _context.ProductReturns
+                .Where(pr => productFipsIds.Contains(pr.FipsId) && pr.Status == ReturnStatus.Submitted)
+                .Include(pr => pr.MetricValues)
+                .GroupBy(pr => pr.FipsId)
+                .Select(g => g.OrderByDescending(pr => pr.Year)
+                               .ThenByDescending(pr => pr.Month)
+                               .First())
+                .ToDictionaryAsync(pr => pr.FipsId);
+
             ViewBag.CurrentSection = section;
             ViewBag.WeekStart = weekStart.Value;
             ViewBag.WeekEnd = weekStart.Value.AddDays(6);
             ViewBag.BusinessArea = area;
+            ViewBag.SelectedBusinessArea = area;
+            ViewBag.BusinessAreaProducts = businessAreaProducts;
+            ViewBag.TotalProducts = totalProducts;
+            ViewBag.EnrolledProducts = enrolledProducts;
+            ViewBag.TotalAccessibilityIssues = totalAccessibilityIssues;
+            ViewBag.AccessibilityEnrollments = accessibilityEnrollments;
+            ViewBag.PerfUx1Metric = perfUx1Metric;
+            ViewBag.PerfAcc3Metric = perfAcc3Metric;
+            ViewBag.LatestReturns = latestReturns;
             
             return View(projects);
         }
