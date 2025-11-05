@@ -17,6 +17,14 @@ namespace Compass.Controllers
         }
 
         /// <summary>
+        /// Getting started guide for new users
+        /// </summary>
+        public IActionResult GettingStarted()
+        {
+            return View();
+        }
+
+        /// <summary>
         /// Overview of the Compass platform
         /// </summary>
         public IActionResult Overview()
@@ -36,6 +44,14 @@ namespace Compass.Controllers
         /// User guide with user journeys and processes
         /// </summary>
         public IActionResult UserGuide()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Delivery reporting documentation covering projects, products, and performance
+        /// </summary>
+        public IActionResult DeliveryReporting()
         {
             return View();
         }

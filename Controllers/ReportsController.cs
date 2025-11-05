@@ -290,7 +290,7 @@ public class ReportsController : Controller
                 "objective" => risk.Objective?.Title ?? "-",
                 "proximityDate" => risk.ProximityDate?.ToString("dd/MM/yyyy") ?? "-",
                 "createdAt" => risk.CreatedAt.ToString("dd/MM/yyyy"),
-                _ => null
+                _ => (object?)null!
             };
         }
         
@@ -321,7 +321,7 @@ public class ReportsController : Controller
                 "detectedDate" => issue.DetectedDate.ToString("dd/MM/yyyy"),
                 "targetResolutionDate" => issue.TargetResolutionDate?.ToString("dd/MM/yyyy") ?? "-",
                 "createdAt" => issue.CreatedAt.ToString("dd/MM/yyyy"),
-                _ => null
+                _ => (object?)null!
             };
         }
         
@@ -351,7 +351,7 @@ public class ReportsController : Controller
                 "dueDate" => action.DueDate?.ToString("dd/MM/yyyy") ?? "-",
                 "completedDate" => action.CompletedDate?.ToString("dd/MM/yyyy") ?? "-",
                 "createdAt" => action.CreatedAt.ToString("dd/MM/yyyy"),
-                _ => null
+                _ => (object?)null!
             };
         }
         
@@ -379,7 +379,7 @@ public class ReportsController : Controller
                 "dueDate" => milestone.DueDate.ToString("dd/MM/yyyy"),
                 "progressPercent" => milestone.ProgressPercent?.ToString() ?? "0",
                 "createdAt" => milestone.CreatedAt.ToString("dd/MM/yyyy"),
-                _ => null
+                _ => (object?)null!
             };
         }
         

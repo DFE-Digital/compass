@@ -13,5 +13,6 @@ public interface IProductsApiService
     Task<List<CategoryValueDto>> GetBusinessAreaCategoryValuesAsync();
     Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
     Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
+    Task<bool> UpdateProductStateAsync(string fipsId, string state);
 }
 
