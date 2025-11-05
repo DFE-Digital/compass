@@ -926,4 +926,131 @@ public class ProductsApiService : IProductsApiService
             return false;
         }
     }
+
+    public async Task<ProductDto?> CreateProductAsync(string title, string? shortDescription, string? longDescription, List<int> categoryValueIds, string state = "Active")
+    {
+        try
+        {
+            var createData = new
+            {
+                data = new
+                {
+                    title = title,
+                    short_description = shortDescription,
+                    long_description = longDescription,
+                    category_values = categoryValueIds,
+                    state = state
+                    // Note: publishedAt is intentionally not set, keeping it as draft
+                }
+            };
+
+            var json = JsonSerializer.Serialize(createData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PostAsync("products", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<ProductDto>>(responseContent, _jsonOptions);
+                
+                // Clear caches
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                
+                _logger.LogInformation("Successfully created product: {Title}", title);
+                return apiResponse?.Data;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to create product. Status: {StatusCode}, Error: {Error}", 
+                    response.StatusCode, errorContent);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating product: {Title}", title);
+            return null;
+        }
+    }
+
+    public async Task<List<ProductDto>> SearchProductsByTitleAsync(string searchTerm)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return new List<ProductDto>();
+        }
+
+        try
+        {
+            var queryParams = new List<string>
+            {
+                $"filters[title][$containsi]={Uri.EscapeDataString(searchTerm)}",
+                "fields[0]=id",
+                "fields[1]=title",
+                "fields[2]=fips_id",
+                "fields[3]=state",
+                "populate[category_values][fields][0]=name",
+                "populate[category_values][populate][category_type][fields][0]=name",
+                "pagination[pageSize]=25"
+            };
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"products?{queryString}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError($"Failed to search products. Status: {response.StatusCode}");
+                return new List<ProductDto>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+
+            var products = apiResponse?.Data ?? new List<ProductDto>();
+            
+            // Extract phase from category_values
+            foreach (var product in products)
+            {
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null)
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
+            }
+
+            return products;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching products by title: {SearchTerm}", searchTerm);
+            return new List<ProductDto>();
+        }
+    }
 }
