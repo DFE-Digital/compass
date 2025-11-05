@@ -45,6 +45,11 @@ public class PerformanceMetricController : Controller
         };
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Title)
+            .ToListAsync();
+        
         return View("~/Views/Admin/PerformanceMetric/Create.cshtml", metric);
     }
 
@@ -69,7 +74,11 @@ public class PerformanceMetricController : Controller
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
                         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
-                        return View(metric);
+                        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+                            .Where(m => !m.IsDisabled)
+                            .OrderBy(m => m.Title)
+                            .ToListAsync();
+                        return View("~/Views/Admin/PerformanceMetric/Create.cshtml", metric);
                     }
                 }
                 
@@ -94,6 +103,12 @@ public class PerformanceMetricController : Controller
             }
         }
         
+        ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Title)
+            .ToListAsync();
+        
         return View("~/Views/Admin/PerformanceMetric/Create.cshtml", metric);
     }
 
@@ -112,6 +127,11 @@ public class PerformanceMetricController : Controller
         }
 
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled && m.Id != id) // Exclude self to prevent circular dependencies
+            .OrderBy(m => m.Title)
+            .ToListAsync();
+        
         return View("~/Views/Admin/PerformanceMetric/Edit.cshtml", metric);
     }
 
@@ -141,7 +161,11 @@ public class PerformanceMetricController : Controller
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
                         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
-                        return View(metric);
+                        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+                            .Where(m => !m.IsDisabled && m.Id != id)
+                            .OrderBy(m => m.Title)
+                            .ToListAsync();
+                        return View("~/Views/Admin/PerformanceMetric/Edit.cshtml", metric);
                     }
                 }
                 
@@ -175,6 +199,12 @@ public class PerformanceMetricController : Controller
                 ModelState.AddModelError("", "An error occurred while updating the performance metric. Please try again.");
             }
         }
+        
+        ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled && m.Id != id)
+            .OrderBy(m => m.Title)
+            .ToListAsync();
         
         return View("~/Views/Admin/PerformanceMetric/Edit.cshtml", metric);
     }
