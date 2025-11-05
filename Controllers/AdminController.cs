@@ -2634,5 +2634,52 @@ public class AdminController : Controller
 
         return RedirectToAction(nameof(Skills));
     }
+
+    // ========================================
+    // DATA MANAGEMENT
+    // ========================================
+
+    // GET: Admin/ClearPerformanceReturns
+    [HttpGet]
+    public IActionResult ClearPerformanceReturns()
+    {
+        return View("~/Views/Admin/ClearPerformanceReturns.cshtml");
+    }
+
+    // POST: Admin/ClearPerformanceReturns
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ClearPerformanceReturnsConfirmed()
+    {
+        try
+        {
+            _logger.LogWarning("Starting to clear all performance returns - initiated by {User}", User.Identity?.Name);
+
+            // Count before deletion
+            var returnsCount = await _context.ProductReturns.CountAsync();
+            var valuesCount = await _context.ProductMetricValues.CountAsync();
+
+            _logger.LogInformation("Deleting {ReturnsCount} ProductReturns and {ValuesCount} ProductMetricValues", returnsCount, valuesCount);
+
+            // Delete all product metric values first (they reference ProductReturns)
+            _context.ProductMetricValues.RemoveRange(_context.ProductMetricValues);
+            await _context.SaveChangesAsync();
+
+            // Delete all product returns
+            _context.ProductReturns.RemoveRange(_context.ProductReturns);
+            await _context.SaveChangesAsync();
+
+            _logger.LogWarning("Successfully cleared all performance returns - {ReturnsCount} returns and {ValuesCount} values deleted", returnsCount, valuesCount);
+
+            TempData["SuccessMessage"] = $"Successfully cleared {returnsCount} performance returns and {valuesCount} metric values. System will now start from October 2025.";
+            return RedirectToAction("Index", "PerformanceMetric");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing performance returns");
+            TempData["ErrorMessage"] = "An error occurred while clearing performance returns. Please try again.";
+            return RedirectToAction(nameof(ClearPerformanceReturns));
+        }
+    }
 }
 

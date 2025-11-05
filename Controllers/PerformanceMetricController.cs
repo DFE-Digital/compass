@@ -41,7 +41,7 @@ public class PerformanceMetricController : Controller
         var metric = new PerformanceMetric
         {
             ValidFromYear = DateTime.UtcNow.Year,
-            ValidFromMonth = 9 // Default to September
+            ValidFromMonth = 10 // Default to October
         };
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
