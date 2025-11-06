@@ -7,8 +7,12 @@
 }
 
 <style nonce="@Context.Items["Nonce"]">
-    .reporting-period-text {
-        font-size: 1rem;
+    .small-box .inner h3 {
+        font-size: 1.5rem;
+    }
+    
+    .small-box .inner p {
+        font-size: 0.875rem;
     }
 </style>
 
@@ -60,7 +64,7 @@
             <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
                 <div class="small-box bg-info">
                     <div class="inner">
-                        <h3 class="reporting-period-text">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
+                        <h3>@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
                         <p>Reporting period</p>
                     </div>
                     <div class="icon">
@@ -119,7 +123,11 @@
                                 </td>
                                 <td>
                                     <span id="display-@metricValue.Id">
-                                        @if (!string.IsNullOrEmpty(metricValue.Value))
+                                        @if (metricValue.IsNotCaptured)
+                                        {
+                                            <span class="text-muted">Not captured</span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(metricValue.Value))
                                         {
                                             @metricValue.Value
                                         }
@@ -151,6 +159,9 @@
                                                 data-identifier="@metricValue.PerformanceMetric?.Identifier"
                                                 data-title="@metricValue.PerformanceMetric?.Title"
                                                 data-value="@metricValue.Value"
+                                                data-previous-value="@metricValue.PreviousValue"
+                                                data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
+                                                data-not-captured-reason="@metricValue.NotCapturedReason"
                                                 data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
                                                 data-rules="@metricValue.PerformanceMetric?.ValidationRules"
                                                 data-hint="@metricValue.PerformanceMetric?.HintText">
@@ -212,6 +223,11 @@
                 </button>
             </div>
             <div class="modal-body">
+                <div class="form-group" id="previousValueContainer" style="display: none;">
+                    <div class="alert alert-info mb-3">
+                        <strong>Previous month value:</strong> <span id="previousValueDisplay"></span>
+                    </div>
+                </div>
                 <div class="form-group">
                     <p class="mb-2 text-muted"><small><span id="modalIdentifier"></span></small></p>
                     <label for="modalValue"><strong id="modalTitle"></strong></label>
@@ -227,6 +243,18 @@
                         </label>
                     </div>
                     <small class="form-text text-muted">Check this if the metric data is not available or not captured for this period</small>
+                </div>
+                <div class="form-group" id="notCapturedReasonContainer" style="display: none;">
+                    <label for="notCapturedReason">Reason for not capturing this metric <span class="text-danger">*</span></label>
+                    <small class="form-text text-muted mb-2 d-block">Please explain why this metric is not captured for this period.</small>
+                    <textarea id="notCapturedReason" class="form-control" rows="3" placeholder="Enter reason for not capturing this metric"></textarea>
+                    <div class="invalid-feedback d-block d-none" id="notCapturedReasonError"></div>
+                </div>
+                <div class="form-group" id="reasonForDifferenceContainer" style="display: none;">
+                    <label for="reasonForDifference">Reason for difference from previous month <span class="text-danger">*</span></label>
+                    <small class="form-text text-muted mb-2 d-block">The value differs by more than 20% from the previous month. Please explain why.</small>
+                    <textarea id="reasonForDifference" class="form-control" rows="3" placeholder="Enter reason for the difference"></textarea>
+                    <div class="invalid-feedback d-block d-none" id="reasonError"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -269,22 +297,43 @@
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
+        console.log('Script loaded');
         $(document).ready(function() {
+            console.log('Document ready');
             var currentMetricId = null;
+            var currentPreviousValue = null;
+            var currentValueType = null;
 
             $('.edit-metric').click(function() {
                 currentMetricId = $(this).data('id');
                 var identifier = $(this).data('identifier');
                 var title = $(this).data('title');
                 var currentValue = $(this).data('value') || '';
-                var valueType = $(this).data('type');
+                currentPreviousValue = $(this).data('previous-value') || '';
+                currentValueType = $(this).data('type');
                 var rules = $(this).data('rules');
                 var hintText = $(this).data('hint') || '';
+                var isNotCaptured = $(this).data('is-not-captured') === true || $(this).data('is-not-captured') === 'true';
+                var notCapturedReason = $(this).data('not-captured-reason') || '';
 
                 $('#modalIdentifier').text(identifier);
                 $('#modalTitle').text(title);
-                $('#modalValue').val(currentValue).removeClass('is-invalid');
+                $('#modalValue').val(currentValue).removeClass('is-invalid').prop('disabled', false);
                 $('#modalError').text('').addClass('d-none').removeClass('d-block');
+                $('#reasonForDifference').val('').removeClass('is-invalid');
+                $('#reasonError').text('').addClass('d-none').removeClass('d-block');
+                $('#reasonForDifferenceContainer').hide();
+                $('#notCapturedReason').val('').removeClass('is-invalid');
+                $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
+                $('#notCapturedReasonContainer').hide();
+                
+                // Show previous value if it exists and is numeric
+                if (currentPreviousValue && (currentValueType == 1 || currentValueType == 2 || currentValueType == 3)) {
+                    $('#previousValueDisplay').text(currentPreviousValue);
+                    $('#previousValueContainer').show();
+                } else {
+                    $('#previousValueContainer').hide();
+                }
                 
                 // Parse validation rules to check for allowNull
                 var parsedRules = null;
@@ -299,7 +348,16 @@
                 // Show/hide null checkbox based on allowNull
                 if (parsedRules && parsedRules.allowNull === true) {
                     $('#nullCheckboxContainer').show();
-                    $('#metricNotCaptured').prop('checked', currentValue === '').change();
+                    
+                    // If this metric was previously marked as not captured, restore that state
+                    if (isNotCaptured) {
+                        $('#metricNotCaptured').prop('checked', true);
+                        $('#notCapturedReason').val(notCapturedReason);
+                        $('#modalValue').val('').prop('disabled', true);
+                        $('#notCapturedReasonContainer').show();
+                    } else {
+                        $('#metricNotCaptured').prop('checked', false);
+                    }
                 } else {
                     $('#nullCheckboxContainer').hide();
                     $('#metricNotCaptured').prop('checked', false);
@@ -308,9 +366,9 @@
                 // Set help text based on hint text or type
                 var helpText = hintText;
                 if (!helpText) {
-                    if (valueType == 1) helpText = 'Enter a whole number';
-                    else if (valueType == 2) helpText = 'Enter a decimal number';
-                    else if (valueType == 3) helpText = 'Enter a percentage (0-100)';
+                    if (currentValueType == 1) helpText = 'Enter a whole number';
+                    else if (currentValueType == 2) helpText = 'Enter a decimal number';
+                    else if (currentValueType == 3) helpText = 'Enter a percentage (0-100)';
                     else helpText = 'Enter text';
                 }
 
@@ -323,12 +381,54 @@
                 if ($(this).is(':checked')) {
                     $('#modalValue').val('').prop('disabled', true).removeClass('is-invalid');
                     $('#modalError').text('').addClass('d-none').removeClass('d-block');
+                    $('#reasonForDifferenceContainer').hide();
+                    $('#notCapturedReasonContainer').show();
                 } else {
                     $('#modalValue').prop('disabled', false);
+                    $('#notCapturedReasonContainer').hide();
+                    $('#notCapturedReason').val('').removeClass('is-invalid');
+                    $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
                 }
             });
+            
+            // Handle value change to check for 20% difference
+            $('#modalValue').on('input', function() {
+                checkForSignificantDifference();
+            });
+            
+            function checkForSignificantDifference() {
+                var newValue = $('#modalValue').val().trim();
+                var isNotCaptured = $('#metricNotCaptured').is(':checked');
+                
+                // Only check for numeric types and when we have a previous value
+                if (isNotCaptured || !currentPreviousValue || !newValue || 
+                    (currentValueType != 1 && currentValueType != 2 && currentValueType != 3)) {
+                    $('#reasonForDifferenceContainer').hide();
+                    return;
+                }
+                
+                var previous = parseFloat(currentPreviousValue);
+                var current = parseFloat(newValue);
+                
+                if (isNaN(previous) || isNaN(current) || previous === 0) {
+                    $('#reasonForDifferenceContainer').hide();
+                    return;
+                }
+                
+                // Calculate percentage difference
+                var percentDifference = Math.abs((current - previous) / previous * 100);
+                
+                if (percentDifference > 20) {
+                    $('#reasonForDifferenceContainer').show();
+                } else {
+                    $('#reasonForDifferenceContainer').hide();
+                    $('#reasonForDifference').val('').removeClass('is-invalid');
+                    $('#reasonError').text('').addClass('d-none').removeClass('d-block');
+                }
+            }
 
             $('#saveMetricBtn').click(function() {
+                console.log('Save button clicked!');
                 var isNotCaptured = $('#metricNotCaptured').is(':checked');
                 var value = isNotCaptured ? '' : $('#modalValue').val().trim();
                 var saveUrl = '/ProductReporting/SaveMetricValue';
@@ -346,10 +446,20 @@
                 
                 var valueType = $('.edit-metric[data-id="' + currentMetricId + '"]').data('type');
                 
-                // If "not captured" checkbox is checked and allowNull is true, skip validation entirely
-                if (isNotCaptured && rules && rules.allowNull === true) {
-                    // Don't validate, just save empty value
-                    console.log('Skipping validation - metric marked as not captured with allowNull=true');
+                // If "not captured" checkbox is checked, validate the reason
+                if (isNotCaptured) {
+                    var notCapturedReason = $('#notCapturedReason').val().trim();
+                    if (!notCapturedReason) {
+                        $('#notCapturedReason').addClass('is-invalid');
+                        $('#notCapturedReasonError').text('Please provide a reason for not capturing this metric').removeClass('d-none').addClass('d-block');
+                        return;
+                    } else {
+                        $('#notCapturedReason').removeClass('is-invalid');
+                        $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
+                    }
+                    
+                    // Skip value validation for not captured metrics
+                    console.log('Metric marked as not captured - skipping value validation');
                 } else {
                     // Client-side validation for all other cases
                     var validationError = validateValue(value, valueType, rules);
@@ -360,22 +470,54 @@
                     }
                 }
                 
+                // Check if reason for difference is required and validate it
+                if ($('#reasonForDifferenceContainer').is(':visible')) {
+                    var reason = $('#reasonForDifference').val().trim();
+                    if (!reason) {
+                        $('#reasonForDifference').addClass('is-invalid');
+                        $('#reasonError').text('Please provide a reason for the significant difference from the previous month').removeClass('d-none').addClass('d-block');
+                        return;
+                    } else {
+                        $('#reasonForDifference').removeClass('is-invalid');
+                        $('#reasonError').text('').addClass('d-none').removeClass('d-block');
+                    }
+                }
+                
                 console.log('Saving to URL:', saveUrl);
+                console.log('isNotCaptured:', isNotCaptured);
+                
+                // Prepare data to send
+                var postData = {
+                    id: currentMetricId,
+                    value: value,
+                    isNotCaptured: isNotCaptured,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                };
+                
+                // Add reason for not capturing if checkbox is checked
+                if (isNotCaptured) {
+                    postData.notCapturedReason = $('#notCapturedReason').val().trim();
+                    console.log('Not captured reason:', postData.notCapturedReason);
+                }
+                
+                // Add reason for difference if the field is visible
+                if ($('#reasonForDifferenceContainer').is(':visible')) {
+                    postData.reasonForDifference = $('#reasonForDifference').val().trim();
+                }
+                
+                console.log('POST data:', postData);
                 
                 // Save metric value to the server
                 $.ajax({
                     url: saveUrl,
                     type: 'POST',
-                    data: {
-                        id: currentMetricId,
-                        value: value,
-                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
-                    },
+                    data: postData,
                     success: function(response) {
+                        console.log('Server response:', response);
                         if (response.success) {
                             var displayText = value;
-                            if (!value && isNotCaptured) {
-                                displayText = '<span class="text-muted">Unreported</span>';
+                            if (isNotCaptured) {
+                                displayText = '<span class="text-muted">Not captured</span>';
                             } else if (!value) {
                                 displayText = '<span class="text-muted">Not entered</span>';
                             }
@@ -398,7 +540,8 @@
                             $('#modalError').text(response.message).removeClass('d-none').addClass('d-block');
                         }
                     },
-                    error: function() {
+                    error: function(xhr, status, error) {
+                        console.log('AJAX error:', status, error, xhr);
                         $('#modalValue').addClass('is-invalid');
                         $('#modalError').text('An error occurred while saving').removeClass('d-none').addClass('d-block');
                     }

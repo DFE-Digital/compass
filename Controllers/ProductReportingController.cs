@@ -366,6 +366,30 @@ public class ProductReportingController : Controller
 
         await _context.SaveChangesAsync();
 
+        // Get previous month's values for comparison
+        var previousMonth = month == 1 ? 12 : month - 1;
+        var previousYear = month == 1 ? year - 1 : year;
+        
+        var previousReturn = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .FirstOrDefaultAsync(pr => pr.FipsId == fipsId && 
+                                      pr.Year == previousYear && 
+                                      pr.Month == previousMonth);
+        
+        if (previousReturn != null)
+        {
+            foreach (var metricValue in metricValues)
+            {
+                var previousMetricValue = previousReturn.MetricValues
+                    .FirstOrDefault(mv => mv.PerformanceMetricId == metricValue.PerformanceMetricId);
+                
+                if (previousMetricValue != null && !string.IsNullOrWhiteSpace(previousMetricValue.Value))
+                {
+                    metricValue.PreviousValue = previousMetricValue.Value;
+                }
+            }
+        }
+
         ViewBag.Product = product;
         ViewBag.ProductReturn = productReturn;
         ViewBag.IsReadOnly = productReturn.Status == ReturnStatus.Submitted || productReturn.Status == ReturnStatus.Upcoming;
@@ -376,8 +400,20 @@ public class ProductReportingController : Controller
     // POST: ProductReporting/SaveMetricValue
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveMetricValue(int id, string value)
+    public async Task<IActionResult> SaveMetricValue(int id, string? value, bool isNotCaptured = false, string? notCapturedReason = null, string? reasonForDifference = null)
     {
+        Console.WriteLine("========================================");
+        Console.WriteLine($"SaveMetricValue called at {DateTime.Now:HH:mm:ss}");
+        Console.WriteLine($"  ID: {id}");
+        Console.WriteLine($"  Value: '{value ?? "(null)"}'");
+        Console.WriteLine($"  IsNotCaptured: {isNotCaptured}");
+        Console.WriteLine($"  NotCapturedReason: '{notCapturedReason ?? "(null)"}'");
+        Console.WriteLine($"  ReasonForDifference: '{reasonForDifference ?? "(null)"}'");
+        Console.WriteLine("========================================");
+        
+        _logger.LogInformation("SaveMetricValue called - ID: {Id}, Value: '{Value}', IsNotCaptured: {IsNotCaptured}, NotCapturedReason: '{Reason}'", 
+            id, value ?? "(null)", isNotCaptured, notCapturedReason ?? "(null)");
+        
         var metricValue = await _context.ProductMetricValues
             .Include(mv => mv.PerformanceMetric)
             .Include(mv => mv.ProductReturn)
@@ -401,34 +437,59 @@ public class ProductReportingController : Controller
 
         try
         {
-            // Validate the value based on the metric's validation rules
-            if (metricValue.PerformanceMetric != null)
+            // If metric is marked as not captured, log it and mark as complete
+            if (isNotCaptured)
             {
-                var validationResult = ValidateMetricValue(value, metricValue.PerformanceMetric);
-                if (!validationResult.IsValid)
-                {
-                    return Json(new { success = false, message = validationResult.ErrorMessage });
-                }
-            }
-
-            metricValue.Value = value;
-            
-            // Mark as complete if value is provided OR if empty but allowNull is true (not captured)
-            var isNotCaptured = string.IsNullOrWhiteSpace(value);
-            if (isNotCaptured && metricValue.PerformanceMetric != null)
-            {
-                try
-                {
-                    var rules = JsonSerializer.Deserialize<ValidationRules>(metricValue.PerformanceMetric.ValidationRules);
-                    metricValue.IsComplete = rules?.AllowNull == true;
-                }
-                catch
-                {
-                    metricValue.IsComplete = !string.IsNullOrWhiteSpace(value);
-                }
+                _logger.LogInformation(
+                    "Metric not captured. FIPS ID: {FipsId}, Metric: {MetricId} ({MetricTitle}), " +
+                    "Period: {Year}-{Month}, Reason: {Reason}",
+                    metricValue.ProductReturn?.FipsId,
+                    metricValue.PerformanceMetricId,
+                    metricValue.PerformanceMetric?.Title,
+                    metricValue.ProductReturn?.Year,
+                    metricValue.ProductReturn?.Month,
+                    notCapturedReason ?? "No reason provided"
+                );
+                
+                metricValue.Value = string.Empty;
+                metricValue.IsComplete = true;
+                metricValue.IsNotCaptured = true;
+                metricValue.NotCapturedReason = notCapturedReason;
             }
             else
             {
+                // Validate the value based on the metric's validation rules
+                if (metricValue.PerformanceMetric != null && !string.IsNullOrWhiteSpace(value))
+                {
+                    var validationResult = ValidateMetricValue(value, metricValue.PerformanceMetric);
+                    if (!validationResult.IsValid)
+                    {
+                        return Json(new { success = false, message = validationResult.ErrorMessage });
+                    }
+                }
+
+                // Log reason for significant difference if provided
+                if (!string.IsNullOrWhiteSpace(reasonForDifference))
+                {
+                    _logger.LogInformation(
+                        "Metric value change with significant difference. FIPS ID: {FipsId}, Metric: {MetricId} ({MetricTitle}), " +
+                        "Period: {Year}-{Month}, New Value: {NewValue}, Reason: {Reason}",
+                        metricValue.ProductReturn?.FipsId,
+                        metricValue.PerformanceMetricId,
+                        metricValue.PerformanceMetric?.Title,
+                        metricValue.ProductReturn?.Year,
+                        metricValue.ProductReturn?.Month,
+                        value ?? "",
+                        reasonForDifference
+                    );
+                }
+
+                metricValue.Value = value ?? string.Empty;
+                metricValue.IsNotCaptured = false;
+                metricValue.NotCapturedReason = null;
+                metricValue.ReasonForDifference = reasonForDifference;
+                
+                // Mark as complete based on whether value is provided
                 metricValue.IsComplete = !string.IsNullOrWhiteSpace(value);
             }
             
@@ -436,10 +497,18 @@ public class ProductReportingController : Controller
 
             await _context.SaveChangesAsync();
 
+            Console.WriteLine($"✓ Metric value saved successfully!");
+            Console.WriteLine($"  → IsComplete: {metricValue.IsComplete}");
+            Console.WriteLine($"  → Value: '{metricValue.Value}'");
+            Console.WriteLine($"  → IsNotCaptured: {metricValue.IsNotCaptured}");
+            Console.WriteLine($"  → NotCapturedReason: '{metricValue.NotCapturedReason ?? "(null)"}'");
+            Console.WriteLine($"  → ReasonForDifference: '{metricValue.ReasonForDifference ?? "(null)"}'");
+            
             return Json(new { success = true, message = "Value saved successfully" });
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"✗ ERROR saving metric value: {ex.Message}");
             _logger.LogError(ex, "Error saving metric value");
             return Json(new { success = false, message = "An error occurred while saving" });
         }

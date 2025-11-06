@@ -677,10 +677,14 @@ namespace Compass.Controllers
                 productAccessibility.EnrolledBy = User.Identity?.Name;
                 productAccessibility.UpdatedAt = DateTime.UtcNow;
                 
+                // Clear the navigation property to prevent duplicate contact methods
+                // The model binder populates both the navigation property and the separate parameter
+                productAccessibility.ContactMethods = new List<ContactMethod>();
+                
                 _context.ProductAccessibilities.Add(productAccessibility);
                 await _context.SaveChangesAsync();
                 
-                // Add contact methods
+                // Add contact methods from the parameter
                 if (contactMethods != null && contactMethods.Any())
                 {
                     foreach (var cm in contactMethods.Where(c => !string.IsNullOrWhiteSpace(c.ContactDetail)))
