@@ -405,14 +405,15 @@
 
 <script nonce="@Context.Items["Nonce"]">
 (function() {
-    // Namespace to avoid conflicts
-    if (!window.StrategicAlignment) {
-        window.StrategicAlignment = {};
-    }
-    
-    // Initialize with existing departments
-    window.StrategicAlignment.selectedDepartmentsData = [];
-    let searchTimeout;
+    function initStrategicAlignment() {
+        // Namespace to avoid conflicts
+        if (!window.StrategicAlignment) {
+            window.StrategicAlignment = {};
+        }
+        
+        // Initialize with existing departments
+        window.StrategicAlignment.selectedDepartmentsData = [];
+        let searchTimeout;
     
     @if (Model.IsMultiDepartmentProject && !string.IsNullOrEmpty(Model.OtherDepartments))
     {
@@ -432,150 +433,168 @@
         }
     }
     
-    function updateSelectedDepartmentsList() {
-        const $container = $('#selectedDepartmentsList');
-        const $input = $('#otherDepartmentsInput');
-        const selectedData = window.StrategicAlignment.selectedDepartmentsData;
-        
-        if (selectedData.length === 0) {
-            $container.empty();
-            $input.val('');
-            return;
-        }
-        
-        $container.html('<strong class="d-block mb-2">Selected Departments:</strong>');
-        
-        selectedData.forEach(function(dept) {
-            const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
-            const $item = $('<div class="d-inline-block mr-2 mb-2"></div>');
-            const $badge = $('<span class="badge badge-primary"></span>');
-            $badge.text(displayText + ' ');
+        function updateSelectedDepartmentsList() {
+            const $container = $('#selectedDepartmentsList');
+            const $input = $('#otherDepartmentsInput');
+            const selectedData = window.StrategicAlignment.selectedDepartmentsData;
             
-            const $removeBtn = $('<button type="button" class="btn btn-sm btn-link text-white p-0 ml-1" aria-label="Remove"></button>');
-            $removeBtn.html('&times;');
-            $removeBtn.on('click', function() {
-                removeDepartmentFromList(dept.id);
+            if (selectedData.length === 0) {
+                $container.empty();
+                $input.val('');
+                return;
+            }
+            
+            $container.html('<strong class="d-block mb-2">Selected Departments:</strong>');
+            
+            selectedData.forEach(function(dept) {
+                const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
+                const $item = $('<div class="d-inline-block mr-2 mb-2"></div>');
+                const $badge = $('<span class="badge badge-primary"></span>');
+                $badge.text(displayText + ' ');
+                
+                const $removeBtn = $('<button type="button" class="btn btn-sm btn-link text-white p-0 ml-1" aria-label="Remove"></button>');
+                $removeBtn.html('&times;');
+                $removeBtn.on('click', function() {
+                    removeDepartmentFromList(dept.id);
+                });
+                
+                $badge.append($removeBtn);
+                $item.append($badge);
+                $container.append($item);
             });
             
-            $badge.append($removeBtn);
-            $item.append($badge);
-            $container.append($item);
-        });
+            // Update hidden input with JSON array of IDs
+            $input.val(JSON.stringify(selectedData.map(d => d.id)));
+        }
         
-        // Update hidden input with JSON array of IDs
-        $input.val(JSON.stringify(selectedData.map(d => d.id)));
-    }
-    
-    function removeDepartmentFromList(deptId) {
-        window.StrategicAlignment.selectedDepartmentsData = window.StrategicAlignment.selectedDepartmentsData.filter(d => d.id !== deptId);
-        updateSelectedDepartmentsList();
-    }
-    
-    function addDepartment(dept) {
-        if (!window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
-            window.StrategicAlignment.selectedDepartmentsData.push(dept);
+        function removeDepartmentFromList(deptId) {
+            window.StrategicAlignment.selectedDepartmentsData = window.StrategicAlignment.selectedDepartmentsData.filter(d => d.id !== deptId);
             updateSelectedDepartmentsList();
-            $('#deptSearch').val('');
-            $('#deptSearchResults').empty();
-        }
-    }
-    
-    function displaySearchResults(results) {
-        const $container = $('#deptSearchResults');
-        $container.empty();
-        
-        if (results.length === 0) {
-            $container.html('<div class="list-group-item text-muted mt-2">No departments found</div>');
-            return;
         }
         
-        const $listGroup = $('<div class="list-group mt-2"></div>');
+        function addDepartment(dept) {
+            if (!window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
+                window.StrategicAlignment.selectedDepartmentsData.push(dept);
+                updateSelectedDepartmentsList();
+                $('#deptSearch').val('');
+                $('#deptSearchResults').empty();
+            }
+        }
         
-        results.forEach(function(dept) {
-            // Check if already selected
-            if (window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
-                return; // Skip already selected
+        function displaySearchResults(results) {
+            const $container = $('#deptSearchResults');
+            $container.empty();
+            
+            if (results.length === 0) {
+                $container.html('<div class="list-group-item text-muted mt-2">No departments found</div>');
+                return;
             }
             
-            const $item = $('<a href="#" class="list-group-item list-group-item-action"></a>');
-            const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
-            $item.text(displayText);
+            const $listGroup = $('<div class="list-group mt-2"></div>');
             
-            $item.on('click', function(e) {
-                e.preventDefault();
-                addDepartment(dept);
+            results.forEach(function(dept) {
+                // Check if already selected
+                if (window.StrategicAlignment.selectedDepartmentsData.find(d => d.id === dept.id)) {
+                    return; // Skip already selected
+                }
+                
+                const $item = $('<a href="#" class="list-group-item list-group-item-action"></a>');
+                const displayText = dept.text + (dept.abbreviation ? ' (' + dept.abbreviation + ')' : '');
+                $item.text(displayText);
+                
+                $item.on('click', function(e) {
+                    e.preventDefault();
+                    addDepartment(dept);
+                });
+                
+                $listGroup.append($item);
             });
             
-            $listGroup.append($item);
+            $container.append($listGroup);
+        }
+        
+        function searchDepartments(query) {
+            $.ajax({
+                url: '/Admin/GovernmentDepartment/Search',
+                data: { q: query },
+                success: function(data) {
+                    displaySearchResults(data.results);
+                },
+                error: function() {
+                    $('#deptSearchResults').html('<div class="alert alert-danger mt-2">Error searching departments</div>');
+                }
+            });
+        }
+        
+        // Set up department management modal
+        $('#manageDepartmentsModal').on('shown.bs.modal', function() {
+            console.log('Multi-department modal opened');
+            updateSelectedDepartmentsList();
+            
+            // Ensure the section visibility is correct based on checkbox state
+            if ($('#isMultiDeptCheck').is(':checked')) {
+                $('#departmentSelectionSection').show();
+            } else {
+                $('#departmentSelectionSection').hide();
+            }
+            
+            // Clear any previous search results
+            $('#deptSearchResults').empty();
+            $('#deptSearch').val('');
         });
         
-        $container.append($listGroup);
-    }
-    
-    function searchDepartments(query) {
-        $.ajax({
-            url: '/Admin/GovernmentDepartment/Search',
-            data: { q: query },
-            success: function(data) {
-                displaySearchResults(data.results);
-            },
-            error: function() {
-                $('#deptSearchResults').html('<div class="alert alert-danger mt-2">Error searching departments</div>');
+        // Show/hide department selection when checkbox changes
+        $('#isMultiDeptCheck').on('change', function() {
+            console.log('Multi-department checkbox changed:', $(this).is(':checked'));
+            if ($(this).is(':checked')) {
+                $('#departmentSelectionSection').slideDown(function() {
+                    // Focus search field after animation
+                    $('#deptSearch').focus();
+                });
+            } else {
+                $('#departmentSelectionSection').slideUp();
+                $('#deptSearchResults').empty();
             }
         });
-    }
-    
-    // Set up event handlers - remove existing first to avoid duplicates
-    $(document).off('shown.bs.modal', '#manageDepartmentsModal');
-    $(document).off('change', '#isMultiDeptCheck');
-    $(document).off('input', '#deptSearch');
-    
-    // Set up department management modal
-    $(document).on('shown.bs.modal', '#manageDepartmentsModal', function() {
-        updateSelectedDepartmentsList();
-    });
-    
-    // Show/hide department selection when checkbox changes
-    $(document).on('change', '#isMultiDeptCheck', function() {
-        if ($(this).is(':checked')) {
-            $('#departmentSelectionSection').slideDown();
-        } else {
-            $('#departmentSelectionSection').slideUp();
-        }
-    });
-    
-    // Department search with debounce
-    $(document).on('input', '#deptSearch', function() {
-        clearTimeout(searchTimeout);
-        const query = $(this).val().trim();
         
-        if (query.length < 2) {
-            $('#deptSearchResults').empty();
-            return;
-        }
+        // Department search with debounce
+        $('#deptSearch').on('input', function() {
+            console.log('Department search input:', $(this).val());
+            clearTimeout(searchTimeout);
+            const query = $(this).val().trim();
+            
+            if (query.length < 2) {
+                $('#deptSearchResults').empty();
+                return;
+            }
+            
+            searchTimeout = setTimeout(function() {
+                searchDepartments(query);
+            }, 300);
+        });
         
-        searchTimeout = setTimeout(function() {
-            searchDepartments(query);
-        }, 300);
-    });
+        // Hide search results when clicking outside
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('#deptSearch').length && !$(e.target).closest('#deptSearchResults').length) {
+                $('#deptSearchResults').empty();
+            }
+        });
     
-    // Hide search results when clicking outside
-    $(document).on('click', function(e) {
-        if (!$(e.target).closest('#deptSearch').length && !$(e.target).closest('#deptSearchResults').length) {
-            $('#deptSearchResults').empty();
-        }
-    });
-    
-    // Initialize on page load
-    $(document).ready(function() {
+        // Initialize on page load
         if ($('#isMultiDeptCheck').is(':checked')) {
             updateSelectedDepartmentsList();
         }
-    });
+    }
     
-    // Initialize display if modal is already open
-    if ($('#manageDepartmentsModal').hasClass('show')) {
-        updateSelectedDepartmentsList();
+    // Wait for jQuery to be available
+    if (typeof jQuery !== 'undefined') {
+        $(document).ready(initStrategicAlignment);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof jQuery !== 'undefined') {
+                $(document).ready(initStrategicAlignment);
+            }
+        });
     }
 })();
 </script>
