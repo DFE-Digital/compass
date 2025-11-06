@@ -22,6 +22,16 @@ public class ProductMetricValue
     
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    public bool IsNotCaptured { get; set; } = false;
+    
+    public string? NotCapturedReason { get; set; }
+    
+    public string? ReasonForDifference { get; set; }
+
+    // Not mapped - calculated property for previous month's value
+    [NotMapped]
+    public string? PreviousValue { get; set; }
+
     // Navigation properties
     [ForeignKey("ProductReturnId")]
     public ProductReturn? ProductReturn { get; set; }
