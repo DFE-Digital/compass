@@ -22,5 +22,7 @@ public class ProjectOutcomeDetailsViewModel
 
     public DateTime UpdatedAt { get; set; }
 
+    public RaidLinkSummaryViewModel RaidSummary { get; set; } = new();
+
     public ProjectSummaryViewModel ProjectSummary { get; set; } = new();
 }

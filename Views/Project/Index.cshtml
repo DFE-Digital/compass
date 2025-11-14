@@ -1,3 +1,4 @@
+@using System.Linq
 @model Compass.ViewModels.ProjectIndexViewModel
 
 @{
@@ -16,9 +17,12 @@
                 </nav>
                 <h1 class="m-0">Delivery reporting</h1>
             </div>
-            <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
-                <a asp-action="Create" class="btn btn-success">Create entry</a>
-            </div>
+            @if (User.IsInRole("Admin"))
+            {
+                <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
+                    <a asp-action="Create" class="btn btn-success">Create entry</a>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -49,6 +53,10 @@
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
+                        @{
+                            var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
+                            var currentPriorityId = ViewBag.CurrentPriority as int?;
+                        }
                         <form method="get" id="filterForm">
                             <div class="form-group">
                                 <label>Search</label>
@@ -168,6 +176,24 @@
                             </div>
 
                             <div class="form-group">
+                                <label>Priority</label>
+                                <select name="priority" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @foreach (var priorityOption in deliveryPriorities)
+                                    {
+                                        if (currentPriorityId == priorityOption.Id)
+                                        {
+                                            <option value="@priorityOption.Id" selected="selected">@priorityOption.Name</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@priorityOption.Id">@priorityOption.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
                                 <a asp-action="Index" class="btn btn-default btn-sm btn-block">Clear all filters</a>
                             </div>
@@ -177,7 +203,8 @@
                              !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
-                             !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
+                             !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                             currentPriorityId.HasValue)
                         {
                             <div class="mt-3 pt-3 border-top">
                                 <strong class="d-block mb-2">Active Filters:</strong>
@@ -187,9 +214,10 @@
                                         <span class="badge badge-info">Search: @ViewBag.CurrentSearch</span>
                                         <a href="@Url.Action("Index", new { 
                                             ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
+                        businessArea = ViewBag.CurrentBusinessArea, 
                                             phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
                                         })" class="text-danger" title="Remove filter">
                                             <i class="fas fa-times"></i>
                                         </a>
@@ -203,7 +231,8 @@
                                             search = ViewBag.CurrentSearch, 
                                             businessArea = ViewBag.CurrentBusinessArea, 
                                             phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
                                         })" class="text-danger" title="Remove filter">
                                             <i class="fas fa-times"></i>
                                         </a>
@@ -217,7 +246,8 @@
                                             search = ViewBag.CurrentSearch, 
                                             ragStatus = ViewBag.CurrentRagStatus, 
                                             phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
                                         })" class="text-danger" title="Remove filter">
                                             <i class="fas fa-times"></i>
                                         </a>
@@ -231,7 +261,8 @@
                                             search = ViewBag.CurrentSearch, 
                                             ragStatus = ViewBag.CurrentRagStatus, 
                                             businessArea = ViewBag.CurrentBusinessArea, 
-                                            flagship = ViewBag.CurrentFlagship 
+                                            flagship = ViewBag.CurrentFlagship,
+                                            priority = currentPriorityId
                                         })" class="text-danger" title="Remove filter">
                                             <i class="fas fa-times"></i>
                                         </a>
@@ -245,7 +276,24 @@
                                             search = ViewBag.CurrentSearch, 
                                             ragStatus = ViewBag.CurrentRagStatus, 
                                             businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase 
+                                            phase = ViewBag.CurrentPhase,
+                                            priority = currentPriorityId
+                                        })" class="text-danger" title="Remove filter">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @if (currentPriorityId.HasValue)
+                                {
+                                    var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge badge-info">Priority: @(currentPriority?.Name ?? currentPriorityId.ToString())</span>
+                                        <a href="@Url.Action("Index", new { 
+                                            search = ViewBag.CurrentSearch, 
+                                            ragStatus = ViewBag.CurrentRagStatus, 
+                                            businessArea = ViewBag.CurrentBusinessArea, 
+                                            phase = ViewBag.CurrentPhase,
+                                            flagship = ViewBag.CurrentFlagship 
                                         })" class="text-danger" title="Remove filter">
                                             <i class="fas fa-times"></i>
                                         </a>
@@ -270,9 +318,9 @@
                             <table class="table table-hover text-nowrap sortable-table user-projects-table">
                                 <thead>
                                     <tr>
-                                        <th class="col-project-code sortable" data-column="Code" tabindex="0" role="button" aria-label="Sort by Code">Code <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
@@ -284,10 +332,26 @@
                                     {
                                         <tr>
                                             <td>
-                                                <span title="Legacy code: @project.ProjectCode">@GetDeliveryCode(project)</span>
+                                                <a asp-action="Details" asp-route-id="@project.Id">@project.Title</a>
+                                                <div class="project-meta text-muted small mt-1">
+                                                    <span class="d-block">Delivery code: <span class="text-monospace">@GetDeliveryCode(project)</span></span>
+                                                    @if (!string.IsNullOrWhiteSpace(project.ProjectCode))
+                                                    {
+                                                        <span class="d-block">Legacy code: <span class="text-monospace">@project.ProjectCode</span></span>
+                                                    }
+                                                </div>
                                             </td>
-                                            <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
-                                            <td>@project.BusinessArea</td>
+                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
+                                            <td>
+                                                @if (project.DeliveryPriority != null)
+                                                {
+                                                    <span class="badge badge-blue">@project.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not set</span>
+                                                }
+                                            </td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(project.RagStatus))
                                                 {
@@ -343,9 +407,9 @@
                             <table class="table table-hover text-nowrap sortable-table projects-index-table">
                                 <thead>
                                     <tr>
-                                        <th class="col-project-code sortable" data-column="Code" tabindex="0" role="button" aria-label="Sort by Code">Code <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
@@ -357,10 +421,26 @@
                                     {
                                         <tr>
                                             <td>
-                                                <span title="Legacy code: @project.ProjectCode">@GetDeliveryCode(project)</span>
+                                                <a asp-action="Details" asp-route-id="@project.Id">@project.Title</a>
+                                                <div class="project-meta text-muted small mt-1">
+                                                    <span class="d-block">Delivery code: <span class="text-monospace">@GetDeliveryCode(project)</span></span>
+                                                    @if (!string.IsNullOrWhiteSpace(project.ProjectCode))
+                                                    {
+                                                        <span class="d-block">Legacy code: <span class="text-monospace">@project.ProjectCode</span></span>
+                                                    }
+                                                </div>
                                             </td>
-                                            <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
-                                            <td>@project.BusinessArea</td>
+                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
+                                            <td>
+                                                @if (project.DeliveryPriority != null)
+                                                {
+                                                    <span class="badge badge-blue">@project.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not set</span>
+                                                }
+                                            </td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(project.RagStatus))
                                                 {
@@ -418,6 +498,7 @@
                                            asp-route-businessArea="@ViewBag.CurrentBusinessArea"
                                            asp-route-phase="@ViewBag.CurrentPhase"
                                            asp-route-flagship="@ViewBag.CurrentFlagship"
+                                           asp-route-priority="@ViewBag.CurrentPriority"
                                            rel="prev">Previous</a>
                                     </li>
                                     @for (var i = 1; i <= Model.TotalPages; i++)
@@ -430,7 +511,8 @@
                                                asp-route-ragStatus="@ViewBag.CurrentRagStatus"
                                                asp-route-businessArea="@ViewBag.CurrentBusinessArea"
                                                asp-route-phase="@ViewBag.CurrentPhase"
-                                               asp-route-flagship="@ViewBag.CurrentFlagship">@i</a>
+                                               asp-route-flagship="@ViewBag.CurrentFlagship"
+                                               asp-route-priority="@ViewBag.CurrentPriority">@i</a>
                                         </li>
                                     }
                                     <li class="page-item @(Model.HasNextPage ? string.Empty : "disabled")">
@@ -442,6 +524,7 @@
                                            asp-route-businessArea="@ViewBag.CurrentBusinessArea"
                                            asp-route-phase="@ViewBag.CurrentPhase"
                                            asp-route-flagship="@ViewBag.CurrentFlagship"
+                                           asp-route-priority="@ViewBag.CurrentPriority"
                                            rel="next">Next</a>
                                     </li>
                                 </ul>
@@ -473,88 +556,6 @@
         };
     }
 }
-
-<style>
-.sortable {
-    cursor: pointer;
-    user-select: none;
-}
-
-.sortable:hover {
-    background-color: #f8f9fa;
-}
-
-/* Consistent column widths for both tables */
-.user-projects-table,
-.projects-index-table {
-    table-layout: fixed;
-    width: 100%;
-}
-
-.user-projects-table th.col-project-code,
-.projects-index-table th.col-project-code,
-.user-projects-table td:first-child,
-.projects-index-table td:first-child {
-    width: 10%;
-}
-
-.user-projects-table th.col-project-title,
-.projects-index-table th.col-project-title,
-.user-projects-table td:nth-child(2),
-.projects-index-table td:nth-child(2) {
-    width: 25%;
-}
-
-.user-projects-table th.col-project-business-area,
-.projects-index-table th.col-project-business-area,
-.user-projects-table td:nth-child(3),
-.projects-index-table td:nth-child(3) {
-    width: 15%;
-}
-
-.user-projects-table th.col-project-rag,
-.projects-index-table th.col-project-rag,
-.user-projects-table td:nth-child(4),
-.projects-index-table td:nth-child(4) {
-    width: 12%;
-}
-
-.user-projects-table th.col-project-phase,
-.projects-index-table th.col-project-phase,
-.user-projects-table td:nth-child(5),
-.projects-index-table td:nth-child(5) {
-    width: 12%;
-}
-
-.user-projects-table th.col-project-target,
-.projects-index-table th.col-project-target,
-.user-projects-table td:nth-child(6),
-.projects-index-table td:nth-child(6) {
-    width: 14%;
-}
-
-.user-projects-table th.col-project-flagship,
-.projects-index-table th.col-project-flagship,
-.user-projects-table td:nth-child(7),
-.projects-index-table td:nth-child(7) {
-    width: 12%;
-}
-
-/* Ensure text doesn't overflow */
-.user-projects-table td,
-.projects-index-table td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Allow title column to wrap if needed */
-.user-projects-table td:nth-child(2),
-.projects-index-table td:nth-child(2) {
-    white-space: normal;
-    word-wrap: break-word;
-}
-</style>
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">

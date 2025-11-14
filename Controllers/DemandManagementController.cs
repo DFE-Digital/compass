@@ -2877,6 +2877,9 @@ namespace Compass.Controllers
                         Name = contact.Name,
                         Email = contact.Email,
                         SortOrder = index + 1,
+                        FundingArrangement = "Not specified",
+                        EmploymentType = "Permanent",
+                        TeamStatus = "current",
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     })

@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -5,6 +8,7 @@ using Compass.Data;
 using Compass.Models;
 using Microsoft.AspNetCore.Authorization;
 using Compass.Services;
+using Compass.ViewModels.Admin;
 
 namespace Compass.Controllers;
 
@@ -14,6 +18,43 @@ public class AdminController : Controller
     private readonly CompassDbContext _context;
     private readonly ILogger<AdminController> _logger;
     private readonly IApiTokenService _apiTokenService;
+
+    private static readonly IReadOnlyList<RaidLookupDefinition> _raidLookupDefinitions = new List<RaidLookupDefinition>
+    {
+        CreateLookupDefinition<ActionStatus>("action-statuses", "Action statuses", "Workflow states shown on every action."),
+        CreateLookupDefinition<ActionPriority>("action-priorities", "Action priorities", "Priority options shared across action listings."),
+        CreateLookupDefinition<ActionType>("action-types", "Action types", "Helps teams categorise actions for reporting."),
+        CreateLookupDefinition<ActionCategory>("action-categories", "Action categories", "Used to slice actions by category."),
+        CreateLookupDefinition<ActionImpactLevel>("action-impact-levels", "Action impact levels", "Impact level choices aligned with RAID reporting."),
+        CreateLookupDefinition<ActionReminderFrequency>("action-reminder-frequencies", "Action reminder frequencies", "Determines how often reminders fire for actions."),
+        CreateLookupDefinition<ActionEscalationThreshold>("action-escalation-thresholds", "Action escalation thresholds", "Number of days before escalation is triggered."),
+        CreateLookupDefinition<IssueStatus>("issue-statuses", "Issue statuses", "Issue workflow states."),
+        CreateLookupDefinition<IssuePriority>("issue-priorities", "Issue priorities", "Priority options for issues."),
+        CreateLookupDefinition<IssueSeverity>("issue-severities", "Issue severities", "Severity scale mapped to RAID reporting."),
+        CreateLookupDefinition<IssueCategory>("issue-categories", "Issue categories", "Issue categorisation used in dashboards."),
+        CreateLookupDefinition<DecisionStatus>("decision-statuses", "Decision statuses", "Status values for decisions."),
+        CreateLookupDefinition<DecisionPriority>("decision-priorities", "Decision priorities", "Decision priority labels."),
+        CreateLookupDefinition<DecisionOutcome>("decision-outcomes", "Decision outcomes", "Possible outcomes recorded when a decision is made."),
+        CreateLookupDefinition<DecisionImplementationStatus>("decision-implementation-statuses", "Decision implementation statuses", "Tracks implementation progress."),
+        CreateLookupDefinition<RiskStatus>("risk-statuses", "Risk statuses", "Core risk workflow states."),
+        CreateLookupDefinition<RiskPriority>("risk-priorities", "Risk priorities", "Priority scale applied to risks."),
+        CreateLookupDefinition<RiskLikelihood>("risk-likelihoods", "Risk likelihoods", "Likelihood scale used to calculate scores."),
+        CreateLookupDefinition<RiskImpactLevel>("risk-impact-levels", "Risk impact levels", "Impact scale for risks."),
+        CreateLookupDefinition<RiskProximity>("risk-proximities", "Risk proximities", "Timeline bands for when a risk may materialise."),
+        CreateLookupDefinition<RiskCategory>("risk-categories", "Risk categories", "Categorisation for risk libraries."),
+        CreateLookupDefinition<RaidEvidenceType>("raid-evidence-types", "Evidence types", "Shared evidence/documentation types."),
+        CreateLookupDefinition<GovernanceBoard>("governance-boards", "Governance boards", "Committees and boards used for RAID escalation.")
+    };
+
+    private static RaidLookupDefinition CreateLookupDefinition<TLookup>(string key, string label, string? description = null)
+        where TLookup : RaidLookupBase, new() =>
+        new(
+            key,
+            label,
+            ctx => ctx.Set<TLookup>().Cast<RaidLookupBase>(),
+            () => new TLookup(),
+            description);
+
 
     public AdminController(CompassDbContext context, ILogger<AdminController> logger, IApiTokenService apiTokenService)
     {
@@ -26,6 +67,144 @@ public class AdminController : Controller
     public IActionResult Index()
     {
         return View("~/Views/Admin/Index.cshtml");
+    }
+
+    // ==================== RAID SETTINGS ====================
+
+    public async Task<IActionResult> RaidSettings(string? lookupKey = null, int? editId = null)
+    {
+        var descriptor = ResolveRaidLookupDefinition(lookupKey) ?? _raidLookupDefinitions.First();
+        var viewModel = await BuildRaidSettingsViewModelAsync(descriptor);
+
+        if (editId.HasValue)
+        {
+            var entity = await descriptor.Query(_context)
+                .FirstOrDefaultAsync(x => x.Id == editId.Value);
+
+            if (entity == null)
+            {
+                TempData["ErrorMessage"] = "The selected entry could not be found.";
+            }
+            else
+            {
+                viewModel.EditEntry = new RaidLookupEditInputModel
+                {
+                    Id = entity.Id,
+                    LookupKey = descriptor.Key,
+                    Code = entity.Code,
+                    Label = entity.Label,
+                    Description = entity.Description,
+                    SortOrder = entity.SortOrder,
+                    IsActive = entity.IsActive
+                };
+            }
+        }
+
+        return View("~/Views/Admin/Settings/RaidSettings.cshtml", viewModel);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRaidLookup([Bind(Prefix = "NewEntry")] RaidLookupEditInputModel input)
+    {
+        var descriptor = ResolveRaidLookupDefinition(input.LookupKey) ?? _raidLookupDefinitions.First();
+
+        if (!ModelState.IsValid)
+        {
+            var invalidViewModel = await BuildRaidSettingsViewModelAsync(descriptor, input);
+            return View("~/Views/Admin/Settings/RaidSettings.cshtml", invalidViewModel);
+        }
+
+        var entity = descriptor.Factory();
+
+        entity.Code = input.Code.Trim();
+        entity.Label = input.Label.Trim();
+        entity.Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim();
+        entity.SortOrder = input.SortOrder;
+        entity.IsActive = input.IsActive;
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        _context.Add(entity);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Added '{entity.Label}' to {descriptor.Label.ToLowerInvariant()}.";
+        return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateRaidLookup([Bind(Prefix = "EditEntry")] RaidLookupEditInputModel input)
+    {
+        if (!input.Id.HasValue)
+        {
+            TempData["ErrorMessage"] = "Invalid RAID lookup identifier.";
+            return RedirectToAction(nameof(RaidSettings));
+        }
+
+        var descriptor = ResolveRaidLookupDefinition(input.LookupKey) ?? _raidLookupDefinitions.First();
+
+        if (!ModelState.IsValid)
+        {
+            var invalidViewModel = await BuildRaidSettingsViewModelAsync(descriptor, null, input);
+            return View("~/Views/Admin/Settings/RaidSettings.cshtml", invalidViewModel);
+        }
+
+        var entity = await descriptor.Query(_context)
+            .FirstOrDefaultAsync(x => x.Id == input.Id.Value);
+
+        if (entity == null)
+        {
+            TempData["ErrorMessage"] = "Unable to find the selected RAID lookup entry.";
+            return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+        }
+
+        entity.Code = input.Code.Trim();
+        entity.Label = input.Label.Trim();
+        entity.Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim();
+        entity.SortOrder = input.SortOrder;
+        entity.IsActive = input.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Updated '{entity.Label}'.";
+        return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRaidLookup(string lookupKey, int id)
+    {
+        var descriptor = ResolveRaidLookupDefinition(lookupKey);
+        if (descriptor == null)
+        {
+            TempData["ErrorMessage"] = "Unknown RAID lookup.";
+            return RedirectToAction(nameof(RaidSettings));
+        }
+
+        var entity = await descriptor.Query(_context)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (entity == null)
+        {
+            TempData["ErrorMessage"] = "The selected entry could not be found.";
+            return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+        }
+
+        try
+        {
+            _context.Remove(entity);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Deleted '{entity.Label}'.";
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete RAID lookup {LookupKey} {LookupId}", descriptor.Key, id);
+            TempData["ErrorMessage"] = "Unable to delete this entry because it is currently in use.";
+        }
+
+        return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
     }
 
     // GET: Admin/Users
@@ -3080,5 +3259,60 @@ public class AdminController : Controller
         TempData["SuccessMessage"] = "Triage meeting deleted.";
         return RedirectToAction(nameof(TriageMeetings));
     }
-}
 
+    private RaidLookupDefinition? ResolveRaidLookupDefinition(string? key) =>
+        _raidLookupDefinitions.FirstOrDefault(d =>
+            string.Equals(d.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private async Task<RaidLookupListViewModel> BuildRaidSettingsViewModelAsync(
+        RaidLookupDefinition descriptor,
+        RaidLookupEditInputModel? newEntry = null,
+        RaidLookupEditInputModel? editEntry = null)
+    {
+        var items = await descriptor.Query(_context)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Label)
+            .Select(x => new RaidLookupListItemViewModel
+            {
+                Id = x.Id,
+                Code = x.Code,
+                Label = x.Label,
+                Description = x.Description,
+                SortOrder = x.SortOrder,
+                IsActive = x.IsActive
+            })
+            .ToListAsync();
+
+        var defaultSort = items.Any() ? items.Max(i => i.SortOrder) + 10 : 0;
+
+        return new RaidLookupListViewModel
+        {
+            CurrentLookupKey = descriptor.Key,
+            CurrentLookupLabel = descriptor.Label,
+            CurrentLookupDescription = descriptor.Description,
+            Lookups = _raidLookupDefinitions
+                .Select(d => new RaidLookupSelectorViewModel
+                {
+                    Key = d.Key,
+                    Label = d.Label
+                })
+                .ToList(),
+            Items = items,
+            NewEntry = newEntry ?? new RaidLookupEditInputModel
+            {
+                LookupKey = descriptor.Key,
+                SortOrder = defaultSort,
+                IsActive = true
+            },
+            EditEntry = editEntry
+        };
+    }
+
+    private record RaidLookupDefinition(
+        string Key,
+        string Label,
+        Func<CompassDbContext, IQueryable<RaidLookupBase>> Query,
+        Func<RaidLookupBase> Factory,
+        string? Description);
+
+}

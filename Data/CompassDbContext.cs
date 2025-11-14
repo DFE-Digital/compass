@@ -1145,6 +1145,12 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ProjectContact>()
+            .HasOne(pc => pc.User)
+            .WithMany()
+            .HasForeignKey(pc => pc.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ProjectContact>()
             .HasIndex(pc => pc.ProjectId);
 
         modelBuilder.Entity<ProjectContact>()
@@ -1152,6 +1158,9 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectContact>()
             .HasIndex(pc => pc.Role);
+
+        modelBuilder.Entity<ProjectContact>()
+            .HasIndex(pc => pc.TeamStatus);
 
         // ProjectObjective configuration
         modelBuilder.Entity<ProjectObjective>()

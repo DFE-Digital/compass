@@ -1,10 +1,12 @@
 @model Compass.Models.Project
+@using System
 @using System.Linq
 
 @{
-    var totalOutcomes = Model.Outcomes.Count;
-    var totalMilestones = Model.Milestones.Count;
-    var completedMilestones = Model.Milestones.Count(m => m.Status == "complete");
+    var activeMilestones = Model.Milestones
+        .Where(m => m.Status != "complete")
+        .OrderBy(m => m.DueDate)
+        .ToList();
     
     // Flagship project deliverables
     var deliverableProjects = ViewBag.DeliverableProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
@@ -18,10 +20,10 @@
 <div class="row">
     <!-- Left Column -->
     <div class="col-lg-8">
-        <!-- Project Aim -->
+        <!-- Aim -->
         <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title">Project Aim</h3>
+                <h3 class="card-title">Aim</h3>
                 <div class="card-tools">
                     <a href="#" data-toggle="modal" data-target="#editAimModal">Change</a>
                 </div>
@@ -38,187 +40,59 @@
             </div>
         </div>
 
-        <!-- Project Summary -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title">Project Summary</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card priority-card text-white h-100 mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <p class="card-label text-uppercase mb-1">Priority</p>
+                                <h3 class="card-value mb-0">@((Model.DeliveryPriority?.Name) ?? "Not set")</h3>
+                            </div>
+                            <a href="#" class="card-link text-white" data-toggle="modal" data-target="#editDeliveryPriorityModal">Change</a>
+                        </div>
+                        @if (Model.DeliveryPriority != null && !string.IsNullOrWhiteSpace(Model.DeliveryPriority.Summary))
+                        {
+                            <p class="mb-0">@Model.DeliveryPriority.Summary</p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 text-white-50">No summary provided.</p>
+                        }
+                    </div>
+                </div>
             </div>
-            <div class="card-body p-0">
-                <table class="table table-borderless mb-0 project-overview-summary">
-                    <tbody>
-                        <tr>
-                            <td class="summary-label"><strong>Delivery code</strong></td>
-                            <td class="summary-value">
-                                @deliveryCode
-                                @if (!string.IsNullOrEmpty(Model.HistoricBuRTId))
-                                {
-                                    <div class="text-muted small">BuRT: @Model.HistoricBuRTId</div>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editBuRTIdModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Business Area</strong></td>
-                            <td class="summary-value">
-                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                {
-                                    @Model.BusinessArea
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not specified</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editBusinessAreaModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Phase</strong></td>
-                            <td class="summary-value">
-                                @if (!string.IsNullOrEmpty(Model.Phase))
-                                {
-                                    @Model.Phase
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not specified</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editPhaseModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Status</strong></td>
-                            <td class="summary-value">
-                                <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editStatusModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Primary contact</strong></td>
-                            <td class="summary-value">
-                                @if (Model.PrimaryContactUser != null)
-                                {
-                                    <div>
-                                        <strong>@Model.PrimaryContactUser.Name</strong><br />
-                                        <span class="text-muted">@Model.PrimaryContactUser.Email</span>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editPrimaryContactModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Priority</strong></td>
-                            <td class="summary-value">
-                                @if (Model.DeliveryPriority != null)
-                                {
-                                    <span class="badge badge-secondary">@Model.DeliveryPriority.Name</span>
-                                    if (!string.IsNullOrWhiteSpace(Model.DeliveryPriority.Summary))
-                                    {
-                                        <div class="text-muted small mt-1">@Model.DeliveryPriority.Summary</div>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editDeliveryPriorityModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>RAG Status</strong></td>
-                            <td class="summary-value">
-                                @if (!string.IsNullOrEmpty(Model.RagStatus))
-                                {
-                                <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-secondary">Not set</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="rag">View</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Flagship</strong></td>
-                            <td class="summary-value">
-                                @if (Model.IsFlagship)
-                                {
-                                    <span class="badge badge-success">Yes</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-secondary">No</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editFlagshipModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Start Date</strong></td>
-                            <td class="summary-value">
-                                @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
-                                {
-                                    @Model.StartDate.Value.ToString("d MMMM yyyy")
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editStartDateModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Target End Date</strong></td>
-                            <td class="summary-value">
-                                @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
-                                {
-                                    @Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                }
-                                else
-                                {
-                                    <span class="text-muted">No end date</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editTargetDateModal">Change</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Outcomes</strong></td>
-                            <td class="summary-value">@totalOutcomes defined</td>
-                            <td class="text-right">
-                                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="outcomes">View</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Milestones</strong></td>
-                            <td class="summary-value">@completedMilestones of @totalMilestones completed</td>
-                            <td class="text-right">
-                                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View</a>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="col-md-6">
+                @{
+                    var ragCardClass = GetRagCardClass(Model.RagStatus);
+                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? Model.RagStatus : "Not set";
+                    var ragSupportingTextClass = !string.IsNullOrEmpty(ragCardClass) && ragCardClass.Contains("amber", StringComparison.OrdinalIgnoreCase)
+                        ? "text-muted"
+                        : "text-white-50";
+                }
+                <div class="card rag-card @ragCardClass h-100 mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <p class="card-label text-uppercase mb-1">RAG status</p>
+                                <h3 class="card-value mb-0">@ragStatusDisplay</h3>
+                            </div>
+                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="rag" class="card-link text-reset">View history</a>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.RagJustification))
+                        {
+                            <p class="mb-0">@Model.RagJustification</p>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(Model.PathToGreen))
+                        {
+                            <p class="mb-0">@Model.PathToGreen</p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 @ragSupportingTextClass">No recent update provided.</p>
+                        }
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -314,16 +188,16 @@
             </div>
         }
 
-        <!-- Project Milestones -->
+        <!-- Active Milestones -->
         <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title">Recent Milestones</h3>
+                <h3 class="card-title">Active milestones</h3>
                 <div class="card-tools">
                     <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
                 </div>
             </div>
             <div class="card-body table-responsive p-0">
-                @if (Model.Milestones.Any())
+                @if (activeMilestones.Any())
                 {
                     <table class="table table-hover text-nowrap milestones-table">
                         <thead>
@@ -336,7 +210,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate).Take(5))
+                            @foreach (var milestone in activeMilestones.Take(5))
                             {
                                 <tr>
                                     <td>
@@ -386,12 +260,12 @@
                 else
                 {
                     <div class="p-4">
-                        <p class="text-muted mb-2">No milestones recorded.</p>
+                        <p class="text-muted mb-2">No active milestones.</p>
                         <a class="btn btn-success btn-sm" asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
                     </div>
                 }
             </div>
-            @if (Model.Milestones.Count > 5)
+            @if (activeMilestones.Count > 5)
             {
                 <div class="card-footer">
                     <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View all @Model.Milestones.Count milestones</a>
@@ -459,168 +333,121 @@
             </div>
         </div>
 
-        <!-- Project Milestones -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title">Recent Milestones</h3>
-                <div class="card-tools">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View all milestones</a>
-                </div>
-            </div>
-            <div class="card-body table-responsive p-0">
-                @if (Model.Milestones.Any())
-                {
-                    <table class="table table-hover text-nowrap milestones-table">
-                        <thead>
-                            <tr>
-                                <th class="col-name">Name</th>
-                                <th class="col-status">Status</th>
-                                <th class="col-due">Due Date</th>
-                                <th class="col-actual">Actual Date</th>
-                                <th class="col-progress">Progress</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate).Take(5))
-                            {
-                                <tr>
-                                    <td>
-                                        <a href="#" 
-                                           class="view-milestone-link"
-                                           data-milestone-id="@milestone.Id"
-                                           data-milestone-name="@milestone.Name"
-                                           data-milestone-status="@milestone.Status"
-                                           data-milestone-progress="@(milestone.ProgressPercent ?? 0)"
-                                           data-milestone-due="@milestone.DueDate.ToString("yyyy-MM-dd")"
-                                           data-milestone-actual="@(milestone.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
-                                           data-milestone-description="@milestone.Description">
-                                            @milestone.Name
-                                        </a>
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "in_progress" ? "info" : "secondary")">
-                                            @milestone.Status.Replace("_", " ")
-                                        </span>
-                                    </td>
-                                    <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
-                                    <td>
-                                        @if (milestone.ActualDate.HasValue)
-                                        {
-                                            @milestone.ActualDate.Value.ToString("dd MMM yyyy")
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not completed</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
-                                        {
-                                            @milestone.ProgressPercent.Value<text>%</text>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">0%</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-                else
-                {
-                    <div class="p-4">
-                        <p class="text-muted mb-2">No milestones recorded.</p>
-                        <a class="btn btn-success btn-sm" asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
-                    </div>
-                }
-            </div>
-            @if (Model.Milestones.Count > 5)
-            {
-                <div class="card-footer">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="milestones">View all @Model.Milestones.Count milestones</a>
-                </div>
-            }
-        </div>
     </div>
     
     <!-- Right Column -->
     <div class="col-lg-4">
-        <!-- Staff & Funding Overview -->
-        <div class="card mb-4 staff-funding-card">
+        <!-- Project Summary (Key Fields) -->
+        <div class="card mb-4 project-summary-card">
             <div class="card-header">
-                <h3 class="card-title">Staff & Funding Overview</h3>
-                <div class="card-tools">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="funding">Manage</a>
-                </div>
+                <h3 class="card-title">Project summary</h3>
             </div>
-            <div class="card-body table-responsive p-0">
-                @{
-                    var permFte = Model.TotalPermFte ?? 0;
-                    var mspFte = Model.TotalMspFte ?? 0;
-                    var projectTotalFte = permFte + mspFte;
-                    
-                    // Calculate percentages for Permanent vs MSP
-                    var permPercentage = projectTotalFte > 0 ? Math.Round((permFte / projectTotalFte) * 100, 1) : 0;
-                    var mspPercentage = projectTotalFte > 0 ? Math.Round((mspFte / projectTotalFte) * 100, 1) : 0;
-                    
-                    // Funding calculations
-                    var permFunding = Model.ResourceFunding?.FirstOrDefault(rf => rf.ResourceType == "Permanent");
-                    var mspFunding = Model.ResourceFunding?.FirstOrDefault(rf => rf.ResourceType == "MSP");
-                    
-                    var permProgrammeFunded = permFunding != null ? (permFunding.ProgrammeFundedPercentage / 100m) * permFte : 0;
-                    var permAdminFunded = permFunding != null ? (permFunding.AdminFundedPercentage / 100m) * permFte : 0;
-                    var mspProgrammeFunded = mspFunding != null ? (mspFunding.ProgrammeFundedPercentage / 100m) * mspFte : 0;
-                    var mspAdminFunded = mspFunding != null ? (mspFunding.AdminFundedPercentage / 100m) * mspFte : 0;
-                    
-                    var programmeFunded = permProgrammeFunded + mspProgrammeFunded;
-                    var adminFunded = permAdminFunded + mspAdminFunded;
-                }
-                
-                <table class="table table-sm mb-0">
-                    <thead>
-                        <tr>
-                            <th>Type</th>
-                            <th class="text-right">FTE</th>
-                            <th class="text-right">%</th>
-                        </tr>
-                    </thead>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0 project-overview-summary">
                     <tbody>
                         <tr>
-                            <td>Permanent</td>
-                            <td class="text-right"><strong>@permFte</strong></td>
-                            <td class="text-right">@permPercentage%</td>
+                            <td class="summary-label"><strong>Business area</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
+                                {
+                                    @Model.BusinessArea
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not specified</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editBusinessAreaModal">Change</a>
+                            </td>
                         </tr>
                         <tr>
-                            <td>MSP</td>
-                            <td class="text-right"><strong>@mspFte</strong></td>
-                            <td class="text-right">@mspPercentage%</td>
+                            <td class="summary-label"><strong>Phase</strong></td>
+                            <td class="summary-value">
+                                @if (!string.IsNullOrEmpty(Model.Phase))
+                                {
+                                    @Model.Phase
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not specified</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editPhaseModal">Change</a>
+                            </td>
                         </tr>
                         <tr>
-                            <td><strong>Total FTE</strong></td>
-                            <td class="text-right"><strong>@projectTotalFte</strong></td>
-                            <td class="text-right"><strong>100%</strong></td>
-                        </tr>
-                        <tr class="border-top">
-                            <td>Programme</td>
-                            <td class="text-right" colspan="2">@programmeFunded.ToString("0.0") FTE</td>
+                            <td class="summary-label"><strong>Status</strong></td>
+                            <td class="summary-value">
+                                <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editStatusModal">Change</a>
+                            </td>
                         </tr>
                         <tr>
-                            <td>Admin</td>
-                            <td class="text-right" colspan="2">@adminFunded.ToString("0.0") FTE</td>
+                            <td class="summary-label"><strong>Primary contact</strong></td>
+                            <td class="summary-value">
+                                @if (Model.PrimaryContactUser != null)
+                                {
+                                    <div>
+                                        <strong>@Model.PrimaryContactUser.Name</strong><br />
+                                        <span class="text-muted">@Model.PrimaryContactUser.Email</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editPrimaryContactModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Start date</strong></td>
+                            <td class="summary-value">
+                                @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
+                                {
+                                    @Model.StartDate.Value.ToString("d MMMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editStartDateModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Target end date</strong></td>
+                            <td class="summary-value">
+                                @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
+                                {
+                                    @Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No end date</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editTargetDateModal">Change</a>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Contacts -->
+        <!-- Team snapshot -->
         <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title">Contacts</h3>
+                <h3 class="card-title">Team</h3>
                 <div class="card-tools">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts">View contacts</a>
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team">View team</a>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -657,8 +484,8 @@
                     @if (Model.ProjectContacts.Count > 5)
                     {
                         <div class="text-center mt-3 p-3 border-top">
-                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contacts" class="btn btn-sm btn-outline-secondary">
-                                View all @Model.ProjectContacts.Count contacts
+                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team" class="btn btn-sm btn-outline-secondary">
+                                View entire team
                             </a>
                         </div>
                     }
@@ -679,7 +506,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editAimModalLabel">Edit Project Aim</h5>
+                <h5 class="modal-title" id="editAimModalLabel">Edit aim</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -688,8 +515,8 @@
                 <input type="hidden" name="id" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="aim">Project Aim</label>
-                        <textarea class="form-control" id="aim" name="aim" rows="6" placeholder="Describe the project aim...">@Model.Aim</textarea>
+                        <label for="aim">Aim</label>
+                        <textarea class="form-control" id="aim" name="aim" rows="6" placeholder="Describe the aim...">@Model.Aim</textarea>
                         <small class="form-text text-muted">Clearly state the primary objective and purpose of this project.</small>
                     </div>
                 </div>
@@ -1174,6 +1001,19 @@
             "Amber-Red" => "badge badge-amber-red",
             "Red" => "badge badge-red",
             _ => "badge badge-secondary"
+        };
+    }
+
+    string GetRagCardClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "rag-card-green",
+            "Amber-Green" => "rag-card-amber-green",
+            "Amber" => "rag-card-amber",
+            "Amber-Red" => "rag-card-amber-red",
+            "Red" => "rag-card-red",
+            _ => "rag-card-default"
         };
     }
 }
