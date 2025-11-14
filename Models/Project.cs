@@ -50,6 +50,16 @@ public class Project
     [MaxLength(100)]
     public string? HistoricBuRTId { get; set; }
 
+    public int? PrimaryContactUserId { get; set; }
+
+    [ForeignKey(nameof(PrimaryContactUserId))]
+    public User? PrimaryContactUser { get; set; }
+
+    public int? DeliveryPriorityId { get; set; }
+
+    [ForeignKey(nameof(DeliveryPriorityId))]
+    public DeliveryPriority? DeliveryPriority { get; set; }
+
     // Organizational structure fields
     public int? PrimaryOrganizationalGroupId { get; set; }
     public OrganizationalGroup? PrimaryOrganizationalGroup { get; set; }
@@ -92,4 +102,6 @@ public class Project
     public ICollection<Risk> Risks { get; set; } = new List<Risk>();
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Models.Action> Actions { get; set; } = new List<Models.Action>();
+    public ICollection<Decision> Decisions { get; set; } = new List<Decision>();
+    public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
 }

@@ -1,0 +1,155 @@
+@model Compass.Models.Project
+@{
+    var actions = Model.Actions.Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
+    var openCount = actions.Count(a => a.Status != "done" && a.Status != "cancelled");
+    var closedCount = actions.Count(a => a.Status == "done" || a.Status == "cancelled");
+    var blockedCount = actions.Count(a => a.Status == "blocked");
+    var overdueCount = actions.Count(a =>
+        a.DueDate.HasValue &&
+        a.DueDate.Value.Date < DateTime.UtcNow.Date &&
+        a.Status != "done" &&
+        a.Status != "cancelled");
+}
+
+<div class="card" id="actions">
+    <div class="card-header">
+        <h3 class="card-title">Project actions</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateAction" asp-route-projectId="@Model.Id">Add action</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (actions.Any())
+        {
+            <table class="table table-hover text-nowrap sortable-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                        <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status" style="width: 140px;">Status</th>
+                        <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="width: 110px;">Priority</th>
+                        <th class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due date" style="width: 160px;">Due date</th>
+                        <th class="sortable" data-column="AssignedTo" tabindex="0" role="button" aria-label="Sort by Assigned to" style="width: 180px;">Assigned to</th>
+                        <th style="width: 220px;">Linked items</th>
+                        <th style="width: 160px;">Decision</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var action in actions)
+                    {
+                        var isOverdue = action.DueDate.HasValue && action.DueDate.Value.Date < DateTime.UtcNow.Date && action.Status != "done" && action.Status != "cancelled";
+                        var riskLinks = action.RiskActions.Select(ra => ra.Risk).Where(r => r != null && !r.IsDeleted).OrderBy(r => r!.Title).ToList();
+                        var issueLinks = action.IssueActions.Select(ia => ia.Issue).Where(i => i != null && !i.IsDeleted).OrderBy(i => i!.Title).ToList();
+                        var decision = action.Decision != null && !action.Decision.IsDeleted ? action.Decision : null;
+
+                        <tr>
+                            <td>
+                                <a asp-controller="Action" asp-action="Details" asp-route-id="@action.Id">@action.Title</a>
+                            </td>
+                            <td>
+                                @switch (action.Status)
+                                {
+                                    case "not_started":
+                                        <span class="badge badge-secondary">Not started</span>
+                                        break;
+                                    case "in_progress":
+                                        <span class="badge badge-primary">In progress</span>
+                                        break;
+                                    case "blocked":
+                                        <span class="badge badge-danger">Blocked</span>
+                                        break;
+                                    case "done":
+                                        <span class="badge badge-success">Done</span>
+                                        break;
+                                    case "cancelled":
+                                        <span class="badge badge-secondary">Cancelled</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-secondary">@action.Status.Replace("_", " ")</span>
+                                        break;
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(action.Priority))
+                                {
+                                    var priorityClass = action.Priority switch
+                                    {
+                                        "high" => "badge-danger",
+                                        "medium" => "badge-warning",
+                                        "low" => "badge-secondary",
+                                        _ => "badge-light"
+                                    };
+                                    <span class="badge @priorityClass">@action.Priority</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                @if (action.CompletedDate.HasValue)
+                                {
+                                    <span class="text-success">@action.CompletedDate.Value.ToString("d MMMM yyyy")</span>
+                                }
+                                else if (action.DueDate.HasValue)
+                                {
+                                    <span class="@(isOverdue ? "text-danger font-weight-bold" : string.Empty)">@action.DueDate.Value.ToString("d MMMM yyyy")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(action.AssignedToEmail))
+                                {
+                                    <span>@action.AssignedToEmail</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Unassigned</span>
+                                }
+                            </td>
+                            <td>
+                                @if (riskLinks.Any())
+                                {
+                                    foreach (var risk in riskLinks)
+                                    {
+                                        <span class="badge badge-warning mr-1 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>@risk!.Title</span>
+                                    }
+                                }
+                                @if (issueLinks.Any())
+                                {
+                                    foreach (var issue in issueLinks)
+                                    {
+                                        <span class="badge badge-info mr-1 mb-1"><i class="fas fa-bug mr-1"></i>@issue!.Title</span>
+                                    }
+                                }
+                                @if (!riskLinks.Any() && !issueLinks.Any())
+                                {
+                                    <span class="text-muted">No linked items</span>
+                                }
+                            </td>
+                            <td>
+                                @if (decision != null)
+                                {
+                                    <span class="badge badge-primary"><i class="fas fa-gavel mr-1"></i>@decision.Title</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not linked</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-2">No actions recorded for this project yet.</p>
+                <a asp-controller="Project" asp-action="CreateAction" asp-route-projectId="@Model.Id">Add the first action</a>
+            </div>
+        }
+    </div>
+</div>

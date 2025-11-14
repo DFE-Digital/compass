@@ -1,0 +1,1750 @@
+@model Compass.ViewModels.DemandManagement.TriageViewModel
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using Compass.Models
+@using Compass.ViewModels.DemandManagement
+
+@functions {
+    private static readonly CultureInfo UkCulture = CultureInfo.GetCultureInfo("en-GB");
+
+    private static string FormatPersonName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var parts = name.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 2)
+        {
+            return $"{parts[1]} {parts[0]}".Trim();
+        }
+
+        return name.Trim();
+    }
+
+    private static string FormatBoolean(bool? value) => value.HasValue ? (value.Value ? "Yes" : "No") : "Not answered";
+
+    private static string FormatCurrency(decimal? value) => value.HasValue ? value.Value.ToString("C0", UkCulture) : "Not specified";
+
+    private static string FormatNumber(int? value) => value.HasValue ? value.Value.ToString(UkCulture) : "Not specified";
+
+    private static string FormatNullableString(string? value, string fallback = "Not specified") => string.IsNullOrWhiteSpace(value) ? fallback : value!;
+
+    private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("dd MMM yyyy", UkCulture) : "Not set";
+
+    private static string FormatDateTime(DateTime? value) => value.HasValue ? value.Value.ToString("dd MMM yyyy HH:mm", UkCulture) : "Not recorded";
+
+    private static IReadOnlyList<string> SplitCommaSeparated(string? value) => string.IsNullOrWhiteSpace(value)
+        ? Array.Empty<string>()
+        : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .Select(item => item.Trim())
+               .Where(item => !string.IsNullOrWhiteSpace(item))
+               .ToArray();
+
+    private static string GetAssessmentContent(IEnumerable<DemandRequestAssessment>? assessments, string type)
+    {
+        if (assessments == null)
+        {
+            return "Not recorded";
+        }
+
+        var match = assessments.FirstOrDefault(a => string.Equals(a.AssessmentType, type, StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(match?.AssessmentContent) ? "Not recorded" : match!.AssessmentContent!;
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Draft" => "badge badge-secondary",
+        "Submitted" => "badge badge-info",
+        "Explore" => "badge badge-info",
+        "Prioritisation" => "badge badge-primary",
+        "Triage" => "badge badge-warning",
+        "Delivery" => "badge badge-success",
+        "Run" => "badge badge-success",
+        "Deferred" => "badge badge-secondary",
+        "Rejected" => "badge badge-danger",
+        _ => "badge badge-light"
+    };
+
+    private static string GetPriorityBadgeClass(string? tier) => tier switch
+    {
+        "Tier 1 – Critical" => "badge badge-danger",
+        "Tier 2 – High" => "badge badge-warning",
+        "Tier 3 – Medium" => "badge badge-info",
+        "Tier 4 – Low" => "badge badge-secondary",
+        _ => "badge badge-light"
+    };
+
+    private static string GetPriorityShortLabel(string? tier) => string.IsNullOrWhiteSpace(tier)
+        ? "Unprioritised"
+        : tier.Split('–')[0].Trim();
+
+    private static string GetMeetingStateLabel(TriageMeetingSummaryViewModel meeting) => meeting.IsUpcoming ? "Upcoming" : "Completed";
+
+    private sealed class PriorityFactor
+    {
+        public string Label { get; init; } = string.Empty;
+        public int Score { get; init; }
+    }
+
+    private sealed class PriorityCategory
+    {
+        public string Label { get; init; } = string.Empty;
+        public int Total { get; init; }
+        public IReadOnlyList<PriorityFactor> Factors { get; init; } = Array.Empty<PriorityFactor>();
+    }
+
+    private static string FormatYesNo(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not answered";
+        }
+
+        if (value.Equals("Yes", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Yes";
+        }
+
+        if (value.Equals("No", StringComparison.OrdinalIgnoreCase))
+        {
+            return "No";
+        }
+
+        if (value.Equals("Unsure", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Unsure";
+        }
+
+        return value;
+    }
+
+    private static string DescribeWeightedScore(int score)
+    {
+        if (score >= 16)
+        {
+            return "High";
+        }
+
+        if (score >= 9)
+        {
+            return "Medium";
+        }
+
+        if (score > 0)
+        {
+            return "Low";
+        }
+
+        return "Not scored";
+    }
+
+    private static string Summarize(string? value, int maxLength = 140)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not recorded";
+        }
+
+        var sanitized = value.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (sanitized.Length <= maxLength)
+        {
+            return sanitized;
+        }
+
+        return sanitized.Substring(0, maxLength).TrimEnd() + "...";
+    }
+
+    private static IReadOnlyList<PriorityCategory> BuildPriorityCategories(DemandRequestPrioritisation? prioritisation)
+    {
+        if (prioritisation == null)
+        {
+            return Array.Empty<PriorityCategory>();
+        }
+
+        return new[]
+        {
+            new PriorityCategory
+            {
+                Label = "Strategic alignment",
+                Total = prioritisation.StrategicAlignmentTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Statutory or manifesto commitment", Score = prioritisation.StatutoryManifestoScore },
+                    new PriorityFactor { Label = "Mission pillar support", Score = prioritisation.OpportunityMissionScore },
+                    new PriorityFactor { Label = "Strategic framework theme", Score = prioritisation.DdatStrategicThemeScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "User impact",
+                Total = prioritisation.UserImpactTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Scale of users", Score = prioritisation.ScaleOfUsersScore },
+                    new PriorityFactor { Label = "Evidence of user need", Score = prioritisation.EvidenceOfUserNeedScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Risk and urgency",
+                Total = prioritisation.RiskUrgencyTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Risk if not delivered", Score = prioritisation.RiskIfNotDeliveredScore },
+                    new PriorityFactor { Label = "Delivery urgency", Score = prioritisation.TargetDeliveryUrgencyScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Feasibility",
+                Total = prioritisation.FeasibilityTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Funding available", Score = prioritisation.FundingAvailableScore },
+                    new PriorityFactor { Label = "Headcount available", Score = prioritisation.HeadcountAvailableScore },
+                    new PriorityFactor { Label = "Portfolio fit", Score = prioritisation.PortfolioFitScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Value and outcome",
+                Total = prioritisation.ValueOutcomeTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Expected benefits", Score = prioritisation.ExpectedBenefitsScore }
+                }
+            }
+        };
+    }
+
+    private static string FormatLevel(int? score)
+    {
+        if (!score.HasValue || score.Value <= 0)
+        {
+            return "Not scored";
+        }
+
+        return score.Value switch
+        {
+            >= 4 => "High",
+            3 => "Medium",
+            _ => "Low"
+        };
+    }
+
+    private static string Summarise(string? value, int maxLength = 160)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not recorded";
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length <= maxLength)
+        {
+            return trimmed;
+        }
+
+        var shortened = trimmed.Substring(0, Math.Min(trimmed.Length, maxLength)).TrimEnd();
+        return shortened.EndsWith("...", StringComparison.Ordinal) ? shortened : shortened + "...";
+    }
+}
+
+@{
+    ViewData["Title"] = "Triage";
+    var meetings = Model.Meetings ?? Array.Empty<TriageMeetingSummaryViewModel>();
+    var months = Model.Months?.OrderBy(m => m.Month).ToList() ?? new List<TriageMonthSummaryViewModel>();
+    var selectedMeetingId = Model.SelectedMeetingId;
+    var selectedMeeting = Model.SelectedMeeting;
+    var meetingRequests = Model.MeetingRequests ?? Array.Empty<DemandRequest>();
+    var awaitingRequests = Model.AwaitingScheduling?.OrderByDescending(r => r.TriageSubmittedAt ?? r.UpdatedAt).ToList() ?? new List<DemandRequest>();
+    var hasMeetings = meetings.Any();
+    var awaitingCount = awaitingRequests.Count;
+    var selectedMonth = months.FirstOrDefault(m => string.Equals(m.Key, Model.SelectedMonthKey, StringComparison.OrdinalIgnoreCase));
+    var selectedMonthIndex = selectedMonth != null ? months.IndexOf(selectedMonth) : -1;
+    var previousMonth = selectedMonthIndex > 0 ? months[selectedMonthIndex - 1] : null;
+    var nextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < months.Count - 1 ? months[selectedMonthIndex + 1] : null;
+    var assessmentDefinitions = new[]
+    {
+        new { Key = "ResearchAndEvidence", Label = "Research and evidence" },
+        new { Key = "NeedsAssessment", Label = "Needs assessment" },
+        new { Key = "Recommendations", Label = "Recommendations" },
+        new { Key = "PrioritisationAssessment", Label = "Prioritisation assessment" },
+        new { Key = "Outcome", Label = "Outcome" }
+    };
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2 align-items-center">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Requests">Demand requests</a></li>
+                    <li class="breadcrumb-item active">Triage</li>
+                </ol>
+                <h1 class="m-0">Triage</h1>
+                <p class="text-muted mb-0">Review upcoming meetings, understand outcomes, and prepare for decision making.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] is string successMessage)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                @successMessage
+            </div>
+        }
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                @errorMessage
+            </div>
+        }
+
+        @if (months.Any())
+         {
+             <div class="card triage-month-card mb-3">
+                <div class="card-body">
+                    <div class="triage-month-controls d-flex flex-column flex-lg-row align-items-lg-center justify-content-between">
+                        <div class="btn-group mb-3 mb-lg-0" role="group" aria-label="Change month">
+                            @if (previousMonth != null)
+                            {
+                                <a class="btn btn-outline-secondary btn-icon" href="@Url.Action("Triage", new { month = previousMonth.Key })" aria-label="View @previousMonth.Label">
+                                    <span aria-hidden="true">&larr;</span>
+                                    <span class="sr-only">Previous month</span>
+                                </a>
+                                <span class="btn btn-outline-secondary btn-static d-none d-lg-inline">@previousMonth.Label</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-icon" disabled aria-disabled="true" aria-label="No earlier month available">
+                                    <span aria-hidden="true">&larr;</span>
+                                </button>
+                            }
+
+                            @if (nextMonth != null)
+                            {
+                                <span class="btn btn-outline-secondary btn-static d-none d-lg-inline">@nextMonth.Label</span>
+                                <a class="btn btn-outline-secondary btn-icon" href="@Url.Action("Triage", new { month = nextMonth.Key })" aria-label="View @nextMonth.Label">
+                                    <span aria-hidden="true">&rarr;</span>
+                                    <span class="sr-only">Next month</span>
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-icon" disabled aria-disabled="true" aria-label="No later month available">
+                                    <span aria-hidden="true">&rarr;</span>
+                                </button>
+                            }
+                        </div>
+                        <div class="triage-month-summary text-lg-right">
+                            <div class="triage-month-label">@(selectedMonth?.Label ?? months.Last().Label)</div>
+                            <div class="text-muted small mt-1 mt-lg-0">
+                                @(selectedMonth?.MeetingCount ?? months.Last().MeetingCount) meeting@((selectedMonth?.MeetingCount ?? months.Last().MeetingCount) == 1 ? string.Empty : "s") ·
+                                @(selectedMonth?.RequestCount ?? months.Last().RequestCount) request@((selectedMonth?.RequestCount ?? months.Last().RequestCount) == 1 ? string.Empty : "s")
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (meetings.Any())
+                    {
+                        <div class="triage-meeting-picker mt-3">
+                            <label for="triageMeetingSelect" class="sr-only">Jump to meeting</label>
+                            <select id="triageMeetingSelect" class="custom-select custom-select-sm">
+                                <option value="">Jump to a meeting…</option>
+                                @foreach (var meeting in meetings)
+                                {
+                                    var isSelected = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
+                                    if (isSelected)
+                                    {
+                                        <option value="@meeting.Id" selected="selected">@meeting.Title (@meeting.StartAt.ToString("dd MMM"))</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@meeting.Id">@meeting.Title (@meeting.StartAt.ToString("dd MMM"))</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="table-responsive triage-month-table mt-3">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Meeting</th>
+                                        <th scope="col">When</th>
+                                        <th scope="col">Requests</th>
+                                        <th scope="col">State</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var meeting in meetings)
+                                    {
+                                        var isActive = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
+                                        <tr class="@(isActive ? "table-active" : string.Empty)">
+                                            <td>
+                                                <div class="font-weight-semibold">@meeting.Title</div>
+                                                <div class="text-muted small">@(string.IsNullOrWhiteSpace(meeting.Location) ? "Location TBC" : meeting.Location)</div>
+                                            </td>
+                                            <td>
+                                                @meeting.StartAt.ToString("dd MMM yyyy HH:mm")
+                                            </td>
+                                            <td>@meeting.TotalRequests</td>
+                                            <td>@GetMeetingStateLabel(meeting)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (months.Count > 1)
+                    {
+                        <div class="card-footer triage-month-links mt-3">
+                            @foreach (var monthSummary in months)
+                            {
+                                var isActiveMonth = string.Equals(monthSummary.Key, Model.SelectedMonthKey, StringComparison.OrdinalIgnoreCase);
+                                <a class="badge badge-pill @(isActiveMonth ? "badge-primary" : "badge-light")" href="@Url.Action("Triage", new { month = monthSummary.Key })">
+                                    @monthSummary.Label
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+             </div>
+         }
+
+        @if (hasMeetings)
+        {
+            <div class="card triage-overview-card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">Triage meetings overview</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm triage-overview-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Meeting</th>
+                                    <th scope="col">When</th>
+                                    <th scope="col">Requests</th>
+                                    <th scope="col">In delivery</th>
+                                    <th scope="col">Converted</th>
+                                    <th scope="col">Deferred</th>
+                                    <th scope="col">Rejected</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var meeting in meetings.OrderBy(m => m.StartAt))
+                                {
+                                    var isActiveRow = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
+                                    var meetingLocation = string.IsNullOrWhiteSpace(meeting.Location) ? "Location TBC" : meeting.Location;
+                                    var tierHighlights = new List<string>();
+                                    if (meeting.TierOneCount > 0)
+                                    {
+                                        tierHighlights.Add($"Tier 1 {meeting.TierOneCount}");
+                                    }
+                                    if (meeting.TierTwoCount > 0)
+                                    {
+                                        tierHighlights.Add($"Tier 2 {meeting.TierTwoCount}");
+                                    }
+                                    if (meeting.TierThreeCount > 0)
+                                    {
+                                        tierHighlights.Add($"Tier 3 {meeting.TierThreeCount}");
+                                    }
+ 
+                                    <tr class="@(isActiveRow ? "triage-overview-selected" : string.Empty)">
+                                        <td>
+                                            <div class="font-weight-semibold">
+                                                <a class="triage-overview-link" href="@Url.Action("Triage", new { meetingId = meeting.Id, month = Model.SelectedMonthKey })">@meeting.Title</a>
+                                            </div>
+                                            <div class="text-muted small">@GetMeetingStateLabel(meeting) &middot; @(meeting.IsActive ? "Active" : "Inactive")</div>
+                                        </td>
+                                        <td>
+                                            <div>@meeting.StartAt.ToString("dd MMM yyyy HH:mm")</div>
+                                            <div class="text-muted small">@meetingLocation</div>
+                                        </td>
+                                        <td>
+                                            <div class="font-weight-semibold">@meeting.TotalRequests</div>
+                                            @if (tierHighlights.Any())
+                                            {
+                                                <div class="text-muted small">@string.Join(", ", tierHighlights)</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted small">No tier assigned</div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-semibold">@meeting.DeliveryCount</span>
+                                            <div class="text-muted small">Includes delivery &amp; run</div>
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-semibold">@meeting.ConvertedCount</span>
+                                            <div class="text-muted small">Created projects</div>
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-semibold">@meeting.DeferredCount</span>
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-semibold">@meeting.RejectedCount</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card mb-4">
+                <div class="card-body text-center py-5">
+                    <h3 class="mb-3">No triage meetings scheduled</h3>
+                    <p class="text-muted mb-0">Add meeting dates in the admin section to begin scheduling requests for review.</p>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-12">
+                @if (selectedMeeting != null)
+                {
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="card-title mb-0">@selectedMeeting.Title</h3>
+                            <span class="text-muted small">@GetMeetingStateLabel(selectedMeeting)</span>
+                        </div>
+                        <div class="card-body">
+                            <dl class="definition-list triage-meeting-summary">
+                                <div class="definition-item">
+                                    <dt>Date &amp; time</dt>
+                                    <dd>
+                                        <div>@selectedMeeting.StartAt.ToString("dd MMM yyyy HH:mm")</div>
+                                        <div class="text-muted small">Ends @selectedMeeting.EndAt.ToString("HH:mm")</div>
+                                    </dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Location</dt>
+                                    <dd>@(string.IsNullOrWhiteSpace(selectedMeeting.Location) ? "Location TBC" : selectedMeeting.Location)</dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Total requests</dt>
+                                    <dd>
+                                        <div class="font-weight-semibold">@selectedMeeting.TotalRequests</div>
+                                        <div class="text-muted small">Delivery @selectedMeeting.DeliveryCount &middot; Converted @selectedMeeting.ConvertedCount</div>
+                                    </dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Funding confirmed</dt>
+                                    <dd>@selectedMeeting.FundingConfirmedCount</dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Headcount confirmed</dt>
+                                    <dd>@selectedMeeting.HeadcountConfirmedCount</dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Deferred</dt>
+                                    <dd>@selectedMeeting.DeferredCount</dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Rejected</dt>
+                                    <dd>@selectedMeeting.RejectedCount</dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>Tier split</dt>
+                                    <dd>
+                                        <div class="triage-tier-list">
+                                            <span>Tier 1 @selectedMeeting.TierOneCount</span>
+                                            <span>Tier 2 @selectedMeeting.TierTwoCount</span>
+                                            <span>Tier 3 @selectedMeeting.TierThreeCount</span>
+                                        </div>
+                                    </dd>
+                                </div>
+                            </dl>
+                            @if (selectedMeeting.StatusCounts.Any())
+                            {
+                                <div class="triage-status-pills">
+                                    @foreach (var status in selectedMeeting.StatusCounts.OrderByDescending(pair => pair.Value))
+                                    {
+                                        <span class="badge badge-light">@status.Key: @status.Value</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="card-title mb-0">Requests in this meeting</h3>
+                            <span class="text-muted small">@meetingRequests.Count request@(meetingRequests.Count == 1 ? string.Empty : "s")</span>
+                        </div>
+                        <div class="card-body">
+                            @if (meetingRequests.Any())
+                            {
+                                var meetingAccordionId = "meetingRequestsAccordion";
+                                <div id="@meetingAccordionId" class="triage-request-list">
+                                    @foreach (var request in meetingRequests)
+                                    {
+                                        var collapseId = $"request-{request.Id}";
+                                        var requestorName = FormatPersonName(request.ApplicantName);
+                                        var hasRequestorEmail = !string.IsNullOrWhiteSpace(request.ApplicantEmail) && !string.IsNullOrWhiteSpace(requestorName);
+                                        var priorityTier = request.Prioritisation?.PriorityTier;
+                                        var priorityBadgeClass = GetPriorityBadgeClass(priorityTier);
+                                        var priorityShort = GetPriorityShortLabel(priorityTier);
+                                        var totalScore = request.Prioritisation?.TotalPriorityScore;
+                                        var missionPillars = SplitCommaSeparated(request.OpportunityMissionPillars);
+                                        var strategicThemes = SplitCommaSeparated(request.DdatStrategicThemes);
+                                        var rolesProvided = SplitCommaSeparated(request.RolesProvided);
+                                        var riskCategories = request.RiskTypeLinks?
+                                            .Where(link => link.RiskType != null)
+                                            .Select(link => link.RiskType!.Name)
+                                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                                            .OrderBy(name => name)
+                                            .ToList() ?? new List<string>();
+                                        var assessments = request.Assessments?.OrderByDescending(a => a.UpdatedAt).ToList() ?? new List<DemandRequestAssessment>();
+                                        var notes = request.Notes?.OrderByDescending(n => n.CreatedAt).ToList() ?? new List<DemandRequestNote>();
+                                        var contacts = request.Contacts?.OrderBy(c => c.Name).ToList() ?? new List<DemandRequestContact>();
+                                        var scoringCategories = BuildPriorityCategories(request.Prioritisation);
+                                        var riskScore = request.Prioritisation != null
+                                            ? (int?)Math.Round((request.Prioritisation.RiskIfNotDeliveredScore + request.Prioritisation.TargetDeliveryUrgencyScore) / 2.0, MidpointRounding.AwayFromZero)
+                                            : null;
+                                        var impactScore = request.Prioritisation != null
+                                            ? (int?)Math.Round((request.Prioritisation.ScaleOfUsersScore + request.Prioritisation.EvidenceOfUserNeedScore) / 2.0, MidpointRounding.AwayFromZero)
+                                            : null;
+                                        var timescaleSummary = !string.IsNullOrWhiteSpace(request.DeliveryTimescales)
+                                            ? request.DeliveryTimescales
+                                            : (request.TargetDeliveryDate.HasValue ? $"Target delivery {request.TargetDeliveryDate.Value:dd MMM yyyy}" : "Not specified");
+                                        var fundingSummary = request.HasFunding == true
+                                            ? (request.FundingAmount.HasValue ? $"Confirmed ({FormatCurrency(request.FundingAmount)})" : "Funding confirmed")
+                                            : request.HasFunding == false ? "Not funded" : "Not specified";
+                                        var headcountSummary = request.HasHeadcount == true
+                                            ? (request.NumberOfFTE.HasValue ? $"{request.NumberOfFTE} FTE" : "Headcount confirmed")
+                                            : request.HasHeadcount == false ? "No additional headcount" : "Not specified";
+                                        var objectives = missionPillars.Concat(strategicThemes).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                                        var needsSummary = Summarise(GetAssessmentContent(assessments, "NeedsAssessment"), 140);
+                                        var recommendationsSummary = Summarise(GetAssessmentContent(assessments, "Recommendations"), 140);
+                                        var outcomeSummary = Summarise(GetAssessmentContent(assessments, "Outcome"), 140);
+
+                                        <div class="card triage-request-card">
+                                            <div class="card-header" id="heading-@request.Id">
+                                                <button class="triage-toggle" type="button" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                                                    <div class="triage-card-summary">
+                                                        <div class="triage-card-title-block">
+                                                            <div class="triage-card-title">@request.ProposedTitle</div>
+                                                            <div class="triage-card-ref">Reference @request.ReferenceNumber</div>
+                                                        </div>
+                                                        <div class="triage-card-badges">
+                                                            <span class="@GetStatusBadgeClass(request.Status)">@request.Status</span>
+                                                            @if (!string.IsNullOrWhiteSpace(priorityShort))
+                                                            {
+                                                                <span class="@priorityBadgeClass">@priorityShort</span>
+                                                            }
+                                                            @if (totalScore.HasValue)
+                                                            {
+                                                                <span class="badge badge-light text-dark">Score @totalScore</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <div class="triage-card-meta">
+                                                        <span>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Business area not set" : request.BusinessArea)</span>
+                                                        <span>
+                                                            @if (hasRequestorEmail)
+                                                            {
+                                                                <a href="mailto:@request.ApplicantEmail" class="triage-link">@requestorName</a>
+                                                            }
+                                                            else if (!string.IsNullOrWhiteSpace(requestorName))
+                                                            {
+                                                                @requestorName
+                                                            }
+                                                            else if (!string.IsNullOrWhiteSpace(request.ApplicantEmail))
+                                                            {
+                                                                <a href="mailto:@request.ApplicantEmail" class="triage-link">@request.ApplicantEmail</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">Requestor not set</span>
+                                                            }
+                                                        </span>
+                                                        <span>Submitted @FormatDate(request.TriageSubmittedAt ?? request.SubmittedAt)</span>
+                                                        <span>Updated @FormatDateTime(request.UpdatedAt)</span>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                            <div id="@collapseId" class="collapse" aria-labelledby="heading-@request.Id" data-parent="#@meetingAccordionId">
+                                                <div class="card-body">
+                                                    <div class="triage-detail-layout">
+                                                        <div class="triage-detail-main">
+                                                            <div class="triage-detail-card">
+                                                                <h4>Request overview</h4>
+                                                                <dl class="definition-list">
+                                                                    <div class="definition-item">
+                                                                        <dt>Business area</dt>
+                                                                        <dd>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Not specified" : request.BusinessArea)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Status</dt>
+                                                                        <dd><span class="@GetStatusBadgeClass(request.Status)">@request.Status</span></dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Submitted</dt>
+                                                                        <dd>@FormatDateTime(request.SubmittedAt)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Last updated</dt>
+                                                                        <dd>@FormatDateTime(request.UpdatedAt)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Converted project</dt>
+                                                                        <dd>
+                                                                            @if (request.ConvertedProjectId.HasValue)
+                                                                            {
+                                                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@request.ConvertedProjectId">View project</a>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="text-muted">Not converted</span>
+                                                                            }
+                                                                        </dd>
+                                                                    </div>
+                                                                </dl>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Overview and need</h6>
+                                                                    <p class="triage-text-block">@FormatNullableString(request.OverviewAndBusinessNeed, "No overview provided")</p>
+                                                                </div>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Expected outcome</h6>
+                                                                    <p class="triage-text-block">@FormatNullableString(request.ExpectedBenefits, "Not provided")</p>
+                                                                </div>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Risk if not delivered</h6>
+                                                                    <p class="triage-text-block">@FormatNullableString(request.RiskIfNotDelivered, "Not provided")</p>
+                                                                </div>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Contacts</h6>
+                                                                    @if (contacts.Any())
+                                                                    {
+                                                                        <ul class="triage-inline-list">
+                                                                            @foreach (var contact in contacts)
+                                                                            {
+                                                                                var contactName = FormatPersonName(contact.Name);
+                                                                                <li>
+                                                                                    @if (!string.IsNullOrWhiteSpace(contact.Email))
+                                                                                    {
+                                                                                        <a href="mailto:@contact.Email" class="triage-link">@(string.IsNullOrWhiteSpace(contactName) ? contact.Email : contactName)</a>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        @contactName
+                                                                                    }
+                                                                                    @if (!string.IsNullOrWhiteSpace(contact.Role))
+                                                                                    {
+                                                                                        <span class="text-muted">&middot; @contact.Role</span>
+                                                                                    }
+                                                                                </li>
+                                                                            }
+                                                                        </ul>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <p class="text-muted small mb-0">No contacts recorded.</p>
+                                                                    }
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="triage-detail-card">
+                                                                <h4>Delivery &amp; timing</h4>
+                                                                <dl class="definition-list">
+                                                                    <div class="definition-item">
+                                                                        <dt>Timescales</dt>
+                                                                        <dd>@FormatNullableString(request.DeliveryTimescales)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Target delivery date</dt>
+                                                                        <dd>@FormatDate(request.TargetDeliveryDate)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Converted project</dt>
+                                                                        <dd>
+                                                                            @if (request.ConvertedProjectId.HasValue)
+                                                                            {
+                                                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@request.ConvertedProjectId">View project</a>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="text-muted">Not converted</span>
+                                                                            }
+                                                                        </dd>
+                                                                    </div>
+                                                                </dl>
+                                                                @if (riskCategories.Any())
+                                                                {
+                                                                    <div class="summary-section">
+                                                                        <h6 class="triage-subheading">Risk categories</h6>
+                                                                        <ul class="summary-list-bullets">
+                                                                            @foreach (var risk in riskCategories)
+                                                                            {
+                                                                                <li>@risk</li>
+                                                                            }
+                                                                        </ul>
+                                                                    </div>
+                                                                }
+                                                            </div>
+
+                                                            <div class="triage-detail-card">
+                                                                <h4>Strategic alignment</h4>
+                                                                <dl class="definition-list">
+                                                                    <div class="definition-item">
+                                                                        <dt>Statutory or manifesto</dt>
+                                                                        <dd>
+                                                                            @FormatNullableString(request.IsManifestoOrStatutory, "Not answered")
+                                                                            @if (!string.IsNullOrWhiteSpace(request.ManifestoStatutoryDetails))
+                                                                            {
+                                                                                <div class="text-muted small">@request.ManifestoStatutoryDetails</div>
+                                                                            }
+                                                                        </dd>
+                                                                    </div>
+                                                                </dl>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Mission pillars</h6>
+                                                                    @if (missionPillars.Any())
+                                                                    {
+                                                                        <ul class="summary-list-bullets">
+                                                                            @foreach (var pillar in missionPillars)
+                                                                            {
+                                                                                <li>@pillar</li>
+                                                                            }
+                                                                        </ul>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <p class="text-muted small mb-0">No pillars selected.</p>
+                                                                    }
+                                                                </div>
+                                                                <div class="summary-section">
+                                                                    <h6 class="triage-subheading">Strategic themes</h6>
+                                                                    @if (strategicThemes.Any())
+                                                                    {
+                                                                        <ul class="summary-list-bullets">
+                                                                            @foreach (var theme in strategicThemes)
+                                                                            {
+                                                                                <li>@theme</li>
+                                                                            }
+                                                                        </ul>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <p class="text-muted small mb-0">No themes selected.</p>
+                                                                    }
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="triage-detail-card">
+                                                                <h4>Funding &amp; resourcing</h4>
+                                                                <dl class="definition-list">
+                                                                    <div class="definition-item">
+                                                                        <dt>Funding confirmed</dt>
+                                                                        <dd>@FormatBoolean(request.HasFunding)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Funding amount</dt>
+                                                                        <dd>@FormatCurrency(request.FundingAmount)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Funding source</dt>
+                                                                        <dd>@FormatNullableString(request.FundingSource)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Headcount required</dt>
+                                                                        <dd>@FormatBoolean(request.HasHeadcount)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>FTE provided</dt>
+                                                                        <dd>@FormatNumber(request.NumberOfFTE)</dd>
+                                                                    </div>
+                                                                </dl>
+                                                                @if (rolesProvided.Any())
+                                                                {
+                                                                    <div class="summary-section">
+                                                                        <h6 class="triage-subheading">Roles provided</h6>
+                                                                        <ul class="summary-list-bullets">
+                                                                            @foreach (var role in rolesProvided)
+                                                                            {
+                                                                                <li>@role</li>
+                                                                            }
+                                                                        </ul>
+                                                                    </div>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(request.FundingNotes) || !string.IsNullOrWhiteSpace(request.HeadcountNotes))
+                                                                {
+                                                                    <div class="summary-section">
+                                                                        <h6 class="triage-subheading">Additional notes</h6>
+                                                                        @if (!string.IsNullOrWhiteSpace(request.FundingNotes))
+                                                                        {
+                                                                            <p class="text-muted small mb-1">@request.FundingNotes</p>
+                                                                        }
+                                                                        @if (!string.IsNullOrWhiteSpace(request.HeadcountNotes))
+                                                                        {
+                                                                            <p class="text-muted small mb-0">@request.HeadcountNotes</p>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+
+                                                            <div class="triage-detail-card">
+                                                                <h4>Assessments &amp; recommendations</h4>
+                                                                <div class="triage-assessment-list">
+                                                                    @foreach (var assessment in assessmentDefinitions)
+                                                                    {
+                                                                        var content = GetAssessmentContent(assessments, assessment.Key);
+                                                                        var hasContent = !string.Equals(content, "Not recorded", StringComparison.OrdinalIgnoreCase);
+                                                                        <div class="triage-assessment-item">
+                                                                            <h5>@assessment.Label</h5>
+                                                                            <p class="@(hasContent ? string.Empty : "text-muted")">@content</p>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="triage-detail-card">
+                                                                <h4>Notes &amp; comments</h4>
+                                                                @if (!string.IsNullOrWhiteSpace(request.TriageNotes))
+                                                                {
+                                                                    <div class="triage-note triage-note--highlight">
+                                                                        <div class="triage-note-label">Triage pack note</div>
+                                                                        <div class="triage-note-text">@request.TriageNotes</div>
+                                                                    </div>
+                                                                }
+                                                                @if (notes.Any())
+                                                                {
+                                                                    <ul class="triage-note-list">
+                                                                        @foreach (var note in notes)
+                                                                        {
+                                                                            var author = FormatPersonName(note.CreatedByName);
+                                                                            <li class="triage-note">
+                                                                                <div class="triage-note-meta">
+                                                                                    <span class="font-weight-semibold">@(string.IsNullOrWhiteSpace(author) ? note.CreatedByEmail ?? "Unknown" : author)</span>
+                                                                                    <span class="text-muted">@note.CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+                                                                                </div>
+                                                                                <div class="triage-note-text">@note.NoteText</div>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                }
+                                                                else if (string.IsNullOrWhiteSpace(request.TriageNotes))
+                                                                {
+                                                                    <p class="text-muted mb-0">No notes captured yet.</p>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        <aside class="triage-detail-aside">
+                                                            <div class="triage-summary-card">
+                                                                <h5 class="triage-summary-title">Key summary</h5>
+                                                                <dl class="definition-list summary-list">
+                                                                    <div class="definition-item">
+                                                                        <dt>Statutory</dt>
+                                                                        <dd>@FormatNullableString(request.IsManifestoOrStatutory, "Not answered")</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Timescales</dt>
+                                                                        <dd>@timescaleSummary</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Risk level</dt>
+                                                                        <dd>@FormatLevel(riskScore)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Impact level</dt>
+                                                                        <dd>@FormatLevel(impactScore)</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Funding</dt>
+                                                                        <dd>@fundingSummary</dd>
+                                                                    </div>
+                                                                    <div class="definition-item">
+                                                                        <dt>Headcount</dt>
+                                                                        <dd>@headcountSummary</dd>
+                                                                    </div>
+                                                                </dl>
+                                                                @if (objectives.Any())
+                                                                {
+                                                                    <div class="summary-section">
+                                                                        <h6>Strategic objectives</h6>
+                                                                        <ul class="summary-list-bullets">
+                                                                            @foreach (var objective in objectives)
+                                                                            {
+                                                                                <li>@objective</li>
+                                                                            }
+                                                                        </ul>
+                                                                    </div>
+                                                                }
+                                                                <div class="summary-section">
+                                                                    <h6>Assessment outcomes</h6>
+                                                                    <ul class="summary-list-bullets">
+                                                                        <li><strong>Needs:</strong> @needsSummary</li>
+                                                                        <li><strong>Recommendations:</strong> @recommendationsSummary</li>
+                                                                        <li><strong>Outcome:</strong> @outcomeSummary</li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+
+                                                            @if (request.Prioritisation != null)
+                                                            {
+                                                                <div class="triage-summary-card">
+                                                                    <h5 class="triage-summary-title">Prioritisation</h5>
+                                                                    <div class="triage-score-highlight">
+                                                                        <span class="triage-score-value">@request.Prioritisation.TotalPriorityScore</span>
+                                                                        <div class="triage-score-meta">
+                                                                            <span class="text-muted">Overall score</span>
+                                                                            @if (!string.IsNullOrWhiteSpace(priorityTier))
+                                                                            {
+                                                                                <span class="triage-score-tier">@priorityTier</span>
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                    <dl class="definition-list triage-score-details">
+                                                                        <div class="definition-item">
+                                                                            <dt>Scored by</dt>
+                                                                            <dd>@FormatNullableString(request.Prioritisation.ScoredBy, "Not recorded")</dd>
+                                                                        </div>
+                                                                        <div class="definition-item">
+                                                                            <dt>Scored at</dt>
+                                                                            <dd>@FormatDateTime(request.Prioritisation.ScoredAt)</dd>
+                                                                        </div>
+                                                                        <div class="definition-item">
+                                                                            <dt>Scoring notes</dt>
+                                                                            <dd>@FormatNullableString(request.Prioritisation.ScoringNotes, "No notes provided")</dd>
+                                                                        </div>
+                                                                    </dl>
+                                                                    <div class="table-responsive triage-score-table">
+                                                                        <table class="table table-sm mb-0">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th scope="col">Category</th>
+                                                                                    <th scope="col">Weighted total</th>
+                                                                                    <th scope="col">Factors (score /5)</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                @foreach (var category in scoringCategories)
+                                                                                {
+                                                                                    <tr>
+                                                                                        <td>@category.Label</td>
+                                                                                        <td>@category.Total</td>
+                                                                                        <td>
+                                                                                            <ul class="triage-score-factor-list">
+                                                                                                @foreach (var factor in category.Factors)
+                                                                                                {
+                                                                                                    <li>@factor.Label &middot; <strong>@factor.Score</strong></li>
+                                                                                                }
+                                                                                            </ul>
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                }
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </aside>
+                                                    </div>
+                                                    <div class="triage-card-actions mt-3">
+                                                        <a asp-action="Details" asp-route-id="@request.Id" class="btn btn-outline-primary btn-sm">Open request</a>
+                                                        <a asp-action="ScoreRequest" asp-route-id="@request.Id" class="btn btn-outline-secondary btn-sm">Review scoring</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0">No requests have been scheduled for this meeting yet.</p>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (hasMeetings)
+                {
+                    <div class="card mb-4">
+                        <div class="card-body text-center py-5">
+                            <h3 class="mb-3">Select a meeting</h3>
+                            <p class="text-muted mb-0">Choose a meeting from the table above to review the requests, assessments, and scoring prepared for triage.</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div id="awaiting-requests" class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Requests awaiting scheduling</h3>
+                <span class="text-muted small">@awaitingCount request@(awaitingCount == 1 ? string.Empty : "s")</span>
+            </div>
+            <div class="card-body">
+                @if (awaitingRequests.Any())
+                {
+                    <p class="text-muted mb-3">Requests flagged for triage but not yet allocated to a meeting.</p>
+                    var awaitingAccordionId = "awaitingRequestsAccordion";
+                    <div id="@awaitingAccordionId" class="triage-request-list">
+                        @foreach (var request in awaitingRequests)
+                        {
+                            var collapseId = $"awaiting-{request.Id}";
+                            var requestorName = FormatPersonName(request.ApplicantName);
+                            var hasRequestorEmail = !string.IsNullOrWhiteSpace(request.ApplicantEmail) && !string.IsNullOrWhiteSpace(requestorName);
+                            var priorityTier = request.Prioritisation?.PriorityTier;
+                            var priorityBadgeClass = GetPriorityBadgeClass(priorityTier);
+                            var priorityShort = GetPriorityShortLabel(priorityTier);
+                            var totalScore = request.Prioritisation?.TotalPriorityScore;
+                            var assessments = request.Assessments?.OrderByDescending(a => a.UpdatedAt).ToList() ?? new List<DemandRequestAssessment>();
+                            var scoringCategories = BuildPriorityCategories(request.Prioritisation);
+                            var awaitingRiskScore = request.Prioritisation != null
+                                ? (int?)Math.Round((request.Prioritisation.RiskIfNotDeliveredScore + request.Prioritisation.TargetDeliveryUrgencyScore) / 2.0, MidpointRounding.AwayFromZero)
+                                : null;
+                            var awaitingImpactScore = request.Prioritisation != null
+                                ? (int?)Math.Round((request.Prioritisation.ScaleOfUsersScore + request.Prioritisation.EvidenceOfUserNeedScore) / 2.0, MidpointRounding.AwayFromZero)
+                                : null;
+                            var awaitingTimescale = !string.IsNullOrWhiteSpace(request.DeliveryTimescales)
+                                ? request.DeliveryTimescales
+                                : (request.TargetDeliveryDate.HasValue ? $"Target delivery {request.TargetDeliveryDate.Value:dd MMM yyyy}" : "Not specified");
+
+                            <div class="card triage-request-card">
+                                <div class="card-header" id="awaiting-heading-@request.Id">
+                                    <button class="triage-toggle" type="button" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                                        <div class="triage-card-summary">
+                                            <div class="triage-card-title-block">
+                                                <div class="triage-card-title">@request.ProposedTitle</div>
+                                                <div class="triage-card-ref">Reference @request.ReferenceNumber</div>
+                                            </div>
+                                            <div class="triage-card-badges">
+                                                <span class="@GetStatusBadgeClass(request.Status)">@request.Status</span>
+                                                @if (!string.IsNullOrWhiteSpace(priorityShort))
+                                                {
+                                                    <span class="@priorityBadgeClass">@priorityShort</span>
+                                                }
+                                                @if (totalScore.HasValue)
+                                                {
+                                                    <span class="badge badge-light text-dark">Score @totalScore</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="triage-card-meta">
+                                            <span>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Business area not set" : request.BusinessArea)</span>
+                                            <span>
+                                                @if (hasRequestorEmail)
+                                                {
+                                                    <a href="mailto:@request.ApplicantEmail" class="triage-link">@requestorName</a>
+                                                }
+                                                else if (!string.IsNullOrWhiteSpace(requestorName))
+                                                {
+                                                    @requestorName
+                                                }
+                                                else if (!string.IsNullOrWhiteSpace(request.ApplicantEmail))
+                                                {
+                                                    <a href="mailto:@request.ApplicantEmail" class="triage-link">@request.ApplicantEmail</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Requestor not set</span>
+                                                }
+                                            </span>
+                                            <span>Submitted @FormatDate(request.TriageSubmittedAt ?? request.SubmittedAt)</span>
+                                            <span>Updated @FormatDateTime(request.UpdatedAt)</span>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div id="@collapseId" class="collapse" aria-labelledby="awaiting-heading-@request.Id" data-parent="#@awaitingAccordionId">
+                                    <div class="card-body">
+                                        <div class="triage-detail-layout">
+                                            <div class="triage-detail-main">
+                                                <p class="text-muted">This request is ready to be scheduled into a triage meeting.</p>
+                                                @if (request.Prioritisation != null)
+                                                {
+                                                    <div class="triage-note triage-note--highlight">
+                                                        <div class="triage-note-label">Prioritisation summary</div>
+                                                        <div class="triage-note-text">
+                                                            <strong>Total score:</strong> @request.Prioritisation.TotalPriorityScore (@priorityTier)
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <aside class="triage-detail-aside">
+                                                <div class="triage-summary-card">
+                                                    <h5 class="triage-summary-title">Quick view</h5>
+                                                    <dl class="definition-list summary-list">
+                                                        <div class="definition-item">
+                                                            <dt>Timescales</dt>
+                                                            <dd>@awaitingTimescale</dd>
+                                                        </div>
+                                                        <div class="definition-item">
+                                                            <dt>Risk level</dt>
+                                                            <dd>@FormatLevel(awaitingRiskScore)</dd>
+                                                        </div>
+                                                        <div class="definition-item">
+                                                            <dt>Impact level</dt>
+                                                            <dd>@FormatLevel(awaitingImpactScore)</dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+                                                @if (request.Prioritisation != null)
+                                                {
+                                                    <div class="triage-summary-card">
+                                                        <h5 class="triage-summary-title">Prioritisation details</h5>
+                                                        <div class="table-responsive triage-score-table">
+                                                            <table class="table table-sm mb-0">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th scope="col">Category</th>
+                                                                        <th scope="col">Weighted total</th>
+                                                                        <th scope="col">Factors (score /5)</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    @foreach (var category in scoringCategories)
+                                                                    {
+                                                                        <tr>
+                                                                            <td>@category.Label</td>
+                                                                            <td>@category.Total</td>
+                                                                            <td>
+                                                                                <ul class="triage-score-factor-list">
+                                                                                    @foreach (var factor in category.Factors)
+                                                                                    {
+                                                                                        <li>@factor.Label &middot; <strong>@factor.Score</strong></li>
+                                                                                    }
+                                                                                </ul>
+                                                                            </td>
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </aside>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No requests are currently awaiting scheduling.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .triage-month-card {
+        border: 1px solid #e4e7ec;
+    }
+ 
+     .btn-icon {
+         width: 2.75rem;
+         height: 2.75rem;
+         display: inline-flex;
+         align-items: center;
+         justify-content: center;
+         border-radius: 0.5rem;
+     }
+
+    .btn-static {
+        pointer-events: none;
+        cursor: default;
+        color: #475467;
+    }
+
+    .triage-month-controls {
+        gap: 1rem;
+    }
+ 
+     .triage-month-summary {
+         text-align: left;
+     }
+ 
+     .triage-month-label {
+         font-weight: 600;
+         font-size: 1.05rem;
+         color: #0c1d3e;
+     }
+ 
+     .triage-month-links {
+         display: flex;
+         flex-wrap: wrap;
+         gap: 0.5rem;
+     }
+ 
+     .triage-month-links .badge {
+         padding: 0.45rem 0.85rem;
+         font-weight: 600;
+         font-size: 0.85rem;
+     }
+
+    .triage-meeting-picker select {
+        max-width: 340px;
+    }
+
+    .triage-month-table table thead th {
+        border-top: none;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #667085;
+    }
+
+    .triage-month-table table td {
+        vertical-align: middle;
+    }
+
+    .triage-month-table .table-active {
+        background-color: #eef4ff;
+    }
+ 
+     .triage-overview-card {
+         border: 1px solid #e4e7ec;
+     }
+
+    .triage-overview-table tbody tr:hover {
+        background-color: #f5f7fb;
+    }
+
+    .triage-overview-selected {
+        background-color: #e7f1fb;
+    }
+
+    .triage-overview-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .triage-overview-link:hover,
+    .triage-overview-link:focus {
+        text-decoration: underline;
+    }
+
+    .triage-request-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .triage-request-card {
+        border: 1px solid #e4e7ec;
+        border-radius: 0.75rem;
+        background-color: #ffffff;
+    }
+
+    .triage-request-card .card-header {
+        background-color: #f9fafb;
+        border-bottom: 1px solid #e4e7ec;
+        padding: 0;
+    }
+
+    .triage-toggle {
+        width: 100%;
+        text-align: left;
+        padding: 1.25rem 1.5rem;
+        background: none;
+        border: none;
+        color: inherit;
+    }
+
+    .triage-toggle:hover,
+    .triage-toggle:focus {
+        background-color: #f2f5fb;
+    }
+
+    .triage-toggle:focus {
+        outline: 3px solid #2b6fce;
+        outline-offset: -3px;
+    }
+
+    .triage-card-summary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .triage-card-title-block {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .triage-card-title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #0c1d3e;
+        margin-bottom: 0.25rem;
+    }
+
+    .triage-card-ref {
+        font-size: 0.85rem;
+        color: #667085;
+        white-space: nowrap;
+    }
+
+    .triage-card-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .triage-card-meta {
+        margin-top: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        font-size: 0.9rem;
+        color: #475467;
+    }
+
+    .triage-meeting-link {
+        font-weight: 600;
+        color: #1d4ed8;
+    }
+
+    .triage-meeting-link:hover,
+    .triage-meeting-link:focus {
+        text-decoration: underline;
+        color: #123e8a;
+    }
+
+    .triage-detail-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .triage-summary-card {
+        border: 1px solid #e4e7ec;
+        border-radius: 0.75rem;
+        background-color: #f9fafb;
+        padding: 1.25rem 1.5rem;
+        height: 100%;
+    }
+
+    .summary-list {
+        margin: 0;
+    }
+
+    .summary-list-bullets {
+        list-style: disc;
+        padding-left: 1.25rem;
+        margin-bottom: 0;
+        color: #475467;
+    }
+
+    .summary-list-bullets li {
+        margin-bottom: 0.35rem;
+    }
+
+    .summary-section {
+        margin-top: 1rem;
+    }
+
+    .triage-detail-layout {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .triage-detail-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .triage-detail-aside {
+        width: 320px;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .triage-detail-card {
+        background-color: #f9fafb;
+        border: 1px solid #e4e7ec;
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        min-height: 100%;
+    }
+
+    .triage-detail-card--full {
+        width: 100%;
+    }
+
+    .triage-detail-card h4 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0;
+        color: #0c1d3e;
+    }
+
+    .triage-subheading {
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #475467;
+        margin-bottom: 0.35rem;
+    }
+
+    .definition-list {
+        margin: 0;
+    }
+
+    .definition-item {
+        margin-bottom: 0.65rem;
+    }
+
+    .definition-item dt {
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #475467;
+    }
+
+    .definition-item dd {
+        margin-bottom: 0;
+        color: #101828;
+    }
+
+    .triage-inline-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .triage-chip-list {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+
+    .triage-chip-list span,
+    .triage-chip-list::after {
+        background-color: rgba(43, 111, 206, 0.08);
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.8rem;
+        color: #18427c;
+    }
+
+    .triage-score-highlight {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .triage-score-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #0c1d3e;
+        line-height: 1;
+    }
+
+    .triage-score-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .triage-score-tier {
+        font-weight: 600;
+        color: #1d4ed8;
+    }
+
+    .triage-score-table table {
+        border: 1px solid #e4e7ec;
+    }
+
+    .triage-score-factor-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .triage-score-factor-list li {
+        margin-bottom: 0.25rem;
+        color: #475467;
+    }
+
+    .triage-assessment-item + .triage-assessment-item {
+        border-top: 1px solid #e4e7ec;
+        padding-top: 0.75rem;
+    }
+
+    .triage-assessment-item h5 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+    }
+
+    .triage-note-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .triage-note {
+        border-left: 3px solid #9bbcf6;
+        padding-left: 0.75rem;
+    }
+
+    .triage-note--highlight {
+        border-left-color: #2b6fce;
+        background-color: #eef4ff;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+    }
+
+    .triage-note-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+        color: #475467;
+        margin-bottom: 0.35rem;
+    }
+
+    .triage-note-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .triage-note-text {
+        margin-top: 0.35rem;
+        color: #344054;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .triage-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .triage-awaiting-card {
+        border: 1px solid #e4e7ec;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .triage-detail-aside {
+            width: 280px;
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        .triage-detail-layout {
+            flex-direction: column;
+        }
+
+        .triage-detail-aside {
+            width: 100%;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .triage-card-summary {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .triage-card-badges {
+            justify-content: flex-start;
+        }
+
+        .triage-card-meta {
+            gap: 0.75rem;
+        }
+
+        .triage-month-summary {
+            width: 100%;
+            text-align: left;
+        }
+
+        .triage-month-card .btn-group {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .triage-overview-table thead {
+            display: none;
+        }
+
+        .triage-overview-table tbody tr {
+            display: block;
+            padding: 0.75rem 1rem;
+        }
+
+        .triage-overview-table tbody td {
+            display: block;
+            padding: 0.35rem 0;
+        }
+
+        .triage-overview-table tbody td:last-child {
+            text-align: left !important;
+        }
+
+        .triage-summary-card {
+            margin-top: 0.5rem;
+        }
+    }
+</style>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function () {
+        const meetingSelect = document.getElementById('triageMeetingSelect');
+        if (!meetingSelect) {
+            return;
+        }
+
+        meetingSelect.addEventListener('change', function () {
+            if (!this.value) {
+                return;
+            }
+
+            const destination = new URL('@Url.Action("Triage", "DemandManagement")', window.location.origin);
+            destination.searchParams.set('meetingId', this.value);
+
+            const selectedMonthKey = '@(Model.SelectedMonthKey ?? string.Empty)';
+            if (selectedMonthKey) {
+                destination.searchParams.set('month', selectedMonthKey);
+            }
+
+            window.location.href = destination.toString();
+        });
+    })();
+</script>
+

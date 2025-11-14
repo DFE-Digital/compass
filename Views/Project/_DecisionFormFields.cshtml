@@ -1,0 +1,145 @@
+@model Compass.ViewModels.ProjectDecisionFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+<input type="hidden" asp-for="Input.ProjectId" />
+<input type="hidden" asp-for="Input.DecisionId" />
+<input type="hidden" asp-for="Input.SourceMilestoneId" />
+
+<div class="form-group @(hasError("Title") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Title">Decision title</label>
+    <small class="form-text text-muted">Capture the headline question or outcome agreed.</small>
+    <span asp-validation-for="Input.Title" class="form-error-message"></span>
+    <input asp-for="Input.Title" class="form-control @(hasError("Title") ? "form-control--error" : string.Empty)" required maxlength="200" />
+</div>
+
+<div class="form-group @(hasError("Status") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Status">Status</label>
+    <small class="form-text text-muted">Track whether the decision is pending, approved, or superseded.</small>
+    <span asp-validation-for="Input.Status" class="form-error-message"></span>
+    <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.StatusOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.DecisionType">Decision type</label>
+    <input asp-for="Input.DecisionType" class="form-control" maxlength="50" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.DecisionDate">Decision date</label>
+    <input asp-for="Input.DecisionDate" type="date" class="form-control" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Summary">Summary</label>
+    <small class="form-text text-muted">Outline the key points that led to the decision.</small>
+    <textarea asp-for="Input.Summary" class="form-control" rows="3"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.BusinessArea">Business area</label>
+    <select asp-for="Input.BusinessArea" class="form-control">
+        @foreach (var option in Model.BusinessAreaOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.OwnerEmail">Owner email</label>
+    <small class="form-text text-muted">Leave blank if the decision is not assigned.</small>
+    <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
+    <input asp-for="Input.OwnerEmail" type="email" class="form-control @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.FipsId">FIPS ID</label>
+    <input asp-for="Input.FipsId" class="form-control" maxlength="50" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Outcome">Outcome</label>
+    <small class="form-text text-muted">Note the agreed result or follow-up.</small>
+    <textarea asp-for="Input.Outcome" class="form-control" rows="2"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Notes">Notes</label>
+    <textarea asp-for="Input.Notes" class="form-control" rows="3"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.SourceType">Source type</label>
+    <input asp-for="Input.SourceType" class="form-control" maxlength="100" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.SourceReference">Source reference</label>
+    <input asp-for="Input.SourceReference" class="form-control" maxlength="100" />
+</div>
+
+<div class="form-group @(hasError("SourceRecordUrl") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.SourceRecordUrl">Source URL</label>
+    <small class="form-text text-muted">Link to minutes or supporting evidence.</small>
+    <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
+    <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("SourceRecordUrl") ? "form-control--error" : string.Empty)" maxlength="500" />
+</div>
+
+<div class="form-group">
+    <label>Linked risks</label>
+    <small class="form-text text-muted">Hold Command (Mac) or Ctrl (Windows) to select multiple risks.</small>
+    <select asp-for="Input.LinkedRiskIds" class="form-control select2" multiple size="@(Math.Max(Model.RiskOptions.Count(), 3))">
+        @foreach (var option in Model.RiskOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Linked issues</label>
+    <select asp-for="Input.LinkedIssueIds" class="form-control select2" multiple size="@(Math.Max(Model.IssueOptions.Count(), 3))">
+        @foreach (var option in Model.IssueOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Linked actions</label>
+    <small class="form-text text-muted">Link actions that result from or depend on this decision.</small>
+    <select asp-for="Input.LinkedActionIds" class="form-control select2" multiple size="@(Math.Max(Model.ActionOptions.Count(), 3))">
+        @foreach (var option in Model.ActionOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>

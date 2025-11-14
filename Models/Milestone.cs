@@ -73,5 +73,6 @@ public class Milestone
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
     public ICollection<MilestoneUpdate> MilestoneUpdates { get; set; } = new List<MilestoneUpdate>();
+    public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
 }
 

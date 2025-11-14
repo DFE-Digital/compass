@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
+using Azure.Identity;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using Compass.Services;
@@ -10,6 +12,7 @@ using Compass.Middlewares;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 using System.IO;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -164,6 +167,25 @@ builder.Services.AddControllersWithViews()
 
 builder.Services.AddAuthorization();
 
+// Microsoft Graph app-to-app client using Entra configuration
+builder.Services.AddSingleton(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var tenantId = configuration["Entra:TenantId"];
+    var clientId = configuration["Entra:ClientId"];
+    var clientSecret = configuration["Entra:ClientSecret"];
+
+    if (string.IsNullOrWhiteSpace(tenantId) ||
+        string.IsNullOrWhiteSpace(clientId) ||
+        string.IsNullOrWhiteSpace(clientSecret))
+    {
+        throw new InvalidOperationException("Entra configuration is missing TenantId, ClientId, or ClientSecret.");
+    }
+
+    var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+    return new Microsoft.Graph.GraphServiceClient(credential);
+});
+
 // Configure database - Use Azure SQL for all environments
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -226,10 +248,15 @@ builder.Services.AddHttpClient<Compass.Controllers.GovernmentDepartmentControlle
 
 // Register services
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
+builder.Services.AddScoped<IPerformanceReportingEligibilityService, PerformanceReportingEligibilityService>();
 builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
+
+// Register HttpClientFactory for PerformanceReportingManagementController
+builder.Services.AddHttpClient();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -250,12 +277,20 @@ builder.Services.AddSession(options =>
     options.Cookie.Name = "Compass.Session";
 });
 
+// Respect proxy forwarded headers so RemoteIpAddress reflects the client
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // Add rate limiting
 builder.Services.AddRateLimiter(options =>
 {
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
+            partitionKey: GetGlobalPartitionKey(httpContext),
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
@@ -306,6 +341,8 @@ if (app.Environment.IsDevelopment())
 {
     app.Urls.Add("http://localhost:5500");
 }
+
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
@@ -675,5 +712,37 @@ static string? GetFipsPartitionKey(HttpContext httpContext)
     }
     catch { }
     return null;
+}
+
+static string GetGlobalPartitionKey(HttpContext httpContext)
+{
+    var identityName = httpContext.User.Identity?.IsAuthenticated == true
+        ? httpContext.User.Identity?.Name
+        : null;
+    if (!string.IsNullOrWhiteSpace(identityName))
+    {
+        return $"user:{identityName}";
+    }
+
+    string? forwardedFor = httpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedValues)
+        ? forwardedValues.FirstOrDefault()
+        : null;
+
+    if (!string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            return $"ip:{firstIp}";
+        }
+    }
+
+    var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
+    if (!string.IsNullOrWhiteSpace(remoteIp))
+    {
+        return $"ip:{remoteIp}";
+    }
+
+    return $"host:{httpContext.Request.Headers.Host}";
 }
 

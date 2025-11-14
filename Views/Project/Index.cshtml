@@ -1,4 +1,4 @@
-@model IEnumerable<Compass.Models.Project>
+@model Compass.ViewModels.ProjectIndexViewModel
 
 @{
     ViewData["Title"] = "Delivery";
@@ -6,18 +6,18 @@
 
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-              <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active">Delivery reporting</li>
-                </ol>
+        <div class="row mb-3 align-items-center">
+            <div class="col-lg-8 col-md-7 col-sm-12">
+                <nav aria-label="Breadcrumb" class="mb-2">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="/">Home</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Delivery reporting</li>
+                    </ol>
+                </nav>
                 <h1 class="m-0">Delivery reporting</h1>
             </div>
-            <div class="col-sm-6">
-                <div class="float-right">
-                    <a asp-action="Create" class="btn btn-primary">Create New Project</a>
-                </div>
+            <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
+                <a asp-action="Create" class="btn btn-success">Create entry</a>
             </div>
         </div>
     </div>
@@ -259,11 +259,7 @@
 
             <!-- Right Column: Projects Tables -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @{
-                    var userProjects = ViewBag.UserProjects as List<Compass.Models.Project>;
-                }
-                
-                @if (userProjects != null && userProjects.Any())
+                @if (Model.UserProjects.Any())
                 {
                     <!-- Your Projects Section -->
                     <div class="card mb-4">
@@ -284,10 +280,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var project in userProjects)
+                                    @foreach (var project in Model.UserProjects)
                                     {
                                         <tr>
-                                            <td>@project.ProjectCode</td>
+                                            <td>
+                                                <span title="Legacy code: @project.ProjectCode">@GetDeliveryCode(project)</span>
+                                            </td>
                                             <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
                                             <td>@project.BusinessArea</td>
                                             <td>
@@ -304,7 +302,7 @@
                                             <td>
                                                 @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
                                                 {
-                                                    @project.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
                                                 }
                                                 else
                                                 {
@@ -340,7 +338,7 @@
                 </div>
                     </div>
                     <div class="card-body table-responsive p-0">
-                        @if (Model.Any())
+                        @if (Model.Projects.Any())
                         {
                             <table class="table table-hover text-nowrap sortable-table projects-index-table">
                                 <thead>
@@ -355,10 +353,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var project in Model)
+                                    @foreach (var project in Model.Projects)
                                     {
                                         <tr>
-                                            <td>@project.ProjectCode</td>
+                                            <td>
+                                                <span title="Legacy code: @project.ProjectCode">@GetDeliveryCode(project)</span>
+                                            </td>
                                             <td><a asp-action="Details" asp-route-id="@project.Id">@project.Title</a></td>
                                             <td>@project.BusinessArea</td>
                                             <td>
@@ -375,7 +375,7 @@
                                             <td>
                                                 @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
                                                 {
-                                                    @project.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
                                                 }
                                                 else
                                                 {
@@ -399,11 +399,55 @@
                         }
                         else
                         {
-                            <div class="text-center p-4">
-                                <p class="text-muted">No projects found matching your criteria.</p>
+                            <div class="p-4">
+                                <p class="text-muted mb-0">No projects recorded.</p>
                             </div>
                         }
                     </div>
+                    @if (Model.TotalPages > 1)
+                    {
+                        <div class="card-footer">
+                            <nav aria-label="All projects pagination">
+                                <ul class="pagination justify-content-center mb-0">
+                                    <li class="page-item @(Model.HasPreviousPage ? string.Empty : "disabled")">
+                                        <a class="page-link"
+                                           asp-action="Index"
+                                           asp-route-page="@(Model.PageNumber > 1 ? Model.PageNumber - 1 : 1)"
+                                           asp-route-search="@ViewBag.CurrentSearch"
+                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                           asp-route-phase="@ViewBag.CurrentPhase"
+                                           asp-route-flagship="@ViewBag.CurrentFlagship"
+                                           rel="prev">Previous</a>
+                                    </li>
+                                    @for (var i = 1; i <= Model.TotalPages; i++)
+                                    {
+                                        <li class="page-item @(i == Model.PageNumber ? "active" : string.Empty)">
+                                            <a class="page-link"
+                                               asp-action="Index"
+                                               asp-route-page="@i"
+                                               asp-route-search="@ViewBag.CurrentSearch"
+                                               asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                               asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                               asp-route-phase="@ViewBag.CurrentPhase"
+                                               asp-route-flagship="@ViewBag.CurrentFlagship">@i</a>
+                                        </li>
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? string.Empty : "disabled")">
+                                        <a class="page-link"
+                                           asp-action="Index"
+                                           asp-route-page="@(Model.PageNumber < Model.TotalPages ? Model.PageNumber + 1 : Model.TotalPages)"
+                                           asp-route-search="@ViewBag.CurrentSearch"
+                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                           asp-route-phase="@ViewBag.CurrentPhase"
+                                           asp-route-flagship="@ViewBag.CurrentFlagship"
+                                           rel="next">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -411,6 +455,11 @@
 </section>
 
 @functions {
+    string GetDeliveryCode(Compass.Models.Project project)
+    {
+        return $"DEL-DDT-{project.Id}";
+    }
+
     string GetRagBadgeClass(string ragStatus)
     {
         return ragStatus switch

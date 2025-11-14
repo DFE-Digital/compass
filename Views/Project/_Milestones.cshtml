@@ -1,50 +1,10 @@
 @model Compass.Models.Project
 
-@{
-    // Calculate overall milestone status
-    var milestones = Model.Milestones.ToList();
-    var totalMilestones = milestones.Count;
-    var completedMilestones = milestones.Count(m => m.Status == "complete");
-    var atRiskMilestones = milestones.Count(m => m.Status == "at_risk");
-    var inProgressMilestones = milestones.Count(m => m.Status == "in_progress");
-    var notStartedMilestones = milestones.Count(m => m.Status == "not_started");
-    
-    string overallStatus;
-    string overallStatusClass;
-    
-    if (totalMilestones == 0)
-    {
-        overallStatus = "No Milestones";
-        overallStatusClass = "badge-secondary";
-    }
-    else if (atRiskMilestones > 0)
-    {
-        overallStatus = "At Risk";
-        overallStatusClass = "badge-warning";
-    }
-    else if (completedMilestones == totalMilestones)
-    {
-        overallStatus = "Complete";
-        overallStatusClass = "badge-success";
-    }
-    else if (inProgressMilestones > 0 || completedMilestones > 0)
-    {
-        overallStatus = "On Track";
-        overallStatusClass = "badge-info";
-    }
-    else
-    {
-        overallStatus = "Not Started";
-        overallStatusClass = "badge-secondary";
-    }
-}
-
-
 <div class="card" id="milestones">
     <div class="card-header">
-        <h3 class="card-title">Project Milestones</h3>
+        <h3 class="card-title">Project milestones</h3>
         <div class="card-tools">
-            <a href="#" data-toggle="modal" data-target="#addMilestoneModal">Add milestone</a>
+            <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
         </div>
     </div>
     <div class="card-body table-responsive p-0">
@@ -53,46 +13,44 @@
             <table class="table table-hover text-nowrap sortable-table milestones-table">
                 <thead>
                     <tr>
-                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
                         <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
+                        <th class="col-objective sortable" data-column="Objective" tabindex="0" role="button" aria-label="Sort by Objective">Objective</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">Due Date</th>
-                        <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">Actual Date</th>
+                        <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">Due date</th>
+                        <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">Actual date</th>
                         <th class="col-progress sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">Progress</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @{
-                        var milestonesOrderedByCreatedAt = Model.Milestones.OrderBy(m => m.CreatedAt).ToList();
-                    }
                     @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate))
                     {
-                        var milestoneYear = milestone.CreatedAt.Year;
-                        var milestonesInYear = milestonesOrderedByCreatedAt.Where(m => m.CreatedAt.Year == milestoneYear).OrderBy(m => m.CreatedAt).ToList();
-                        var milestoneSequence = milestonesInYear.IndexOf(milestone) + 1;
-                        var formattedMilestoneId = $"{milestoneYear}-MIL-{milestoneSequence}";
                         <tr>
                             <td>
-                                <span class="text-muted small">@formattedMilestoneId</span>
-                            </td>
-                            <td>
-                                <a href="#" class="view-milestone-link" 
-                                   data-milestone-id="@milestone.Id" 
-                                   data-milestone-name="@milestone.Name"
-                                   data-milestone-status="@milestone.Status"
-                                   data-milestone-due="@milestone.DueDate.ToString("yyyy-MM-dd")"
-                                   data-milestone-actual="@(milestone.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
-                                   data-milestone-progress="@(milestone.ProgressPercent ?? 0)"
-                                   data-milestone-description="@(milestone.Description ?? "")">
+                                <a asp-controller="Project" asp-action="MilestoneDetails" asp-route-id="@milestone.Id">
                                     @milestone.Name
                                 </a>
                             </td>
+                            <td>
+                                @if (milestone.Objective != null)
+                                {
+                                    <span>@milestone.Objective.Title</span>
+                                    if (!string.IsNullOrWhiteSpace(milestone.Objective.Theme))
+                                    {
+                                        <br />
+                                        <small class="text-muted">@milestone.Objective.Theme</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not linked</span>
+                                }
+                            </td>
                             <td>@milestone.Status.Replace("_", " ")</td>
-                            <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                            <td>@milestone.DueDate.ToString("d MMMM yyyy")</td>
                             <td>
                                 @if (milestone.ActualDate.HasValue)
                                 {
-                                    @milestone.ActualDate.Value.ToString("dd MMM yyyy")
+                                    @milestone.ActualDate.Value.ToString("d MMMM yyyy")
                                 }
                                 else
                                 {
@@ -116,238 +74,10 @@
         }
         else
         {
-            <div class="text-center p-4">
-                <p class="text-muted">No milestones defined.</p>
-                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addMilestoneModal">Add First Milestone</button>
+            <div class="p-4">
+                <p class="text-muted mb-2">No milestones recorded.</p>
+                <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add the first milestone</a>
             </div>
         }
     </div>
 </div>
-
-<!-- View/Edit Milestone Modal -->
-<div class="modal fade" id="viewMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="viewMilestoneModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewMilestoneModalLabel">Milestone Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form id="editMilestoneForm" asp-action="UpdateMilestone" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <input type="hidden" name="milestoneId" id="editMilestoneId" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="editMilestoneName">Milestone Name</label>
-                        <input type="text" class="form-control" id="editMilestoneName" name="name" required>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editMilestoneStatus">Status</label>
-                                <select class="form-control" id="editMilestoneStatus" name="status" required>
-                                    <option value="not_started">Not Started</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="at_risk">At Risk</option>
-                                    <option value="complete">Complete</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editMilestoneProgress">Progress (%)</label>
-                                <input type="number" class="form-control" id="editMilestoneProgress" name="progressPercent" min="0" max="100">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editMilestoneDueDate">Due Date</label>
-                                <input type="date" class="form-control" id="editMilestoneDueDate" name="dueDate" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editMilestoneActualDate">Actual Completion Date</label>
-                                <input type="date" class="form-control" id="editMilestoneActualDate" name="actualDate">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="editMilestoneDescription">Description</label>
-                        <textarea class="form-control" id="editMilestoneDescription" name="description" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <button type="button" class="btn btn-danger" id="deleteMilestoneFromViewBtn">Delete Milestone</button>
-                    <div>
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Milestone Confirmation Modal -->
-<div class="modal fade" id="deleteMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="deleteMilestoneModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteMilestoneModalLabel">Confirm Delete Milestone</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete the milestone <strong id="milestoneNameToDelete"></strong>?</p>
-                <p class="text-muted">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form asp-action="DeleteMilestone" method="post" class="d-inline">
-                    <input type="hidden" name="projectId" value="@Model.Id" />
-                    <input type="hidden" name="milestoneId" id="deleteMilestoneId" />
-                    <button type="submit" class="btn btn-danger">Delete Milestone</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script nonce="@Context.Items["Nonce"]">
-    (function() {
-        function initMilestonesPage() {
-            // Initialize sortable tables
-            $('.milestones-table').each(function() {
-                initializeMilestonesTable($(this));
-            });
-
-            // Handle view milestone link clicks
-            $(document).on('click', '.view-milestone-link', function(e) {
-                e.preventDefault();
-                var milestoneId = $(this).attr('data-milestone-id');
-                var name = $(this).attr('data-milestone-name');
-                var status = $(this).attr('data-milestone-status');
-                var dueDate = $(this).attr('data-milestone-due');
-                var actualDate = $(this).attr('data-milestone-actual');
-                var progress = $(this).attr('data-milestone-progress');
-                var description = $(this).attr('data-milestone-description');
-                
-                viewMilestone(milestoneId, name, status, dueDate, actualDate, progress, description);
-            });
-
-            // Handle delete milestone button from view modal
-            $('#deleteMilestoneFromViewBtn').on('click', function() {
-                var milestoneId = $('#editMilestoneId').val();
-                var name = $('#editMilestoneName').val();
-                $('#viewMilestoneModal').modal('hide');
-                deleteMilestone(milestoneId, name);
-            });
-        }
-
-        function viewMilestone(milestoneId, name, status, dueDate, actualDate, progress, description) {
-            $('#editMilestoneId').val(milestoneId);
-            $('#editMilestoneName').val(name);
-            $('#editMilestoneStatus').val(status);
-            $('#editMilestoneDueDate').val(dueDate);
-            $('#editMilestoneActualDate').val(actualDate);
-            $('#editMilestoneProgress').val(progress);
-            $('#editMilestoneDescription').val(description);
-            $('#viewMilestoneModal').modal('show');
-        }
-
-        function deleteMilestone(milestoneId, name) {
-            $('#deleteMilestoneId').val(milestoneId);
-            $('#milestoneNameToDelete').text(name);
-            $('#deleteMilestoneModal').modal('show');
-        }
-
-        function initializeMilestonesTable(table) {
-            var currentSort = { column: null, direction: 'asc' };
-
-            table.find('.sortable').on('click keypress', function(e) {
-                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
-                    return;
-                }
-                
-                var column = $(this).data('column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(table, column, direction);
-                currentSort = { column: column, direction: direction };
-            });
-
-            function sortTable(table, column, direction) {
-                var tbody = table.find('tbody');
-                var rows = tbody.find('tr').toArray();
-                
-                rows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
-                    
-                    if (column === 'DueDate' || column === 'ActualDate') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else if (column === 'Progress') {
-                        var aProgress = $(a).find('td').eq(colIndex).text().trim().replace('%', '').replace('Not set', '0');
-                        var bProgress = $(b).find('td').eq(colIndex).text().trim().replace('%', '').replace('Not set', '0');
-                        aVal = parseInt(aProgress) || 0;
-                        bVal = parseInt(bProgress) || 0;
-                    } else {
-                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                tbody.empty();
-                rows.forEach(function(row) {
-                    tbody.append(row);
-                });
-                
-                updateSortIcons(table, column, direction);
-            }
-
-            function updateSortIcons(table, column, direction) {
-                // Remove active class from all headers
-                table.find('.sortable').removeClass('sort-asc sort-desc');
-                
-                // Add appropriate class to active header
-                var activeHeader = table.find('.sortable[data-column="' + column + '"]');
-                if (direction === 'asc') {
-                    activeHeader.addClass('sort-asc');
-                } else {
-                    activeHeader.addClass('sort-desc');
-                }
-            }
-        }
-
-        if (typeof jQuery !== 'undefined') {
-            $(document).ready(initMilestonesPage);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() {
-                if (typeof jQuery !== 'undefined') {
-                    $(document).ready(initMilestonesPage);
-                }
-            });
-        }
-    })();
-</script>

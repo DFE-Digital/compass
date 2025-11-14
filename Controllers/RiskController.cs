@@ -5,6 +5,7 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
+using System;
 
 namespace Compass.Controllers;
 
@@ -256,7 +257,7 @@ public class RiskController : Controller
     }
 
     // GET: Risk/Create
-    public async Task<IActionResult> Create(int? objectiveId)
+    public async Task<IActionResult> Create(int? objectiveId, int? milestoneId, string? returnTo)
     {
         ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", objectiveId);
@@ -268,6 +269,21 @@ public class RiskController : Controller
         
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
+
+        ViewBag.MilestoneId = milestoneId;
+        ViewBag.ReturnTo = returnTo;
+
+        if (milestoneId.HasValue)
+        {
+            var milestone = await _context.Milestones
+                .Include(m => m.Project)
+                .FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
+
+            if (milestone != null)
+            {
+                ViewBag.SourceMilestone = milestone;
+            }
+        }
         
         return View();
     }
@@ -275,7 +291,7 @@ public class RiskController : Controller
     // POST: Risk/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,Notes")] Risk risk, int[] selectedRiskTypes)
+    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,Notes")] Risk risk, int[] selectedRiskTypes, int? milestoneId, string? returnTo)
     {
         _logger.LogInformation("=== CREATE RISK POST ===");
         _logger.LogInformation("OwnerEmail received: {OwnerEmail}", risk.OwnerEmail);
@@ -295,7 +311,27 @@ public class RiskController : Controller
                 }
             }
         }
-        
+
+        Milestone? milestoneContext = null;
+        if (milestoneId.HasValue)
+        {
+            milestoneContext = await _context.Milestones
+                .FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
+
+            if (milestoneContext != null)
+            {
+                if (!risk.ProjectId.HasValue && milestoneContext.ProjectId.HasValue)
+                {
+                    risk.ProjectId = milestoneContext.ProjectId;
+                }
+
+                if (!risk.ObjectiveId.HasValue && milestoneContext.ObjectiveId.HasValue)
+                {
+                    risk.ObjectiveId = milestoneContext.ObjectiveId;
+                }
+            }
+        }
+
         if (ModelState.IsValid)
         {
             try
@@ -334,9 +370,29 @@ public class RiskController : Controller
                 {
                     _logger.LogWarning("No risk types to add");
                 }
+
+                if (milestoneContext != null)
+                {
+                    _context.MilestoneRisks.Add(new MilestoneRisk
+                    {
+                        MilestoneId = milestoneContext.Id,
+                        RiskId = risk.Id
+                    });
+                    await _context.SaveChangesAsync();
+                }
                 
                 TempData["SuccessMessage"] = $"Risk '{risk.Title}' has been created successfully.";
                 
+                if (milestoneContext != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(returnTo) && returnTo.Equals("project-milestone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return RedirectToAction("MilestoneDetails", "Project", new { id = milestoneContext.Id });
+                    }
+
+                    return RedirectToAction("Details", "Milestone", new { id = milestoneContext.Id });
+                }
+
                 if (risk.ObjectiveId.HasValue)
                 {
                     return RedirectToAction(nameof(Index), new { objectiveId = risk.ObjectiveId });
@@ -360,6 +416,13 @@ public class RiskController : Controller
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
         
+        ViewBag.MilestoneId = milestoneId;
+        ViewBag.ReturnTo = returnTo;
+        if (milestoneContext != null)
+        {
+            ViewBag.SourceMilestone = milestoneContext;
+        }
+
         return View(risk);
     }
 

@@ -6,17 +6,13 @@
     
     // Get dependencies where this project is the target
     var incomingDependencies = Model.DependenciesAsTarget.OrderByDescending(d => d.CreatedAt).ToList();
-    
-    // Combine all dependencies for sequence calculation
-    var allProjectDependencies = Model.DependenciesAsSource.Concat(Model.DependenciesAsTarget)
-        .OrderBy(d => d.CreatedAt).ToList();
 }
 
 <div class="card mb-4" id="outgoing-dependencies">
     <div class="card-header">
-        <h3 class="card-title">Outgoing Dependencies</h3>
+        <h3 class="card-title">Outgoing dependencies</h3>
         <div class="card-tools">
-            <a href="#" data-toggle="modal" data-target="#addDependencyModal">Add dependency</a>
+            <a asp-controller="Project" asp-action="CreateDependency" asp-route-projectId="@Model.Id">Add dependency</a>
         </div>
     </div>
     <div class="card-body table-responsive p-0">
@@ -25,44 +21,28 @@
             <table class="table table-hover text-nowrap sortable-table dependencies-table">
                 <thead>
                     <tr>
-                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
-                        <th class="col-target sortable" data-column="Target" tabindex="0" role="button" aria-label="Sort by Target">Depends On</th>
-                        <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
-                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="col-created sortable" data-column="Created" tabindex="0" role="button" aria-label="Sort by Created">Created</th>
+                        <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by title">Dependency</th>
+                        <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by type">Type</th>
+                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by status">Status</th>
+                        <th class="col-created sortable" data-column="Created" tabindex="0" role="button" aria-label="Sort by created">Created</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var dependency in outgoingDependencies)
                     {
-                        var dependencyYear = dependency.CreatedAt.Year;
-                        var dependenciesInYear = allProjectDependencies.Where(d => d.CreatedAt.Year == dependencyYear).OrderBy(d => d.CreatedAt).ToList();
-                        var dependencySequence = dependenciesInYear.IndexOf(dependency) + 1;
-                        var formattedDependencyId = $"{dependencyYear}-DEP-{dependencySequence}";
                         <tr>
                             <td>
-                                <span class="text-muted small">@formattedDependencyId</span>
-                            </td>
-                            <td>
-                                <a href="#" class="view-dependency-link" 
-                                   data-dependency-id="@dependency.Id" 
-                                   data-dependency-target-type="@dependency.TargetEntityType"
-                                   data-dependency-target-id="@dependency.TargetEntityId"
-                                   data-dependency-target-title="@dependency.TargetEntityTitle"
-                                   data-dependency-type="@(dependency.DependencyType ?? "")"
-                                   data-dependency-status="@(dependency.Status ?? "Active")"
-                                   data-dependency-description="@(dependency.Description ?? "")">
-                                    <strong>@dependency.TargetEntityTitle</strong>
-                                </a><br>
-                                <small class="text-muted">@dependency.TargetEntityType</small>
+                                <a asp-controller="Project" asp-action="DependencyDetails" asp-route-projectId="@Model.Id" asp-route-dependencyId="@dependency.Id">
+                                    @(string.IsNullOrWhiteSpace(dependency.TargetEntityTitle) ? "View details" : dependency.TargetEntityTitle)
+                                </a>
                             </td>
                             <td>@(dependency.DependencyType ?? "Related")</td>
                             <td>
-                                <span class="badge badge-@(dependency.Status == "Resolved" ? "success" : dependency.Status == "Cancelled" ? "secondary" : "primary")">
+                                <span class="badge @GetDependencyStatusBadgeClass(dependency.Status)">
                                     @(dependency.Status ?? "Active")
                                 </span>
                             </td>
-                            <td>@dependency.CreatedAt.ToString("dd MMM yyyy")</td>
+                            <td>@dependency.CreatedAt.ToString("d MMMM yyyy")</td>
                         </tr>
                     }
                 </tbody>
@@ -70,9 +50,9 @@
         }
         else
         {
-            <div class="text-center p-4">
-                <p class="text-muted">No outgoing dependencies.</p>
-                <a href="#" data-toggle="modal" data-target="#addDependencyModal">Add dependency</a>
+            <div class="p-4">
+                <p class="text-muted mb-2">No outgoing dependencies recorded.</p>
+                <a asp-controller="Project" asp-action="CreateDependency" asp-route-projectId="@Model.Id">Add the first dependency</a>
             </div>
         }
     </div>
@@ -80,7 +60,7 @@
 
 <div class="card" id="incoming-dependencies">
     <div class="card-header">
-        <h3 class="card-title">Incoming Dependencies</h3>
+        <h3 class="card-title mb-0">Incoming dependencies</h3>
     </div>
     <div class="card-body table-responsive p-0">
         @if (incomingDependencies.Any())
@@ -88,44 +68,28 @@
             <table class="table table-hover text-nowrap sortable-table dependencies-table">
                 <thead>
                     <tr>
-                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
-                        <th class="col-source sortable" data-column="Source" tabindex="0" role="button" aria-label="Sort by Source">Dependent On This</th>
-                        <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
-                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="col-created sortable" data-column="Created" tabindex="0" role="button" aria-label="Sort by Created">Created</th>
+                        <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by title">Dependency</th>
+                        <th class="col-type sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by type">Type</th>
+                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by status">Status</th>
+                        <th class="col-created sortable" data-column="Created" tabindex="0" role="button" aria-label="Sort by created">Created</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var dependency in incomingDependencies)
                     {
-                        var dependencyYear = dependency.CreatedAt.Year;
-                        var dependenciesInYear = allProjectDependencies.Where(d => d.CreatedAt.Year == dependencyYear).OrderBy(d => d.CreatedAt).ToList();
-                        var dependencySequence = dependenciesInYear.IndexOf(dependency) + 1;
-                        var formattedDependencyId = $"{dependencyYear}-DEP-{dependencySequence}";
                         <tr>
                             <td>
-                                <span class="text-muted small">@formattedDependencyId</span>
-                            </td>
-                            <td>
-                                <a href="#" class="view-dependency-link" 
-                                   data-dependency-id="@dependency.Id" 
-                                   data-dependency-source-type="@dependency.SourceEntityType"
-                                   data-dependency-source-id="@dependency.SourceEntityId"
-                                   data-dependency-source-title="@dependency.SourceEntityTitle"
-                                   data-dependency-type="@(dependency.DependencyType ?? "")"
-                                   data-dependency-status="@(dependency.Status ?? "Active")"
-                                   data-dependency-description="@(dependency.Description ?? "")">
-                                    <strong>@dependency.SourceEntityTitle</strong>
-                                </a><br>
-                                <small class="text-muted">@dependency.SourceEntityType</small>
+                                <a asp-controller="Project" asp-action="DependencyDetails" asp-route-projectId="@Model.Id" asp-route-dependencyId="@dependency.Id">
+                                    @(string.IsNullOrWhiteSpace(dependency.SourceEntityTitle) ? "View details" : dependency.SourceEntityTitle)
+                                </a>
                             </td>
                             <td>@(dependency.DependencyType ?? "Related")</td>
                             <td>
-                                <span class="badge badge-@(dependency.Status == "Resolved" ? "success" : dependency.Status == "Cancelled" ? "secondary" : "primary")">
+                                <span class="badge @GetDependencyStatusBadgeClass(dependency.Status)">
                                     @(dependency.Status ?? "Active")
                                 </span>
                             </td>
-                            <td>@dependency.CreatedAt.ToString("dd MMM yyyy")</td>
+                            <td>@dependency.CreatedAt.ToString("d MMMM yyyy")</td>
                         </tr>
                     }
                 </tbody>
@@ -133,429 +97,30 @@
         }
         else
         {
-            <div class="text-center p-4">
-                <p class="text-muted">No incoming dependencies.</p>
+            <div class="p-4">
+                <p class="text-muted mb-0">No incoming dependencies recorded.</p>
             </div>
         }
     </div>
 </div>
 
-<!-- Add Dependency Modal -->
-<div class="modal fade" id="addDependencyModal" tabindex="-1" role="dialog" aria-labelledby="addDependencyModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addDependencyModalLabel">Add New Dependency</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="AddDependency" method="post" id="addDependencyForm">
-                <input type="hidden" name="sourceEntityType" value="Project" />
-                <input type="hidden" name="sourceEntityId" value="@Model.Id" />
-                <input type="hidden" name="targetEntityId" id="selectedTargetEntityId" required />
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <strong>Note:</strong> This will create a dependency where the current project depends on another entity.
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="targetEntityType">Target Entity Type</label>
-                        <select class="form-control" id="targetEntityType" name="targetEntityType" required>
-                            <option value="">Select type...</option>
-                            <option value="Project">Project</option>
-                            <option value="Milestone">Milestone</option>
-                            <option value="Issue">Issue</option>
-                        </select>
-                        <small class="form-text text-muted">Select the type of entity this project depends on</small>
-                    </div>
-                    
-                    <div class="form-group" id="entitySearchGroup" style="display: none;">
-                        <label for="entitySearchInput">Search for Entity</label>
-                        <input type="text" class="form-control entity-autocomplete" id="entitySearchInput" autocomplete="off" placeholder="Start typing to search..." required>
-                        <small class="form-text text-muted">Type to search for the selected entity type</small>
-                    </div>
-                    
-                    <div id="selectedEntityDisplay" class="alert alert-success mt-3" style="display: none;">
-                        <strong>Selected Entity:</strong><br>
-                        <div id="selectedEntityTitle"></div>
-                        <small class="text-muted" id="selectedEntityDetails"></small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="dependencyType">Dependency Type</label>
-                        <select class="form-control" id="dependencyType" name="dependencyType">
-                            <option value="Blocking">Blocking</option>
-                            <option value="Related">Related</option>
-                            <option value="Prerequisite">Prerequisite</option>
-                            <option value="Successor">Successor</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="dependencyDescription">Description</label>
-                        <textarea class="form-control" id="dependencyDescription" name="description" rows="3" placeholder="Describe the dependency relationship..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="addDependencySubmitBtn" disabled>Add Dependency</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- View/Edit Dependency Modal -->
-<div class="modal fade" id="viewDependencyModal" tabindex="-1" role="dialog" aria-labelledby="viewDependencyModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewDependencyModalLabel">Dependency Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form id="editDependencyForm" asp-action="UpdateDependency" method="post">
-                <input type="hidden" name="dependencyId" id="editDependencyId" />
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Source Entity</label>
-                                <p class="form-control-plaintext" id="viewSourceEntity"></p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Target Entity</label>
-                                <p class="form-control-plaintext" id="viewTargetEntity"></p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editDependencyType">Dependency Type</label>
-                                <select class="form-control" id="editDependencyType" name="dependencyType">
-                                    <option value="Blocking">Blocking</option>
-                                    <option value="Related">Related</option>
-                                    <option value="Prerequisite">Prerequisite</option>
-                                    <option value="Successor">Successor</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editDependencyStatus">Status</label>
-                                <select class="form-control" id="editDependencyStatus" name="status">
-                                    <option value="Active">Active</option>
-                                    <option value="Resolved">Resolved</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="editDependencyDescription">Description</label>
-                        <textarea class="form-control" id="editDependencyDescription" name="description" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <button type="button" class="btn btn-danger" id="deleteDependencyFromViewBtn">Delete Dependency</button>
-                    <div>
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Dependency Confirmation Modal -->
-<div class="modal fade" id="deleteDependencyModal" tabindex="-1" role="dialog" aria-labelledby="deleteDependencyModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteDependencyModalLabel">Confirm Delete Dependency</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete this dependency?</p>
-                <p class="text-muted">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form asp-action="DeleteDependency" method="post" class="d-inline">
-                    <input type="hidden" name="projectId" value="@Model.Id" />
-                    <input type="hidden" name="dependencyId" id="deleteDependencyId" />
-                    <button type="submit" class="btn btn-danger">Delete Dependency</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script nonce="@Context.Items["Nonce"]">
-    (function() {
-        var searchTimeout;
-
-        function initDependenciesPage() {
-            // Initialize sortable tables
-            $('.dependencies-table').each(function() {
-                initializeDependenciesTable($(this));
-            });
-
-            // Handle view dependency link clicks
-            $(document).on('click', '.view-dependency-link', function(e) {
-                e.preventDefault();
-                var dependencyId = $(this).attr('data-dependency-id');
-                var sourceType = $(this).attr('data-dependency-source-type') || 'Project';
-                var sourceId = $(this).attr('data-dependency-source-id') || '@Model.Id';
-                var sourceTitle = $(this).attr('data-dependency-source-title') || '@Model.Title';
-                var targetType = $(this).attr('data-dependency-target-type') || '';
-                var targetId = $(this).attr('data-dependency-target-id') || '';
-                var targetTitle = $(this).attr('data-dependency-target-title') || '';
-                var type = $(this).attr('data-dependency-type');
-                var status = $(this).attr('data-dependency-status');
-                var description = $(this).attr('data-dependency-description');
-                
-                viewDependency(dependencyId, sourceType, sourceId, sourceTitle, targetType, targetId, targetTitle, type, status, description);
-            });
-
-            // Handle delete dependency button from view modal
-            $('#deleteDependencyFromViewBtn').on('click', function() {
-                var dependencyId = $('#editDependencyId').val();
-                $('#viewDependencyModal').modal('hide');
-                deleteDependency(dependencyId);
-            });
-
-            // Handle entity type change
-            $('#targetEntityType').on('change', function() {
-                var entityType = $(this).val();
-                $('.autocomplete-results').hide().empty();
-                if (entityType) {
-                    $('#entitySearchGroup').show();
-                    $('#entitySearchInput').val('').focus();
-                    $('#selectedEntityDisplay').hide();
-                    $('#selectedTargetEntityId').val('');
-                    $('#addDependencySubmitBtn').prop('disabled', true);
-                } else {
-                    $('#entitySearchGroup').hide();
-                    $('#selectedEntityDisplay').hide();
-                    $('#selectedTargetEntityId').val('');
-                    $('#addDependencySubmitBtn').prop('disabled', true);
-                }
-            });
-
-            // Initialize entity autocomplete
-            initEntityAutocomplete();
-
-            // Reset form when modal is closed
-            $('#addDependencyModal').on('hidden.bs.modal', function() {
-                $('#addDependencyForm')[0].reset();
-                $('#entitySearchGroup').hide();
-                $('#selectedEntityDisplay').hide();
-                $('#selectedTargetEntityId').val('');
-                $('#addDependencySubmitBtn').prop('disabled', true);
-                $('.autocomplete-results').remove();
-            });
+@functions {
+    string GetDependencyStatusBadgeClass(string status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "badge-primary";
         }
 
-        function initEntityAutocomplete() {
-            var $input = $('#entitySearchInput');
-            var $resultsContainer = $('<div class="autocomplete-results"></div>');
-            $input.after($resultsContainer);
-
-            $input.on('input', function() {
-                clearTimeout(searchTimeout);
-                var searchTerm = $(this).val();
-                var entityType = $('#targetEntityType').val();
-                
-                if (searchTerm.length < 2 || !entityType) {
-                    $resultsContainer.hide().empty();
-                    return;
-                }
-                
-                searchTimeout = setTimeout(function() {
-                    $.ajax({
-                        url: '/entities/search',
-                        data: { entityType: entityType, q: searchTerm },
-                        dataType: 'json',
-                        success: function(data) {
-                            displayEntityResults(data.results, $resultsContainer, entityType);
-                        },
-                        error: function(xhr, status, error) {
-                            console.error('Failed to search entities:', status, error);
-                            $resultsContainer.html('<div class="autocomplete-item no-results">Error searching entities</div>');
-                            $resultsContainer.show();
-                        }
-                    });
-                }, 300);
-            });
-
-            // Keyboard navigation
-            $input.on('keydown', function(e) {
-                var $items = $resultsContainer.find('.autocomplete-item:not(.no-results)');
-                var $selected = $items.filter('.selected');
-                
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    if ($selected.length === 0) {
-                        $items.first().addClass('selected');
-                    } else {
-                        $selected.removeClass('selected').next('.autocomplete-item:not(.no-results)').addClass('selected');
-                    }
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    if ($selected.length > 0) {
-                        $selected.removeClass('selected').prev('.autocomplete-item:not(.no-results)').addClass('selected');
-                    }
-                } else if (e.key === 'Enter') {
-                    if ($selected.length > 0) {
-                        e.preventDefault();
-                        $selected.click();
-                    }
-                } else if (e.key === 'Escape') {
-                    $resultsContainer.hide();
-                }
-            });
-
-            // Click outside to close
-            $(document).on('click', function(e) {
-                if (!$(e.target).closest('.entity-autocomplete, .autocomplete-results').length) {
-                    $resultsContainer.hide();
-                }
-            });
+        switch (status.Trim().ToLowerInvariant())
+        {
+            case "resolved":
+                return "badge-success";
+            case "cancelled":
+                return "badge-secondary";
+            default:
+                return "badge-primary";
         }
-
-        function displayEntityResults(results, $resultsContainer, entityType) {
-            $resultsContainer.empty();
-            if (!results || results.length === 0) {
-                $resultsContainer.html('<div class="autocomplete-item no-results">No ' + entityType.toLowerCase() + 's found</div>');
-                $resultsContainer.show();
-                return;
-            }
-            
-            results.forEach(function(entity) {
-                var $item = $('<div class="autocomplete-item"></div>');
-                $item.html(
-                    '<div class="autocomplete-name">' + entity.title + '</div>' +
-                    '<div class="autocomplete-details">' + entity.metadata + '</div>'
-                );
-                $item.on('click', function() {
-                    selectEntity(entity);
-                    $resultsContainer.hide().empty();
-                });
-                $resultsContainer.append($item);
-            });
-            $resultsContainer.show();
-        }
-
-        function selectEntity(entity) {
-            $('#entitySearchInput').val(entity.title);
-            $('#selectedTargetEntityId').val(entity.id);
-            $('#selectedEntityTitle').text(entity.title);
-            $('#selectedEntityDetails').text(entity.metadata);
-            $('#selectedEntityDisplay').show();
-            $('#addDependencySubmitBtn').prop('disabled', false);
-        }
-
-        function viewDependency(dependencyId, sourceType, sourceId, sourceTitle, targetType, targetId, targetTitle, type, status, description) {
-            $('#editDependencyId').val(dependencyId);
-            $('#viewSourceEntity').text(sourceTitle + ' (' + sourceType + ')');
-            $('#viewTargetEntity').text(targetTitle + ' (' + targetType + ')');
-            $('#editDependencyType').val(type || 'Related');
-            $('#editDependencyStatus').val(status || 'Active');
-            $('#editDependencyDescription').val(description);
-            $('#viewDependencyModal').modal('show');
-        }
-
-        function deleteDependency(dependencyId) {
-            $('#deleteDependencyId').val(dependencyId);
-            $('#deleteDependencyModal').modal('show');
-        }
-
-        function initializeDependenciesTable(table) {
-            var currentSort = { column: null, direction: 'asc' };
-
-            table.find('.sortable').on('click keypress', function(e) {
-                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
-                    return;
-                }
-                
-                var column = $(this).data('column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(table, column, direction);
-                currentSort = { column: column, direction: direction };
-            });
-
-            function sortTable(table, column, direction) {
-                var tbody = table.find('tbody');
-                var rows = tbody.find('tr').toArray();
-                
-                rows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
-                    
-                    if (column === 'Created') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else {
-                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                tbody.empty();
-                rows.forEach(function(row) {
-                    tbody.append(row);
-                });
-                
-                updateSortIcons(table, column, direction);
-            }
-
-            function updateSortIcons(table, column, direction) {
-                // Remove active class from all headers
-                table.find('.sortable').removeClass('sort-asc sort-desc');
-                
-                // Add appropriate class to active header
-                var activeHeader = table.find('.sortable[data-column="' + column + '"]');
-                if (direction === 'asc') {
-                    activeHeader.addClass('sort-asc');
-                } else {
-                    activeHeader.addClass('sort-desc');
-                }
-            }
-        }
-
-        if (typeof jQuery !== 'undefined') {
-            $(document).ready(initDependenciesPage);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() {
-                if (typeof jQuery !== 'undefined') {
-                    $(document).ready(initDependenciesPage);
-                }
-            });
-        }
-    })();
-</script>
+    }
+}
 

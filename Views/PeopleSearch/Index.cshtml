@@ -1,0 +1,283 @@
+@{
+    ViewData["Title"] = "People search";
+    Layout = "/Views/Shared/_Layout.cshtml";
+    var nonce = Context.Items["Nonce"] as string ?? string.Empty;
+}
+
+<style>
+    .people-autocomplete {
+        position: relative;
+        max-width: 520px;
+    }
+
+    .people-autocomplete__panel {
+        border: 1px solid #b1b4b6;
+        border-radius: 6px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        margin-top: 4px;
+        background: #fff;
+        max-height: 360px;
+        overflow-y: auto;
+        display: none;
+        z-index: 100;
+    }
+
+    .people-result {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #f3f2f1;
+        cursor: pointer;
+    }
+
+    .people-result:last-child {
+        border-bottom: 0;
+    }
+
+    .people-result:hover,
+    .people-result:focus {
+        background: #f3f2f1;
+        outline: none;
+    }
+
+    .people-result__name {
+        font-weight: 600;
+    }
+
+    .people-result__meta {
+        color: #505a5f;
+        font-size: 0.9rem;
+    }
+
+    .people-autocomplete__spinner {
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.9rem;
+        color: #505a5f;
+        display: none;
+    }
+</style>
+
+<h1 class="govuk-heading-l">People search</h1>
+<p class="govuk-body">Start typing a colleague’s name or email address. You can enter first or last name in any order.</p>
+
+<div class="govuk-form-group people-autocomplete">
+    <label class="govuk-label" for="people-q">Search for a person</label>
+    <span class="govuk-hint" id="people-hint">Type at least three characters. Results update automatically.</span>
+    <input id="people-q"
+           class="govuk-input"
+           type="text"
+           autocomplete="off"
+           aria-describedby="people-hint"
+           placeholder="e.g. Andy Jones or jones@education.gov.uk" />
+    <span id="people-spinner" class="people-autocomplete__spinner">Searching…</span>
+    <p id="people-message" class="govuk-hint govuk-!-margin-top-2" aria-live="polite" style="display:none;"></p>
+    <div id="people-results" class="people-autocomplete__panel" role="listbox" aria-live="polite"></div>
+</div>
+
+<script nonce="@nonce">
+(function () {
+    const input = document.getElementById('people-q');
+    const panel = document.getElementById('people-results');
+    const spinner = document.getElementById('people-spinner');
+    const message = document.getElementById('people-message');
+    let timer;
+    let lastQuery = '';
+    let abortController;
+    let requestSeq = 0;
+    let cooldownUntil = 0;
+    const MIN_CHARS = 3;
+    const DEBOUNCE_MS = 350;
+    const RATE_LIMIT_MESSAGE = 'Microsoft Graph is slowing us down. Please wait a moment and try again.';
+
+    function debounce(callback, ms) {
+        clearTimeout(timer);
+        timer = setTimeout(callback, ms);
+    }
+
+    function hide() {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+    }
+
+    function show() {
+        panel.style.display = 'block';
+    }
+
+    function setLoading(isLoading) {
+        spinner.style.display = isLoading ? 'inline-block' : 'none';
+    }
+
+    function setMessage(text) {
+        if (!message) {
+            return;
+        }
+        if (text) {
+            message.textContent = text;
+            message.style.display = 'block';
+        } else {
+            message.textContent = '';
+            message.style.display = 'none';
+        }
+    }
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        const now = Date.now();
+        if (now < cooldownUntil) {
+            setMessage(RATE_LIMIT_MESSAGE);
+            return;
+        }
+
+        if (q.length < MIN_CHARS) {
+            hide();
+            lastQuery = '';
+            setMessage('Type at least three characters to start searching.');
+            return;
+        }
+
+        if (q === lastQuery) {
+            return;
+        }
+        lastQuery = q;
+        setMessage('');
+
+        debounce(async () => {
+            const currentSeq = ++requestSeq;
+            abortController?.abort();
+            abortController = new AbortController();
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`, {
+                    credentials: 'same-origin',
+                    signal: abortController.signal
+                });
+                if (currentSeq !== requestSeq) {
+                    return;
+                }
+
+                if (res.status === 429) {
+                    await handleRateLimit(res);
+                    return;
+                }
+
+                if (!res.ok) {
+                    throw new Error(`Request failed with status ${res.status}`);
+                }
+
+                const data = await res.json();
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    hide();
+                    setMessage('No matches yet. Try refining your search.');
+                    return;
+                }
+
+                panel.innerHTML = data.map(u => {
+                    const id = typeof u.id === 'string' ? u.id : '';
+                    const name = typeof u.name === 'string' ? u.name : '';
+                    const email = typeof u.email === 'string' ? u.email : '';
+                    const jobTitle = typeof u.jobTitle === 'string' ? u.jobTitle : '';
+                    const metaText = jobTitle ? `${escapeHtml(jobTitle)} • ${escapeHtml(email)}` : escapeHtml(email);
+
+                    return `
+                        <div class="people-result" data-id="${escapeHtml(id)}" tabindex="0" role="option">
+                            <div class="people-result__name">${escapeHtml(name)}</div>
+                            <div class="people-result__meta">${metaText}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                show();
+                setMessage('');
+
+                Array.from(panel.querySelectorAll('.people-result')).forEach(li => {
+                    li.addEventListener('click', () => pick(li));
+                    li.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter') {
+                            pick(li);
+                        }
+                    });
+                });
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error(error);
+                    setMessage('Something went wrong while searching. Please try again.');
+                }
+                hide();
+            }
+            finally {
+                setLoading(false);
+            }
+        }, 200);
+    });
+
+    async function pick(element) {
+        const name = element.querySelector('.people-result__name')?.textContent ?? '';
+        const objectId = element.getAttribute('data-id');
+        input.value = name;
+        hide();
+        if (!objectId) {
+            return;
+        }
+        try {
+            const res = await fetch('/api/users/select', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ objectId })
+            });
+            if (!res.ok) {
+                throw new Error('select_failed');
+            }
+            const data = await res.json();
+            setMessage(`${data.name} is now available to use in Compass forms.`);
+        } catch (error) {
+            console.error(error);
+            setMessage('We found that person but could not store them yet. Please try again.');
+        }
+    }
+
+    function escapeHtml(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+
+        return value.replace(/[&<>"']/g, (match) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[match]);
+    }
+
+    document.addEventListener('click', (event) => {
+        if (!panel.contains(event.target) && event.target !== input) {
+            hide();
+        }
+    });
+
+    async function handleRateLimit(response) {
+        try {
+            const body = await response.json();
+            if (body?.retryAfter) {
+                cooldownUntil = Date.now() + (body.retryAfter * 1000);
+            }
+        } catch {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retrySeconds = retryAfterHeader ? parseFloat(retryAfterHeader) : 2;
+            if (!Number.isNaN(retrySeconds)) {
+                cooldownUntil = Date.now() + (retrySeconds * 1000);
+            }
+        }
+        setMessage(RATE_LIMIT_MESSAGE);
+        hide();
+    }
+})();
+</script>

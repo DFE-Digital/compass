@@ -1,0 +1,260 @@
+@model Compass.ViewModels.ProjectDependencyDetailsViewModel
+@{
+    var dependency = Model.Dependency;
+    var projectId = Model.ProjectId;
+    var backUrl = Url.Action("Details", "Project", new { id = projectId, tab = "dependencies" });
+    var relationshipType = string.IsNullOrWhiteSpace(dependency.DependencyType) ? "Related" : dependency.DependencyType;
+    var status = string.IsNullOrWhiteSpace(dependency.Status) ? "Active" : dependency.Status;
+
+    string statusBoxClass = status switch
+    {
+        "Resolved" => "bg-success",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-primary"
+    };
+
+    string statusBadgeClass = status switch
+    {
+        "Resolved" => "badge-success",
+        "Cancelled" => "badge-secondary",
+        _ => "badge-primary"
+    };
+
+    string targetType = dependency.TargetEntityType ?? "Entity";
+    string targetDisplay = Model.TargetDisplay;
+    string sourceDisplay = Model.SourceDisplay;
+
+    string? targetUrl = dependency.TargetEntityType switch
+    {
+        "Project" => Url.Action("Details", "Project", new { id = dependency.TargetEntityId }),
+        "Milestone" => Url.Action("MilestoneDetails", "Project", new { id = dependency.TargetEntityId }),
+        "Issue" => Url.Action("Details", "Issue", new { id = dependency.TargetEntityId }),
+        _ => null
+    };
+
+    string? sourceUrl = dependency.SourceEntityType switch
+    {
+        "Project" => Url.Action("Details", "Project", new { id = dependency.SourceEntityId, tab = "dependencies" }),
+        _ => null
+    };
+
+    var createdLabel = dependency.CreatedAt.ToString("d MMMM yyyy HH:mm");
+    var updatedLabel = dependency.UpdatedAt.ToString("d MMMM yyyy HH:mm");
+    var resolvedLabel = dependency.ResolvedDate?.ToString("d MMMM yyyy HH:mm") ?? "-";
+
+    var projectSummary = Model.ProjectSummary;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@backUrl" aria-label="Back to project">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                </a>
+                <h1 class="m-0">Dependency</h1>
+                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box bg-secondary">
+                    <div class="inner">
+                        <h3>@relationshipType</h3>
+                        <p>Relationship type</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box @statusBoxClass">
+                    <div class="inner">
+                        <h3>@status</h3>
+                        <p>Status</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@(dependency.SourceEntityType ?? "Source")</h3>
+                        <p>Source type</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@targetType</h3>
+                        <p>Depends on</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row align-items-center mb-4">
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <a class="btn btn-primary mr-2 mb-2" asp-action="EditDependency" asp-route-projectId="@Model.ProjectId" asp-route-dependencyId="@dependency.Id">Edit dependency</a>
+                <form asp-action="DeleteDependency" method="post" class="mb-2" onsubmit="return confirm('Are you sure you want to delete this dependency?');">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@Model.ProjectId" />
+                    <input type="hidden" name="dependencyId" value="@dependency.Id" />
+                    <button type="submit" class="btn btn-outline-danger">Delete dependency</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-5 mb-4">
+                @if (projectSummary?.Id > 0)
+                {
+                    <partial name="_ProjectSummarySidebar" model="projectSummary" />
+                }
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Dependency participants</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="definition-list mb-0">
+                            <div class="definition-item">
+                                <dt>Source</dt>
+                                <dd>
+                                    @if (!string.IsNullOrWhiteSpace(sourceUrl))
+                                    {
+                                        <a href="@sourceUrl">@sourceDisplay</a>
+                                    }
+                                    else
+                                    {
+                                        @sourceDisplay
+                                    }
+                                </dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Depends on</dt>
+                                <dd>
+                                    @if (!string.IsNullOrWhiteSpace(targetUrl))
+                                    {
+                                        <a href="@targetUrl">@targetDisplay</a>
+                                    }
+                                    else
+                                    {
+                                        @targetDisplay
+                                    }
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-7 col-sm-12 col-12">
+                <div class="card mb-4" id="details">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Dependency information</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-borderless mb-0">
+                            <tbody>
+                                <tr>
+                                    <td class="summary-label"><strong>Relationship type</strong></td>
+                                    <td class="summary-value">@relationshipType</td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Status</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-pill @statusBadgeClass">@status</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Source</strong></td>
+                                    <td class="summary-value">
+                                        @if (!string.IsNullOrWhiteSpace(sourceUrl))
+                                        {
+                                            <a href="@sourceUrl">@sourceDisplay</a>
+                                        }
+                                        else
+                                        {
+                                            @sourceDisplay
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Depends on</strong></td>
+                                    <td class="summary-value">
+                                        @if (!string.IsNullOrWhiteSpace(targetUrl))
+                                        {
+                                            <a href="@targetUrl">@targetDisplay</a>
+                                        }
+                                        else
+                                        {
+                                            @targetDisplay
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Created</strong></td>
+                                    <td class="summary-value">@createdLabel</td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Last updated</strong></td>
+                                    <td class="summary-value">@updatedLabel</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(dependency.Description))
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Notes</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@dependency.Description</p>
+                        </div>
+                    </div>
+                }
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Timeline</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Created</dt>
+                            <dd class="col-sm-8 mb-3">@createdLabel</dd>
+
+                            <dt class="col-sm-4">Last updated</dt>
+                            <dd class="col-sm-8 mb-3">@updatedLabel</dd>
+
+                            <dt class="col-sm-4">Resolved on</dt>
+                            <dd class="col-sm-8 mb-3">@resolvedLabel</dd>
+
+                            <dt class="col-sm-4">Resolved by</dt>
+                            <dd class="col-sm-8 mb-0">
+                                @if (!string.IsNullOrWhiteSpace(dependency.ResolvedByName))
+                                {
+                                    @dependency.ResolvedByName
+                                }
+                                else if (!string.IsNullOrWhiteSpace(dependency.ResolvedByEmail))
+                                {
+                                    @dependency.ResolvedByEmail
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not recorded</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

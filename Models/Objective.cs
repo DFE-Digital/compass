@@ -23,6 +23,16 @@ public class Objective
     [ForeignKey(nameof(OwnerUserId))]
     public User? OwnerUser { get; set; }
 
+    public int? ThemeSroUserId { get; set; }
+
+    [ForeignKey(nameof(ThemeSroUserId))]
+    public User? ThemeSroUser { get; set; }
+
+    public int? OutcomeSroUserId { get; set; }
+
+    [ForeignKey(nameof(OutcomeSroUserId))]
+    public User? OutcomeSroUser { get; set; }
+
     public int? MissionId { get; set; }
 
     [ForeignKey(nameof(MissionId))]
@@ -56,5 +66,7 @@ public class Objective
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<Models.Action> Actions { get; set; } = new List<Models.Action>();
+    public ICollection<Decision> Decisions { get; set; } = new List<Decision>();
+    public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
 }
 

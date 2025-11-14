@@ -14,6 +14,11 @@ public class ProductsApiService : IProductsApiService
     private readonly ILogger<ProductsApiService> _logger;
     private readonly IConfiguration _configuration;
     private readonly JsonSerializerOptions _jsonOptions;
+    private static readonly string[] UserGroupCategoryTypeNames = new[]
+    {
+        "User group", "User Group", "User groups", "User Groups",
+        "User Type", "User Types", "Audience", "Target Audience"
+    };
 
     public ProductsApiService(
         HttpClient httpClient, 
@@ -31,6 +36,11 @@ public class ProductsApiService : IProductsApiService
             PropertyNameCaseInsensitive = true
         };
     }
+
+    private static bool IsUserGroupCategory(string? categoryTypeName) =>
+        !string.IsNullOrWhiteSpace(categoryTypeName) &&
+        UserGroupCategoryTypeNames.Any(name => 
+            name.Equals(categoryTypeName, StringComparison.OrdinalIgnoreCase));
 
     public async Task<List<ProductDto>> GetProductsAsync(string? userEmail = null)
     {
@@ -65,6 +75,7 @@ public class ProductsApiService : IProductsApiService
                     "fields[3]=product_url",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts]=*",
                     "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
                     "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
                 };
@@ -193,6 +204,7 @@ public class ProductsApiService : IProductsApiService
                     "fields[4]=state",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts]=*",
                     "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
                     "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
                 };
@@ -680,6 +692,61 @@ public class ProductsApiService : IProductsApiService
         }
     }
 
+    public async Task<List<CategoryValueDto>> GetUserGroupCategoryValuesAsync()
+    {
+        const string cacheKey = "UserGroupCategoryValues";
+        if (_cache.TryGetValue(cacheKey, out List<CategoryValueDto>? cachedValues))
+        {
+            if (cachedValues != null) return cachedValues;
+        }
+
+        try
+        {
+            var queryParams = new List<string>
+            {
+                "fields[0]=id",
+                "fields[1]=name",
+                "fields[2]=sort_order",
+                "sort=name:asc",
+                "populate[category_type][fields][0]=name",
+                "pagination[pageSize]=500"
+            };
+
+            for (var i = 0; i < UserGroupCategoryTypeNames.Length; i++)
+            {
+                queryParams.Add($"filters[category_type][name][$in][{i}]={Uri.EscapeDataString(UserGroupCategoryTypeNames[i])}");
+            }
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"category-values?{queryString}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to fetch user group category values from CMS. Status: {StatusCode}", response.StatusCode);
+                return new List<CategoryValueDto>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<CategoryValueDto>>(content, _jsonOptions);
+
+            var values = apiResponse?.Data?
+                .Where(cv => IsUserGroupCategory(cv.CategoryType?.Name))
+                .OrderBy(cv => cv.SortOrder ?? int.MaxValue)
+                .ThenBy(cv => cv.Name)
+                .ToList() ?? new List<CategoryValueDto>();
+
+            _cache.Set(cacheKey, values, TimeSpan.FromHours(1));
+            return values;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching user group category values from CMS");
+            return new List<CategoryValueDto>();
+        }
+    }
+
     public async Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId)
     {
         try
@@ -859,6 +926,93 @@ public class ProductsApiService : IProductsApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product Business Area for {FipsId}", fipsId);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateProductUserGroupsAsync(string fipsId, IEnumerable<int> userGroupCategoryValueIds)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            var newUserGroupIds = userGroupCategoryValueIds?
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList() ?? new List<int>();
+
+            _logger.LogInformation("Updating {Count} user group(s) for product {FipsId}", newUserGroupIds.Count, fipsId);
+
+            var currentCategoryValues = new List<int>();
+            if (product.CategoryValues != null)
+            {
+                foreach (var cv in product.CategoryValues)
+                {
+                    var categoryType = cv.CategoryType?.Name;
+                    if (!IsUserGroupCategory(categoryType))
+                    {
+                        currentCategoryValues.Add(cv.Id);
+                    }
+                }
+            }
+
+            currentCategoryValues.AddRange(newUserGroupIds);
+
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId,
+                    category_values = currentCategoryValues
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                _logger.LogInformation("Successfully updated user groups for product {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update user groups for {FipsId}. Status: {StatusCode}, Error: {Error}",
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating user groups for {FipsId}", fipsId);
             return false;
         }
     }

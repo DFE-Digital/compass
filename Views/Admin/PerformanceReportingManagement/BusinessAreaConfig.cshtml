@@ -1,0 +1,163 @@
+@model List<Compass.Models.PerformanceReportingBusinessAreaConfig>
+@{
+    ViewData["Title"] = "Business area reporting configuration";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Business area reporting configuration</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index">Admin</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Performance reporting management</a></li>
+                    <li class="breadcrumb-item active">Business area config</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>Note:</strong> Configure which business areas/portfolios are subject to performance reporting requirements and from which date they are applicable. Business area configurations override period-level exclusions.
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Active configurations</h3>
+                <div class="card-tools">
+                    <a asp-action="CreateBusinessAreaConfig" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus mr-2"></i>Create configuration
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Business area</th>
+                                <th>Applicable from</th>
+                                <th>Applicable until</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var config in Model)
+                            {
+                                var fromDate = new DateTime(config.ApplicableFromYear, config.ApplicableFromMonth, 1);
+                                <tr>
+                                    <td><strong>@config.BusinessAreaName</strong></td>
+                                    <td>@fromDate.ToString("MMMM yyyy")</td>
+                                    <td>
+                                        @if (config.ApplicableUntilYear.HasValue && config.ApplicableUntilMonth.HasValue)
+                                        {
+                                            var untilDate = new DateTime(config.ApplicableUntilYear.Value, config.ApplicableUntilMonth.Value, 1);
+                                            @untilDate.ToString("MMMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Indefinitely</span>
+                                        }
+                                    </td>
+                                    <td><small>@(config.Notes ?? "-")</small></td>
+                                    <td>
+                                        <a asp-action="EditBusinessAreaConfig" asp-route-id="@config.Id" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                data-toggle="modal" 
+                                                data-target="#confirmDeleteModal"
+                                                data-id="@config.Id"
+                                                data-name="@config.BusinessAreaName">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No active configurations.</p>
+                }
+            </div>
+            <div class="card-footer">
+                <a asp-action="Index" class="btn btn-default">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to management
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger">
+                <h5 class="modal-title">Confirm deletion</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Are you sure you want to delete the configuration for <strong><span id="modalName"></span></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <form asp-action="DeleteBusinessAreaConfig" method="post" id="deleteForm" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="deleteId" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt mr-2"></i>Delete configuration
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#confirmDeleteModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var id = button.data('id');
+                var name = button.data('name');
+                
+                var modal = $(this);
+                modal.find('#modalName').text(name);
+                
+                // Update form action
+                var form = modal.find('#deleteForm');
+                form.attr('action', form.attr('action').replace(/\/\d+$/, '/' + id));
+            });
+        });
+    </script>
+}
+

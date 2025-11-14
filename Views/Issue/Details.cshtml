@@ -1,40 +1,113 @@
 @model Compass.Models.Issue
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
-    ViewData["Title"] = "Issue details";
-    var isOverdue = Model.TargetResolutionDate.HasValue && 
-                    Model.TargetResolutionDate.Value.Date < DateTime.Today &&
-                    Model.Status != "resolved" && Model.Status != "closed";
+    ViewData["Title"] = string.IsNullOrWhiteSpace(Model.Title) ? "Issue details" : $"Issue – {Model.Title}";
+
     var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
     var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+    var productUrl = !string.IsNullOrWhiteSpace(Model.FipsId)
+        ? $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}"
+        : null;
+    var linkedProduct = !string.IsNullOrWhiteSpace(Model.FipsId)
+        ? products.FirstOrDefault(p => p.FipsId == Model.FipsId)
+        : null;
+
+    var hasProject = Model.Project != null;
+    var hasProduct = !string.IsNullOrWhiteSpace(Model.FipsId);
+    var backLinkUrl = hasProject
+        ? Url.Action("Details", "Project", new { id = Model.ProjectId, tab = "issues" })
+        : Url.Action("Index");
+    var backLinkText = hasProject ? "Back to project" : "Back to issues";
+
+    var textInfo = System.Globalization.CultureInfo.CurrentCulture.TextInfo;
+    string ToTitle(string? value) => string.IsNullOrWhiteSpace(value)
+        ? "Not set"
+        : textInfo.ToTitleCase(value.Replace("_", " "));
+
+    var statusLabel = ToTitle(Model.Status);
+    var severityLabel = ToTitle(Model.Severity);
+    var priorityLabel = ToTitle(Model.Priority);
+    var blockedLabel = Model.BlockedFlag ? "Yes" : "No";
+
+    var statusBoxClass = Model.Status switch
+    {
+        "resolved" => "bg-success",
+        "closed" => "bg-secondary",
+        "blocked" => "bg-danger",
+        "in_progress" => "bg-info",
+        _ => "bg-warning"
+    };
+
+    var statusBadgeClass = Model.Status switch
+    {
+        "open" => "badge-danger",
+        "blocked" => "badge-danger",
+        "in_progress" => "badge-primary",
+        "resolved" => "badge-success",
+        "closed" => "badge-secondary",
+        _ => "badge-secondary"
+    };
+
+    var severityBoxClass = Model.Severity switch
+    {
+        "critical" => "bg-danger",
+        "high" => "bg-warning",
+        "medium" => "bg-info",
+        "low" => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    var priorityBoxClass = Model.Priority switch
+    {
+        "high" => "bg-danger",
+        "medium" => "bg-warning",
+        "low" => "bg-info",
+        _ => "bg-secondary"
+    };
+
+    var isOverdue = Model.TargetResolutionDate.HasValue &&
+                    Model.TargetResolutionDate.Value.Date < DateTime.Today &&
+                    Model.Status != "resolved" && Model.Status != "closed";
+
+    var targetResolutionLabel = Model.TargetResolutionDate.HasValue
+        ? Model.TargetResolutionDate.Value.ToString("d MMMM yyyy")
+        : "Not set";
+    var targetBoxClass = Model.TargetResolutionDate.HasValue
+        ? (isOverdue ? "bg-danger" : "bg-primary")
+        : "bg-secondary";
+
+    var detectedDateLabel = Model.DetectedDate.ToString("d MMMM yyyy");
+    var createdAtLabel = Model.CreatedAt.ToString("d MMMM yyyy HH:mm");
+    var updatedAtLabel = Model.UpdatedAt.ToString("d MMMM yyyy HH:mm");
+    var closedDateLabel = Model.ClosedDate?.ToString("d MMMM yyyy") ?? "-";
+
+    Compass.ViewModels.ProjectSummaryViewModel? projectSummary = null;
+    if (Model.Project != null)
+    {
+        projectSummary = new Compass.ViewModels.ProjectSummaryViewModel
+        {
+            Id = Model.Project.Id,
+            Title = Model.Project.Title,
+            ProjectCode = Model.Project.ProjectCode,
+            Status = Model.Project.Status ?? string.Empty,
+            RagStatus = Model.Project.RagStatus,
+            Phase = Model.Project.Phase,
+            BusinessArea = Model.Project.BusinessArea,
+            StartDate = Model.Project.StartDate,
+            TargetDeliveryDate = Model.Project.TargetDeliveryDate
+        };
+    }
 }
 
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item"><a asp-action="Index">Issues</a></li>
-                    <li class="breadcrumb-item active">Issue details</li>
-                </ol>
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@backLinkUrl" aria-label="@backLinkText">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>@backLinkText
+                </a>
                 <h1 class="m-0">@Model.Title</h1>
-                <p class="text-muted">Issue #@Model.Id</p>
-            </div>
-            <div class="col-sm-6">
-                <div class="float-right">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">Edit issue</a>
-                            <a class="dropdown-item" asp-controller="Action" asp-action="Create" asp-route-issueId="@Model.Id">Add resolution action</a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" asp-action="Delete" asp-route-id="@Model.Id">Delete issue</a>
-                        </div>
-                    </div>
-                </div>
+                <p class="text-muted mb-0">Issue #@Model.Id</p>
             </div>
         </div>
     </div>
@@ -42,92 +115,360 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box @statusBoxClass">
+                    <div class="inner">
+                        <h3 class="text-capitalize">@statusLabel</h3>
+                        <p>Status</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box @severityBoxClass">
+                    <div class="inner">
+                        <h3 class="text-capitalize">@severityLabel</h3>
+                        <p>Severity</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12 mb-3 mb-lg-0">
+                <div class="small-box @targetBoxClass">
+                    <div class="inner">
+                        <h3>@targetResolutionLabel</h3>
+                        <p>Target resolution</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="small-box @priorityBoxClass">
+                    <div class="inner">
+                        <h3 class="text-capitalize">@priorityLabel</h3>
+                        <p>Priority</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row align-items-center mb-4">
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <a class="btn btn-primary mr-2 mb-2" asp-action="Edit" asp-route-id="@Model.Id">Edit issue</a>
+                <a class="btn btn-outline-primary mr-2 mb-2" asp-controller="Project" asp-action="CreateDecision" asp-route-projectId="@Model.ProjectId" asp-route-issueId="@Model.Id">Record decision</a>
+                <a class="btn btn-outline-primary mr-2 mb-2" asp-controller="Action" asp-action="Create" asp-route-issueId="@Model.Id">Add resolution action</a>
+                <a class="btn btn-outline-danger mb-2" asp-action="Delete" asp-route-id="@Model.Id">Delete issue</a>
+            </div>
+        </div>
+
         <div class="row">
-            <!-- Main content -->
-            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12 col-sm-12 col-12">
-                <!-- Product link -->
-                @if (!string.IsNullOrEmpty(Model.FipsId))
+            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-5 mb-4">
+                @if (projectSummary != null)
                 {
-                    var product = products.FirstOrDefault(p => p.FipsId == Model.FipsId);
-                    var productUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}";
-                    <div class="card">
-                        <div class="card-body">
-                            <strong>Product:</strong>
-                            @if (product != null)
-                            {
-                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@product.Title (@Model.FipsId)</a>
-                            }
-                            else
-                            {
-                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@Model.FipsId</a>
-                            }
-                        </div>
-                    </div>
+                    <partial name="_ProjectSummarySidebar" model="projectSummary" />
                 }
-
-                <!-- Description -->
-                @if (!string.IsNullOrEmpty(Model.Description))
+                else if (hasProduct)
                 {
-                    <div class="card">
+                    <div class="card mb-4">
                         <div class="card-header">
-                            <h3 class="card-title">Description</h3>
+                            <h3 class="card-title mb-0">Linked product</h3>
                         </div>
                         <div class="card-body">
-                            <p class="mb-0">@Model.Description</p>
+                            <dl class="definition-list mb-0">
+                                <div class="definition-item">
+                                    <dt>Title</dt>
+                                    <dd>
+                                        @if (linkedProduct != null)
+                                        {
+                                            @linkedProduct.Title
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not available</span>
+                                        }
+                                    </dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>FIPS ID</dt>
+                                    <dd>
+                                        @if (productUrl != null)
+                                        {
+                                            <a href="@productUrl" target="_blank" rel="noopener noreferrer">@Model.FipsId</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">@Model.FipsId</span>
+                                        }
+                                    </dd>
+                                </div>
+                                <div class="definition-item">
+                                    <dt>State</dt>
+                                    <dd>@(linkedProduct?.State ?? "Unknown")</dd>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(linkedProduct?.Phase))
+                                {
+                                    <div class="definition-item">
+                                        <dt>Phase</dt>
+                                        <dd>@linkedProduct.Phase</dd>
+                                    </div>
+                                }
+                                @if (linkedProduct?.CategoryValues?.Any() == true)
+                                {
+                                    var categories = linkedProduct.CategoryValues
+                                        .Where(cv => !string.IsNullOrWhiteSpace(cv.Name))
+                                        .OrderBy(cv => cv.SortOrder)
+                                        .Select(cv => cv.Name)
+                                        .ToList();
+                                    if (categories.Any())
+                                    {
+                                        <div class="definition-item">
+                                            <dt>Categories</dt>
+                                            <dd>
+                                                <ul class="list-unstyled mb-0">
+                                                    @foreach (var category in categories.Take(5))
+                                                    {
+                                                        <li><span class="badge badge-light text-uppercase">@category</span></li>
+                                                    }
+                                                </ul>
+                                            </dd>
+                                        </div>
+                                    }
+                                }
+                                @if (linkedProduct?.ProductContacts?.Any() == true)
+                                {
+                                    var contact = linkedProduct.ProductContacts.First();
+                                    <div class="definition-item">
+                                        <dt>Primary contact</dt>
+                                        <dd>
+                                            <div>@(contact.ContactName ?? contact.LegacyName ?? "Not set")</div>
+                                            @if (!string.IsNullOrWhiteSpace(contact.ContactEmail))
+                                            {
+                                                <small><a href="mailto:@contact.ContactEmail">@contact.ContactEmail</a></small>
+                                            }
+                                        </dd>
+                                    </div>
+                                }
+                            </dl>
                         </div>
                     </div>
                 }
 
-                <!-- Workaround -->
-                @if (!string.IsNullOrEmpty(Model.Workaround))
-                {
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Workaround</h3>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">People & links</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="definition-list mb-0">
+                            <div class="definition-item">
+                                <dt>Assigned to</dt>
+                                <dd>
+                                    <div class="definition-value">
+                                        @if (Model.OwnerUser != null)
+                                        {
+                                            <div>@Model.OwnerUser.Name</div>
+                                            @if (!string.IsNullOrEmpty(Model.OwnerUser.Email))
+                                            {
+                                                <small><a href="mailto:@Model.OwnerUser.Email">@Model.OwnerUser.Email</a></small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unassigned</span>
+                                        }
+                                    </div>
+                                </dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Business area</dt>
+                                <dd>@(string.IsNullOrWhiteSpace(Model.BusinessArea) ? "Not set" : Model.BusinessArea)</dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Strategic objective</dt>
+                                <dd>
+                                    @if (Model.Objective != null)
+                                    {
+                                        <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id">@Model.Objective.Title</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not linked</span>
+                                    }
+                                </dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Source</dt>
+                                <dd>
+                                    @if (!string.IsNullOrWhiteSpace(Model.SourceType) || !string.IsNullOrWhiteSpace(Model.SourceReference))
+                                    {
+                                        <div><strong>@(Model.SourceType ?? "Source"):</strong> @(Model.SourceReference ?? "Not specified")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not recorded</span>
+                                    }
+                                </dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Blocked</dt>
+                                <dd>@blockedLabel</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-7 col-sm-12 col-12">
+                <div class="card mb-4" id="details">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Issue information</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-borderless mb-0 issue-summary">
+                            <tbody>
+                                <tr>
+                                    <td class="summary-label"><strong>Title</strong></td>
+                                    <td class="summary-value">
+                                        @(string.IsNullOrWhiteSpace(Model.Title) ? "Not set" : Model.Title)
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Status</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-pill @statusBadgeClass">@statusLabel</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Severity</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-light text-uppercase">@severityLabel</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Priority</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-light text-uppercase">@priorityLabel</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Category</strong></td>
+                                    <td class="summary-value">@(string.IsNullOrWhiteSpace(Model.Category) ? "-" : Model.Category)</td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Target resolution</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.TargetResolutionDate.HasValue)
+                                        {
+                                            <span class="@(isOverdue ? "text-danger font-weight-bold" : string.Empty)">@targetResolutionLabel</span>
+                                            @if (isOverdue)
+                                            {
+                                                var daysOverdue = (DateTime.Today - Model.TargetResolutionDate.Value.Date).Days;
+                                                <span class="d-block text-danger small">@daysOverdue day@(daysOverdue == 1 ? string.Empty : "s") overdue</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Linked project</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.Project != null)
+                                        {
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.ProjectId" asp-route-tab="issues">@Model.Project.Title</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not linked</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Linked product</strong></td>
+                                    <td class="summary-value">
+                                        @if (!string.IsNullOrWhiteSpace(Model.FipsId) && productUrl != null)
+                                        {
+                                            if (linkedProduct != null)
+                                            {
+                                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@linkedProduct.Title (@Model.FipsId)</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@Model.FipsId</a>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not linked</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">Narrative</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <h4 class="h6 text-uppercase text-muted">Description</h4>
+                            <p class="mb-0">@(string.IsNullOrEmpty(Model.Description) ? "No description provided." : Model.Description)</p>
                         </div>
-                        <div class="card-body">
-                            <p class="mb-0">@Model.Workaround</p>
+                        <div class="mb-4">
+                            <h4 class="h6 text-uppercase text-muted">Workaround</h4>
+                            <p class="mb-0">@(string.IsNullOrEmpty(Model.Workaround) ? "No workaround recorded." : Model.Workaround)</p>
+                        </div>
+                        <div class="mb-0">
+                            <h4 class="h6 text-uppercase text-muted">Resolution summary</h4>
+                            <p class="mb-0">@(string.IsNullOrEmpty(Model.ResolutionSummary) ? "No resolution summary recorded." : Model.ResolutionSummary)</p>
                         </div>
                     </div>
-                }
+                </div>
 
-                <!-- Resolution summary -->
-                @if (!string.IsNullOrEmpty(Model.ResolutionSummary))
-                {
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Resolution summary</h3>
-                        </div>
-                        <div class="card-body">
-                            <p class="mb-0">@Model.ResolutionSummary</p>
-                        </div>
-                    </div>
-                }
-
-                <!-- Related resolution actions -->
                 @if (Model.IssueActions != null && Model.IssueActions.Any())
                 {
-                    <div class="card">
+                    <div class="card mb-4">
                         <div class="card-header">
-                            <h3 class="card-title">Related resolution actions</h3>
+                            <h3 class="card-title mb-0">Related resolution actions</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
                             <table class="table table-hover mb-0">
                                 <thead>
                                     <tr>
                                         <th>Title</th>
-                                        <th style="width: 150px;">Assigned to</th>
-                                        <th style="width: 120px;">Status</th>
-                                        <th style="width: 120px;">Due date</th>
+                                        <th style="width: 160px;">Assigned to</th>
+                                        <th style="width: 140px;">Status</th>
+                                        <th style="width: 160px;">Due date</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var ia in Model.IssueActions)
                                     {
-                                        var actionOverdue = ia.Action.DueDate.HasValue && 
+                                        var actionOverdue = ia.Action.DueDate.HasValue &&
                                                           ia.Action.DueDate.Value.Date < DateTime.Today &&
                                                           ia.Action.Status != "done" && ia.Action.Status != "cancelled";
-                                        <tr class="@(actionOverdue ? "table-danger" : "")">
+                                        <tr class="@(actionOverdue ? "table-danger" : string.Empty)">
                                             <td><a asp-controller="Action" asp-action="Details" asp-route-id="@ia.Action.Id">@ia.Action.Title</a></td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(ia.Action.AssignedToEmail))
@@ -158,20 +499,20 @@
                                                         <span class="badge badge-dark">Cancelled</span>
                                                         break;
                                                     default:
-                                                        <span class="badge badge-secondary">@ia.Action.Status</span>
+                                                        <span class="badge badge-secondary">@ToTitle(ia.Action.Status)</span>
                                                         break;
                                                 }
                                             </td>
                                             <td>
                                                 @if (ia.Action.DueDate.HasValue)
                                                 {
-                                                    <span class="@(actionOverdue ? "text-danger" : "")">
-                                                        @ia.Action.DueDate.Value.ToString("dd MMM yyyy")
+                                                    <span class="@(actionOverdue ? "text-danger font-weight-semibold" : string.Empty)">
+                                                        @ia.Action.DueDate.Value.ToString("d MMMM yyyy")
                                                     </span>
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">-</span>
+                                                    <span class="text-muted">Not set</span>
                                                 }
                                             </td>
                                         </tr>
@@ -182,198 +523,54 @@
                     </div>
                 }
 
-                <!-- Comments Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Timeline</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Detected</dt>
+                            <dd class="col-sm-8 mb-3">@detectedDateLabel</dd>
+
+                            <dt class="col-sm-4">Target resolution</dt>
+                            <dd class="col-sm-8 mb-3">
+                                @if (Model.TargetResolutionDate.HasValue)
+                                {
+                                    <span class="@(isOverdue ? "text-danger font-weight-bold" : string.Empty)">@targetResolutionLabel</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Closed</dt>
+                            <dd class="col-sm-8 mb-3">@closedDateLabel</dd>
+
+                            <dt class="col-sm-4">Created</dt>
+                            <dd class="col-sm-8 mb-3">@createdAtLabel</dd>
+
+                            <dt class="col-sm-4">Last updated</dt>
+                            <dd class="col-sm-8 mb-0">@updatedAtLabel</dd>
+                        </dl>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Comments</h3>
+                        <h3 class="card-title mb-0">Comments</h3>
                     </div>
                     <div class="card-body">
                         <div id="commentsContainer">
                             <p class="text-muted text-center">Loading comments...</p>
                         </div>
-                        
                         <hr />
-                        
                         <div class="form-group mb-0">
                             <label for="newComment">Add a comment</label>
                             <textarea id="newComment" class="form-control" rows="3" placeholder="Enter your comment..."></textarea>
                             <button type="button" class="btn btn-primary mt-2" id="addCommentBtn">Add comment</button>
+                            <div id="commentError" class="text-danger mt-2 d-none" role="alert"></div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sidebar -->
-            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12 col-12">
-                <!-- Status & Owner -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Details</h3>
-                    </div>
-                    <div class="card-body">
-                        <dl class="mb-0">
-                            <dt>Status</dt>
-                            <dd class="mb-3">
-                                @switch (Model.Status)
-                                {
-                                    case "open":
-                                        <span class="badge badge-danger">Open</span>
-                                        break;
-                                    case "in_progress":
-                                        <span class="badge badge-primary">In progress</span>
-                                        break;
-                                    case "blocked":
-                                        <span class="badge badge-danger">Blocked</span>
-                                        break;
-                                    case "resolved":
-                                        <span class="badge badge-success">Resolved</span>
-                                        break;
-                                    case "closed":
-                                        <span class="badge badge-secondary">Closed</span>
-                                        break;
-                                    default:
-                                        <span class="badge badge-secondary">@Model.Status</span>
-                                        break;
-                                }
-                            </dd>
-
-                            <dt>Severity</dt>
-                            <dd class="mb-3">
-                                @switch (Model.Severity)
-                                {
-                                    case "critical":
-                                        <span class="badge badge-danger">Critical</span>
-                                        break;
-                                    case "high":
-                                        <span class="badge badge-warning">High</span>
-                                        break;
-                                    case "medium":
-                                        <span class="badge badge-info">Medium</span>
-                                        break;
-                                    case "low":
-                                        <span class="badge badge-secondary">Low</span>
-                                        break;
-                                    default:
-                                        <span class="badge badge-secondary">@Model.Severity</span>
-                                        break;
-                                }
-                            </dd>
-
-                            <dt>Priority</dt>
-                            <dd class="mb-3">
-                                @switch (Model.Priority)
-                                {
-                                    case "high":
-                                        <span class="badge badge-danger">High</span>
-                                        break;
-                                    case "medium":
-                                        <span class="badge badge-warning">Medium</span>
-                                        break;
-                                    case "low":
-                                        <span class="badge badge-info">Low</span>
-                                        break;
-                                    default:
-                                        <span class="text-muted">@(Model.Priority ?? "Not set")</span>
-                                        break;
-                                }
-                            </dd>
-
-                            <dt>Blocked</dt>
-                            <dd class="mb-3">
-                                @if (Model.BlockedFlag)
-                                {
-                                    <span class="badge badge-danger">Yes</span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">No</span>
-                                }
-                            </dd>
-
-                            <dt>Owner</dt>
-                            <dd class="mb-3">
-                                @if (Model.OwnerUser != null)
-                                {
-                                    <div>@Model.OwnerUser.Name</div>
-                                    @if (!string.IsNullOrEmpty(Model.OwnerUser.Email))
-                                    {
-                                        <small><a href="mailto:@Model.OwnerUser.Email">@Model.OwnerUser.Email</a></small>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Unassigned</span>
-                                }
-                            </dd>
-
-                            <dt>Business area</dt>
-                            <dd class="mb-3">
-                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                {
-                                    <a asp-action="Index" asp-route-businessArea="@Model.BusinessArea">@Model.BusinessArea</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </dd>
-
-                            <dt>Strategic objective</dt>
-                            <dd class="mb-3">
-                                @if (Model.Objective != null)
-                                {
-                                    <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id">@Model.Objective.Title</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not linked</span>
-                                }
-                            </dd>
-
-                            <dt>Category</dt>
-                            <dd class="mb-0">@(Model.Category ?? "-")</dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Dates -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Timeline</h3>
-                    </div>
-                    <div class="card-body">
-                        <dl class="mb-0">
-                            <dt>Detected</dt>
-                            <dd class="mb-3">@Model.DetectedDate.ToString("dd MMM yyyy")</dd>
-
-                            <dt>Target resolution</dt>
-                            <dd class="mb-3">
-                                @if (Model.TargetResolutionDate.HasValue)
-                                {
-                                    <span class="@(isOverdue ? "text-danger" : "")">
-                                        @Model.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                    </span>
-                                    @if (isOverdue)
-                                    {
-                                        var daysOverdue = (DateTime.Today - Model.TargetResolutionDate.Value.Date).Days;
-                                        <br><span class="text-danger small">@daysOverdue days overdue</span>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </dd>
-
-                            <dt>Closed</dt>
-                            <dd class="mb-3">@(Model.ClosedDate?.ToString("dd MMM yyyy") ?? "-")</dd>
-
-                            <dt>Created</dt>
-                            <dd class="mb-3">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-
-                            <dt>Last updated</dt>
-                            <dd class="mb-0">@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-                        </dl>
                     </div>
                 </div>
             </div>
@@ -386,24 +583,37 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
+            const commentsContainer = $('#commentsContainer');
+            const newCommentField = $('#newComment');
+            const commentError = $('#commentError');
+
             loadComments();
             
+            function showCommentError(message) {
+                commentError.text(message).removeClass('d-none');
+            }
+
+            function clearCommentError() {
+                commentError.text('').addClass('d-none');
+            }
+
             function loadComments() {
                 $.ajax({
-                    url: '/comments/Issue/@Model.Id',
+                    url: '/api/comments/Issue/@Model.Id',
                     type: 'GET',
                     success: function(data) {
+                        clearCommentError();
                         displayComments(data);
                     },
                     error: function() {
-                        $('#commentsContainer').html('<p class="text-danger">Failed to load comments</p>');
+                        commentsContainer.html('<p class="text-danger mb-0" role="alert">We could not load comments. Please try again.</p>');
                     }
                 });
             }
             
             function displayComments(comments) {
                 if (!comments || comments.length === 0) {
-                    $('#commentsContainer').html('<p class="text-muted">No comments yet</p>');
+                    commentsContainer.html('<p class="text-muted mb-0">No comments yet</p>');
                     return;
                 }
                 
@@ -427,19 +637,21 @@
                     html += '</div>';
                 });
                 
-                $('#commentsContainer').html(html);
+                commentsContainer.html(html);
             }
             
             $('#addCommentBtn').click(function() {
-                var commentText = $('#newComment').val().trim();
+                clearCommentError();
+                var commentText = newCommentField.val().trim();
                 
                 if (!commentText) {
-                    alert('Please enter a comment');
+                    showCommentError('Enter a comment before submitting.');
+                    newCommentField.focus();
                     return;
                 }
                 
                 $.ajax({
-                    url: '/comments',
+                    url: '/api/comments',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({
@@ -451,11 +663,11 @@
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
                     },
                     success: function() {
-                        $('#newComment').val('');
+                        newCommentField.val('');
                         loadComments();
                     },
                     error: function() {
-                        alert('Failed to add comment');
+                        showCommentError('We could not add your comment. Please try again.');
                     }
                 });
             });
