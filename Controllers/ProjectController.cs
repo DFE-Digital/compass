@@ -91,7 +91,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project
-        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int page = 1)
+        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
@@ -106,6 +106,7 @@ namespace Compass.Controllers
                 userProjects = await _context.Projects
                     .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
                     .AsNoTracking()
+                    .Include(p => p.DeliveryPriority)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
                     .Include(p => p.ProjectObjectives)
@@ -114,12 +115,14 @@ namespace Compass.Controllers
                         .ThenInclude(fa => fa.FundingSource)
                     .Include(p => p.Outcomes)
                     .Include(p => p.ProjectContacts)
+                        .ThenInclude(pc => pc.User)
                     .OrderBy(p => p.Title)
                     .ToListAsync();
             }
 
             var query = _context.Projects
                 .Where(p => !p.IsDeleted)
+                .Include(p => p.DeliveryPriority)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
                 .Include(p => p.ProjectObjectives)
@@ -128,6 +131,7 @@ namespace Compass.Controllers
                     .ThenInclude(fa => fa.FundingSource)
                 .Include(p => p.Outcomes)
                 .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
                 .AsQueryable();
 
             // Apply search filter
@@ -161,6 +165,11 @@ namespace Compass.Controllers
                 query = query.Where(p => p.IsFlagship == isFlagship);
             }
 
+            if (priority.HasValue)
+            {
+                query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+
             var orderedQuery = query
                 .OrderByDescending(p => p.CreatedAt)
                 .AsNoTracking();
@@ -178,16 +187,23 @@ namespace Compass.Controllers
             ViewBag.CurrentBusinessArea = businessArea;
             ViewBag.CurrentPhase = phase;
             ViewBag.CurrentFlagship = flagship;
+            ViewBag.CurrentPriority = priority;
 
             // Get business areas and phases from CMS
             ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
 
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+            ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
+                .Where(dp => dp.IsActive)
+                .OrderBy(dp => dp.SortOrder)
+                .ThenBy(dp => dp.Name)
+                .AsNoTracking()
+                .ToListAsync();
 
             var viewModel = new ProjectIndexViewModel
             {
-                Projects = projects,
-                UserProjects = userProjects,
+                Projects = projects.AsReadOnly(),
+                UserProjects = userProjects.AsReadOnly(),
                 PageNumber = pageNumber,
                 PageSize = pageSize,
                 TotalCount = totalCount
@@ -750,111 +766,364 @@ namespace Compass.Controllers
             return View();
         }
 
-        // POST: Project/AddContact
+        // ==================== TEAM MANAGEMENT ====================
+
+        [HttpGet]
+        public async Task<IActionResult> CreateTeamMember(int projectId)
+        {
+            var summary = await GetProjectSummaryAsync(projectId);
+            if (summary == null)
+            {
+                return NotFound();
+            }
+
+            var placeholder = new ProjectContact
+            {
+                ProjectId = summary.Id,
+                FundingArrangement = "Not specified",
+                EmploymentType = "Permanent",
+                TeamStatus = "current"
+            };
+
+            var viewModel = BuildTeamMemberFormViewModel(summary, placeholder);
+            return View("CreateTeamMember", viewModel);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddContact(int projectId, string name, string? role, string email, string? description)
+        public async Task<IActionResult> AddTeamMember(ProjectTeamMemberInputModel input)
         {
+            input.EmploymentType = NormalizeEmploymentType(input.EmploymentType);
+            input.TeamStatus = NormalizeTeamStatus(input.TeamStatus);
+
+            if (string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(input.LeaveReason))
+            {
+                ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.LeaveReason), "Provide a reason for leaving the team.");
+            }
+
+            if (!input.UserId.HasValue)
+            {
+                ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.UserId), "Select a team member.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var invalidViewModel = await BuildTeamMemberFormViewModelAsync(input);
+                if (invalidViewModel == null)
+                {
+                    return NotFound();
+                }
+                return View("CreateTeamMember", invalidViewModel);
+            }
+
             try
             {
-                // Check if contact with this email already exists for this project
-                var existingContact = await _context.ProjectContacts
-                    .FirstOrDefaultAsync(pc => pc.ProjectId == projectId && pc.Email.ToLower() == email.ToLower());
+                var project = await _context.Projects
+                    .Include(p => p.ProjectContacts)
+                    .FirstOrDefaultAsync(p => p.Id == input.ProjectId && !p.IsDeleted);
 
-                if (existingContact != null)
+                if (project == null)
                 {
-                    TempData["ErrorMessage"] = $"A contact with email '{email}' already exists for this project.";
-                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
+                    return NotFound();
                 }
 
-                var contact = new ProjectContact
+                var user = await _context.Users.FindAsync(input.UserId!.Value);
+                if (user == null)
                 {
-                    ProjectId = projectId,
-                    Name = name,
-                    Role = string.IsNullOrWhiteSpace(role) ? "Not specified" : role,
-                    Email = email,
-                    RoleDescription = description,
+                    ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.UserId), "Selected person could not be found.");
+                    var invalidViewModel = await BuildTeamMemberFormViewModelAsync(input);
+                    if (invalidViewModel == null)
+                    {
+                        return NotFound();
+                    }
+                    return View("CreateTeamMember", invalidViewModel);
+                }
+
+                var teamMember = new ProjectContact
+                {
+                    ProjectId = input.ProjectId,
+                    UserId = user.Id,
+                    Name = user.Name,
+                    Email = user.Email,
+                    Role = input.Role.Trim(),
+                    FundingArrangement = input.FundingArrangement.Trim(),
+                    EmploymentType = input.EmploymentType,
+                    TeamStatus = input.TeamStatus,
+                    LeaveReason = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? input.LeaveReason?.Trim() : null,
+                    LeftAt = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? DateTime.UtcNow : null,
+                    SortOrder = project.ProjectContacts.Count + 1,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                _context.ProjectContacts.Add(contact);
+                _context.ProjectContacts.Add(teamMember);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Contact added successfully!";
+                TempData["SuccessMessage"] = "Team member added successfully.";
+                return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "team" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error adding project contact");
-                TempData["ErrorMessage"] = "An error occurred while adding the contact.";
+                _logger.LogError(ex, "Error adding project team member");
+                TempData["ErrorMessage"] = "An error occurred while adding the team member.";
+                return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "team" });
             }
-
-            return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
         }
 
-        // POST: Project/UpdateContact
+        [HttpGet]
+        public async Task<IActionResult> EditTeamMember(int projectId, int teamMemberId)
+        {
+            var contact = await _context.ProjectContacts
+                .Include(pc => pc.Project)
+                .Include(pc => pc.User)
+                .FirstOrDefaultAsync(pc => pc.Id == teamMemberId && pc.ProjectId == projectId);
+
+            if (contact == null || contact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            await EnsureContactUserAsync(contact);
+            var summary = CreateProjectSummary(contact.Project);
+            var viewModel = BuildTeamMemberFormViewModel(summary, contact);
+            viewModel.Input.TeamMemberId = contact.Id;
+            return View("EditTeamMember", viewModel);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateContact(int projectId, int contactId, string name, string? role, string email, string? description)
+        public async Task<IActionResult> UpdateTeamMember(ProjectTeamMemberInputModel input)
         {
-            try
+            if (!input.TeamMemberId.HasValue)
             {
-                var contact = await _context.ProjectContacts
-                    .FirstOrDefaultAsync(c => c.Id == contactId && c.ProjectId == projectId);
+                return NotFound();
+            }
 
-                if (contact == null)
+            input.EmploymentType = NormalizeEmploymentType(input.EmploymentType);
+            input.TeamStatus = NormalizeTeamStatus(input.TeamStatus);
+
+            if (string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(input.LeaveReason))
+            {
+                ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.LeaveReason), "Provide a reason for leaving the team.");
+            }
+
+            if (!input.UserId.HasValue)
+            {
+                ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.UserId), "Select a team member.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var invalidViewModel = await BuildTeamMemberFormViewModelAsync(input);
+                if (invalidViewModel == null)
                 {
-                    TempData["ErrorMessage"] = "Contact not found.";
-                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
+                    return NotFound();
                 }
+                return View("EditTeamMember", invalidViewModel);
+            }
 
-                contact.Name = name;
-                contact.Role = string.IsNullOrWhiteSpace(role) ? "Not specified" : role;
-                contact.Email = email;
-                contact.RoleDescription = description;
+            var contact = await _context.ProjectContacts
+                .Include(pc => pc.Project)
+                .FirstOrDefaultAsync(pc => pc.Id == input.TeamMemberId.Value && pc.ProjectId == input.ProjectId);
+
+            if (contact == null || contact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var user = await _context.Users.FindAsync(input.UserId!.Value);
+            if (user == null)
+            {
+                ModelState.AddModelError(nameof(ProjectTeamMemberInputModel.UserId), "Selected person could not be found.");
+                var invalidViewModel = await BuildTeamMemberFormViewModelAsync(input);
+                if (invalidViewModel == null)
+                {
+                    return NotFound();
+                }
+                return View("EditTeamMember", invalidViewModel);
+            }
+
+            contact.UserId = user.Id;
+            contact.Name = user.Name;
+            contact.Email = user.Email;
+            contact.Role = input.Role.Trim();
+            contact.FundingArrangement = input.FundingArrangement.Trim();
+            contact.EmploymentType = input.EmploymentType;
+            contact.TeamStatus = input.TeamStatus;
+            contact.LeaveReason = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? input.LeaveReason?.Trim() : null;
+            contact.LeftAt = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? contact.LeftAt ?? DateTime.UtcNow : null;
+            if (!string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase))
+            {
+                contact.LeftAt = null;
+            }
+            contact.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Team member updated successfully.";
+            return RedirectToAction(nameof(TeamMemberDetails), new { projectId = input.ProjectId, teamMemberId = contact.Id });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> TeamMemberDetails(int projectId, int teamMemberId)
+        {
+            var contact = await _context.ProjectContacts
+                .Include(pc => pc.Project)
+                .Include(pc => pc.User)
+                .FirstOrDefaultAsync(pc => pc.Id == teamMemberId && pc.ProjectId == projectId);
+
+            if (contact == null || contact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectTeamMemberDetailsViewModel
+            {
+                ProjectId = contact.ProjectId,
+                TeamMemberId = contact.Id,
+                ProjectTitle = contact.Project.Title,
+                Name = contact.Name,
+                Email = contact.Email,
+                Role = contact.Role,
+                FundingArrangement = contact.FundingArrangement,
+                EmploymentType = contact.EmploymentType,
+                TeamStatus = string.IsNullOrWhiteSpace(contact.TeamStatus) ? "current" : contact.TeamStatus,
+                LeaveReason = contact.LeaveReason,
+                AddedAt = contact.CreatedAt,
+                LeftAt = contact.LeftAt,
+                JobTitle = contact.User?.JobTitle
+            };
+
+            return View("TeamMemberDetails", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveTeamMember(ProjectTeamMemberRemovalInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Please provide a reason for removing this person from the team.";
+                return RedirectToAction(nameof(TeamMemberDetails), new { projectId = input.ProjectId, teamMemberId = input.TeamMemberId });
+            }
+
+            var contact = await _context.ProjectContacts
+                .FirstOrDefaultAsync(pc => pc.Id == input.TeamMemberId && pc.ProjectId == input.ProjectId);
+
+            if (contact == null)
+            {
+                return NotFound();
+            }
+
+            contact.TeamStatus = "previous";
+            contact.LeaveReason = input.Reason.Trim();
+            contact.LeftAt = DateTime.UtcNow;
+            contact.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Team member marked as previous.";
+            return RedirectToAction(nameof(TeamMemberDetails), new { projectId = input.ProjectId, teamMemberId = input.TeamMemberId });
+        }
+
+        private async Task EnsureContactUserAsync(ProjectContact contact)
+        {
+            if (contact.UserId.HasValue || string.IsNullOrWhiteSpace(contact.Email))
+            {
+                return;
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == contact.Email);
+            if (user != null)
+            {
+                contact.UserId = user.Id;
                 contact.UpdatedAt = DateTime.UtcNow;
-
                 await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Contact updated successfully!";
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating project contact");
-                TempData["ErrorMessage"] = "An error occurred while updating the contact.";
-            }
-
-            return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
         }
 
-        // POST: Project/DeleteContact
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteContact(int projectId, int contactId)
+        private IReadOnlyList<SelectListItem> BuildEmploymentTypeOptions(string? selected)
         {
-            try
+            return new List<SelectListItem>
             {
-                var contact = await _context.ProjectContacts
-                    .FirstOrDefaultAsync(c => c.Id == contactId && c.ProjectId == projectId);
+                new("Permanent", "Permanent", string.Equals(selected, "Permanent", StringComparison.OrdinalIgnoreCase)),
+                new("MSP", "MSP", string.Equals(selected, "MSP", StringComparison.OrdinalIgnoreCase))
+            };
+        }
 
-                if (contact == null)
+        private IReadOnlyList<SelectListItem> BuildTeamStatusOptions(string? selected)
+        {
+            return new List<SelectListItem>
+            {
+                new("Current", "current", string.Equals(selected, "current", StringComparison.OrdinalIgnoreCase)),
+                new("Previous", "previous", string.Equals(selected, "previous", StringComparison.OrdinalIgnoreCase))
+            };
+        }
+
+        private static string NormalizeEmploymentType(string? value)
+            => string.Equals(value, "MSP", StringComparison.OrdinalIgnoreCase) ? "MSP" : "Permanent";
+
+        private static string NormalizeTeamStatus(string? value)
+            => string.Equals(value, "previous", StringComparison.OrdinalIgnoreCase) ? "previous" : "current";
+
+        private ProjectTeamMemberFormViewModel BuildTeamMemberFormViewModel(ProjectSummaryViewModel summary, ProjectContact? member)
+        {
+            var input = new ProjectTeamMemberInputModel
+            {
+                ProjectId = summary.Id,
+                TeamMemberId = member?.Id,
+                UserId = member?.UserId,
+                Role = member?.Role ?? string.Empty,
+                FundingArrangement = member?.FundingArrangement ?? "Not specified",
+                EmploymentType = member?.EmploymentType ?? "Permanent",
+                TeamStatus = member?.TeamStatus ?? "current",
+                LeaveReason = member?.LeaveReason
+            };
+
+            return new ProjectTeamMemberFormViewModel
+            {
+                Input = input,
+                ProjectSummary = summary,
+                ProjectTitle = summary.Title,
+                EmploymentTypeOptions = BuildEmploymentTypeOptions(input.EmploymentType),
+                TeamStatusOptions = BuildTeamStatusOptions(input.TeamStatus),
+                SelectedUserName = member?.User?.Name ?? member?.Name,
+                SelectedUserEmail = member?.User?.Email ?? member?.Email
+            };
+        }
+
+        private async Task<ProjectTeamMemberFormViewModel?> BuildTeamMemberFormViewModelAsync(ProjectTeamMemberInputModel input)
+        {
+            var summary = await GetProjectSummaryAsync(input.ProjectId);
+            if (summary == null)
+            {
+                return null;
+            }
+
+            string? selectedName = null;
+            string? selectedEmail = null;
+            if (input.UserId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(input.UserId.Value);
+                if (user != null)
                 {
-                    TempData["ErrorMessage"] = "Contact not found.";
-                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
+                    selectedName = user.Name;
+                    selectedEmail = user.Email;
                 }
-
-                _context.ProjectContacts.Remove(contact);
-                await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Contact deleted successfully!";
             }
-            catch (Exception ex)
+
+            return new ProjectTeamMemberFormViewModel
             {
-                _logger.LogError(ex, "Error deleting project contact");
-                TempData["ErrorMessage"] = "An error occurred while deleting the contact.";
-            }
-
-            return RedirectToAction(nameof(Details), new { id = projectId, tab = "contacts" });
+                Input = input,
+                ProjectSummary = summary,
+                ProjectTitle = summary.Title,
+                EmploymentTypeOptions = BuildEmploymentTypeOptions(input.EmploymentType),
+                TeamStatusOptions = BuildTeamStatusOptions(input.TeamStatus),
+                SelectedUserName = selectedName,
+                SelectedUserEmail = selectedEmail
+            };
         }
 
         // GET: Project/Create
@@ -1162,7 +1431,10 @@ namespace Compass.Controllers
                                 Name = names[i],
                                 Email = i < emails.Count ? emails[i] : "",
                                 RoleDescription = i < roleDescriptions.Count ? roleDescriptions[i] : "",
-                                SortOrder = i + 1
+                                SortOrder = i + 1,
+                                FundingArrangement = "Not specified",
+                                EmploymentType = "Permanent",
+                                TeamStatus = "current"
                             });
                         }
                     }
@@ -1466,7 +1738,7 @@ namespace Compass.Controllers
                 if (programmePercentage + adminPercentage > 100)
                 {
                     TempData["ErrorMessage"] = "Programme and Admin percentages cannot exceed 100% in total.";
-                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "funding" });
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "overview" });
                 }
 
                 var project = await _context.Projects
@@ -1543,7 +1815,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "Error updating funding allocation. Please try again.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = projectId, tab = "funding" });
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "overview" });
         }
 
         // POST: Project/DeleteOutcome
@@ -4890,7 +5162,8 @@ namespace Compass.Controllers
                 SortOrder = outcome.SortOrder,
                 CreatedAt = outcome.CreatedAt,
                 UpdatedAt = outcome.UpdatedAt,
-                ProjectSummary = CreateProjectSummary(outcome.Project)
+                ProjectSummary = CreateProjectSummary(outcome.Project),
+                RaidSummary = new RaidLinkSummaryViewModel()
             };
 
             return View("OutcomeDetails", viewModel);

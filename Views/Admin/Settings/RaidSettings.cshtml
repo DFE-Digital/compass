@@ -1,0 +1,305 @@
+@model Compass.ViewModels.Admin.RaidLookupListViewModel
+
+@{
+    ViewData["Title"] = "RAID settings";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Settings">Settings</a></li>
+                    <li class="breadcrumb-item active">RAID settings</li>
+                </ol>
+                <h1 class="m-0">RAID settings</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-2 col-xl-2 col-lg-2 col-md-2 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Administration</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="nav flex-column nav-pills">
+                            <a href="@Url.Action("Index", "PerformanceMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PerformanceMetric" ? "active" : "")">
+                                Operational reports
+                            </a>
+                            <a href="@Url.Action("Index", "EnterpriseMetric")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseMetric" ? "active" : "")">
+                                Enterprise metrics
+                            </a>
+                            <a href="@Url.Action("Index", "FunctionalStandard")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "FunctionalStandard" ? "active" : "")">
+                                Functional standards
+                            </a>
+                            <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
+                                Priority outcomes
+                            </a>
+                            <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
+                                Missions
+                            </a>
+                            <a href="@Url.Action("FundingSources", "Admin")" class="nav-link @(currentAction.Contains("FundingSource") ? "active" : "")">
+                                Funding sources
+                            </a>
+                            <a href="@Url.Action("Index", "GovernmentDepartment")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "GovernmentDepartment" ? "active" : "")">
+                                Government departments
+                            </a>
+                            <a href="@Url.Action("Index", "Organizational")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Organizational" ? "active" : "")">
+                                Organisational
+                            </a>
+                            <a href="@Url.Action("RiskTypes", "Admin")" class="nav-link @(currentAction.Contains("RiskType") ? "active" : "")">
+                                Risk types
+                            </a>
+                            <a href="@Url.Action("RiskTiers", "Admin")" class="nav-link @(currentAction.Contains("RiskTier") ? "active" : "")">
+                                Risk tiers
+                            </a>
+                            <a href="@Url.Action("ActionSources", "Admin")" class="nav-link @(currentAction.Contains("ActionSource") ? "active" : "")">
+                                Action sources
+                            </a>
+                            <a href="@Url.Action("DeliveryPriorities", "Admin")" class="nav-link @(currentAction.Contains("DeliveryPriorit") ? "active" : "")">
+                                Delivery priorities
+                            </a>
+                            <a href="@Url.Action("WcagCriteria", "Admin")" class="nav-link @(currentAction.Contains("WcagCriterion") || currentAction.Contains("WcagCriteria") ? "active" : "")">
+                                WCAG criteria
+                            </a>
+                            <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
+                                GDD roles
+                            </a>
+                            <a href="@Url.Action("Skills", "Admin")" class="nav-link @(currentAction.Contains("Skill") ? "active" : "")">
+                                Skills
+                            </a>
+                            <a href="@Url.Action("KpiCategories", "Admin")" class="nav-link @(currentAction.Contains("KpiCategor") ? "active" : "")">
+                                KPI categories
+                            </a>
+                            <a href="@Url.Action("ApiTokens", "Admin")" class="nav-link @(currentAction.Contains("ApiToken") ? "active" : "")">
+                                API tokens
+                            </a>
+                            <a href="@Url.Action("RaidSettings", "Admin")" class="nav-link @(currentAction == "RaidSettings" ? "active" : "")">
+                                RAID settings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title">@Model.CurrentLookupLabel</h3>
+                        <form asp-action="RaidSettings" method="get" class="form-inline">
+                            <label class="mr-2 mb-0" for="lookupKey">Lookup set</label>
+                            <select class="form-control form-control-sm" id="lookupKey" name="lookupKey" onchange="this.form.submit()">
+                                @foreach (var lookup in Model.Lookups)
+                                {
+                                    if (lookup.Key == Model.CurrentLookupKey)
+                                    {
+                                        <option value="@lookup.Key" selected="selected">@lookup.Label</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@lookup.Key">@lookup.Label</option>
+                                    }
+                                }
+                            </select>
+                        </form>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrWhiteSpace(Model.CurrentLookupDescription))
+                        {
+                            <p class="text-muted">@Model.CurrentLookupDescription</p>
+                        }
+
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <div class="border rounded p-3 mb-4">
+                                    <h5 class="mb-3">Add new entry</h5>
+                                    <form asp-action="CreateRaidLookup" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <div asp-validation-summary="All" class="text-danger"></div>
+                                        <input type="hidden" asp-for="NewEntry.LookupKey" />
+
+                                        <div class="form-group">
+                                            <label asp-for="NewEntry.Code"></label>
+                                            <input asp-for="NewEntry.Code" class="form-control" />
+                                            <span asp-validation-for="NewEntry.Code" class="text-danger"></span>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label asp-for="NewEntry.Label"></label>
+                                            <input asp-for="NewEntry.Label" class="form-control" />
+                                            <span asp-validation-for="NewEntry.Label" class="text-danger"></span>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label asp-for="NewEntry.Description"></label>
+                                            <textarea asp-for="NewEntry.Description" class="form-control" rows="2"></textarea>
+                                            <span asp-validation-for="NewEntry.Description" class="text-danger"></span>
+                                        </div>
+
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label asp-for="NewEntry.SortOrder"></label>
+                                                <input asp-for="NewEntry.SortOrder" class="form-control" type="number" />
+                                                <span asp-validation-for="NewEntry.SortOrder" class="text-danger"></span>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <div class="form-check mt-4">
+                                                    <input class="form-check-input" asp-for="NewEntry.IsActive" />
+                                                    <label class="form-check-label" asp-for="NewEntry.IsActive"></label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">Save entry</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                @if (Model.EditEntry != null)
+                                {
+                                    <div class="border rounded p-3 mb-4 bg-light">
+                                        <h5 class="mb-3">Edit entry</h5>
+                                        <form asp-action="UpdateRaidLookup" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <div asp-validation-summary="All" class="text-danger"></div>
+                                            <input type="hidden" asp-for="EditEntry.Id" />
+                                            <input type="hidden" asp-for="EditEntry.LookupKey" />
+
+                                            <div class="form-group">
+                                                <label asp-for="EditEntry.Code"></label>
+                                                <input asp-for="EditEntry.Code" class="form-control" />
+                                                <span asp-validation-for="EditEntry.Code" class="text-danger"></span>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label asp-for="EditEntry.Label"></label>
+                                                <input asp-for="EditEntry.Label" class="form-control" />
+                                                <span asp-validation-for="EditEntry.Label" class="text-danger"></span>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label asp-for="EditEntry.Description"></label>
+                                                <textarea asp-for="EditEntry.Description" class="form-control" rows="2"></textarea>
+                                                <span asp-validation-for="EditEntry.Description" class="text-danger"></span>
+                                            </div>
+
+                                            <div class="form-row">
+                                                <div class="form-group col-md-6">
+                                                    <label asp-for="EditEntry.SortOrder"></label>
+                                                    <input asp-for="EditEntry.SortOrder" class="form-control" type="number" />
+                                                    <span asp-validation-for="EditEntry.SortOrder" class="text-danger"></span>
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    <div class="form-check mt-4">
+                                                        <input class="form-check-input" asp-for="EditEntry.IsActive" />
+                                                        <label class="form-check-label" asp-for="EditEntry.IsActive"></label>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="d-flex justify-content-between">
+                                                <button type="submit" class="btn btn-primary">Update entry</button>
+                                                <a asp-action="RaidSettings" asp-route-lookupKey="@Model.CurrentLookupKey" class="btn btn-link">Cancel</a>
+                                            </div>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <h5 class="mt-3">Existing entries</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 5%;">ID</th>
+                                        <th style="width: 15%;">Code</th>
+                                        <th style="width: 25%;">Label</th>
+                                        <th style="width: 35%;">Description</th>
+                                        <th style="width: 10%;">Sort order</th>
+                                        <th style="width: 5%;">Status</th>
+                                        <th style="width: 5%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Items.Any())
+                                    {
+                                        foreach (var item in Model.Items)
+                                        {
+                                            <tr class="@(item.IsActive ? "" : "text-muted")">
+                                                <td>@item.Id</td>
+                                                <td>@item.Code</td>
+                                                <td>@item.Label</td>
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                                    {
+                                                        <small class="text-muted">@item.Description</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">—</span>
+                                                    }
+                                                </td>
+                                                <td>@item.SortOrder</td>
+                                                <td>
+                                                    @if (item.IsActive)
+                                                    {
+                                                        <span class="badge badge-success">Active</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                    }
+                                                </td>
+                                                <td class="text-nowrap">
+                                                    <a class="btn btn-sm btn-link" asp-action="RaidSettings" asp-route-lookupKey="@Model.CurrentLookupKey" asp-route-editId="@item.Id">
+                                                        Edit
+                                                    </a>
+                                                    <form asp-action="DeleteRaidLookup" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this entry?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="lookupKey" value="@Model.CurrentLookupKey" />
+                                                        <input type="hidden" name="id" value="@item.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-link text-danger">Delete</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">No entries configured yet.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

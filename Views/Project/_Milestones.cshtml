@@ -1,5 +1,16 @@
 @model Compass.Models.Project
 
+@{
+    var milestones = Model.Milestones
+        .OrderBy(m => m.DueDate)
+        .ToList();
+    var completedMilestones = milestones.Count(m => string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase));
+    var activeMilestones = milestones.Count - completedMilestones;
+    var overdueMilestones = milestones.Count(m =>
+        !string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase) &&
+        m.DueDate.Date < DateTime.Today);
+}
+
 <div class="card" id="milestones">
     <div class="card-header">
         <h3 class="card-title">Project milestones</h3>
@@ -8,13 +19,27 @@
         </div>
     </div>
     <div class="card-body table-responsive p-0">
-        @if (Model.Milestones.Any())
+        @if (milestones.Any())
         {
+            <div class="row no-gutters text-center border-bottom">
+                <div class="col-md-4 p-3">
+                    <p class="text-uppercase text-muted mb-1 small">Completed</p>
+                    <p class="h4 mb-0">@completedMilestones</p>
+                </div>
+                <div class="col-md-4 p-3 border-left border-right">
+                    <p class="text-uppercase text-muted mb-1 small">Active</p>
+                    <p class="h4 mb-0">@activeMilestones</p>
+                </div>
+                <div class="col-md-4 p-3">
+                    <p class="text-uppercase text-muted mb-1 small">Overdue</p>
+                    <p class="h4 mb-0 text-danger">@overdueMilestones</p>
+                </div>
+            </div>
+
             <table class="table table-hover text-nowrap sortable-table milestones-table">
                 <thead>
                     <tr>
                         <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
-                        <th class="col-objective sortable" data-column="Objective" tabindex="0" role="button" aria-label="Sort by Objective">Objective</th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
                         <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">Due date</th>
                         <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">Actual date</th>
@@ -22,7 +47,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var milestone in Model.Milestones.OrderBy(m => m.DueDate))
+                    @foreach (var milestone in milestones)
                     {
                         <tr>
                             <td>
@@ -31,21 +56,18 @@
                                 </a>
                             </td>
                             <td>
-                                @if (milestone.Objective != null)
-                                {
-                                    <span>@milestone.Objective.Title</span>
-                                    if (!string.IsNullOrWhiteSpace(milestone.Objective.Theme))
+                                @{
+                                    var statusClass = milestone.Status switch
                                     {
-                                        <br />
-                                        <small class="text-muted">@milestone.Objective.Theme</small>
-                                    }
+                                        "complete" => "badge badge-success",
+                                        "at_risk" => "badge badge-warning",
+                                        "in_progress" => "badge badge-info",
+                                        "delayed" => "badge badge-danger",
+                                        _ => "badge badge-secondary"
+                                    };
                                 }
-                                else
-                                {
-                                    <span class="text-muted">Not linked</span>
-                                }
+                                <span class="@statusClass">@milestone.Status.Replace("_", " ")</span>
                             </td>
-                            <td>@milestone.Status.Replace("_", " ")</td>
                             <td>@milestone.DueDate.ToString("d MMMM yyyy")</td>
                             <td>
                                 @if (milestone.ActualDate.HasValue)
@@ -57,15 +79,17 @@
                                     <span class="text-muted">Not completed</span>
                                 }
                             </td>
-                            <td>
-                                @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
-                                {
-                                    @milestone.ProgressPercent.Value<text>%</text>
+                            <td style="min-width: 150px;">
+                                @{
+                                    var progress = milestone.ProgressPercent.GetValueOrDefault();
+                                    var progressValue = progress < 0 ? 0 : progress > 100 ? 100 : progress;
                                 }
-                                else
-                                {
-                                    <span class="text-muted">0%</span>
-                                }
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 mr-2" style="height: 6px;">
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: @progressValue%" aria-valuenow="@progressValue" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <span class="text-muted small">@progressValue%</span>
+                                </div>
                             </td>
                         </tr>
                     }

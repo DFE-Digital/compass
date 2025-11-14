@@ -1,0 +1,120 @@
+@using System
+@model Compass.Models.Project
+
+@{
+    var teamMembers = Model.ProjectContacts?
+        .OrderByDescending(member => string.Equals(member.TeamStatus, "current", StringComparison.OrdinalIgnoreCase))
+        .ThenBy(member => member.SortOrder)
+        .ToList() ?? new List<Compass.Models.ProjectContact>();
+}
+
+<div class="card" id="team">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Team</h3>
+        <div class="card-tools">
+            <a asp-controller="Project"
+               asp-action="CreateTeamMember"
+               asp-route-projectId="@Model.Id"
+               class="btn btn-primary btn-sm">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add team member
+            </a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (teamMembers.Any())
+        {
+            <table class="table table-hover text-nowrap sortable-table team-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
+                        <th class="sortable" data-column="Role" tabindex="0" role="button" aria-label="Sort by Role">Role</th>
+                        <th class="sortable" data-column="Funding" tabindex="0" role="button" aria-label="Sort by Funding">Funding</th>
+                        <th class="sortable" data-column="EmploymentType" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
+                        <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                        <th class="sortable" data-column="LeaveReason" tabindex="0" role="button" aria-label="Sort by Reason">Reason for leaving</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in teamMembers)
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(member.Name)
+                            ? member.Name
+                            : member.User?.Name ?? member.Email;
+                        var statusBadgeClass = string.Equals(member.TeamStatus, "current", StringComparison.OrdinalIgnoreCase)
+                            ? "badge badge-success"
+                            : "badge badge-secondary";
+                        var statusLabel = string.IsNullOrWhiteSpace(member.TeamStatus)
+                            ? "Unknown"
+                            : char.ToUpper(member.TeamStatus[0]) + member.TeamStatus.Substring(1);
+                        var employmentBadgeClass = string.Equals(member.EmploymentType, "MSP", StringComparison.OrdinalIgnoreCase)
+                            ? "badge badge-info"
+                            : "badge badge-primary";
+                        <tr>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <strong>@displayName</strong>
+                                    <span class="text-muted small">@member.Email</span>
+                                    @if (!string.IsNullOrWhiteSpace(member.User?.JobTitle))
+                                    {
+                                        <span class="text-muted small">@member.User.JobTitle</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>@member.Role</td>
+                            <td>@member.FundingArrangement</td>
+                            <td>
+                                <span class="@employmentBadgeClass">@member.EmploymentType</span>
+                            </td>
+                            <td>
+                                <span class="@statusBadgeClass">@statusLabel</span>
+                            </td>
+                            <td>
+                                @if (string.Equals(member.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (!string.IsNullOrWhiteSpace(member.LeaveReason))
+                                    {
+                                        <span>@member.LeaveReason</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Reason not recorded</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a asp-controller="Project"
+                                   asp-action="TeamMemberDetails"
+                                   asp-route-projectId="@Model.Id"
+                                   asp-route-teamMemberId="@member.Id"
+                                   class="btn btn-link btn-sm">View</a>
+                                <a asp-controller="Project"
+                                   asp-action="EditTeamMember"
+                                   asp-route-projectId="@Model.Id"
+                                   asp-route-teamMemberId="@member.Id"
+                                   class="btn btn-link btn-sm">Edit</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-2">No team members recorded.</p>
+                <a asp-controller="Project"
+                   asp-action="CreateTeamMember"
+                   asp-route-projectId="@Model.Id"
+                   class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add the first team member
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
