@@ -2,49 +2,20 @@
 
 @{
     ViewData["Title"] = "Project Details";
+    var deliveryCode = $"DEL-DDT-{Model.Id}";
 }
 
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-6">
-                <ol class="breadcrumb">
+            <div class="col-sm-12 col-md-8">
+                <ol class="breadcrumb breadcrumb-chevron" aria-label="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item"><a asp-action="Index">Delivery</a></li>
-                    <li class="breadcrumb-item active">Project</li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Delivery reporting</a></li>
+                    <li class="breadcrumb-item active" aria-current="page"><span>Project</span></li>
                 </ol>
                 <h1 class="m-0">@Model.Title</h1>
-                <p class="text-muted mb-0">@Model.ProjectCode</p>
-            </div>
-            <div class="col-sm-6">
-                <div class="float-right">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">
-                                Edit Project
-                            </a>
-                            <a class="dropdown-item" href="@Url.Action("Details", new { id = Model.Id, tab = "settings" })">
-                                Project Settings
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addMilestoneModal">
-                                Add Milestone
-                            </a>
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addSuccessModal">
-                                Add Success
-                            </a>
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addIssueModal">
-                                Add Issue
-                            </a>
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#addContactModal">
-                                Add Contact
-                            </a>
-                        </div>
-                    </div>
-                </div>
+                <p class="text-muted mb-0">Delivery code: @deliveryCode</p>
             </div>
         </div>
     </div>
@@ -70,56 +41,87 @@
         <div class="row">
             <!-- Left Column: Navigation -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
-                <div class="card">
+                <!-- Project Navigation Card -->
+                <div class="card mb-4">
                     <div class="card-header">
                         <h3 class="card-title">Navigation</h3>
                     </div>
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "overview" })" 
+                            @{ var activeKpiCount = Model.Kpis?.Count(k => k.Active) ?? 0; }
+                            @{
+                                var dependencyCount = Model.DependenciesAsSource.Count() + Model.DependenciesAsTarget.Count();
+                            }
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "overview" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "overview" ? "active" : "")">
                                 Overview
                             </a>
-                            @if (Model.IsFlagship)
-                            {
-                                <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })" 
-                                   class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "deliverables" ? "active" : "")">
-                                    Deliverables
-                                </a>
-                            }
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "outcomes" })" 
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "outcomes" ? "active" : "")">
-                                Outcomes
-                            </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "strategicalignment" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "strategicalignment" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "strategicalignment" ? "active" : "")">
                                 Strategic Alignment
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "milestones" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "outcomes" })"
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "outcomes" ? "active" : "")">
+                                Outcomes
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "milestones" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "milestones" ? "active" : "")">
                                 Milestones
                                 <span class="badge badge-light float-right">@Model.Milestones.Count</span>
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "successes" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "dependencies" })"
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "dependencies" ? "active" : "")">
+                                Dependencies
+                                <span class="badge badge-light float-right">@dependencyCount</span>
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "kpis" })"
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "kpis" ? "active" : "")">
+                                KPIs
+                                @if (activeKpiCount > 0)
+                                {
+                                    <span class="badge badge-light float-right">@activeKpiCount</span>
+                                }
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "successes" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "successes" ? "active" : "")">
                                 Successes
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "rag" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "rag" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "rag" ? "active" : "")">
                                 RAG Tracking
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "funding" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "funding" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "funding" ? "active" : "")">
                                 Funding and Resources
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "contacts" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "contacts" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "contacts" ? "active" : "")">
                                 Contacts
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "products" })" 
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "products" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "products" ? "active" : "")">
-                                Products
+                                Linked Products
                                 <span class="badge badge-light float-right">@Model.ProjectProducts.Count</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RAID Navigation Card -->
+                <div class="card mb-4 mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">RAID</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item d-flex justify-content-between align-items-center text-muted">
+                                <span>Risks</span>
+                                <span class="badge badge-light">Coming soon</span>
+                            </div>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "actions" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "actions" ? "active" : "")">
+                                Actions
+                                <span class="badge badge-light float-right">@Model.Actions.Where(a => !a.IsDeleted).Count()</span>
                             </a>
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "issues" })" 
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "issues" ? "active" : "")">
@@ -129,13 +131,13 @@
                                 }
                                 <span class="badge badge-light float-right">@issueCount</span>
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "dependencies" })" 
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "dependencies" ? "active" : "")">
-                                Dependencies
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "decisions" })" 
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "decisions" ? "active" : "")">
+                                Decisions
                                 @{
-                                    var dependencyCount = Model.DependenciesAsSource.Count() + Model.DependenciesAsTarget.Count();
+                                    var decisionCount = Model.Decisions.Where(d => !d.IsDeleted).Count();
                                 }
-                                <span class="badge badge-light float-right">@dependencyCount</span>
+                                <span class="badge badge-light float-right">@decisionCount</span>
                             </a>
                         </div>
                     </div>
@@ -174,6 +176,9 @@
                     case "milestones":
                         @await Html.PartialAsync("_Milestones", Model)
                         break;
+                    case "kpis":
+                        @await Html.PartialAsync("_Kpis", Model)
+                        break;
                     case "successes":
                         @await Html.PartialAsync("_Successes", Model)
                         break;
@@ -192,6 +197,12 @@
                     case "issues":
                         @await Html.PartialAsync("_Issues", Model)
                         break;
+                    case "actions":
+                        @await Html.PartialAsync("_Actions", Model)
+                        break;
+                    case "decisions":
+                        @await Html.PartialAsync("_Decisions", Model)
+                        break;
                     case "dependencies":
                         @await Html.PartialAsync("_Dependencies", Model)
                         break;
@@ -208,48 +219,6 @@
 </div>
 
 <!-- Add Milestone Modal -->
-<div class="modal fade" id="addMilestoneModal" tabindex="-1" role="dialog" aria-labelledby="addMilestoneModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addMilestoneModalLabel">Add New Milestone</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="AddMilestone" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="milestoneName">Milestone Name</label>
-                        <input type="text" class="form-control" id="milestoneName" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="milestoneDescription">Description</label>
-                        <textarea class="form-control" id="milestoneDescription" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="milestoneDueDate">Due Date</label>
-                        <input type="date" class="form-control" id="milestoneDueDate" name="dueDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="milestoneStatus">Status</label>
-                        <select class="form-control" id="milestoneStatus" name="status">
-                            <option value="planned">Planned</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="at_risk">At Risk</option>
-                            <option value="complete">Complete</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Milestone</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <!-- View Milestones Modal -->
 <div class="modal fade" id="viewMilestonesModal" tabindex="-1" role="dialog" aria-labelledby="viewMilestonesModalLabel" aria-hidden="true">
@@ -325,7 +294,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No milestones defined.</td>
+                                    <td colspan="5" class="text-muted">No milestones recorded.</td>
                                 </tr>
                             }
                         </tbody>
@@ -542,19 +511,27 @@
         function sortTable(table, column, direction) {
             var tbody = table.find('tbody');
             var rows = tbody.find('tr').toArray();
+            var dateColumns = ['DueDate', 'ActualDate', 'Detected', 'Target', 'Changed', 'Reported'];
             
             rows.sort(function(a, b) {
-                var aVal, bVal;
                 var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                var aCell = $(a).find('td').eq(colIndex);
+                var bCell = $(b).find('td').eq(colIndex);
+                var aSort = aCell.data('sortValue');
+                var bSort = bCell.data('sortValue');
+                var aVal, bVal;
                 
-                if (column === 'DueDate' || column === 'ActualDate') {
-                    var aDate = $(a).find('td').eq(colIndex).text().trim();
-                    var bDate = $(b).find('td').eq(colIndex).text().trim();
-                    aVal = new Date(aDate);
-                    bVal = new Date(bDate);
+                if (aSort !== undefined || bSort !== undefined) {
+                    aVal = aSort !== undefined ? aSort : '';
+                    bVal = bSort !== undefined ? bSort : '';
+                } else if (dateColumns.indexOf(column) > -1) {
+                    var aDate = Date.parse(aCell.text().trim());
+                    var bDate = Date.parse(bCell.text().trim());
+                    aVal = isNaN(aDate) ? 0 : aDate;
+                    bVal = isNaN(bDate) ? 0 : bDate;
                 } else {
-                    aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                    bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    aVal = aCell.text().trim().toLowerCase();
+                    bVal = bCell.text().trim().toLowerCase();
                 }
                 
                 if (direction === 'asc') {
@@ -579,7 +556,8 @@
             header.append(' <i class="fas ' + iconClass + '"></i>');
         }
     }
-    </script>
+</script>
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
 }
 
 <!-- Add Contact Modal -->

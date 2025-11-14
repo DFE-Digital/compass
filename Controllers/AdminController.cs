@@ -564,9 +564,17 @@ public class AdminController : Controller
     {
         var objectives = await _context.Objectives
             .Include(o => o.OwnerUser)
+            .Include(o => o.ThemeSroUser)
+            .Include(o => o.OutcomeSroUser)
             .Where(o => !o.IsDeleted)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync();
+
+        ViewBag.Users = new SelectList(
+            await _context.Users.OrderBy(u => u.Name).ToListAsync(),
+            "Id",
+            "Name"
+        );
         
         return View("~/Views/Admin/Objective/Index.cshtml", objectives);
     }
@@ -581,6 +589,8 @@ public class AdminController : Controller
 
         var objective = await _context.Objectives
             .Include(o => o.OwnerUser)
+            .Include(o => o.ThemeSroUser)
+            .Include(o => o.OutcomeSroUser)
             .Include(o => o.Risks.Where(r => !r.IsDeleted))
             .Include(o => o.Issues.Where(i => !i.IsDeleted))
             .Include(o => o.Milestones.Where(m => !m.IsDeleted))
@@ -605,7 +615,7 @@ public class AdminController : Controller
     // POST: Admin/CreateObjective
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateObjective([Bind("Title,Theme,Description,OwnerUserId,Status")] Objective objective)
+    public async Task<IActionResult> CreateObjective([Bind("Title,Theme,Description,OwnerUserId,ThemeSroUserId,OutcomeSroUserId,Status")] Objective objective)
     {
         if (ModelState.IsValid)
         {
@@ -618,7 +628,7 @@ public class AdminController : Controller
                 _context.Add(objective);
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = $"Strategic objective '{objective.Title}' has been created successfully.";
+                TempData["SuccessMessage"] = $"Priority outcome '{objective.Title}' has been created successfully.";
                 return RedirectToAction(nameof(Objectives));
             }
             catch (Exception ex)
@@ -628,7 +638,7 @@ public class AdminController : Controller
             }
         }
         
-        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name", objective.OwnerUserId);
+        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
         return View("~/Views/Admin/Objective/Create.cshtml", objective);
     }
 
@@ -646,14 +656,14 @@ public class AdminController : Controller
             return NotFound();
         }
 
-        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name", objective.OwnerUserId);
+        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
         return View("~/Views/Admin/Objective/Edit.cshtml", objective);
     }
 
     // POST: Admin/EditObjective/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditObjective(int id, [Bind("Id,Title,Theme,Description,OwnerUserId,Status")] Objective objective)
+    public async Task<IActionResult> EditObjective(int id, [Bind("Id,Title,Theme,Description,OwnerUserId,ThemeSroUserId,OutcomeSroUserId,Status")] Objective objective)
     {
         if (id != objective.Id)
         {
@@ -674,12 +684,14 @@ public class AdminController : Controller
                 existingObjective.Theme = objective.Theme;
                 existingObjective.Description = objective.Description;
                 existingObjective.OwnerUserId = objective.OwnerUserId;
+                existingObjective.ThemeSroUserId = objective.ThemeSroUserId;
+                existingObjective.OutcomeSroUserId = objective.OutcomeSroUserId;
                 existingObjective.Status = objective.Status;
                 existingObjective.UpdatedAt = DateTime.UtcNow;
                 
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = $"Strategic objective '{objective.Title}' has been updated successfully.";
+                TempData["SuccessMessage"] = $"Priority outcome '{objective.Title}' has been updated successfully.";
                 return RedirectToAction(nameof(Objectives));
             }
             catch (DbUpdateConcurrencyException)
@@ -700,7 +712,7 @@ public class AdminController : Controller
             }
         }
         
-        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name", objective.OwnerUserId);
+        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
         return View("~/Views/Admin/Objective/Edit.cshtml", objective);
     }
 
@@ -740,7 +752,7 @@ public class AdminController : Controller
                 
             if (objective == null)
             {
-                TempData["ErrorMessage"] = "Strategic objective not found.";
+                TempData["ErrorMessage"] = "Priority outcome not found.";
                 return RedirectToAction(nameof(Objectives));
             }
 
@@ -758,7 +770,7 @@ public class AdminController : Controller
             objective.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             
-            TempData["SuccessMessage"] = $"Strategic objective '{objective.Title}' has been deleted successfully.";
+            TempData["SuccessMessage"] = $"Priority outcome '{objective.Title}' has been deleted successfully.";
         }
         catch (Exception ex)
         {
@@ -790,8 +802,150 @@ public class AdminController : Controller
         ViewBag.Phases = await _context.PhaseLookups.OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
         ViewBag.GddRoles = await _context.GddRoles.OrderBy(r => r.RoleFamily).ThenBy(r => r.RoleName).ThenBy(r => r.RoleLevel).ToListAsync();
         ViewBag.Skills = await _context.Skills.OrderBy(s => s.SkillName).ToListAsync();
+        ViewBag.KpiCategories = await _context.KpiCategories.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync();
         
         return View("~/Views/Admin/Settings/Index.cshtml");
+    }
+
+    // ========================================
+    // SETTINGS - KPI Categories
+    // ========================================
+
+    public async Task<IActionResult> KpiCategories()
+    {
+        var categories = await _context.KpiCategories
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .ToListAsync();
+
+        return View("~/Views/Admin/Settings/KpiCategories.cshtml", categories);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateKpiCategory([Bind("Name,Code,Description,SortOrder,IsActive")] KpiCategory category)
+    {
+        if (string.IsNullOrWhiteSpace(category.Name))
+        {
+            TempData["ErrorMessage"] = "Name is required.";
+            return RedirectToAction(nameof(KpiCategories));
+        }
+
+        try
+        {
+            category.Name = category.Name.Trim();
+            category.Code = SanitiseKpiCategoryCode(category.Code, category.Name);
+            category.Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description.Trim();
+            category.SortOrder = await NormaliseKpiCategorySortOrderAsync(category.SortOrder);
+            category.CreatedAt = DateTime.UtcNow;
+            category.UpdatedAt = DateTime.UtcNow;
+
+            var codeExists = await _context.KpiCategories.AnyAsync(c => c.Code == category.Code);
+            if (codeExists)
+            {
+                TempData["ErrorMessage"] = $"A KPI category with code '{category.Code}' already exists.";
+                return RedirectToAction(nameof(KpiCategories));
+            }
+
+            _context.KpiCategories.Add(category);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"KPI category '{category.Name}' created.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating KPI category");
+            TempData["ErrorMessage"] = "An error occurred while creating the KPI category.";
+        }
+
+        return RedirectToAction(nameof(KpiCategories));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateKpiCategory(int id, string name, string? code, string? description, int sortOrder, bool isActive)
+    {
+        var category = await _context.KpiCategories.FindAsync(id);
+        if (category == null)
+        {
+            TempData["ErrorMessage"] = "KPI category not found.";
+            return RedirectToAction(nameof(KpiCategories));
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["ErrorMessage"] = "Name is required.";
+            return RedirectToAction(nameof(KpiCategories));
+        }
+
+        try
+        {
+            var normalisedCode = SanitiseKpiCategoryCode(code, name);
+            var duplicate = await _context.KpiCategories.AnyAsync(c => c.Code == normalisedCode && c.Id != id);
+            if (duplicate)
+            {
+                TempData["ErrorMessage"] = $"A KPI category with code '{normalisedCode}' already exists.";
+                return RedirectToAction(nameof(KpiCategories));
+            }
+
+            category.Name = name.Trim();
+            category.Code = normalisedCode;
+            category.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            if (sortOrder > 0)
+            {
+                category.SortOrder = sortOrder;
+            }
+            else if (category.SortOrder == 0)
+            {
+                category.SortOrder = await NormaliseKpiCategorySortOrderAsync(sortOrder);
+            }
+            category.IsActive = isActive;
+            category.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"KPI category '{category.Name}' updated.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating KPI category {KpiCategoryId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the KPI category.";
+        }
+
+        return RedirectToAction(nameof(KpiCategories));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteKpiCategory(int id)
+    {
+        var category = await _context.KpiCategories.FindAsync(id);
+        if (category == null)
+        {
+            TempData["ErrorMessage"] = "KPI category not found.";
+            return RedirectToAction(nameof(KpiCategories));
+        }
+
+        try
+        {
+            var codePrefix = $"{category.Code}-";
+            var kpiUsage = await _context.Kpis.CountAsync(k => k.Code != null && k.Code.StartsWith(codePrefix));
+            if (kpiUsage > 0)
+            {
+                TempData["ErrorMessage"] = $"Cannot delete '{category.Name}' because it is used by {kpiUsage} KPI(s). Consider deactivating it instead.";
+                return RedirectToAction(nameof(KpiCategories));
+            }
+
+            _context.KpiCategories.Remove(category);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"KPI category '{category.Name}' deleted.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting KPI category {KpiCategoryId}", id);
+            TempData["ErrorMessage"] = "An error occurred while deleting the KPI category.";
+        }
+
+        return RedirectToAction(nameof(KpiCategories));
     }
 
     // ========================================
@@ -1182,6 +1336,29 @@ public class AdminController : Controller
         return _context.RiskTiers.Any(e => e.Id == id);
     }
 
+    private static string SanitiseKpiCategoryCode(string? value, string? fallbackName)
+    {
+        var source = string.IsNullOrWhiteSpace(value) ? fallbackName : value;
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return "KPI";
+        }
+
+        var filtered = new string(source.Trim().ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+        return string.IsNullOrWhiteSpace(filtered) ? "KPI" : filtered;
+    }
+
+    private async Task<int> NormaliseKpiCategorySortOrderAsync(int sortOrder)
+    {
+        if (sortOrder > 0)
+        {
+            return sortOrder;
+        }
+
+        var maxSortOrder = await _context.KpiCategories.Select(c => (int?)c.SortOrder).MaxAsync() ?? 0;
+        return maxSortOrder + 10;
+    }
+
     // ========================================
     // SETTINGS - Action Sources
     // ========================================
@@ -1195,6 +1372,101 @@ public class AdminController : Controller
             .ToListAsync();
         
         return View("~/Views/Admin/Settings/ActionSources.cshtml", actionSources);
+    }
+
+    // GET: Admin/DeliveryPriorities
+    public async Task<IActionResult> DeliveryPriorities()
+    {
+        var priorities = await _context.DeliveryPriorities
+            .OrderBy(dp => dp.SortOrder)
+            .ThenBy(dp => dp.Name)
+            .ToListAsync();
+
+        return View("~/Views/Admin/Settings/DeliveryPriorities.cshtml", priorities);
+    }
+
+    // POST: Admin/CreateDeliveryPriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateDeliveryPriority([Bind("Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    {
+        if (ModelState.IsValid)
+        {
+            var normalisedName = deliveryPriority.Name.Trim();
+            if (await _context.DeliveryPriorities
+                    .AnyAsync(dp => dp.Name.ToLower() == normalisedName.ToLower()))
+            {
+                ModelState.AddModelError("Name", "A delivery priority with this name already exists.");
+            }
+            else
+            {
+                deliveryPriority.Name = normalisedName;
+                deliveryPriority.CreatedAt = DateTime.UtcNow;
+                deliveryPriority.UpdatedAt = DateTime.UtcNow;
+
+                if (deliveryPriority.SortOrder == 0)
+                {
+                    var nextSortOrder = await _context.DeliveryPriorities
+                        .Select(dp => (int?)dp.SortOrder)
+                        .MaxAsync() ?? 0;
+                    deliveryPriority.SortOrder = nextSortOrder + 1;
+                }
+
+                _context.DeliveryPriorities.Add(deliveryPriority);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Delivery priority '{deliveryPriority.Name}' has been created.";
+                return RedirectToAction(nameof(DeliveryPriorities));
+            }
+        }
+
+        TempData["ErrorMessage"] = "Unable to create delivery priority. Please fix the errors and try again.";
+        return await DeliveryPriorities();
+    }
+
+    // POST: Admin/EditDeliveryPriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditDeliveryPriority(int id, [Bind("Id,Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    {
+        if (id != deliveryPriority.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            var existingPriority = await _context.DeliveryPriorities.FindAsync(id);
+            if (existingPriority == null)
+            {
+                return NotFound();
+            }
+
+            var normalisedName = deliveryPriority.Name.Trim();
+            var duplicateExists = await _context.DeliveryPriorities
+                .AnyAsync(dp => dp.Id != id && dp.Name.ToLower() == normalisedName.ToLower());
+            if (duplicateExists)
+            {
+                ModelState.AddModelError("Name", "A delivery priority with this name already exists.");
+            }
+            else
+            {
+                existingPriority.Name = normalisedName;
+                existingPriority.Summary = deliveryPriority.Summary;
+                existingPriority.Description = deliveryPriority.Description;
+                existingPriority.SortOrder = deliveryPriority.SortOrder;
+                existingPriority.IsActive = deliveryPriority.IsActive;
+                existingPriority.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Delivery priority '{existingPriority.Name}' has been updated.";
+                return RedirectToAction(nameof(DeliveryPriorities));
+            }
+        }
+
+        TempData["ErrorMessage"] = "Unable to update delivery priority. Please fix the errors and try again.";
+        return await DeliveryPriorities();
     }
 
     // GET: Admin/CreateActionSource
@@ -2680,6 +2952,133 @@ public class AdminController : Controller
             TempData["ErrorMessage"] = "An error occurred while clearing performance returns. Please try again.";
             return RedirectToAction(nameof(ClearPerformanceReturns));
         }
+    }
+
+    // DEMAND MANAGEMENT TRIAGE MEETINGS
+
+    public async Task<IActionResult> TriageMeetings()
+    {
+        var meetings = await _context.TriageMeetings
+            .Include(tm => tm.DemandRequests)
+            .OrderByDescending(tm => tm.StartAt)
+            .ToListAsync();
+
+        return View("~/Views/Admin/TriageMeeting/Index.cshtml", meetings);
+    }
+
+    public IActionResult CreateTriageMeeting()
+    {
+        var model = new TriageMeeting
+        {
+            StartAt = DateTime.UtcNow.Date.AddHours(9),
+            EndAt = DateTime.UtcNow.Date.AddHours(10)
+        };
+
+        return View("~/Views/Admin/TriageMeeting/Create.cshtml", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateTriageMeeting(TriageMeeting model)
+    {
+        if (model.EndAt <= model.StartAt)
+        {
+            ModelState.AddModelError(nameof(model.EndAt), "End time must be after the start time.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View("~/Views/Admin/TriageMeeting/Create.cshtml", model);
+        }
+
+        model.Title = model.Title?.Trim() ?? string.Empty;
+        model.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+        model.Location = string.IsNullOrWhiteSpace(model.Location) ? null : model.Location.Trim();
+        model.CreatedAt = DateTime.UtcNow;
+        model.UpdatedAt = DateTime.UtcNow;
+
+        _context.TriageMeetings.Add(model);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Triage meeting created.";
+        return RedirectToAction(nameof(TriageMeetings));
+    }
+
+    public async Task<IActionResult> EditTriageMeeting(int id)
+    {
+        var meeting = await _context.TriageMeetings.FindAsync(id);
+        if (meeting == null)
+        {
+            return NotFound();
+        }
+
+        return View("~/Views/Admin/TriageMeeting/Edit.cshtml", meeting);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditTriageMeeting(int id, TriageMeeting model)
+    {
+        if (id != model.Id)
+        {
+            return BadRequest();
+        }
+
+        if (model.EndAt <= model.StartAt)
+        {
+            ModelState.AddModelError(nameof(model.EndAt), "End time must be after the start time.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View("~/Views/Admin/TriageMeeting/Edit.cshtml", model);
+        }
+
+        var meeting = await _context.TriageMeetings.FindAsync(id);
+        if (meeting == null)
+        {
+            return NotFound();
+        }
+
+        meeting.Title = model.Title?.Trim() ?? string.Empty;
+        meeting.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+        meeting.Location = string.IsNullOrWhiteSpace(model.Location) ? null : model.Location.Trim();
+        meeting.StartAt = model.StartAt;
+        meeting.EndAt = model.EndAt;
+        meeting.IsActive = model.IsActive;
+        meeting.UpdatedAt = DateTime.UtcNow;
+
+        _context.TriageMeetings.Update(meeting);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Triage meeting updated.";
+        return RedirectToAction(nameof(TriageMeetings));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteTriageMeeting(int id)
+    {
+        var meeting = await _context.TriageMeetings
+            .Include(tm => tm.DemandRequests)
+            .FirstOrDefaultAsync(tm => tm.Id == id);
+
+        if (meeting == null)
+        {
+            return NotFound();
+        }
+
+        if (meeting.DemandRequests.Any())
+        {
+            TempData["ErrorMessage"] = "Cannot delete a triage meeting that has demand requests assigned.";
+            return RedirectToAction(nameof(TriageMeetings));
+        }
+
+        _context.TriageMeetings.Remove(meeting);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Triage meeting deleted.";
+        return RedirectToAction(nameof(TriageMeetings));
     }
 }
 

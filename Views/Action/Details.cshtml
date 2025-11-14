@@ -1,12 +1,52 @@
-@model Compass.Models.Action
+@model Compass.ViewModels.ActionDetailsViewModel
+@using Compass.Models
+@using System.Linq
+@using Microsoft.AspNetCore.Mvc.Rendering
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
 @{
     ViewData["Title"] = "Action details";
-    var isOverdue = Model.DueDate.HasValue && 
-                    Model.DueDate.Value.Date < DateTime.Today &&
-                    Model.Status != "done" && Model.Status != "cancelled";
-    var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
-    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+    var action = Model.Action;
+    var input = Model.Input ?? new Compass.ViewModels.ActionDetailsUpdateInputModel { Id = action.Id };
+    input.Title ??= action.Title;
+    var currentTitle = string.IsNullOrWhiteSpace(input.Title) ? action.Title : input.Title;
+    var effectiveStatus = input.Status ?? action.Status;
+    var effectiveDueDate = input.DueDate ?? action.DueDate;
+    var isOverdue = effectiveDueDate.HasValue && effectiveDueDate.Value.Date < DateTime.Today &&
+        !string.Equals(effectiveStatus, "done", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(effectiveStatus, "cancelled", StringComparison.OrdinalIgnoreCase);
+    var successMessage = TempData["SuccessMessage"] as string;
+    var errorMessage = TempData["ErrorMessage"] as string;
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+    var validationMessages = ViewData.ModelState.Values
+        .SelectMany(v => v.Errors)
+        .Select(e => e.ErrorMessage)
+        .Where(message => !string.IsNullOrWhiteSpace(message))
+        .Distinct()
+        .ToList();
+    var productBaseUrl = (Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/").TrimEnd('/');
+    var productLookup = Model.ProductLookup ?? new System.Collections.Generic.Dictionary<string, ProductDto>(System.StringComparer.OrdinalIgnoreCase);
+    productLookup.TryGetValue(action.FipsId ?? string.Empty, out var linkedProduct);
+    var productUrl = !string.IsNullOrWhiteSpace(action.FipsId) ? $"{productBaseUrl}/product/{action.FipsId}" : null;
+    var actionsIndexUrl = Url.Action("Index");
+    var projectActionsUrl = action.ProjectId.HasValue ? Url.Action("Details", "Project", new { id = action.ProjectId, tab = "actions" }) : null;
+    var selectedDecisionOption = (Model.DecisionOptions ?? Enumerable.Empty<SelectListItem>()).FirstOrDefault(o => o.Selected);
+    var decisionCreateUrl = action.ProjectId.HasValue ? Url.Action("CreateDecision", "Project", new { projectId = action.ProjectId, actionId = action.Id }) : null;
+    var hasRiskLinks = (input.SelectedRiskIds?.Any() ?? false) || (action.RiskActions?.Any() ?? false);
+    var hasIssueLinks = (input.SelectedIssueIds?.Any() ?? false) || (action.IssueActions?.Any() ?? false);
 }
 
 <div class="content-header">
@@ -18,22 +58,25 @@
                     <li class="breadcrumb-item"><a asp-action="Index">Actions</a></li>
                     <li class="breadcrumb-item active">Action details</li>
                 </ol>
-                <h1 class="m-0">@Model.Title</h1>
-                <p class="text-muted">Action #@Model.Id</p>
+                <h1 class="m-0">@currentTitle</h1>
+                <p class="text-muted mb-0">Action #@action.Id</p>
             </div>
             <div class="col-sm-6">
-                <div class="float-right">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" asp-action="Edit" asp-route-id="@Model.Id">Edit action</a>
-                            <a class="dropdown-item" asp-action="Create" asp-route-parentActionId="@Model.Id">Add sub-action</a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" asp-action="Delete" asp-route-id="@Model.Id">Delete action</a>
-                        </div>
-                    </div>
+                <div class="d-flex justify-content-sm-end flex-wrap">
+                    <a class="btn btn-outline-secondary mr-2 mb-2" href="@actionsIndexUrl">Back to actions</a>
+                    @if (projectActionsUrl != null)
+                    {
+                        <a class="btn btn-outline-secondary mr-2 mb-2" href="@projectActionsUrl">Project actions</a>
+                    }
+                    @if (action.ProjectId.HasValue)
+                    {
+                        <a class="btn btn-outline-primary mr-2 mb-2" asp-controller="Project" asp-action="CreateDecision" asp-route-projectId="@action.ProjectId" asp-route-actionId="@action.Id">Record decision</a>
+                    }
+                    <a class="btn btn-outline-primary mr-2 mb-2" asp-action="Create" asp-route-parentActionId="@action.Id">Add sub-action</a>
+                    <form asp-action="Delete" asp-route-id="@action.Id" method="post" class="d-inline mb-2" onsubmit="return confirm('Are you sure you want to delete this action?');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-danger">Delete</button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -42,75 +85,329 @@
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
-            <!-- Main content -->
-            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12 col-sm-12 col-12">
-                <!-- Product link -->
-                @if (!string.IsNullOrEmpty(Model.FipsId))
-                {
-                    var product = products.FirstOrDefault(p => p.FipsId == Model.FipsId);
-                    var productUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}";
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                @successMessage
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                @errorMessage
+            </div>
+        }
+        @if (validationMessages.Any())
+        {
+            <div class="alert alert-danger" role="alert">
+                <h2 class="h5 mb-2">There is a problem</h2>
+                <ul class="mb-0">
+                    @foreach (var message in validationMessages)
+                    {
+                        <li>@message</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <form asp-action="UpdateDetails" method="post" novalidate>
+            @Html.AntiForgeryToken()
+            <input asp-for="Input.Id" type="hidden" />
+            <div class="row">
+                <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12 col-sm-12">
                     <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Action summary</h3>
+                        </div>
                         <div class="card-body">
-                            <strong>Product:</strong>
-                            @if (product != null)
+                            <div class="form-group @(hasError("Input.Title") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Title" class="font-weight-bold">Title</label>
+                                <span asp-validation-for="Input.Title" class="form-error-message"></span>
+                                <input asp-for="Input.Title" class="form-control @(hasError("Input.Title") ? "form-control--error" : string.Empty)" maxlength="200" />
+                            </div>
+                            <div class="form-group @(hasError("Input.Description") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Description">Description</label>
+                                <small class="form-text text-muted">Explain what needs to happen and any supporting context.</small>
+                                <span asp-validation-for="Input.Description" class="form-error-message"></span>
+                                <textarea asp-for="Input.Description" class="form-control @(hasError("Input.Description") ? "form-control--error" : string.Empty)" rows="4"></textarea>
+                            </div>
+                            <div class="form-group @(hasError("Input.Notes") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Notes">Notes</label>
+                                <small class="form-text text-muted">Capture any additional information or commentary.</small>
+                                <span asp-validation-for="Input.Notes" class="form-error-message"></span>
+                                <textarea asp-for="Input.Notes" class="form-control @(hasError("Input.Notes") ? "form-control--error" : string.Empty)" rows="3"></textarea>
+                            </div>
+                            <div class="form-group @(hasError("Input.EvidenceUrl") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.EvidenceUrl">Evidence URL</label>
+                                <small class="form-text text-muted">Provide a link to supporting documentation or evidence.</small>
+                                <span asp-validation-for="Input.EvidenceUrl" class="form-error-message"></span>
+                                <input asp-for="Input.EvidenceUrl" class="form-control @(hasError("Input.EvidenceUrl") ? "form-control--error" : string.Empty)" type="url" placeholder="https://example.com" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Linked items</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group @(hasError("Input.SelectedRiskIds") ? "form-group--error" : string.Empty)" data-source-group="risk" data-force-visible="@hasRiskLinks.ToString().ToLowerInvariant()">
+                                <label asp-for="Input.SelectedRiskIds">Linked risks</label>
+                                <small class="form-text text-muted">Hold Ctrl (Windows) or Command (Mac) to select more than one risk.</small>
+                                <span asp-validation-for="Input.SelectedRiskIds" class="form-error-message"></span>
+                                <select asp-for="Input.SelectedRiskIds" class="form-control @(hasError("Input.SelectedRiskIds") ? "form-control--error" : string.Empty)" asp-items="Model.RiskOptions" multiple size="6"></select>
+                            </div>
+                            <div class="form-group @(hasError("Input.SelectedIssueIds") ? "form-group--error" : string.Empty)" data-source-group="issue" data-force-visible="@hasIssueLinks.ToString().ToLowerInvariant()">
+                                <label asp-for="Input.SelectedIssueIds">Linked issues</label>
+                                <small class="form-text text-muted">Select the issues that this action helps to resolve.</small>
+                                <span asp-validation-for="Input.SelectedIssueIds" class="form-error-message"></span>
+                                <select asp-for="Input.SelectedIssueIds" class="form-control @(hasError("Input.SelectedIssueIds") ? "form-control--error" : string.Empty)" asp-items="Model.IssueOptions" multiple size="6"></select>
+                            </div>
+                            <div class="form-group @(hasError("Input.SelectedMilestoneIds") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.SelectedMilestoneIds">Linked milestones</label>
+                                <small class="form-text text-muted">Choose milestones that depend on this action.</small>
+                                <span asp-validation-for="Input.SelectedMilestoneIds" class="form-error-message"></span>
+                                <select asp-for="Input.SelectedMilestoneIds" class="form-control @(hasError("Input.SelectedMilestoneIds") ? "form-control--error" : string.Empty)" asp-items="Model.MilestoneOptions" multiple size="5"></select>
+                            </div>
+                            <div class="form-group @(hasError("Input.DecisionId") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.DecisionId">Associated decision</label>
+                                <small class="form-text text-muted">Link this action to a decision (optional).</small>
+                                <span asp-validation-for="Input.DecisionId" class="form-error-message"></span>
+                                <select asp-for="Input.DecisionId" class="form-control @(hasError("Input.DecisionId") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not linked</option>
+                                    @foreach (var option in Model.DecisionOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.SourceType") ? "form-group--error" : string.Empty)">
+                                <label class="font-weight-bold mb-1">Action source</label>
+                                <small class="form-text text-muted">Identify what triggered this action so we can tie it back to the right RAID item.</small>
+                                <span asp-validation-for="Input.SourceType" class="form-error-message"></span>
+                                <div class="action-source-options" role="radiogroup">
+                                    <div class="custom-control custom-radio">
+                                        <input type="radio"
+                                               class="custom-control-input"
+                                               id="sourceType-none"
+                                               name="Input.SourceType"
+                                               value=""
+                                               @(string.IsNullOrWhiteSpace(input.SourceType) ? "checked" : null) />
+                                        <label class="custom-control-label" for="sourceType-none">Not set</label>
+                                    </div>
+                                    @foreach (var option in Model.SourceTypeOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        var radioId = $"sourceType_{option.Value?.Replace(" ", string.Empty).ToLowerInvariant()}";
+                                        <div class="custom-control custom-radio">
+                                            <input type="radio"
+                                                   class="custom-control-input"
+                                                   id="@radioId"
+                                                   name="Input.SourceType"
+                                                   value="@option.Value"
+                                                   @(option.Selected ? "checked" : null) />
+                                            <label class="custom-control-label" for="@radioId">@option.Text</label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-6 @(hasError("Input.SourceReference") ? "form-group--error" : string.Empty)">
+                                    <label asp-for="Input.SourceReference">Source reference</label>
+                                    <span asp-validation-for="Input.SourceReference" class="form-error-message"></span>
+                                    <input asp-for="Input.SourceReference" class="form-control @(hasError("Input.SourceReference") ? "form-control--error" : string.Empty)" />
+                                </div>
+                                <div class="form-group col-md-6 @(hasError("Input.SourceRecordUrl") ? "form-group--error" : string.Empty)">
+                                    <label asp-for="Input.SourceRecordUrl">Source record URL</label>
+                                    <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
+                                    <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("Input.SourceRecordUrl") ? "form-control--error" : string.Empty)" type="url" placeholder="https://example.com" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Details</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group @(hasError("Input.Status") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Status">Status</label>
+                                <span asp-validation-for="Input.Status" class="form-error-message"></span>
+                                <select asp-for="Input.Status" class="form-control @(hasError("Input.Status") ? "form-control--error" : string.Empty)">
+                                    @foreach (var option in Model.StatusOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.Priority") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Priority">Priority</label>
+                                <span asp-validation-for="Input.Priority" class="form-error-message"></span>
+                                <select asp-for="Input.Priority" class="form-control @(hasError("Input.Priority") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not set</option>
+                                    @foreach (var option in Model.PriorityOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.AssignedToEmail") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.AssignedToEmail">Assigned to</label>
+                                <small class="form-text text-muted">Use an email address so we can notify the owner.</small>
+                                <span asp-validation-for="Input.AssignedToEmail" class="form-error-message"></span>
+                                <input asp-for="Input.AssignedToEmail" class="form-control @(hasError("Input.AssignedToEmail") ? "form-control--error" : string.Empty)" type="email" />
+                            </div>
+                            <div class="form-group @(hasError("Input.BusinessArea") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.BusinessArea">Business area</label>
+                                <span asp-validation-for="Input.BusinessArea" class="form-error-message"></span>
+                                <select asp-for="Input.BusinessArea" class="form-control @(hasError("Input.BusinessArea") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not set</option>
+                                    @foreach (var option in Model.BusinessAreaOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.ObjectiveId") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.ObjectiveId">Strategic objective</label>
+                                <span asp-validation-for="Input.ObjectiveId" class="form-error-message"></span>
+                                <select asp-for="Input.ObjectiveId" class="form-control @(hasError("Input.ObjectiveId") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not linked</option>
+                                    @foreach (var option in Model.ObjectiveOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.ActionSourceId") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.ActionSourceId">Action source</label>
+                                <span asp-validation-for="Input.ActionSourceId" class="form-error-message"></span>
+                                <select asp-for="Input.ActionSourceId" class="form-control @(hasError("Input.ActionSourceId") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not set</option>
+                                    @foreach (var option in Model.ActionSourceOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.ParentActionId") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.ParentActionId">Parent action</label>
+                                <span asp-validation-for="Input.ParentActionId" class="form-error-message"></span>
+                                <select asp-for="Input.ParentActionId" class="form-control @(hasError("Input.ParentActionId") ? "form-control--error" : string.Empty)">
+                                    <option value="">None</option>
+                                    @foreach (var option in Model.ParentActionOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group @(hasError("Input.FipsId") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.FipsId">Linked product</label>
+                                <span asp-validation-for="Input.FipsId" class="form-error-message"></span>
+                                <select asp-for="Input.FipsId" class="form-control @(hasError("Input.FipsId") ? "form-control--error" : string.Empty)">
+                                    <option value="">Not linked</option>
+                                    @foreach (var option in Model.ProductOptions ?? Enumerable.Empty<SelectListItem>())
+                                    {
+                                        <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+                                    }
+                                </select>
+                                @if (!string.IsNullOrWhiteSpace(productUrl) && linkedProduct != null)
+                                {
+                                    <small class="form-text text-muted">
+                                        Currently linked to <a href="@productUrl" target="_blank" rel="noopener noreferrer">@linkedProduct.Title (@action.FipsId)</a>
+                                    </small>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(productUrl))
+                                {
+                                    <small class="form-text text-muted">
+                                        Currently linked to <a href="@productUrl" target="_blank" rel="noopener noreferrer">@action.FipsId</a>
+                                    </small>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Timeline</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group @(hasError("Input.StartDate") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.StartDate">Start date</label>
+                                <span asp-validation-for="Input.StartDate" class="form-error-message"></span>
+                                <input asp-for="Input.StartDate" class="form-control @(hasError("Input.StartDate") ? "form-control--error" : string.Empty)" type="date" />
+                            </div>
+                            <div class="form-group @(hasError("Input.DueDate") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.DueDate">Due date</label>
+                                <span asp-validation-for="Input.DueDate" class="form-error-message"></span>
+                                <input asp-for="Input.DueDate" class="form-control @(hasError("Input.DueDate") ? "form-control--error" : string.Empty)" type="date" />
+                                @if (isOverdue)
+                                {
+                                    <small class="text-danger d-block mt-1">This action is overdue.</small>
+                                }
+                            </div>
+                            <div class="form-group @(hasError("Input.CompletedDate") ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.CompletedDate">Completed date</label>
+                                <span asp-validation-for="Input.CompletedDate" class="form-error-message"></span>
+                                <input asp-for="Input.CompletedDate" class="form-control @(hasError("Input.CompletedDate") ? "form-control--error" : string.Empty)" type="date" />
+                            </div>
+                            <div class="form-group">
+                                <label class="font-weight-bold mb-1">Created</label>
+                                <p class="form-control-plaintext mb-3">@action.CreatedAt.ToString("dd MMM yyyy HH:mm")</p>
+                            </div>
+                            <div class="form-group">
+                                <label class="font-weight-bold mb-1">Last updated</label>
+                                <p class="form-control-plaintext mb-0">@action.UpdatedAt.ToString("dd MMM yyyy HH:mm")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-primary mr-2">Save changes</button>
+                <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@action.Id">Cancel</a>
+            </div>
+        </form>
+
+        <div class="row mt-4">
+            <div class="col-xxl-9 col-xl-9 col-lg-8 col-md-12 col-sm-12">
+                @if (!string.IsNullOrEmpty(action.FipsId) || linkedProduct != null)
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Linked product</h3>
+                        </div>
+                        <div class="card-body">
+                            @if (linkedProduct != null && !string.IsNullOrWhiteSpace(productUrl))
+                                {
+                                    <a href="@productUrl" target="_blank" rel="noopener noreferrer" class="font-weight-semibold">@linkedProduct.Title (@action.FipsId)</a>
+                                    <p class="text-muted mb-0">Phase: @(linkedProduct.Phase ?? "Not set") · State: @(linkedProduct.State ?? "Unknown")</p>
+                                }
+                            else if (!string.IsNullOrWhiteSpace(productUrl) && !string.IsNullOrWhiteSpace(action.FipsId))
                             {
-                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@product.Title (@Model.FipsId)</a>
+                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@action.FipsId</a>
                             }
                             else
                             {
-                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@Model.FipsId</a>
+                                <p class="text-muted mb-0">Product information is not available.</p>
                             }
                         </div>
                     </div>
                 }
 
-                <!-- Description -->
-                @if (!string.IsNullOrEmpty(Model.Description))
+                @if (action.SubActions != null && action.SubActions.Any())
                 {
                     <div class="card">
                         <div class="card-header">
-                            <h3 class="card-title">Description</h3>
-                        </div>
-                        <div class="card-body">
-                            <p class="mb-0">@Model.Description</p>
-                        </div>
-                    </div>
-                }
-
-                <!-- Notes -->
-                @if (!string.IsNullOrEmpty(Model.Notes))
-                {
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Notes</h3>
-                        </div>
-                        <div class="card-body">
-                            <p class="mb-0">@Model.Notes</p>
-                        </div>
-                    </div>
-                }
-
-                <!-- Evidence -->
-                @if (!string.IsNullOrEmpty(Model.EvidenceUrl))
-                {
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Evidence</h3>
-                        </div>
-                        <div class="card-body">
-                            <a href="@Model.EvidenceUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">View evidence</a>
-                            <div class="mt-2"><small class="text-muted">@Model.EvidenceUrl</small></div>
-                        </div>
-                    </div>
-                }
-
-                <!-- Sub-actions -->
-                @if (Model.SubActions != null && Model.SubActions.Any())
-                {
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Sub-actions</h3>
+                            <h3 class="card-title mb-0">Sub-actions</h3>
                         </div>
                         <div class="card-body table-responsive p-0">
                             <table class="table table-hover mb-0">
@@ -123,12 +420,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var subAction in Model.SubActions)
+                                    @foreach (var subAction in action.SubActions)
                                     {
-                                        var subOverdue = subAction.DueDate.HasValue && 
-                                                       subAction.DueDate.Value.Date < DateTime.Today &&
-                                                       subAction.Status != "done" && subAction.Status != "cancelled";
-                                        <tr class="@(subOverdue ? "table-danger" : "")">
+                                        var subOverdue = subAction.DueDate.HasValue &&
+                                                         subAction.DueDate.Value.Date < DateTime.Today &&
+                                                         subAction.Status != "done" && subAction.Status != "cancelled";
+                                        <tr class="@(subOverdue ? "table-danger" : string.Empty)">
                                             <td><a asp-action="Details" asp-route-id="@subAction.Id">@subAction.Title</a></td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(subAction.AssignedToEmail))
@@ -166,7 +463,7 @@
                                             <td>
                                                 @if (subAction.DueDate.HasValue)
                                                 {
-                                                    <span class="@(subOverdue ? "text-danger" : "")">
+                                                    <span class="@(subOverdue ? "text-danger" : string.Empty)">
                                                         @subAction.DueDate.Value.ToString("dd MMM yyyy")
                                                     </span>
                                                 }
@@ -183,26 +480,29 @@
                     </div>
                 }
 
-                <!-- Related items -->
-                @if ((Model.RiskActions != null && Model.RiskActions.Any()) || 
-                     (Model.IssueActions != null && Model.IssueActions.Any()) || 
-                     (Model.MilestoneActions != null && Model.MilestoneActions.Any()))
+                @if ((action.RiskActions != null && action.RiskActions.Any()) ||
+                     (action.IssueActions != null && action.IssueActions.Any()) ||
+                     (action.MilestoneActions != null && action.MilestoneActions.Any()))
                 {
-                    @if (Model.RiskActions != null && Model.RiskActions.Any())
+                    @if (action.RiskActions != null && action.RiskActions.Any())
                     {
                         <div class="card">
                             <div class="card-header">
-                                <h3 class="card-title">Related risks</h3>
+                                <h3 class="card-title mb-0">Related risks</h3>
                             </div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    @foreach (var ra in Model.RiskActions)
+                                    @foreach (var link in action.RiskActions)
                                     {
-                                        <li class="list-group-item">
-                                            <a asp-controller="Risk" asp-action="Details" asp-route-id="@ra.Risk.Id">@ra.Risk.Title</a>
-                                            <span class="badge @(ra.Risk.RiskScore >= 15 ? "badge-danger" : ra.Risk.RiskScore >= 10 ? "badge-warning" : "badge-success") float-right">
-                                                Score: @ra.Risk.RiskScore
-                                            </span>
+                                        if (link.Risk == null)
+                                        {
+                                            continue;
+                                        }
+                                        var risk = link.Risk;
+                                        var badgeClass = risk.RiskScore >= 15 ? "badge-danger" : risk.RiskScore >= 10 ? "badge-warning" : "badge-success";
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id">@risk.Title</a>
+                                            <span class="badge @badgeClass">Score: @risk.RiskScore</span>
                                         </li>
                                     }
                                 </ul>
@@ -210,21 +510,25 @@
                         </div>
                     }
 
-                    @if (Model.IssueActions != null && Model.IssueActions.Any())
+                    @if (action.IssueActions != null && action.IssueActions.Any())
                     {
                         <div class="card">
                             <div class="card-header">
-                                <h3 class="card-title">Related issues</h3>
+                                <h3 class="card-title mb-0">Related issues</h3>
                             </div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    @foreach (var ia in Model.IssueActions)
+                                    @foreach (var link in action.IssueActions)
                                     {
-                                        <li class="list-group-item">
-                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@ia.Issue.Id">@ia.Issue.Title</a>
-                                            <span class="badge @(ia.Issue.Severity == "critical" ? "badge-danger" : ia.Issue.Severity == "high" ? "badge-warning" : "badge-info") float-right">
-                                                @ia.Issue.Severity
-                                            </span>
+                                        if (link.Issue == null)
+                                        {
+                                            continue;
+                                        }
+                                        var issue = link.Issue;
+                                        var badgeClass = issue.Severity == "critical" ? "badge-danger" : issue.Severity == "high" ? "badge-warning" : "badge-info";
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
+                                            <span class="badge @badgeClass text-capitalize">@issue.Severity</span>
                                         </li>
                                     }
                                 </ul>
@@ -232,19 +536,24 @@
                         </div>
                     }
 
-                    @if (Model.MilestoneActions != null && Model.MilestoneActions.Any())
+                    @if (action.MilestoneActions != null && action.MilestoneActions.Any())
                     {
                         <div class="card">
                             <div class="card-header">
-                                <h3 class="card-title">Related milestones</h3>
+                                <h3 class="card-title mb-0">Related milestones</h3>
                             </div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    @foreach (var ma in Model.MilestoneActions)
+                                    @foreach (var link in action.MilestoneActions)
                                     {
-                                        <li class="list-group-item">
-                                            <a asp-controller="Milestone" asp-action="Details" asp-route-id="@ma.Milestone.Id">@ma.Milestone.Name</a>
-                                            <small class="text-muted float-right">Due: @ma.Milestone.DueDate.ToString("dd MMM yyyy")</small>
+                                        if (link.Milestone == null)
+                                        {
+                                            continue;
+                                        }
+                                        var milestone = link.Milestone;
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <a asp-controller="Project" asp-action="MilestoneDetails" asp-route-id="@milestone.Id">@milestone.Name</a>
+                                            <small class="text-muted">Due: @milestone.DueDate.ToString("dd MMM yyyy")</small>
                                         </li>
                                     }
                                 </ul>
@@ -253,18 +562,17 @@
                     }
                 }
 
-                <!-- Comments Section -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Comments</h3>
+                        <h3 class="card-title mb-0">Comments</h3>
                     </div>
                     <div class="card-body">
                         <div id="commentsContainer">
                             <p class="text-muted text-center">Loading comments...</p>
                         </div>
-                        
+
                         <hr />
-                        
+
                         <div class="form-group mb-0">
                             <label for="newComment">Add a comment</label>
                             <textarea id="newComment" class="form-control" rows="3" placeholder="Enter your comment..."></textarea>
@@ -273,165 +581,44 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Sidebar -->
-            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12 col-12">
-                <!-- Details -->
+            <div class="col-xxl-3 col-xl-3 col-lg-4 col-md-12 col-sm-12">
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Details</h3>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">Associated decisions</h3>
+                        @if (!string.IsNullOrWhiteSpace(decisionCreateUrl))
+                        {
+                            <a class="btn btn-outline-primary btn-sm" href="@decisionCreateUrl">Record decision</a>
+                        }
                     </div>
                     <div class="card-body">
-                        <dl class="mb-0">
-                            <dt>Status</dt>
-                            <dd class="mb-3">
-                                @switch (Model.Status)
+                        @if (Model.DecisionAssociations != null && Model.DecisionAssociations.Any())
+                        {
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var decision in Model.DecisionAssociations)
                                 {
-                                    case "done":
-                                        <span class="badge badge-success">Done</span>
-                                        break;
-                                    case "in_progress":
-                                        <span class="badge badge-primary">In progress</span>
-                                        break;
-                                    case "blocked":
-                                        <span class="badge badge-danger">Blocked</span>
-                                        break;
-                                    case "not_started":
-                                        <span class="badge badge-secondary">Not started</span>
-                                        break;
-                                    case "cancelled":
-                                        <span class="badge badge-dark">Cancelled</span>
-                                        break;
-                                    default:
-                                        <span class="badge badge-secondary">@Model.Status</span>
-                                        break;
+                                    <li class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <a asp-controller="Decision" asp-action="Details" asp-route-id="@decision.Id" class="font-weight-semibold">@decision.Title</a>
+                                            <span class="badge badge-secondary text-capitalize">@decision.Status</span>
+                                        </div>
+                                        <small class="text-muted d-block">Decision date: @(decision.DecisionDate?.ToString("dd MMM yyyy") ?? "Not set")</small>
+                                        @if (!string.IsNullOrWhiteSpace(decision.Outcome))
+                                        {
+                                            <small class="text-muted d-block">Outcome: @decision.Outcome</small>
+                                        }
+                                    </li>
                                 }
-                            </dd>
-
-                            <dt>Priority</dt>
-                            <dd class="mb-3">
-                                @switch (Model.Priority)
-                                {
-                                    case "high":
-                                        <span class="badge badge-danger">High</span>
-                                        break;
-                                    case "medium":
-                                        <span class="badge badge-warning">Medium</span>
-                                        break;
-                                    case "low":
-                                        <span class="badge badge-info">Low</span>
-                                        break;
-                                    default:
-                                        <span class="text-muted">@(Model.Priority ?? "Not set")</span>
-                                        break;
-                                }
-                            </dd>
-
-                            <dt>Assigned to</dt>
-                            <dd class="mb-3">
-                                @if (!string.IsNullOrEmpty(Model.AssignedToEmail))
-                                {
-                                    <a href="mailto:@Model.AssignedToEmail">@Model.AssignedToEmail</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Unassigned</span>
-                                }
-                            </dd>
-
-                            <dt>Business area</dt>
-                            <dd class="mb-3">
-                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                {
-                                    <a asp-action="Index" asp-route-businessArea="@Model.BusinessArea">@Model.BusinessArea</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </dd>
-
-                            <dt>Strategic objective</dt>
-                            <dd class="mb-3">
-                                @if (Model.Objective != null)
-                                {
-                                    <a asp-action="Index" asp-route-objectiveId="@Model.Objective.Id">@Model.Objective.Title</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not linked</span>
-                                }
-                            </dd>
-
-                            <dt>Action source</dt>
-                            <dd class="mb-3">
-                                @if (Model.ActionSource != null)
-                                {
-                                    <div>@Model.ActionSource.Name</div>
-                                    @if (!string.IsNullOrEmpty(Model.ActionSource.Summary))
-                                    {
-                                        <small class="text-muted">@Model.ActionSource.Summary</small>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </dd>
-
-                            <dt>Parent action</dt>
-                            <dd class="mb-0">
-                                @if (Model.ParentAction != null)
-                                {
-                                    <a asp-action="Details" asp-route-id="@Model.ParentAction.Id">@Model.ParentAction.Title</a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">None</span>
-                                }
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <!-- Timeline -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Timeline</h3>
-                    </div>
-                    <div class="card-body">
-                        <dl class="mb-0">
-                            <dt>Start date</dt>
-                            <dd class="mb-3">@(Model.StartDate?.ToString("dd MMM yyyy") ?? "-")</dd>
-
-                            <dt>Due date</dt>
-                            <dd class="mb-3">
-                                @if (Model.DueDate.HasValue)
-                                {
-                                    <span class="@(isOverdue ? "text-danger" : "")">
-                                        @Model.DueDate.Value.ToString("dd MMM yyyy")
-                                    </span>
-                                    @if (isOverdue)
-                                    {
-                                        var daysOverdue = (DateTime.Today - Model.DueDate.Value.Date).Days;
-                                        <br><span class="text-danger small">@daysOverdue days overdue</span>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
-                            </dd>
-
-                            <dt>Completed</dt>
-                            <dd class="mb-3">@(Model.CompletedDate?.ToString("dd MMM yyyy") ?? "-")</dd>
-
-                            <dt>Created</dt>
-                            <dd class="mb-3">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-
-                            <dt>Last updated</dt>
-                            <dd class="mb-0">@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-                        </dl>
+                            </ul>
+                        }
+                        else if (selectedDecisionOption != null && !string.IsNullOrWhiteSpace(selectedDecisionOption.Value))
+                        {
+                            <p class="mb-1">Linked decision: @selectedDecisionOption.Text</p>
+                            <small class="text-muted">Save changes to update the association.</small>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">No decisions are currently linked to this action.</p>
+                        }
                     </div>
                 </div>
             </div>
@@ -439,84 +626,118 @@
     </div>
 </section>
 
-@Html.AntiForgeryToken()
-
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
-        $(document).ready(function() {
-            loadComments();
-            
-            function loadComments() {
-                $.ajax({
-                    url: '/comments/Action/@Model.Id',
-                    type: 'GET',
-                    success: function(data) {
-                        displayComments(data);
-                    },
-                    error: function() {
-                        $('#commentsContainer').html('<p class="text-danger">Failed to load comments</p>');
-                    }
-                });
-            }
-            
-            function displayComments(comments) {
-                if (!comments || comments.length === 0) {
-                    $('#commentsContainer').html('<p class="text-muted">No comments yet</p>');
+        (function () {
+            const commentsEndpoint = '/api/comments/Action/@action.Id';
+            const container = document.getElementById('commentsContainer');
+            const commentInput = document.getElementById('newComment');
+            const addCommentBtn = document.getElementById('addCommentBtn');
+            const requestVerificationToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            function renderComments(comments) {
+                if (!Array.isArray(comments) || comments.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No comments yet</p>';
                     return;
                 }
-                
-                var html = '';
-                comments.forEach(function(comment) {
-                    var date = new Date(comment.createdAt);
-                    var dateStr = date.toLocaleString('en-GB', { 
-                        day: 'numeric', 
-                        month: 'short', 
-                        year: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+
+                const html = comments.map(comment => {
+                    const createdAt = new Date(comment.createdAt);
+                    const createdBy = comment.createdByUser ? comment.createdByUser.name : 'Unknown';
+                    const dateStr = createdAt.toLocaleString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
                     });
-                    
-                    html += '<div class="border-bottom pb-3 mb-3">';
-                    html += '<div class="d-flex justify-content-between mb-2">';
-                    html += '<strong>' + (comment.createdByUser ? comment.createdByUser.name : 'Unknown') + '</strong>';
-                    html += '<small class="text-muted">' + dateStr + '</small>';
-                    html += '</div>';
-                    html += '<p class="mb-0">' + comment.commentText.replace(/\n/g, '<br>') + '</p>';
-                    html += '</div>';
-                });
-                
-                $('#commentsContainer').html(html);
+
+                    const body = (comment.commentText || '').replace(/\n/g, '<br>');
+
+                    return `
+                        <div class="border-bottom pb-3 mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <strong>${createdBy}</strong>
+                                <small class="text-muted">${dateStr}</small>
+                            </div>
+                            <p class="mb-0">${body}</p>
+                        </div>`;
+                }).join('');
+
+                container.innerHTML = html;
             }
-            
-            $('#addCommentBtn').click(function() {
-                var commentText = $('#newComment').val().trim();
-                
+
+            function loadComments() {
+                fetch(commentsEndpoint)
+                    .then(response => response.ok ? response.json() : Promise.reject())
+                    .then(renderComments)
+                    .catch(() => {
+                        container.innerHTML = '<p class="text-danger">Failed to load comments</p>';
+                    });
+            }
+
+            addCommentBtn.addEventListener('click', function () {
+                const commentText = (commentInput.value || '').trim();
+
                 if (!commentText) {
                     alert('Please enter a comment');
                     return;
                 }
-                
-                $.ajax({
-                    url: '/comments',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        entityType: 'Action',
-                        entityId: @Model.Id,
-                        commentText: commentText
-                    }),
+
+                fetch('/api/comments', {
+                    method: 'POST',
                     headers: {
-                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': requestVerificationToken
                     },
-                    success: function() {
-                        $('#newComment').val('');
+                    body: JSON.stringify({
+                        entityType: 'Action',
+                        entityId: @action.Id,
+                        commentText: commentText
+                    })
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to add comment');
+                        }
+                        commentInput.value = '';
                         loadComments();
-                    },
-                    error: function() {
-                        alert('Failed to add comment');
+                    })
+                    .catch(() => alert('Failed to add comment'));
+            });
+
+            loadComments();
+
+            function toggleSourceGroups() {
+                const selected = document.querySelector('input[name="Input.SourceType"]:checked');
+                const value = (selected?.value || '').toLowerCase();
+                const groups = document.querySelectorAll('[data-source-group]');
+                groups.forEach(group => {
+                    const forceVisible = group.dataset.forceVisible === 'true';
+                    if (forceVisible) {
+                        group.classList.remove('d-none');
+                        return;
+                    }
+
+                    const targets = (group.dataset.sourceGroup || '')
+                        .toLowerCase()
+                        .split(',')
+                        .map(t => t.trim())
+                        .filter(Boolean);
+
+                    if (!value || targets.length == 0 || targets.includes(value)) {
+                        group.classList.remove('d-none');
+                    } else {
+                        group.classList.add('d-none');
                     }
                 });
-            });
-        });
+            }
+
+            const sourceRadios = document.querySelectorAll('input[name="Input.SourceType"]');
+            if (sourceRadios.length > 0) {
+                sourceRadios.forEach(radio => radio.addEventListener('change', toggleSourceGroups));
+                toggleSourceGroups();
+            }
+        })();
     </script>
 }

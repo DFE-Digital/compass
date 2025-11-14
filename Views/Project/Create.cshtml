@@ -1,21 +1,92 @@
 @model Compass.Models.Project
 
 @{
-    ViewData["Title"] = "Create Project";
+    ViewData["Title"] = "Create delivery entry";
+
+    Func<string, string> normaliseKey = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = key;
+        var bracketIndex = trimmed.IndexOf('[');
+        if (bracketIndex >= 0)
+        {
+            trimmed = trimmed.Substring(0, bracketIndex);
+        }
+
+        var segments = trimmed.Split('.', System.StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : trimmed;
+    };
+
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var normalised = normaliseKey(key);
+        if (!string.Equals(normalised, key, System.StringComparison.OrdinalIgnoreCase) &&
+            ViewData.ModelState.TryGetValue(normalised, out var segmentEntry) && segmentEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+
+    var fieldIdLookup = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+    {
+        [nameof(Model.Title)] = Html.IdFor(m => m.Title),
+        [nameof(Model.Aim)] = Html.IdFor(m => m.Aim),
+        [nameof(Model.Phase)] = Html.IdFor(m => m.Phase),
+        [nameof(Model.BusinessArea)] = Html.IdFor(m => m.BusinessArea),
+        [nameof(Model.StartDate)] = Html.IdFor(m => m.StartDate),
+        [nameof(Model.TargetDeliveryDate)] = Html.IdFor(m => m.TargetDeliveryDate),
+        [nameof(Model.HistoricBuRTId)] = Html.IdFor(m => m.HistoricBuRTId),
+        [nameof(Model.IsMultiDepartmentProject)] = Html.IdFor(m => m.IsMultiDepartmentProject),
+        [nameof(Model.Status)] = Html.IdFor(m => m.Status),
+        [nameof(Model.RagStatus)] = Html.IdFor(m => m.RagStatus),
+        [nameof(Model.RagJustification)] = Html.IdFor(m => m.RagJustification),
+        [nameof(Model.TotalPermFte)] = Html.IdFor(m => m.TotalPermFte),
+        [nameof(Model.TotalMspFte)] = Html.IdFor(m => m.TotalMspFte),
+        [nameof(Model.OtherDepartments)] = Html.IdFor(m => m.OtherDepartments)
+    };
+
+    var modelErrors = ViewData.ModelState
+        .Where(kvp => kvp.Value?.Errors?.Any() == true)
+        .Select(kvp => new
+        {
+            Key = normaliseKey(kvp.Key),
+            Errors = kvp.Value!.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToList()
+        })
+        .Where(entry => entry.Errors.Any())
+        .ToList();
+
+    var hasModelErrors = modelErrors.Any();
+    var errorSummaryClasses = hasModelErrors ? "card error-summary mb-3" : "card error-summary d-none mb-3";
 }
 
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1>Create Project</h1>
-            </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
-                    <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Index">Projects</a></li>
-                    <li class="breadcrumb-item active">Project</li>
-                </ol>
+        <div class="row mb-3 align-items-center">
+            <div class="col-lg-8 col-md-7 col-sm-12">
+                <nav aria-label="Breadcrumb" class="mb-2">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
+                        <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Index">Delivery reporting</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Create entry</li>
+                    </ol>
+                </nav>
+                <h1 class="m-0">Create delivery entry</h1>
             </div>
         </div>
     </div>
@@ -23,7 +94,39 @@
 
 <section class="content">
     <div class="container-fluid">
-        <form asp-action="Create" method="post">
+        <form asp-action="Create" method="post" novalidate>
+            <div id="project-create-error-summary"
+                 class="@errorSummaryClasses"
+                 role="alert"
+                 aria-labelledby="error-summary-title"
+                 @(hasModelErrors ? "tabindex=\"-1\" aria-hidden=\"false\"" : "aria-hidden=\"true\"")
+                 data-module="error-summary">
+                <div class="card-body">
+                    <h2 id="error-summary-title" class="error-summary__title">There is a problem</h2>
+                    <ul class="error-summary__list">
+                        @if (hasModelErrors)
+                        {
+                            foreach (var entry in modelErrors)
+                            {
+                                string fieldId = string.Empty;
+                                var hasLink = !string.IsNullOrWhiteSpace(entry.Key) && fieldIdLookup.TryGetValue(entry.Key, out fieldId);
+
+                                foreach (var message in entry.Errors)
+                                {
+                                    if (hasLink)
+                                    {
+                                        <li><a href="#@fieldId">@message</a></li>
+                                    }
+                                    else
+                                    {
+                                        <li>@message</li>
+                                    }
+                                }
+                            }
+                        }
+                    </ul>
+                </div>
+            </div>
             <div class="row">
                 <div class="col-md-8">
                     <div class="card">
@@ -31,57 +134,47 @@
                             <h3 class="card-title">Project Details</h3>
                         </div>
                         <div class="card-body">
-                            @if (!ViewData.ModelState.IsValid)
-                            {
-                                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                    <h5><i class="icon fas fa-ban"></i> Please correct the following errors:</h5>
-                                    <div asp-validation-summary="All" class="text-danger mb-0"></div>
-                                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                        <span aria-hidden="true">&times;</span>
-                                    </button>
-                                </div>
-                            }
-                            
                             <!-- Title -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.Title)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Title" class="control-label">
                                     Project Title <span class="text-danger">*</span>
                                 </label>
-                                <input asp-for="Title" class="form-control" required />
-                                <span asp-validation-for="Title" class="text-danger"></span>
                                 <small class="form-text text-muted">Enter a clear and descriptive title for the project</small>
+                                <span asp-validation-for="Title" class="form-error-message"></span>
+                                <input asp-for="Title" class="form-control @(hasError(nameof(Model.Title)) ? "form-control--error" : string.Empty)" required />
                             </div>
 
                             <!-- Aim -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.Aim)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Aim" class="control-label">
                                     Project Aim <span class="text-danger">*</span>
                                 </label>
-                                <textarea asp-for="Aim" class="form-control" rows="3" required></textarea>
-                                <span asp-validation-for="Aim" class="text-danger"></span>
                                 <small class="form-text text-muted">Describe the purpose and objectives of this project</small>
+                                <span asp-validation-for="Aim" class="form-error-message"></span>
+                                <textarea asp-for="Aim" class="form-control @(hasError(nameof(Model.Aim)) ? "form-control--error" : string.Empty)" rows="3" required></textarea>
                             </div>
 
-                            <!-- Flagship and AI -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check">
-                                        <input asp-for="IsFlagship" class="form-check-input" type="checkbox" />
-                                        <label asp-for="IsFlagship" class="form-check-label">This is a flagship project</label>
-                                    </div>
+                            <!-- Flagship -->
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsFlagship" class="form-check-input" type="checkbox" />
+                                    <label asp-for="IsFlagship" class="form-check-label">This is a flagship project</label>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-check">
-                                        <input asp-for="IsAiInitiative" class="form-check-input" type="checkbox" />
-                                        <label asp-for="IsAiInitiative" class="form-check-label">This is an AI initiative</label>
-                                    </div>
+                            </div>
+
+                            <!-- AI initiative -->
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsAiInitiative" class="form-check-input" type="checkbox" />
+                                    <label asp-for="IsAiInitiative" class="form-check-label">This is an AI initiative</label>
                                 </div>
                             </div>
 
                             <!-- Phase -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.Phase)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Phase" class="control-label">Phase of Delivery</label>
-                                <select asp-for="Phase" class="form-control">
+                                <span asp-validation-for="Phase" class="form-error-message"></span>
+                                <select asp-for="Phase" class="form-control @(hasError(nameof(Model.Phase)) ? "form-control--error" : string.Empty)">
                                     <option value="">Select phase</option>
                                     @if (ViewBag.Phases != null)
                                     {
@@ -91,13 +184,13 @@
                                         }
                                     }
                                 </select>
-                                <span asp-validation-for="Phase" class="text-danger"></span>
                             </div>
 
                             <!-- Business Area -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.BusinessArea)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="BusinessArea" class="control-label">Business Area</label>
-                                <select asp-for="BusinessArea" class="form-control">
+                                <span asp-validation-for="BusinessArea" class="form-error-message"></span>
+                                <select asp-for="BusinessArea" class="form-control @(hasError(nameof(Model.BusinessArea)) ? "form-control--error" : string.Empty)">
                                     <option value="">Select business area</option>
                                     @if (ViewBag.BusinessAreas != null)
                                     {
@@ -107,81 +200,110 @@
                                         }
                                     }
                                 </select>
-                                <span asp-validation-for="BusinessArea" class="text-danger"></span>
                             </div>
 
-                            <!-- Start Date and Target Date -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="StartDate" class="control-label">
-                                            Start Date <span class="text-danger">*</span>
-                                        </label>
-                                        <input asp-for="StartDate" type="date" class="form-control" required />
-                                        <span asp-validation-for="StartDate" class="text-danger"></span>
-                                        <small class="form-text text-muted">The date when the project began or will begin</small>
+                            @{
+                                var primaryContactUser = ViewBag.PrimaryContactUser as Compass.Models.User ?? Model.PrimaryContactUser;
+                            }
+                            <div class="form-group">
+                                <label class="control-label" for="createPrimaryContact">Primary contact</label>
+                                <small class="form-text text-muted">Optional – choose the main point of contact for this project.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                    <div class="position-relative">
+                                        <input type="text"
+                                               class="form-control js-user-picker-input"
+                                               id="createPrimaryContact"
+                                               autocomplete="off"
+                                               placeholder="Start typing a name or email address"
+                                               value="@(primaryContactUser?.Name ?? string.Empty)" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                    </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" name="PrimaryContactUserId" class="js-user-picker-value" value="@Model.PrimaryContactUserId" />
+                                    <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected.">
+                                        @if (primaryContactUser != null)
+                                        {
+                                            <div class="user-picker__selected-card">
+                                                <div class="user-picker__selected-name">@primaryContactUser.Name</div>
+                                                <div class="user-picker__selected-meta">@primaryContactUser.Email</div>
+                                                <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No primary contact selected.</span>
+                                        }
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="TargetDeliveryDate" class="control-label">Target Delivery Date</label>
-                                        <input asp-for="TargetDeliveryDate" type="date" class="form-control" />
-                                        <span asp-validation-for="TargetDeliveryDate" class="text-danger"></span>
-                                        <small class="form-text text-muted">Leave blank if not known</small>
-                                    </div>
-                                </div>
+                            </div>
+
+                            <!-- Start Date -->
+                            <div class="form-group @(hasError(nameof(Model.StartDate)) ? "form-group--error" : string.Empty)">
+                                <label asp-for="StartDate" class="control-label">
+                                    Start Date <span class="text-danger">*</span>
+                                </label>
+                                <small class="form-text text-muted">The date when the project began or will begin</small>
+                                <span asp-validation-for="StartDate" class="form-error-message"></span>
+                                <input asp-for="StartDate" type="date" class="form-control @(hasError(nameof(Model.StartDate)) ? "form-control--error" : string.Empty)" required />
+                            </div>
+
+                            <!-- Target Date -->
+                            <div class="form-group @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-group--error" : string.Empty)">
+                                <label asp-for="TargetDeliveryDate" class="control-label">Target Delivery Date</label>
+                                <small class="form-text text-muted">Leave blank if not known</small>
+                                <span asp-validation-for="TargetDeliveryDate" class="form-error-message"></span>
+                                <input asp-for="TargetDeliveryDate" type="date" class="form-control @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-control--error" : string.Empty)" />
                             </div>
 
                             <!-- Historic BuRT ID -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.HistoricBuRTId)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="HistoricBuRTId" class="control-label">Historic BuRT ID</label>
-                                <input asp-for="HistoricBuRTId" class="form-control" placeholder="Enter historic BuRT ID" />
-                                <span asp-validation-for="HistoricBuRTId" class="text-danger"></span>
                                 <small class="form-text text-muted">The historic BuRT (Business Risk Tracking) ID for this project</small>
+                                <span asp-validation-for="HistoricBuRTId" class="form-error-message"></span>
+                                <input asp-for="HistoricBuRTId" class="form-control @(hasError(nameof(Model.HistoricBuRTId)) ? "form-control--error" : string.Empty)" placeholder="Enter historic BuRT ID" />
                             </div>
 
                             <!-- Multi-department Project -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.IsMultiDepartmentProject)) ? "form-group--error" : string.Empty)">
                                 <div class="form-check">
                                     <input asp-for="IsMultiDepartmentProject" class="form-check-input" id="isMultiDept" />
                                     <label asp-for="IsMultiDepartmentProject" class="form-check-label">Is this a multi-department project?</label>
                                 </div>
                                 <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
-                                <span asp-validation-for="IsMultiDepartmentProject" class="text-danger"></span>
+                                <span asp-validation-for="IsMultiDepartmentProject" class="form-error-message"></span>
                             </div>
 
-                            <div class="row" id="otherDepartmentsRow" style="display: none;">
-                                <div class="col-12">
-                                    <div class="form-group">
-                                        <label class="control-label">Other Government Departments</label>
-                                        <div class="input-group">
-                                            <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." />
-                                            <div class="input-group-append">
-                                                <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
-                                            </div>
+                            <div id="otherDepartmentsRow" style="display: none;">
+                                <div class="form-group @(hasError(nameof(Model.OtherDepartments)) ? "form-group--error" : string.Empty)">
+                                    <label class="control-label">Other Government Departments</label>
+                                    <small class="form-text text-muted">Select at least one department if this is a multi-department project</small>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." />
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
                                         </div>
-                                        <div id="selectedDepartments" class="mt-2"></div>
-                                        <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
-                                        <span asp-validation-for="OtherDepartments" class="text-danger"></span>
-                                        <small class="form-text text-muted">Select at least one department if this is a multi-department project</small>
                                     </div>
+                                    <div id="selectedDepartments" class="mt-2"></div>
+                                    <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
+                                    <span asp-validation-for="OtherDepartments" class="form-error-message"></span>
                                 </div>
                             </div>
 
                             <!-- Status -->
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.Status)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Status" class="control-label">
                                     Project Status <span class="text-danger">*</span>
                                 </label>
-                                <select asp-for="Status" class="form-control" required>
+                                <small class="form-text text-muted">Select the current status of this project</small>
+                                <span asp-validation-for="Status" class="form-error-message"></span>
+                                <select asp-for="Status" class="form-control @(hasError(nameof(Model.Status)) ? "form-control--error" : string.Empty)" required>
                                     <option value="">Select status</option>
                                     <option value="Active">Active</option>
                                     <option value="On Hold">On Hold</option>
                                     <option value="Completed">Completed</option>
                                     <option value="Cancelled">Cancelled</option>
                                 </select>
-                                <span asp-validation-for="Status" class="text-danger"></span>
-                                <small class="form-text text-muted">Select the current status of this project</small>
                             </div>
                         </div>
                     </div>
@@ -192,11 +314,13 @@
                             <h3 class="card-title">RAG Status</h3>
                         </div>
                         <div class="card-body">
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.RagStatus)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="RagStatus" class="control-label">
                                     RAG Status <span class="text-danger">*</span>
                                 </label>
-                                <select asp-for="RagStatus" class="form-control" required>
+                                <small class="form-text text-muted">Select the current Red, Amber, Green status for this project</small>
+                                <span asp-validation-for="RagStatus" class="form-error-message"></span>
+                                <select asp-for="RagStatus" class="form-control @(hasError(nameof(Model.RagStatus)) ? "form-control--error" : string.Empty)" required>
                                     <option value="">Select RAG status</option>
                                     <option value="Green">Green</option>
                                     <option value="Amber-Green">Amber-Green</option>
@@ -204,14 +328,12 @@
                                     <option value="Amber-Red">Amber-Red</option>
                                     <option value="Red">Red</option>
                                 </select>
-                                <span asp-validation-for="RagStatus" class="text-danger"></span>
-                                <small class="form-text text-muted">Select the current Red, Amber, Green status for this project</small>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group @(hasError(nameof(Model.RagJustification)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="RagJustification" class="control-label">RAG Justification</label>
-                                <textarea asp-for="RagJustification" class="form-control" rows="3" placeholder="Explain why this RAG status has been assigned"></textarea>
-                                <span asp-validation-for="RagJustification" class="text-danger"></span>
                                 <small class="form-text text-muted">Provide justification for the selected RAG status</small>
+                                <span asp-validation-for="RagJustification" class="form-error-message"></span>
+                                <textarea asp-for="RagJustification" class="form-control @(hasError(nameof(Model.RagJustification)) ? "form-control--error" : string.Empty)" rows="3" placeholder="Explain why this RAG status has been assigned"></textarea>
                             </div>
                         </div>
                     </div>
@@ -229,17 +351,17 @@
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-group">
+                                        <div class="form-group @(hasError(nameof(Model.TotalPermFte)) ? "form-group--error" : string.Empty)">
                                         <label asp-for="TotalPermFte" class="control-label">Total Permanent FTE</label>
-                                        <input asp-for="TotalPermFte" type="number" step="0.01" class="form-control" />
-                                        <span asp-validation-for="TotalPermFte" class="text-danger"></span>
+                                            <span asp-validation-for="TotalPermFte" class="form-error-message"></span>
+                                            <input asp-for="TotalPermFte" type="number" step="0.01" class="form-control @(hasError(nameof(Model.TotalPermFte)) ? "form-control--error" : string.Empty)" />
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="form-group">
+                                        <div class="form-group @(hasError(nameof(Model.TotalMspFte)) ? "form-group--error" : string.Empty)">
                                         <label asp-for="TotalMspFte" class="control-label">Total MSP FTE</label>
-                                        <input asp-for="TotalMspFte" type="number" step="0.01" class="form-control" />
-                                        <span asp-validation-for="TotalMspFte" class="text-danger"></span>
+                                            <span asp-validation-for="TotalMspFte" class="form-error-message"></span>
+                                            <input asp-for="TotalMspFte" type="number" step="0.01" class="form-control @(hasError(nameof(Model.TotalMspFte)) ? "form-control--error" : string.Empty)" />
                                     </div>
                                 </div>
                             </div>
@@ -266,13 +388,13 @@
                         </div>
                     </div>
 
-                    <!-- Strategic Objectives -->
+                    <!-- Priority Outcomes -->
                     <div class="card">
                         <div class="card-header">
-                            <h3 class="card-title">Strategic Objectives</h3>
+                            <h3 class="card-title">Priority Outcomes</h3>
                         </div>
                         <div class="card-body">
-                            <p>Which strategic objectives does this project support?</p>
+                            <p>Which priority outcomes does this project support?</p>
                             @if (ViewBag.Objectives != null)
                             {
                                 @foreach (var themeGroup in ViewBag.Objectives)
@@ -407,7 +529,7 @@
                                                         Role
                                                     </label>
                                                     <input type="text" name="Contacts[0].Role" class="form-control" placeholder="e.g., Product Manager, Delivery Manager" />
-                                                    <span class="text-danger field-validation-valid" data-valmsg-for="Contacts[0].Role" data-valmsg-replace="true"></span>
+                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Role" data-valmsg-replace="true"></span>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -424,7 +546,7 @@
                                                         Name
                                                     </label>
                                                     <input type="text" name="Contacts[0].Name" class="form-control" placeholder="Contact name" />
-                                                    <span class="text-danger field-validation-valid" data-valmsg-for="Contacts[0].Name" data-valmsg-replace="true"></span>
+                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Name" data-valmsg-replace="true"></span>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -433,7 +555,7 @@
                                                         Email
                                                     </label>
                                                     <input type="email" name="Contacts[0].Email" class="form-control" placeholder="Contact email" />
-                                                    <span class="text-danger field-validation-valid" data-valmsg-for="Contacts[0].Email" data-valmsg-replace="true"></span>
+                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Email" data-valmsg-replace="true"></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -455,8 +577,10 @@
                             <h3 class="card-title">Actions</h3>
                         </div>
                         <div class="card-body">
-                            <button type="submit" class="btn btn-primary btn-block">Create Project</button>
-                            <a asp-action="Index" class="btn btn-secondary btn-block">Cancel</a>
+                            <div class="d-flex flex-column">
+                                <button type="submit" class="btn btn-success btn-block mb-2">Create entry</button>
+                                <a asp-action="Index" class="btn btn-outline-secondary btn-block">Cancel</a>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -467,6 +591,7 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
     
     <style>
         .text-danger[aria-required="true"]::before {
@@ -585,7 +710,7 @@
                                         '<div class="form-group">' +
                                             '<label class="control-label">Role</label>' +
                                             '<input type="text" name="Contacts[' + contactIndex + '].Role" class="form-control" placeholder="e.g., Product Manager, Delivery Manager" />' +
-                                            '<span class="text-danger field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Role" data-valmsg-replace="true"></span>' +
+                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Role" data-valmsg-replace="true"></span>' +
                                         '</div>' +
                                     '</div>' +
                                     '<div class="col-md-6">' +
@@ -600,14 +725,14 @@
                                         '<div class="form-group">' +
                                             '<label class="control-label">Name</label>' +
                                             '<input type="text" name="Contacts[' + contactIndex + '].Name" class="form-control" placeholder="Contact name" />' +
-                                            '<span class="text-danger field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Name" data-valmsg-replace="true"></span>' +
+                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Name" data-valmsg-replace="true"></span>' +
                                         '</div>' +
                                     '</div>' +
                                     '<div class="col-md-6">' +
                                         '<div class="form-group">' +
                                             '<label class="control-label">Email</label>' +
                                             '<input type="email" name="Contacts[' + contactIndex + '].Email" class="form-control" placeholder="Contact email" />' +
-                                            '<span class="text-danger field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Email" data-valmsg-replace="true"></span>' +
+                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Email" data-valmsg-replace="true"></span>' +
                                         '</div>' +
                                     '</div>' +
                                 '</div>' +

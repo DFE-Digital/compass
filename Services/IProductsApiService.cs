@@ -13,8 +13,10 @@ public interface IProductsApiService
     Task<bool> UpdateProductUrlAsync(string fipsId, string productUrl);
     Task<List<CategoryValueDto>> GetPhaseCategoryValuesAsync();
     Task<List<CategoryValueDto>> GetBusinessAreaCategoryValuesAsync();
+    Task<List<CategoryValueDto>> GetUserGroupCategoryValuesAsync();
     Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
     Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
+    Task<bool> UpdateProductUserGroupsAsync(string fipsId, IEnumerable<int> userGroupCategoryValueIds);
     Task<bool> UpdateProductStateAsync(string fipsId, string state);
     Task<ProductDto?> CreateProductAsync(string title, string? shortDescription, string? longDescription, List<int> categoryValueIds, string state = "Active");
     Task<List<ProductDto>> SearchProductsByTitleAsync(string searchTerm);

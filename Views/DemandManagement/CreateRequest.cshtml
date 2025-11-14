@@ -1,0 +1,349 @@
+@model Compass.Models.DemandRequest
+
+@{
+    ViewData["Title"] = "Create demand request";
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var seniorResponsibleOfficerValue = string.IsNullOrWhiteSpace(Model.SeniorResponsibleOfficer)
+        ? Model.ApplicantName
+        : Model.SeniorResponsibleOfficer;
+    var riskIfNotDeliveredValue = string.IsNullOrWhiteSpace(Model.RiskIfNotDelivered)
+        ? "Not provided"
+        : Model.RiskIfNotDelivered;
+
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var keySegment = key.Split('.').Last();
+        if (!string.Equals(keySegment, key, StringComparison.OrdinalIgnoreCase) &&
+            ViewData.ModelState.TryGetValue(keySegment, out var segmentEntry) && segmentEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+
+    var manifestoFieldId = Html.IdFor(m => m.IsManifestoOrStatutory);
+
+    var fieldIdLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        [nameof(Model.ProposedTitle)] = Html.IdFor(m => m.ProposedTitle),
+        [nameof(Model.OverviewAndBusinessNeed)] = Html.IdFor(m => m.OverviewAndBusinessNeed),
+        [nameof(Model.ExpectedBenefits)] = Html.IdFor(m => m.ExpectedBenefits),
+        [nameof(Model.BusinessArea)] = Html.IdFor(m => m.BusinessArea),
+        [nameof(Model.IsManifestoOrStatutory)] = manifestoFieldId,
+        [nameof(Model.ManifestoStatutoryDetails)] = Html.IdFor(m => m.ManifestoStatutoryDetails),
+        [nameof(Model.HeadcountDuration)] = Html.IdFor(m => m.HeadcountDuration)
+    };
+
+    var modelErrors = ViewData.ModelState
+        .Where(kvp => kvp.Value?.Errors?.Any() == true)
+        .Select(kvp => new
+        {
+            Key = kvp.Key,
+            Errors = kvp.Value!.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToList()
+        })
+        .Where(entry => entry.Errors.Any())
+        .ToList();
+
+    var hasModelErrors = modelErrors.Any();
+    var errorSummaryClasses = hasModelErrors ? "card error-summary" : "card error-summary d-none";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Requests">Demand requests</a></li>
+                    <li class="breadcrumb-item active">Create request</li>
+                </ol>
+                <h1 class="m-0">Create demand request</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <form asp-action="CreateRequest" method="post" id="demandRequestForm" novalidate>
+            <div id="create-request-error-summary"
+                 class="@errorSummaryClasses"
+                 role="alert"
+                 aria-labelledby="error-summary-title"
+                 @(hasModelErrors ? "tabindex=\"-1\" aria-hidden=\"false\"" : "aria-hidden=\"true\"")
+                 data-module="error-summary">
+                <div class="card-body">
+                    <h2 id="error-summary-title" class="error-summary__title">There is a problem</h2>
+                    <ul class="error-summary__list">
+                        @if (hasModelErrors)
+                        {
+                            foreach (var entry in modelErrors)
+                            {
+                                string fieldId = string.Empty;
+                                var key = string.IsNullOrWhiteSpace(entry.Key)
+                                    ? string.Empty
+                                    : entry.Key.Split('.').Last();
+                                var hasLink = !string.IsNullOrWhiteSpace(key) && fieldIdLookup.TryGetValue(key, out fieldId);
+
+                                foreach (var message in entry.Errors)
+                                {
+                                    if (hasLink)
+                                    {
+                                        <li><a href="#@fieldId">@message</a></li>
+                                    }
+                                    else
+                                    {
+                                        <li>@message</li>
+                                    }
+                                }
+                            }
+                        }
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Request summary</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group @(hasError(nameof(Model.ProposedTitle)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="ProposedTitle">Request title <span class="text-danger">*</span></label>
+                        <span asp-validation-for="ProposedTitle" class="form-error-message"></span>
+                        <input asp-for="ProposedTitle" class="form-control @(hasError(nameof(Model.ProposedTitle)) ? "form-control--error" : string.Empty)" maxlength="120" required />
+                        <small class="form-text text-muted">Keep it short and clear (10-120 characters).</small>
+                    </div>
+                    <div class="form-group @(hasError(nameof(Model.OverviewAndBusinessNeed)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="OverviewAndBusinessNeed">Describe the request <span class="text-danger">*</span></label>
+                        <span asp-validation-for="OverviewAndBusinessNeed" class="form-error-message"></span>
+                        <textarea asp-for="OverviewAndBusinessNeed" class="form-control @(hasError(nameof(Model.OverviewAndBusinessNeed)) ? "form-control--error" : string.Empty)" rows="5" placeholder="What are you asking for and why?" required></textarea>
+                    </div>
+                    <div class="form-group @(hasError(nameof(Model.ExpectedBenefits)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="ExpectedBenefits">Describe the outcome <span class="text-danger">*</span></label>
+                        <span asp-validation-for="ExpectedBenefits" class="form-error-message"></span>
+                        <textarea asp-for="ExpectedBenefits" class="form-control @(hasError(nameof(Model.ExpectedBenefits)) ? "form-control--error" : string.Empty)" rows="4" placeholder="What will be different if this happens?" required></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Organisation details</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Requestor</label>
+                        <div class="form-control-plaintext">
+                            <strong>@Model.ApplicantName</strong>
+                            <div class="text-muted">@Model.ApplicantEmail</div>
+                        </div>
+                    </div>
+                    <div class="form-group @(hasError(nameof(Model.BusinessArea)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="BusinessArea">Business area <span class="text-danger">*</span></label>
+                        <span asp-validation-for="BusinessArea" class="form-error-message"></span>
+                        <select asp-for="BusinessArea" class="form-control @(hasError(nameof(Model.BusinessArea)) ? "form-control--error" : string.Empty)" required>
+                            <option value="">Select business area...</option>
+                            @foreach (var area in businessAreas)
+                            {
+                                <option value="@area">@area</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Strategic information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group @(hasError(nameof(Model.IsManifestoOrStatutory)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="IsManifestoOrStatutory">Is this essential for a manifesto or statutory commitment? <span class="text-danger">*</span></label>
+                        <span asp-validation-for="IsManifestoOrStatutory" class="form-error-message"></span>
+                        @{
+                            var manifestoNoId = $"{manifestoFieldId}-no";
+                            var manifestoUnsureId = $"{manifestoFieldId}-unsure";
+                        }
+                        <div>
+                            <div class="form-check">
+                                <input asp-for="IsManifestoOrStatutory" type="radio" value="Yes" class="form-check-input" id="@manifestoFieldId" required />
+                                <label class="form-check-label" for="@manifestoFieldId">Yes</label>
+                            </div>
+                            <div class="form-check">
+                                <input asp-for="IsManifestoOrStatutory" type="radio" value="No" class="form-check-input" id="@manifestoNoId" required />
+                                <label class="form-check-label" for="@manifestoNoId">No</label>
+                            </div>
+                            <div class="form-check">
+                                <input asp-for="IsManifestoOrStatutory" type="radio" value="Unsure" class="form-check-input" id="@manifestoUnsureId" required />
+                                <label class="form-check-label" for="@manifestoUnsureId">Unsure</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group @(hasError(nameof(Model.ManifestoStatutoryDetails)) ? "form-group--error" : string.Empty)" id="manifestoDetailsGroup" style="display:none;">
+                        <label asp-for="ManifestoStatutoryDetails">If yes, what is the commitment?</label>
+                        <span asp-validation-for="ManifestoStatutoryDetails" class="form-error-message"></span>
+                        <textarea asp-for="ManifestoStatutoryDetails" class="form-control @(hasError(nameof(Model.ManifestoStatutoryDetails)) ? "form-control--error" : string.Empty)" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Delivery</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group @(hasError(nameof(Model.HeadcountDuration)) ? "form-group--error" : string.Empty)">
+                        <label asp-for="HeadcountDuration">What are your timescales?</label>
+                        <span asp-validation-for="HeadcountDuration" class="form-error-message"></span>
+                        <textarea asp-for="HeadcountDuration" class="form-control @(hasError(nameof(Model.HeadcountDuration)) ? "form-control--error" : string.Empty)" rows="3" placeholder="Tell us when you need this and any key milestones."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <input type="hidden" asp-for="ReferenceNumber" />
+                <input type="hidden" asp-for="ApplicantName" />
+                <input type="hidden" asp-for="ApplicantEmail" />
+                <input type="hidden" name="SeniorResponsibleOfficer" value="@seniorResponsibleOfficerValue" />
+                <input type="hidden" name="RiskIfNotDelivered" value="@riskIfNotDeliveredValue" />
+                <input type="hidden" asp-for="DeclarationConfirmed" value="true" />
+                <button type="submit" name="Status" value="Draft" class="btn btn-secondary">
+                    <i class="fas fa-save"></i> Save as draft
+                </button>
+                <button type="submit" name="Status" value="Submitted" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Submit request
+                </button>
+                <a asp-action="Requests" class="btn btn-default">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script nonce="@Context.Items["Nonce"]">
+        document.addEventListener('DOMContentLoaded', function () {
+            const manifestoRadios = document.querySelectorAll('input[name="IsManifestoOrStatutory"]');
+            const manifestoDetails = document.getElementById('manifestoDetailsGroup');
+            const errorSummary = document.getElementById('create-request-error-summary');
+            const errorSummaryList = errorSummary ? errorSummary.querySelector('.error-summary__list') : null;
+            const demandRequestForm = document.getElementById('demandRequestForm');
+
+            function toggleManifestoDetails() {
+                if (!manifestoDetails) return;
+                const selected = document.querySelector('input[name="IsManifestoOrStatutory"]:checked');
+                manifestoDetails.style.display = selected && selected.value === 'Yes' ? 'block' : 'none';
+            }
+
+            manifestoRadios.forEach(radio => radio.addEventListener('change', toggleManifestoDetails));
+            toggleManifestoDetails();
+
+            function focusField(fieldId) {
+                const target = document.getElementById(fieldId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.focus({ preventScroll: true });
+                }
+            }
+
+            function renderSummaryItems(errors) {
+                if (!errorSummary || !errorSummaryList) {
+                    return;
+                }
+
+                errorSummaryList.innerHTML = '';
+
+                if (!errors.length) {
+                    errorSummary.classList.add('d-none');
+                    errorSummary.setAttribute('aria-hidden', 'true');
+                    errorSummary.removeAttribute('tabindex');
+                    return;
+                }
+
+                const uniqueErrors = [];
+                const seen = new Set();
+
+                errors.forEach(({ element, message }) => {
+                    if (!element || !message) {
+                        return;
+                    }
+
+                    const fieldId = element.getAttribute('id');
+                    if (!fieldId) {
+                        return;
+                    }
+
+                    const key = `${fieldId}::${message}`;
+                    if (seen.has(key)) {
+                        return;
+                    }
+
+                    seen.add(key);
+                    uniqueErrors.push({ fieldId, message });
+                });
+
+                uniqueErrors.forEach(({ fieldId, message }) => {
+                    const item = document.createElement('li');
+                    const link = document.createElement('a');
+                    link.href = `#${fieldId}`;
+                    link.textContent = message;
+                    link.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        focusField(fieldId);
+                    });
+                    item.appendChild(link);
+                    errorSummaryList.appendChild(item);
+                });
+
+                errorSummary.classList.remove('d-none');
+                errorSummary.setAttribute('aria-hidden', 'false');
+                errorSummary.setAttribute('tabindex', '-1');
+                errorSummary.focus();
+            }
+
+            if (typeof window.jQuery !== 'undefined' && demandRequestForm) {
+                const $form = window.jQuery(demandRequestForm);
+                const validator = $form.data('validator');
+
+                if (validator) {
+                    const originalShowErrors = validator.settings.showErrors;
+                    validator.settings.showErrors = function (errorMap, errorList) {
+                        if (typeof originalShowErrors === 'function') {
+                            originalShowErrors.call(this, errorMap, errorList);
+                        } else {
+                            this.defaultShowErrors();
+                        }
+                        renderSummaryItems(this.errorList || errorList || []);
+                    };
+
+                    $form.on('invalid-form.validate', function (event, v) {
+                        renderSummaryItems(v.errorList || []);
+                    });
+
+                    $form.on('submit', function () {
+                        renderSummaryItems(validator.errorList || []);
+                    });
+                }
+            }
+        });
+    </script>
+}

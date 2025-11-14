@@ -35,6 +35,9 @@ public class CategoryValueDto
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     
+    [JsonPropertyName("code")]
+    public string? Code { get; set; }
+    
     [JsonPropertyName("sort_order")]
     public int? SortOrder { get; set; }
     
@@ -53,6 +56,15 @@ public class ProductContactDto
     public int Id { get; set; }
     
     public string? Role { get; set; }
+    
+    [JsonPropertyName("contact_name")]
+    public string? ContactName { get; set; }
+    
+    [JsonPropertyName("contact_email")]
+    public string? ContactEmail { get; set; }
+    
+    [JsonPropertyName("name")]
+    public string? LegacyName { get; set; }
     
     [JsonPropertyName("users_permissions_user")]
     public UserPermissionsUserDto? UsersPermissionsUser { get; set; }

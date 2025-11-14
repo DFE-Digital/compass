@@ -289,6 +289,16 @@ Development: http://localhost:5500/api</pre>
             <li><strong>Last used:</strong> Track when each token was last used</li>
         </ul>
 
+        <h4 class="h6 mt-3">Permission scopes</h4>
+        <p>Scopes determine which controllers a token can reach. Each scope carries four verbs (<code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>):</p>
+        <ul>
+            <li><strong>Risks:</strong> Access to <code>/api/v1/risks</code> for register operations.</li>
+            <li><strong>Actions:</strong> Access to <code>/api/v1/actions</code> for mitigation tracking.</li>
+            <li><strong>Issues</strong> and <strong>Milestones:</strong> Equivalent scopes to manage other RAID artefacts.</li>
+            <li><strong>Administration:</strong> Separate scopes exist for lookup management and template configuration in the admin namespace.</li>
+        </ul>
+        <p class="small text-muted">Assign the narrowest set of scopes needed for each integration. Tokens created for reporting purposes typically require read-only access to Risks and Actions.</p>
+
         <div class="alert alert-warning mt-3">
             <p class="mb-0">Keep your API tokens secure. Never commit them to version control or share them publicly.</p>
         </div>
@@ -410,6 +420,215 @@ Development: http://localhost:5500/api</pre>
     "pageSize": 50,
     "totalPages": 5,
     "totalRecords": 223
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Risk Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-post">POST</span>
+                <span class="api-path">/api/v1/risks</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Create a new risk, optionally linking it to risk types and an objective.</p>
+
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risks-post-request">Request</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risks-post-response">Response</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risks-post-try">Try it</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risks-post-request">
+                        <h5 class="mt-3">JSON payload</h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "title": "Data quality risk",
+  "description": "Missing source system feeds for April reporting",
+  "fipsId": "PROG-0148",
+  "objectiveId": 12,
+  "riskTierId": 3,
+  "impactRating": 4,
+  "likelihoodRating": 3,
+  "ownerEmail": "programme.manager@education.gov.uk",
+  "status": "open",
+  "category": "data",
+  "businessArea": "Digital Delivery",
+  "proximityDate": "2025-12-01T00:00:00Z",
+  "targetDate": "2026-01-15T00:00:00Z",
+  "response": "mitigate",
+  "riskTypeIds": [2, 7]
+}</pre>
+                        </div>
+                        <p class="small text-muted">Provide at least impact and likelihood scores. <code>riskTypeIds</code> accepts an array so you can tag a single risk with multiple themes.</p>
+
+                        <h5 class="mt-4">Field reference</h5>
+                        <table class="api-param-table">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="api-param-name">title</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Brief descriptive title (max 200 characters).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">description</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Detailed risk narrative for context.</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">fipsId</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>External identifier that links back to FIPS CMS.</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">objectiveId</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Strategic objective reference (optional).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">riskTierId</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Governance tier lookup (project, programme, portfolio, etc.).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">impactRating</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Impact severity (1–5 inclusive).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">likelihoodRating</span> <span class="api-param-required">required</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Likelihood (1–5 inclusive).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">riskTypeIds</span></td>
+                                    <td><span class="api-param-type">array&lt;int&gt;</span></td>
+                                    <td>List of risk type identifiers enabling multi-select classification.</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">status</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Workflow status (defaults to <code>new</code> if omitted).</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">businessArea</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Business area label for reporting.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="tab-pane fade" id="risks-post-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-201">201 Created</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "id": 87,
+  "title": "Data quality risk",
+  "status": "open",
+  "riskScore": 12,
+  "createdAt": "2025-11-09T11:05:04Z"
+}</pre>
+                        </div>
+                        <p class="small text-muted">Use the <code>Location</code> header or the returned <code>id</code> to fetch the full record.</p>
+
+                        <h5 class="mt-4"><span class="api-response-code api-response-400">400 Bad Request</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request data",
+    "details": [
+      "ImpactRating must be between 1 and 5",
+      "LikelihoodRating must be between 1 and 5"
+    ]
+  }
+}</pre>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="risks-post-try">
+                        <h5 class="mt-3">cURL example</h5>
+                        <div class="api-code-block">
+                            <pre>curl -X POST   -H "Authorization: Bearer cps_your_token_here"   -H "Content-Type: application/json"   https://compass.education.gov.uk/api/v1/risks   -d '{
+        "title": "Data quality risk",
+        "impactRating": 4,
+        "likelihoodRating": 3,
+        "riskTypeIds": [2, 7]
+      }'</pre>
+                        </div>
+                        <p class="small text-muted">The example truncates optional properties to highlight the minimum viable payload.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Risk Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-put">PUT</span>
+                <span class="api-path">/api/v1/risks/{id}</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Update a risk in place. Only the fields supplied are amended; omitted properties keep their previous values.</p>
+
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#risks-put-request">Request</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#risks-put-response">Response</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="risks-put-request">
+                        <h5 class="mt-3">Minimum payload</h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "status": "treating",
+  "likelihoodRating": 2,
+  "response": "mitigate"
+}</pre>
+                        </div>
+                        <p class="small text-muted">Recalculation of <code>riskScore</code> happens server-side. Send only the properties that need to change.</p>
+                    </div>
+
+                    <div class="tab-pane fade" id="risks-put-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "message": "Risk updated successfully"
+}</pre>
+                        </div>
+                        <p class="small text-muted">The API recalculates <code>riskScore</code> on every update using the stored impact and likelihood values.</p>
+
+                        <h5 class="mt-4"><span class="api-response-code api-response-404">404 Not Found</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Risk with ID 999 not found"
   }
 }</pre>
                         </div>
@@ -730,6 +949,172 @@ Development: http://localhost:5500/api</pre>
                 <h5 class="mt-3"><span class="api-response-code api-response-200">204 No Content</span></h5>
                 <p class="small">Risk successfully deleted (soft deleted - marked as IsDeleted=true)</p>
             </div>
+        </div>
+
+        <!-- Get All Actions Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-get">GET</span>
+                <span class="api-path">/api/v1/actions</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Retrieve actions with optional filters for product, status, and pagination. Results include provenance via <code>ActionSource</code>.</p>
+
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#actions-get-params">Parameters</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#actions-get-response">Response</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="actions-get-params">
+                        <h5 class="mt-3">Query parameters</h5>
+                        <table class="api-param-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="api-param-name">fipsId</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Filter by FIPS product ID</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">status</span></td>
+                                    <td><span class="api-param-type">string</span></td>
+                                    <td>Filter by status (not_started, in_progress, blocked, done, cancelled)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">page</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Page number (default: 1)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="api-param-name">pageSize</span></td>
+                                    <td><span class="api-param-type">integer</span></td>
+                                    <td>Results per page (default: 50, max: 100)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="tab-pane fade" id="actions-get-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-200">200 OK</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "data": [
+    {
+      "id": 320,
+      "title": "Agree remediation plan",
+      "fipsId": "PROG-0148",
+      "actionSource": {
+        "id": 1,
+        "name": "Risk"
+      },
+      "status": "in_progress",
+      "dueDate": "2025-12-10T00:00:00Z",
+      "businessArea": "Digital Delivery"
+    }
+  ],
+  "pagination": {
+    "currentPage": 1,
+    "pageSize": 50,
+    "totalPages": 3,
+    "totalRecords": 124
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Action Endpoint -->
+        <div class="api-endpoint">
+            <div class="api-endpoint-header">
+                <span class="api-method api-method-post">POST</span>
+                <span class="api-path">/api/v1/actions</span>
+                <span class="ml-auto"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="api-endpoint-body">
+                <p>Capture a new mitigation action. Use <code>ActionSourceId</code> to record where the action originated.</p>
+
+                <ul class="nav nav-tabs api-section-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#actions-post-request">Request</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#actions-post-response">Response</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#actions-post-try">Try it</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="actions-post-request">
+                        <h5 class="mt-3">JSON payload</h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "title": "Agree remediation plan",
+  "description": "Document mitigations with service team",
+  "fipsId": "PROG-0148",
+  "actionSourceId": 1,
+  "objectiveId": 12,
+  "priority": "high",
+  "status": "not_started",
+  "dueDate": "2025-12-10T00:00:00Z",
+  "businessArea": "Digital Delivery"
+}</pre>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="actions-post-response">
+                        <h5 class="mt-3"><span class="api-response-code api-response-201">201 Created</span></h5>
+                        <div class="api-code-block">
+                            <pre>{
+  "id": 320,
+  "title": "Agree remediation plan",
+  "status": "not_started",
+  "createdAt": "2025-11-09T11:06:12Z"
+}</pre>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="actions-post-try">
+                        <h5 class="mt-3">cURL example</h5>
+                        <div class="api-code-block">
+                            <pre>curl -X POST \
+  -H "Authorization: Bearer cps_your_token_here" \
+  -H "Content-Type: application/json" \
+  https://compass.education.gov.uk/api/v1/actions \
+  -d '{
+        "title": "Agree remediation plan",
+        "actionSourceId": 1,
+        "dueDate": "2025-12-10T00:00:00Z"
+      }'</pre>
+                        </div>
+                        <p class="small text-muted">Pair the action with risks or issues after creation using the relevant junction endpoints in the web interface.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-secondary">
+            <h4 class="h6 mb-2"><i class="fas fa-link mr-2"></i>Integration workflow</h4>
+            <ol class="mb-0">
+                <li>Fetch the latest risks with <code>GET /api/v1/risks</code>, recording the <code>riskTypes</code> array for each item.</li>
+                <li>Retrieve open actions with <code>GET /api/v1/actions?status=in_progress</code> to understand mitigation status and provenance.</li>
+                <li>Filter or group client-side by <code>riskTypes[].name</code> or <code>actionSource.name</code> to produce thematic dashboards that highlight outstanding mitigations.</li>
+            </ol>
         </div>
 
         <h3 class="h5 mt-5">Other resources</h3>

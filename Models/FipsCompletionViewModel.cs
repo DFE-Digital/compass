@@ -17,7 +17,18 @@ public class ProductCompletionItem
     public string FipsId { get; set; } = string.Empty;
     public string ProductTitle { get; set; } = string.Empty;
     public string BusinessArea { get; set; } = string.Empty;
+    public string? PhaseName { get; set; }
     public string State { get; set; } = "New";
+    public string? SeniorResponsibleOfficer { get; set; }
+    public string? InformationAssetOwner { get; set; }
+    public string? DeliveryManager { get; set; }
+    public string? ProductUrl { get; set; }
+    public List<string> SeniorResponsibleOfficerContacts { get; set; } = new();
+    public List<string> InformationAssetOwnerContacts { get; set; } = new();
+    public List<string> DeliveryManagerContacts { get; set; } = new();
+    public List<string> ContactDetails { get; set; } = new();
+    public List<string> UserGroupNames { get; set; } = new();
+    public List<int> UserGroupCategoryValueIds { get; set; } = new();
     
     // Completion criteria
     public bool HasPhase { get; set; }

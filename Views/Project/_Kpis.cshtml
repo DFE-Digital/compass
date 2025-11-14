@@ -1,0 +1,296 @@
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@model Compass.Models.Project
+
+@{
+    var activeKpis = Model.Kpis?
+        .Where(k => k.Active)
+        .OrderBy(k => k.Name)
+        .ToList() ?? new List<Compass.Models.Kpi>();
+
+    var archivedKpis = Model.Kpis?
+        .Where(k => !k.Active)
+        .OrderBy(k => k.Name)
+        .ToList() ?? new List<Compass.Models.Kpi>();
+}
+
+<div class="card" id="kpis">
+    <div class="card-header">
+        <h3 class="card-title">Key performance indicators</h3>
+        <div class="card-tools">
+            <a href="@Url.Action("CreateKpi", "Project", new { projectId = Model.Id })">Add KPI</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (activeKpis.Any())
+        {
+            <table class="table table-hover text-nowrap">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Stages</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Target</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var kpi in activeKpis)
+                {
+                    var latestDataPoint = kpi.PerformanceData?
+                        .OrderByDescending(dp => dp.ReportingPeriodStart)
+                        .FirstOrDefault();
+                    var stageSummary = FormatStageSummary(kpi.ReportingStage);
+                    <tr>
+                        <td>
+                            <a asp-controller="Project" asp-action="EditKpi" asp-route-projectId="@Model.Id" asp-route-kpiId="@kpi.Id">@kpi.Name</a>
+                            @if (!string.IsNullOrWhiteSpace(kpi.Code))
+                            {
+                                <br />
+                                <small class="text-muted d-block">Code: @kpi.Code</small>
+                            }
+                            @if (latestDataPoint != null)
+                            {
+                                <div class="mt-1 small text-muted">
+                                    <span class="badge badge-info">Latest</span>
+                                    @latestDataPoint.ReportingPeriodStart.ToString("MMM yyyy")
+                                    @if (latestDataPoint.ReportingPeriodEnd.HasValue)
+                                    {
+                                        <text> - @latestDataPoint.ReportingPeriodEnd.Value.ToString("MMM yyyy")</text>
+                                    }
+                                    @if (latestDataPoint.Value.HasValue)
+                                    {
+                                        <text>: <strong>@FormatKpiValue(latestDataPoint.Value.Value, kpi.UnitOfMeasure)</strong></text>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(latestDataPoint.ValueNarrative))
+                                    {
+                                        <text>: <strong>@latestDataPoint.ValueNarrative</strong></text>
+                                    }
+                                </div>
+                            }
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(kpi.Category) ? "—" : kpi.Category)</td>
+                        <td>@stageSummary</td>
+                        <td>@FormatStatusLabel(kpi.Status)</td>
+                        <td>
+                            @if (kpi.TargetValue.HasValue)
+                            {
+                                <span>@FormatKpiValue(kpi.TargetValue.Value, kpi.UnitOfMeasure)</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Not set</span>
+                            }
+                        </td>
+                    </tr>
+                    if (kpi.PerformanceData != null && kpi.PerformanceData.Any())
+                    {
+                        <tr class="bg-light">
+                            <td colspan="5">
+                                <div class="mb-2 font-weight-bold">Recorded data</div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th scope="col">Reporting period</th>
+                                                <th scope="col">Value</th>
+                                                <th scope="col">Narrative</th>
+                                                <th scope="col">Validated</th>
+                                                <th scope="col">Submitted by</th>
+                                                <th scope="col">Submitted at</th>
+                                                <th scope="col">Notes</th>
+                                                <th scope="col" class="text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var dataPoint in kpi.PerformanceData.OrderByDescending(dp => dp.ReportingPeriodStart))
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        @dataPoint.ReportingPeriodStart.ToString("dd MMM yyyy")
+                                                        @if (dataPoint.ReportingPeriodEnd.HasValue)
+                                                        {
+                                                            <text> - @dataPoint.ReportingPeriodEnd.Value.ToString("dd MMM yyyy")</text>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (dataPoint.Value.HasValue)
+                                                        {
+                                                            <strong>@FormatKpiValue(dataPoint.Value.Value, kpi.UnitOfMeasure)</strong>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">—</span>
+                                                        }
+                                                    </td>
+                                                    <td>@(string.IsNullOrWhiteSpace(dataPoint.ValueNarrative) ? "—" : dataPoint.ValueNarrative)</td>
+                                                    <td>
+                                                        @if (dataPoint.IsValidated)
+                                                        {
+                                                            <span class="badge badge-success">Validated</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-secondary">Draft</span>
+                                                        }
+                                                    </td>
+                                                    <td>@(dataPoint.SubmittedByUser?.Name ?? dataPoint.SubmittedByUser?.Email ?? "Not recorded")</td>
+                                                    <td>@dataPoint.SubmittedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(dataPoint.Notes) ? "—" : dataPoint.Notes)</td>
+                                                    <td class="text-right">
+                                                        <form asp-action="DeleteKpiDataPoint"
+                                                              asp-controller="Project"
+                                                              method="post"
+                                                              class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="projectId" value="@Model.Id" />
+                                                            <input type="hidden" name="dataPointId" value="@dataPoint.Id" />
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                                Delete
+                                                            </button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-2">No KPIs recorded.</p>
+                <a href="@Url.Action("CreateKpi", "Project", new { projectId = Model.Id })">Add the first KPI</a>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Archived KPIs</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (archivedKpis.Any())
+        {
+            <table class="table table-hover text-nowrap">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Stages</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var kpi in archivedKpis)
+                {
+                    var stageSummary = FormatStageSummary(kpi.ReportingStage);
+                    <tr>
+                        <td>
+                            <a asp-controller="Project" asp-action="EditKpi" asp-route-projectId="@Model.Id" asp-route-kpiId="@kpi.Id">@kpi.Name</a>
+                            @if (!string.IsNullOrWhiteSpace(kpi.Code))
+                            {
+                                <br />
+                                <small class="text-muted d-block">Code: @kpi.Code</small>
+                            }
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(kpi.Category) ? "—" : kpi.Category)</td>
+                        <td>@FormatStageSummary(kpi.ReportingStage)</td>
+                        <td>@FormatStatusLabel(kpi.Status)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-0">No archived KPIs recorded.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    private static readonly Dictionary<string, string> StatusLabels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["not_started"] = "Not started",
+        ["monitoring"] = "Monitoring",
+        ["on_track"] = "On track",
+        ["at_risk"] = "At risk",
+        ["blocked"] = "Blocked",
+        ["achieved"] = "Achieved",
+        ["retired"] = "Retired"
+    };
+
+    private static string FormatKpiValue(decimal value, string? unit)
+    {
+        var formattedNumber = value.ToString("0.##", CultureInfo.InvariantCulture);
+
+        if (!string.IsNullOrWhiteSpace(unit) && unit.Equals("Percentage", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{formattedNumber}%";
+        }
+
+        return !string.IsNullOrWhiteSpace(unit)
+            ? $"{formattedNumber} {unit}"
+            : formattedNumber;
+    }
+
+    private static string FormatStageSummary(string? storedStages)
+    {
+        var stages = ParseStageList(storedStages);
+        if (stages.Count == 0)
+        {
+            return "—";
+        }
+
+        if (stages.Count == 1)
+        {
+            return stages[0];
+        }
+
+        var others = stages.Count - 1;
+        var otherLabel = others == 1 ? "other" : "others";
+        return $"{stages[0]} (+ {others} {otherLabel})";
+    }
+
+    private static string FormatStatusLabel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "—";
+        }
+
+        if (StatusLabels.TryGetValue(value, out var label))
+        {
+            return label;
+        }
+
+        var labelText = value.Replace("_", " ");
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(labelText.ToLowerInvariant());
+    }
+
+    private static List<string> ParseStageList(string? storedStages)
+    {
+        if (string.IsNullOrWhiteSpace(storedStages))
+        {
+            return new List<string>();
+        }
+
+        return storedStages
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(stage => stage.Trim())
+            .Where(stage => !string.IsNullOrWhiteSpace(stage))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+}
