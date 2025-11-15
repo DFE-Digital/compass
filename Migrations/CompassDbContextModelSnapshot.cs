@@ -1125,7 +1125,21 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ChangedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChangedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChangedByUserId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -1142,7 +1156,15 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("PayloadJson")
+                    b.Property<string>("EntityReference")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UserAgent")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -2306,12 +2328,6 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ActionId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ActionId1")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -2323,24 +2339,6 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("IssueId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("IssueId1")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("MilestoneId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("MilestoneId1")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ProjectId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ProjectId1")
-                        .HasColumnType("int");
-
                     b.Property<string>("ResolvedByEmail")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -2351,12 +2349,6 @@ namespace Compass.Migrations
 
                     b.Property<DateTime?>("ResolvedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<int?>("RiskId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("RiskId1")
-                        .HasColumnType("int");
 
                     b.Property<int>("SourceEntityId")
                         .HasColumnType("int");
@@ -2383,27 +2375,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ActionId");
-
-                    b.HasIndex("ActionId1");
-
                     b.HasIndex("DependencyType");
-
-                    b.HasIndex("IssueId");
-
-                    b.HasIndex("IssueId1");
-
-                    b.HasIndex("MilestoneId");
-
-                    b.HasIndex("MilestoneId1");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("ProjectId1");
-
-                    b.HasIndex("RiskId");
-
-                    b.HasIndex("RiskId1");
 
                     b.HasIndex("Status");
 
@@ -4760,6 +4732,10 @@ namespace Compass.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DeliveryPriorityChangeReason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<int?>("DeliveryPriorityId")
                         .HasColumnType("int");
 
@@ -4920,25 +4896,6 @@ namespace Compass.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
-                    b.Property<string>("EmploymentType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("Permanent");
-
-                    b.Property<string>("FundingArrangement")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)")
-                        .HasDefaultValue("Not specified");
-
-                    b.Property<DateTime?>("LeftAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LeaveReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -4953,9 +4910,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("TeamStatus")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("current");
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -6735,9 +6691,44 @@ namespace Compass.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DashboardFocus")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DashboardLayout")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("PreferredBusinessAreas")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PreferredTaskGrouping")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("QuickLaunchShortcuts")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("ShowMilestonePanel")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowProductPanel")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowRemindersPanel")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowRiskPanel")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowSuccessPanel")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowTasksPanel")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -7292,49 +7283,6 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("DemandRequest");
-                });
-
-            modelBuilder.Entity("Compass.Models.Dependency", b =>
-                {
-                    b.HasOne("Compass.Models.Action", null)
-                        .WithMany("DependenciesAsSource")
-                        .HasForeignKey("ActionId");
-
-                    b.HasOne("Compass.Models.Action", null)
-                        .WithMany("DependenciesAsTarget")
-                        .HasForeignKey("ActionId1");
-
-                    b.HasOne("Compass.Models.Issue", null)
-                        .WithMany("DependenciesAsSource")
-                        .HasForeignKey("IssueId");
-
-                    b.HasOne("Compass.Models.Issue", null)
-                        .WithMany("DependenciesAsTarget")
-                        .HasForeignKey("IssueId1");
-
-                    b.HasOne("Compass.Models.Milestone", null)
-                        .WithMany("DependenciesAsSource")
-                        .HasForeignKey("MilestoneId");
-
-                    b.HasOne("Compass.Models.Milestone", null)
-                        .WithMany("DependenciesAsTarget")
-                        .HasForeignKey("MilestoneId1");
-
-                    b.HasOne("Compass.Models.Project", null)
-                        .WithMany("DependenciesAsSource")
-                        .HasForeignKey("ProjectId");
-
-                    b.HasOne("Compass.Models.Project", null)
-                        .WithMany("DependenciesAsTarget")
-                        .HasForeignKey("ProjectId1");
-
-                    b.HasOne("Compass.Models.Risk", null)
-                        .WithMany("DependenciesAsSource")
-                        .HasForeignKey("RiskId");
-
-                    b.HasOne("Compass.Models.Risk", null)
-                        .WithMany("DependenciesAsTarget")
-                        .HasForeignKey("RiskId1");
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseMetricValue", b =>
@@ -8350,10 +8298,6 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Action", b =>
                 {
-                    b.Navigation("DependenciesAsSource");
-
-                    b.Navigation("DependenciesAsTarget");
-
                     b.Navigation("IssueActions");
 
                     b.Navigation("MilestoneActions");
@@ -8454,10 +8398,6 @@ namespace Compass.Migrations
                 {
                     b.Navigation("Comments");
 
-                    b.Navigation("DependenciesAsSource");
-
-                    b.Navigation("DependenciesAsTarget");
-
                     b.Navigation("HistoryEntries");
 
                     b.Navigation("IssueActions");
@@ -8478,10 +8418,6 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Milestone", b =>
                 {
-                    b.Navigation("DependenciesAsSource");
-
-                    b.Navigation("DependenciesAsTarget");
-
                     b.Navigation("Kpis");
 
                     b.Navigation("MilestoneActions");
@@ -8549,10 +8485,6 @@ namespace Compass.Migrations
 
                     b.Navigation("Decisions");
 
-                    b.Navigation("DependenciesAsSource");
-
-                    b.Navigation("DependenciesAsTarget");
-
                     b.Navigation("FundingAllocations");
 
                     b.Navigation("FundingHistory");
@@ -8589,10 +8521,6 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Risk", b =>
                 {
-                    b.Navigation("DependenciesAsSource");
-
-                    b.Navigation("DependenciesAsTarget");
-
                     b.Navigation("MilestoneRisks");
 
                     b.Navigation("RiskActions");

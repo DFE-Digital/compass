@@ -1,6 +1,7 @@
 @model Compass.Models.Project
 @using System
 @using System.Linq
+@using Compass.Helpers
 
 @{
     var activeMilestones = Model.Milestones
@@ -15,11 +16,70 @@
     var totalFte = totalPermFte + totalMspFte;
     var deliveryCode = $"DEL-DDT-{Model.Id}";
     var deliveryPriorityOptions = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Enumerable.Empty<Compass.Models.DeliveryPriority>();
+    var priorityKey = PriorityStyleHelper.GetPriorityKey(Model.DeliveryPriority?.Name);
 }
 
 <div class="row">
     <!-- Left Column -->
     <div class="col-lg-8">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card priority-card priority-card--@priorityKey h-100 mb-4" role="group" aria-labelledby="priorityCardHeading" aria-describedby="priorityCardSummary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <p class="card-label text-uppercase mb-1" id="priorityCardHeading">Priority</p>
+                                <h3 class="card-value mb-0">@((Model.DeliveryPriority?.Name) ?? "Not set")</h3>
+                            </div>
+                            <a href="#"
+                               class="btn btn-sm priority-card__cta"
+                               data-toggle="modal"
+                               data-target="#editDeliveryPriorityModal">
+                                Change priority
+                                <span class="sr-only">for @Model.Title</span>
+                                <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                        @if (Model.DeliveryPriority != null && !string.IsNullOrWhiteSpace(Model.DeliveryPriority.Summary))
+                        {
+                            <p class="mb-0 priority-card__support" id="priorityCardSummary">@Model.DeliveryPriority.Summary</p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 priority-card__support" id="priorityCardSummary">No summary provided.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                @{
+                    var ragCardClass = GetRagCardClass(Model.RagStatus);
+                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? Model.RagStatus : "Not set";
+                    var ragSupportingTextClass = !string.IsNullOrEmpty(ragCardClass) && ragCardClass.Contains("amber", StringComparison.OrdinalIgnoreCase)
+                        ? "rag-card__support--dark"
+                        : "rag-card__support--light";
+                }
+                <div class="card rag-card @ragCardClass h-100 mb-4" role="group" aria-labelledby="ragStatusHeading">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <p class="card-label text-uppercase mb-1" id="ragStatusHeading">RAG status</p>
+                                <h3 class="card-value mb-0">@ragStatusDisplay</h3>
+                            </div>
+                            <a asp-action="Details"
+                               asp-route-id="@Model.Id"
+                               asp-route-tab="rag"
+                               class="btn btn-sm rag-card__cta">
+                                View RAG history
+                                <span class="sr-only">for @Model.Title</span>
+                                <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Aim -->
         <div class="card mb-4">
             <div class="card-header">
@@ -37,62 +97,6 @@
                 {
                     <p class="text-muted mb-0">No aim specified</p>
                 }
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card priority-card text-white h-100 mb-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <p class="card-label text-uppercase mb-1">Priority</p>
-                                <h3 class="card-value mb-0">@((Model.DeliveryPriority?.Name) ?? "Not set")</h3>
-                            </div>
-                            <a href="#" class="card-link text-white" data-toggle="modal" data-target="#editDeliveryPriorityModal">Change</a>
-                        </div>
-                        @if (Model.DeliveryPriority != null && !string.IsNullOrWhiteSpace(Model.DeliveryPriority.Summary))
-                        {
-                            <p class="mb-0">@Model.DeliveryPriority.Summary</p>
-                        }
-                        else
-                        {
-                            <p class="mb-0 text-white-50">No summary provided.</p>
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                @{
-                    var ragCardClass = GetRagCardClass(Model.RagStatus);
-                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? Model.RagStatus : "Not set";
-                    var ragSupportingTextClass = !string.IsNullOrEmpty(ragCardClass) && ragCardClass.Contains("amber", StringComparison.OrdinalIgnoreCase)
-                        ? "text-muted"
-                        : "text-white-50";
-                }
-                <div class="card rag-card @ragCardClass h-100 mb-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <p class="card-label text-uppercase mb-1">RAG status</p>
-                                <h3 class="card-value mb-0">@ragStatusDisplay</h3>
-                            </div>
-                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="rag" class="card-link text-reset">View history</a>
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(Model.RagJustification))
-                        {
-                            <p class="mb-0">@Model.RagJustification</p>
-                        }
-                        else if (!string.IsNullOrWhiteSpace(Model.PathToGreen))
-                        {
-                            <p class="mb-0">@Model.PathToGreen</p>
-                        }
-                        else
-                        {
-                            <p class="mb-0 @ragSupportingTextClass">No recent update provided.</p>
-                        }
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -346,19 +350,12 @@
                 <table class="table table-borderless mb-0 project-overview-summary">
                     <tbody>
                         <tr>
-                            <td class="summary-label"><strong>Business area</strong></td>
+                            <td class="summary-label"><strong>Status</strong></td>
                             <td class="summary-value">
-                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
-                                {
-                                    @Model.BusinessArea
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not specified</span>
-                                }
+                                <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
                             </td>
                             <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editBusinessAreaModal">Change</a>
+                                <a href="#" data-toggle="modal" data-target="#editStatusModal">Change</a>
                             </td>
                         </tr>
                         <tr>
@@ -378,12 +375,19 @@
                             </td>
                         </tr>
                         <tr>
-                            <td class="summary-label"><strong>Status</strong></td>
+                            <td class="summary-label"><strong>Business area</strong></td>
                             <td class="summary-value">
-                                <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
+                                @if (!string.IsNullOrEmpty(Model.BusinessArea))
+                                {
+                                    @Model.BusinessArea
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not specified</span>
+                                }
                             </td>
                             <td class="text-right">
-                                <a href="#" data-toggle="modal" data-target="#editStatusModal">Change</a>
+                                <a href="#" data-toggle="modal" data-target="#editBusinessAreaModal">Change</a>
                             </td>
                         </tr>
                         <tr>
@@ -392,8 +396,16 @@
                                 @if (Model.PrimaryContactUser != null)
                                 {
                                     <div>
-                                        <strong>@Model.PrimaryContactUser.Name</strong><br />
-                                        <span class="text-muted">@Model.PrimaryContactUser.Email</span>
+                                @if (!string.IsNullOrWhiteSpace(Model.PrimaryContactUser.Email))
+                                {
+                                    <a href="mailto:@Model.PrimaryContactUser.Email" class="font-weight-bold">
+                                        @Model.PrimaryContactUser.Name
+                                    </a>
+                                }
+                                else
+                                {
+                                    <strong>@Model.PrimaryContactUser.Name</strong>
+                                }
                                     </div>
                                 }
                                 else
@@ -846,13 +858,21 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="deliveryPrioritySelection">Delivery priority</label>
-                        <select class="form-control" id="deliveryPrioritySelection" name="deliveryPriorityId">
+                        <select class="form-control"
+                                id="deliveryPrioritySelection"
+                                name="deliveryPriorityId"
+                                data-current-priority="@((Model.DeliveryPriorityId?.ToString()) ?? string.Empty)">
                             <option value="">Not set</option>
                             @foreach (var priority in deliveryPriorityOptions)
                             {
                                 <option value="@priority.Id" selected="@(priority.Id == Model.DeliveryPriorityId ? "selected" : null)">@priority.Name</option>
                             }
                         </select>
+                    </div>
+                    <div class="form-group" id="priorityReasonGroup" style="display:none;">
+                        <label for="priorityChangeReason">Why is the priority changing? <span class="text-danger">*</span></label>
+                        <small class="form-text text-muted">Share the context so governance teams understand the shift in focus.</small>
+                        <textarea class="form-control" id="priorityChangeReason" name="priorityChangeReason" rows="3"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1079,6 +1099,35 @@
             $('#editStatusModal').on('show.bs.modal', function() {
                 $('#statusChangeReasonOverview').val('');
                 toggleStatusReasonField();
+            });
+
+            const prioritySelect = document.getElementById('deliveryPrioritySelection');
+            const priorityReasonGroup = document.getElementById('priorityReasonGroup');
+            const priorityReasonField = document.getElementById('priorityChangeReason');
+            const initialPriority = prioritySelect?.dataset.currentPriority ?? '';
+
+            const togglePriorityReasonField = () => {
+                if (!prioritySelect || !priorityReasonGroup || !priorityReasonField) {
+                    return;
+                }
+                const hasChanged = (prioritySelect.value || '') !== (initialPriority || '');
+                if (hasChanged) {
+                    priorityReasonGroup.style.display = 'block';
+                    priorityReasonField.required = true;
+                } else {
+                    priorityReasonGroup.style.display = 'none';
+                    priorityReasonField.required = false;
+                    priorityReasonField.value = '';
+                }
+            };
+
+            prioritySelect?.addEventListener('change', togglePriorityReasonField);
+
+            $('#editDeliveryPriorityModal').on('show.bs.modal', function () {
+                if (priorityReasonField) {
+                    priorityReasonField.value = '';
+                }
+                togglePriorityReasonField();
             });
 
             // Validate form before submission

@@ -234,6 +234,10 @@ public class Action
     public ICollection<RiskAction> RiskActions { get; set; } = new List<RiskAction>();
     public ICollection<IssueAction> IssueActions { get; set; } = new List<IssueAction>();
     public ICollection<MilestoneAction> MilestoneActions { get; set; } = new List<MilestoneAction>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 }

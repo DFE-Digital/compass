@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace Compass.ViewModels;
@@ -19,12 +21,24 @@ public class ProjectActionInputModel
     [MaxLength(20)]
     public string Status { get; set; } = "not_started";
 
+    [Required]
+    public int? StatusId { get; set; }
+
     [EmailAddress]
     [MaxLength(255)]
     public string? AssignedToEmail { get; set; }
 
     [MaxLength(10)]
     public string? Priority { get; set; }
+
+    [Required]
+    public int? PriorityId { get; set; }
+
+    public int? ActionTypeId { get; set; }
+
+    public int? CategoryId { get; set; }
+
+    public int? ImpactLevelId { get; set; }
 
     public DateTime? StartDate { get; set; }
 
@@ -55,6 +69,38 @@ public class ProjectActionInputModel
     [MaxLength(500)]
     [Url]
     public string? EvidenceUrl { get; set; }
+
+    public int? EvidenceTypeId { get; set; }
+
+    [MaxLength(250)]
+    public string? EvidenceSummary { get; set; }
+
+    public bool VerificationRequired { get; set; }
+
+    [MaxLength(500)]
+    public string? VerificationNotes { get; set; }
+
+    [Range(0, 100, ErrorMessage = "Enter a value between 0 and 100.")]
+    public int ProgressPercent { get; set; }
+
+    public bool Blocked { get; set; }
+
+    [MaxLength(500)]
+    public string? BlockedReason { get; set; }
+
+    [MaxLength(15)]
+    public string? RagRating { get; set; }
+
+    [MaxLength(150)]
+    public string? TeamName { get; set; }
+
+    public int? ReminderFrequencyId { get; set; }
+
+    public int? EscalationThresholdId { get; set; }
+
+    public bool EscalationTriggered { get; set; }
+
+    public string? Tags { get; set; }
 
     public int? DecisionId { get; set; }
 

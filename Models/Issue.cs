@@ -172,8 +172,13 @@ public class Issue
     // Navigation properties
     public ICollection<IssueAction> IssueActions { get; set; } = new List<IssueAction>();
     public ICollection<MilestoneIssue> MilestoneIssues { get; set; } = new List<MilestoneIssue>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
+
     public ICollection<IssueDecision> IssueDecisions { get; set; } = new List<IssueDecision>();
     public ICollection<IssueComment> Comments { get; set; } = new List<IssueComment>();
     public ICollection<IssueHistory> HistoryEntries { get; set; } = new List<IssueHistory>();

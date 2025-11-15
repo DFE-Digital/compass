@@ -34,11 +34,13 @@ public class ProjectDecisionInputModel
 
     public string? Notes { get; set; }
 
+    public int? OwnerUserId { get; set; }
+
+    [MaxLength(200)]
+    public string? OwnerName { get; set; }
+
     [EmailAddress]
     public string? OwnerEmail { get; set; }
-
-    [MaxLength(50)]
-    public string? FipsId { get; set; }
 
     [MaxLength(100)]
     public string? SourceType { get; set; }

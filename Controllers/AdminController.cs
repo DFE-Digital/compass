@@ -112,6 +112,7 @@ public class AdminController : Controller
         if (!ModelState.IsValid)
         {
             var invalidViewModel = await BuildRaidSettingsViewModelAsync(descriptor, input);
+            ViewData["ActiveRaidModal"] = "create";
             return View("~/Views/Admin/Settings/RaidSettings.cshtml", invalidViewModel);
         }
 
@@ -147,6 +148,7 @@ public class AdminController : Controller
         if (!ModelState.IsValid)
         {
             var invalidViewModel = await BuildRaidSettingsViewModelAsync(descriptor, null, input);
+            ViewData["ActiveRaidModal"] = "edit";
             return View("~/Views/Admin/Settings/RaidSettings.cshtml", invalidViewModel);
         }
 
@@ -204,6 +206,57 @@ public class AdminController : Controller
             TempData["ErrorMessage"] = "Unable to delete this entry because it is currently in use.";
         }
 
+        return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SeedRaidLookupDefaults(string lookupKey)
+    {
+        var descriptor = ResolveRaidLookupDefinition(lookupKey);
+        if (descriptor == null)
+        {
+            TempData["ErrorMessage"] = "Unknown RAID lookup.";
+            return RedirectToAction(nameof(RaidSettings));
+        }
+
+        if (!RaidLookupSeedData.TryGetValues(descriptor.Key, out var seeds) || seeds.Count == 0)
+        {
+            TempData["ErrorMessage"] = "There are no recommended values for this lookup.";
+            return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+        }
+
+        var existingCodes = await descriptor.Query(_context)
+            .Select(x => x.Code.ToLower())
+            .ToListAsync();
+
+        var itemsToAdd = seeds
+            .Where(seed => !existingCodes.Contains(seed.Code.ToLowerInvariant()))
+            .ToList();
+
+        if (!itemsToAdd.Any())
+        {
+            TempData["SuccessMessage"] = "All recommended values already exist for this lookup.";
+            return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
+        }
+
+        foreach (var seed in itemsToAdd)
+        {
+            var entity = descriptor.Factory();
+            entity.Code = seed.Code;
+            entity.Label = seed.Label;
+            entity.Description = seed.Description;
+            entity.SortOrder = seed.SortOrder;
+            entity.IsActive = true;
+            entity.CreatedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            _context.Add(entity);
+        }
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Added {itemsToAdd.Count} recommended value{(itemsToAdd.Count == 1 ? string.Empty : "s")}.";
         return RedirectToAction(nameof(RaidSettings), new { lookupKey = descriptor.Key });
     }
 
@@ -3304,7 +3357,8 @@ public class AdminController : Controller
                 SortOrder = defaultSort,
                 IsActive = true
             },
-            EditEntry = editEntry
+            EditEntry = editEntry,
+            CanSeedDefaults = RaidLookupSeedData.Definitions.ContainsKey(descriptor.Key)
         };
     }
 

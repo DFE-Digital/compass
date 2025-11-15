@@ -5,6 +5,9 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Helpers;
 using Compass.Services;
+using Compass.ViewModels;
+using Compass.Security;
+using System.Security.Claims;
 
 namespace Compass.Controllers;
 
@@ -14,12 +17,18 @@ public class UserController : Controller
     private readonly CompassDbContext _context;
     private readonly ILogger<UserController> _logger;
     private readonly IProductsApiService _productsApiService;
+    private readonly IUserDirectoryService _userDirectoryService;
 
-    public UserController(CompassDbContext context, ILogger<UserController> logger, IProductsApiService productsApiService)
+    public UserController(
+        CompassDbContext context,
+        ILogger<UserController> logger,
+        IProductsApiService productsApiService,
+        IUserDirectoryService userDirectoryService)
     {
         _context = context;
         _logger = logger;
         _productsApiService = productsApiService;
+        _userDirectoryService = userDirectoryService;
     }
 
     // GET: User/MySettings
@@ -56,6 +65,47 @@ public class UserController : Controller
             _logger.LogInformation($"MySettings: Created new user for email: {userEmail}");
         }
 
+        user = await RefreshDirectoryProfileAsync(user, HttpContext.RequestAborted);
+
+        var userWithAccess = await _context.Users
+            .Include(u => u.UserGroups)
+                .ThenInclude(ug => ug.Group)
+                    .ThenInclude(g => g.GroupFeaturePermissions)
+                        .ThenInclude(gfp => gfp.Feature)
+            .FirstOrDefaultAsync(u => u.Id == user.Id) ?? user;
+
+        var groupPermissions = userWithAccess.UserGroups
+            .OrderBy(ug => ug.Group.Name)
+            .Select(ug =>
+            {
+                var featurePermissions = ug.Group.GroupFeaturePermissions
+                    .GroupBy(gfp => gfp.Feature)
+                    .Select(group =>
+                    {
+                        var topPermission = group
+                            .OrderByDescending(gfp => gfp.Permission)
+                            .First();
+                        return new FeaturePermissionSummaryViewModel
+                        {
+                            FeatureName = topPermission.Feature.Name,
+                            FeatureCode = topPermission.Feature.Code,
+                            Permission = topPermission.Permission,
+                            PermissionLabel = DescribePermission(topPermission.Permission)
+                        };
+                    })
+                    .OrderBy(fp => fp.FeatureName)
+                    .ToList();
+
+                return new UserGroupPermissionSummaryViewModel
+                {
+                    GroupName = ug.Group.Name,
+                    GroupDescription = ug.Group.Description,
+                    AssignedAt = ug.AssignedAt,
+                    FeaturePermissions = featurePermissions
+                };
+            })
+            .ToList();
+
         var preferences = await _context.UserPreferences.FindAsync(user.Id);
         var selectedBusinessAreas = preferences != null && !string.IsNullOrEmpty(preferences.PreferredBusinessAreas)
             ? preferences.PreferredBusinessAreas.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(ba => ba.Trim()).ToList()
@@ -63,7 +113,8 @@ public class UserController : Controller
 
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         
-        ViewBag.User = user;
+        ViewBag.User = userWithAccess;
+        ViewBag.GroupPermissions = groupPermissions;
         ViewBag.SelectedBusinessAreas = selectedBusinessAreas;
         ViewBag.BusinessAreas = businessAreas;
         ViewBag.CurrentSection = section;
@@ -98,5 +149,35 @@ public class UserController : Controller
 
         return RedirectToAction(nameof(MySettings), new { section = section });
     }
+
+    private async Task<User> RefreshDirectoryProfileAsync(User currentUser, CancellationToken cancellationToken)
+    {
+        var objectIdClaim = User.FindFirstValue(CompassClaimTypes.ObjectIdentifier);
+        if (!Guid.TryParse(objectIdClaim, out var objectId) && !Guid.TryParse(currentUser.AzureObjectId, out objectId))
+        {
+            return currentUser;
+        }
+
+        try
+        {
+            var refreshed = await _userDirectoryService.EnsureUserAsync(objectId, cancellationToken);
+            return refreshed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to refresh user profile for {Email}", currentUser.Email);
+            return currentUser;
+        }
+    }
+
+    private static string DescribePermission(PermissionType permission)
+        => permission switch
+        {
+            PermissionType.View => "View only",
+            PermissionType.Create => "Create",
+            PermissionType.Update => "Update",
+            PermissionType.Delete => "Full control",
+            _ => permission.ToString()
+        };
 }
 

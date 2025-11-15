@@ -6,41 +6,49 @@
         .OrderByDescending(member => string.Equals(member.TeamStatus, "current", StringComparison.OrdinalIgnoreCase))
         .ThenBy(member => member.SortOrder)
         .ToList() ?? new List<Compass.Models.ProjectContact>();
+    var currentTeamMembers = teamMembers
+        .Where(member => !string.Equals(member.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var previousTeamMembers = teamMembers
+        .Where(member => string.Equals(member.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase))
+        .ToList();
 }
 
 <div class="card" id="team">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header">
         <h3 class="card-title mb-0">Team</h3>
         <div class="card-tools">
             <a asp-controller="Project"
                asp-action="CreateTeamMember"
                asp-route-projectId="@Model.Id"
-               class="btn btn-primary btn-sm">
-                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add team member
+               class="card-link">
+                Add team member
             </a>
         </div>
     </div>
     <div class="card-body table-responsive p-0">
-        @if (teamMembers.Any())
+        @if (currentTeamMembers.Any())
         {
             <table class="table table-hover text-nowrap sortable-table team-table mb-0">
                 <thead>
                     <tr>
                         <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">Name</th>
                         <th class="sortable" data-column="Role" tabindex="0" role="button" aria-label="Sort by Role">Role</th>
-                        <th class="sortable" data-column="Funding" tabindex="0" role="button" aria-label="Sort by Funding">Funding</th>
                         <th class="sortable" data-column="EmploymentType" tabindex="0" role="button" aria-label="Sort by Type">Type</th>
                         <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="sortable" data-column="LeaveReason" tabindex="0" role="button" aria-label="Sort by Reason">Reason for leaving</th>
-                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var member in teamMembers)
+                    @foreach (var member in currentTeamMembers)
                     {
-                        var displayName = !string.IsNullOrWhiteSpace(member.Name)
-                            ? member.Name
-                            : member.User?.Name ?? member.Email;
+                        var directoryUser = member.User;
+                        var displayName = !string.IsNullOrWhiteSpace(directoryUser?.Name)
+                            ? directoryUser!.Name
+                            : (!string.IsNullOrWhiteSpace(member.Name) ? member.Name : directoryUser?.Email ?? member.Email);
+                        var displayEmail = !string.IsNullOrWhiteSpace(directoryUser?.Email)
+                            ? directoryUser!.Email
+                            : member.Email;
+                        var jobTitle = directoryUser?.JobTitle;
                         var statusBadgeClass = string.Equals(member.TeamStatus, "current", StringComparison.OrdinalIgnoreCase)
                             ? "badge badge-success"
                             : "badge badge-secondary";
@@ -53,50 +61,33 @@
                         <tr>
                             <td>
                                 <div class="d-flex flex-column">
-                                    <strong>@displayName</strong>
-                                    <span class="text-muted small">@member.Email</span>
-                                    @if (!string.IsNullOrWhiteSpace(member.User?.JobTitle))
+                                    <a asp-controller="Project"
+                                       asp-action="EditTeamMember"
+                                       asp-route-projectId="@Model.Id"
+                                       asp-route-teamMemberId="@member.Id"
+                                       class="font-weight-bold">
+                                        @displayName
+                                    </a>
+                                    @if (!string.IsNullOrWhiteSpace(displayEmail))
                                     {
-                                        <span class="text-muted small">@member.User.JobTitle</span>
+                                        <span class="text-muted small">@displayEmail</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">No email recorded</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(jobTitle))
+                                    {
+                                        <span class="text-muted small">@jobTitle</span>
                                     }
                                 </div>
                             </td>
                             <td>@member.Role</td>
-                            <td>@member.FundingArrangement</td>
                             <td>
                                 <span class="@employmentBadgeClass">@member.EmploymentType</span>
                             </td>
                             <td>
                                 <span class="@statusBadgeClass">@statusLabel</span>
-                            </td>
-                            <td>
-                                @if (string.Equals(member.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (!string.IsNullOrWhiteSpace(member.LeaveReason))
-                                    {
-                                        <span>@member.LeaveReason</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Reason not recorded</span>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="text-muted">–</span>
-                                }
-                            </td>
-                            <td class="text-right">
-                                <a asp-controller="Project"
-                                   asp-action="TeamMemberDetails"
-                                   asp-route-projectId="@Model.Id"
-                                   asp-route-teamMemberId="@member.Id"
-                                   class="btn btn-link btn-sm">View</a>
-                                <a asp-controller="Project"
-                                   asp-action="EditTeamMember"
-                                   asp-route-projectId="@Model.Id"
-                                   asp-route-teamMemberId="@member.Id"
-                                   class="btn btn-link btn-sm">Edit</a>
                             </td>
                         </tr>
                     }
@@ -106,7 +97,7 @@
         else
         {
             <div class="p-4">
-                <p class="text-muted mb-2">No team members recorded.</p>
+                <p class="text-muted mb-2">No current team members recorded.</p>
                 <a asp-controller="Project"
                    asp-action="CreateTeamMember"
                    asp-route-projectId="@Model.Id"
@@ -117,4 +108,81 @@
         }
     </div>
 </div>
+
+@if (previousTeamMembers.Any())
+{
+    <div class="card collapsed-card mt-3" id="previous-team">
+        <div class="card-header">
+            <h3 class="card-title mb-0">Previous team members (@previousTeamMembers.Count)</h3>
+            <div class="card-tools">
+                <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                    <i class="fas fa-plus" aria-hidden="true"></i>
+                    <span class="sr-only">Toggle previous team members</span>
+                </button>
+            </div>
+        </div>
+        <div class="card-body table-responsive p-0" style="display: none;">
+            <table class="table table-hover text-nowrap team-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Left team</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in previousTeamMembers)
+                    {
+                        var directoryUser = member.User;
+                        var displayName = !string.IsNullOrWhiteSpace(directoryUser?.Name)
+                            ? directoryUser!.Name
+                            : (!string.IsNullOrWhiteSpace(member.Name) ? member.Name : directoryUser?.Email ?? member.Email);
+                        var displayEmail = !string.IsNullOrWhiteSpace(directoryUser?.Email)
+                            ? directoryUser!.Email
+                            : member.Email;
+                        var jobTitle = directoryUser?.JobTitle;
+                        var leftAtLabel = member.LeftAt?.ToString("dd MMM yyyy") ?? "Not recorded";
+                        <tr>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <a asp-controller="Project"
+                                       asp-action="EditTeamMember"
+                                       asp-route-projectId="@Model.Id"
+                                       asp-route-teamMemberId="@member.Id"
+                                       class="font-weight-bold">
+                                        @displayName
+                                    </a>
+                                    @if (!string.IsNullOrWhiteSpace(displayEmail))
+                                    {
+                                        <span class="text-muted small">@displayEmail</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(jobTitle))
+                                    {
+                                        <span class="text-muted small">@jobTitle</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>@member.Role</td>
+                            <td>
+                                <span class="badge badge-primary">@member.EmploymentType</span>
+                            </td>
+                            <td>
+                                <span class="badge badge-secondary">Previous</span>
+                                @if (!string.IsNullOrWhiteSpace(member.LeaveReason))
+                                {
+                                    <div class="text-muted small mt-1">@member.LeaveReason</div>
+                                }
+                            </td>
+                            <td>
+                                <span class="text-muted small">@leftAtLabel</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 

@@ -13,6 +13,7 @@ public class RaidLookupListViewModel
     public IReadOnlyList<RaidLookupListItemViewModel> Items { get; set; } = Array.Empty<RaidLookupListItemViewModel>();
     public RaidLookupEditInputModel NewEntry { get; set; } = new();
     public RaidLookupEditInputModel? EditEntry { get; set; }
+    public bool CanSeedDefaults { get; set; }
 }
 
 public class RaidLookupSelectorViewModel

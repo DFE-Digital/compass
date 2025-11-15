@@ -30,7 +30,6 @@ public class ProjectTeamMemberInputModel
 
     public int? TeamMemberId { get; set; }
 
-    [Required(ErrorMessage = "Select a person using the Entra search.")]
     public int? UserId { get; set; }
 
     [Required]

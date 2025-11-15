@@ -73,15 +73,45 @@
 </div>
 
 <div class="form-group @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
-    <label asp-for="Input.OwnerEmail">Owner email</label>
-    <small class="form-text text-muted">Leave blank if the decision is not assigned.</small>
+    <label for="decisionOwnerSearch">Decision owner</label>
+    <small class="form-text text-muted">Search the Entra directory. Leave blank if unassigned.</small>
     <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
-    <input asp-for="Input.OwnerEmail" type="email" class="form-control @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)" />
-</div>
-
-<div class="form-group">
-    <label asp-for="Input.FipsId">FIPS ID</label>
-    <input asp-for="Input.FipsId" class="form-control" maxlength="50" />
+    <div class="user-picker"
+         data-user-picker
+         data-search-url="/api/users/search"
+         data-select-url="/api/users/select">
+        <div class="position-relative">
+            <input type="text"
+                   class="form-control js-user-picker-input @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)"
+                   id="decisionOwnerSearch"
+                   autocomplete="off"
+                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                   value="@(Model.Input.OwnerName ?? string.Empty)" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="form-text text-muted js-user-picker-message"></p>
+        <input asp-for="Input.OwnerUserId" type="hidden" class="js-user-picker-value" />
+        <input asp-for="Input.OwnerName" type="hidden" class="js-user-picker-name" />
+        <input asp-for="Input.OwnerEmail" type="hidden" class="js-user-picker-email" />
+        <div class="user-picker__selected js-user-picker-summary" data-default-text="No owner selected.">
+            @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerName))
+            {
+                <div class="user-picker__selected-card">
+                    <div class="user-picker__selected-name">@Model.Input.OwnerName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerEmail))
+                    {
+                        <div class="user-picker__selected-meta">@Model.Input.OwnerEmail</div>
+                    }
+                    <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                </div>
+            }
+            else
+            {
+                <span class="text-muted">No owner selected.</span>
+            }
+        </div>
+    </div>
 </div>
 
 <div class="form-group">
@@ -114,8 +144,13 @@
 
 <div class="form-group">
     <label>Linked risks</label>
-    <small class="form-text text-muted">Hold Command (Mac) or Ctrl (Windows) to select multiple risks.</small>
-    <select asp-for="Input.LinkedRiskIds" class="form-control select2" multiple size="@(Math.Max(Model.RiskOptions.Count(), 3))">
+    <small class="form-text text-muted">Start typing to find risks from this project and others.</small>
+    <select asp-for="Input.LinkedRiskIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchRisksForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search risks"
+            multiple>
         @foreach (var option in Model.RiskOptions)
         {
             <option value="@option.Value" selected="@option.Selected">@option.Text</option>
@@ -125,7 +160,12 @@
 
 <div class="form-group">
     <label>Linked issues</label>
-    <select asp-for="Input.LinkedIssueIds" class="form-control select2" multiple size="@(Math.Max(Model.IssueOptions.Count(), 3))">
+    <select asp-for="Input.LinkedIssueIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchIssuesForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search issues"
+            multiple>
         @foreach (var option in Model.IssueOptions)
         {
             <option value="@option.Value" selected="@option.Selected">@option.Text</option>
@@ -136,7 +176,12 @@
 <div class="form-group">
     <label>Linked actions</label>
     <small class="form-text text-muted">Link actions that result from or depend on this decision.</small>
-    <select asp-for="Input.LinkedActionIds" class="form-control select2" multiple size="@(Math.Max(Model.ActionOptions.Count(), 3))">
+    <select asp-for="Input.LinkedActionIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchActionsForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search actions"
+            multiple>
         @foreach (var option in Model.ActionOptions)
         {
             <option value="@option.Value" selected="@option.Selected">@option.Text</option>

@@ -6,6 +6,8 @@ using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Compass.Controllers;
 
@@ -259,14 +261,20 @@ public class RiskController : Controller
     // GET: Risk/Create
     public async Task<IActionResult> Create(int? objectiveId, int? milestoneId, string? returnTo)
     {
-        ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
+        var risk = new Risk
+        {
+            ObjectiveId = objectiveId,
+            IdentifiedDate = DateTime.UtcNow.Date
+        };
+
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", objectiveId);
         ViewBag.RiskTypes = await _context.RiskTypes.Where(rt => rt.IsActive).OrderBy(rt => rt.Name).ToListAsync();
         ViewBag.RiskTiers = new SelectList(await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync(), "Id", "Name");
-        
+        ViewBag.SelectedRiskTypeIds = Array.Empty<int>();
+
         var products = await _productsApiService.GetProductsAsync(null);
         ViewBag.Products = products.OrderBy(p => p.Title).ToList();
-        
+
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
 
@@ -282,80 +290,93 @@ public class RiskController : Controller
             if (milestone != null)
             {
                 ViewBag.SourceMilestone = milestone;
+                risk.ProjectId = milestone.ProjectId;
+                risk.ObjectiveId ??= milestone.ObjectiveId;
             }
         }
-        
-        return View();
+
+        await PopulateRiskLookupsAsync();
+        ViewBag.TagList = string.Empty;
+
+        return View(risk);
     }
 
     // POST: Risk/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,Notes")] Risk risk, int[] selectedRiskTypes, int? milestoneId, string? returnTo)
+    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,Notes,RiskStatusId,RiskPriorityId,RiskLikelihoodId,RiskImpactLevelId,RiskProximityId,RiskCategoryId,IdentifiedDate,NextReviewDate,LastReviewDate,GovernanceBoardId,ResponseStrategy,Source,SourceId,PrimaryProductId")] Risk risk, int[] selectedRiskTypes, int? milestoneId, string? returnTo, string? tagList)
     {
-        _logger.LogInformation("=== CREATE RISK POST ===");
-        _logger.LogInformation("OwnerEmail received: {OwnerEmail}", risk.OwnerEmail);
-        _logger.LogInformation("OwnerEmail from Request.Form: {FormValue}", Request.Form["OwnerEmail"].ToString());
-        _logger.LogInformation("Risk types parameter is null: {IsNull}", selectedRiskTypes == null);
-        _logger.LogInformation("Risk types count: {Count}", selectedRiskTypes?.Length ?? 0);
-        _logger.LogInformation("Risk types values: {RiskTypes}", selectedRiskTypes != null ? string.Join(", ", selectedRiskTypes) : "none");
-        _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
-        
-        if (!ModelState.IsValid)
-        {
-            foreach (var modelState in ModelState.Values)
-            {
-                foreach (var error in modelState.Errors)
-                {
-                    _logger.LogWarning("ModelState Error: {Error}", error.ErrorMessage);
-                }
-            }
-        }
-
+        var tagValues = ParseTags(tagList);
         Milestone? milestoneContext = null;
         if (milestoneId.HasValue)
         {
-            milestoneContext = await _context.Milestones
-                .FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
-
+            milestoneContext = await _context.Milestones.FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
             if (milestoneContext != null)
             {
-                if (!risk.ProjectId.HasValue && milestoneContext.ProjectId.HasValue)
-                {
-                    risk.ProjectId = milestoneContext.ProjectId;
-                }
-
-                if (!risk.ObjectiveId.HasValue && milestoneContext.ObjectiveId.HasValue)
-                {
-                    risk.ObjectiveId = milestoneContext.ObjectiveId;
-                }
+                risk.ProjectId ??= milestoneContext.ProjectId;
+                risk.ObjectiveId ??= milestoneContext.ObjectiveId;
             }
         }
+
+        if (risk.ObjectiveId == 0) risk.ObjectiveId = null;
+        if (risk.RiskTierId == 0) risk.RiskTierId = null;
+        if (risk.RiskStatusId == 0) risk.RiskStatusId = null;
+        if (risk.RiskPriorityId == 0) risk.RiskPriorityId = null;
+        if (risk.RiskLikelihoodId == 0) risk.RiskLikelihoodId = null;
+        if (risk.RiskImpactLevelId == 0) risk.RiskImpactLevelId = null;
+        if (risk.RiskProximityId == 0) risk.RiskProximityId = null;
+        if (risk.RiskCategoryId == 0) risk.RiskCategoryId = null;
+        if (string.IsNullOrWhiteSpace(risk.OwnerEmail)) risk.OwnerEmail = null;
 
         if (ModelState.IsValid)
         {
             try
             {
-                // Ensure nullable foreign keys are set to null if they're 0 or invalid
-                if (risk.ObjectiveId == 0) risk.ObjectiveId = null;
-                if (risk.RiskTierId == 0) risk.RiskTierId = null;
-                if (string.IsNullOrWhiteSpace(risk.OwnerEmail)) risk.OwnerEmail = null;
-                
+                risk.IdentifiedDate ??= DateTime.UtcNow.Date;
+                var currentUserEmail = User.Identity?.Name;
+                if (!string.IsNullOrWhiteSpace(currentUserEmail))
+                {
+                    var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == currentUserEmail.ToLower());
+                    if (currentUser != null)
+                    {
+                        risk.CreatedByUserId = currentUser.Id;
+                        risk.UpdatedByUserId = currentUser.Id;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(risk.OwnerEmail))
+                {
+                    var ownerUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == risk.OwnerEmail.ToLower());
+                    risk.OwnerUserId = ownerUser?.Id;
+                }
+                else
+                {
+                    risk.OwnerUserId = null;
+                }
+
+                if (risk.RiskStatusId.HasValue)
+                {
+                    var statusLookup = await _context.RiskStatuses.FirstOrDefaultAsync(s => s.Id == risk.RiskStatusId.Value);
+                    if (statusLookup != null)
+                    {
+                        risk.Status = statusLookup.Label;
+                    }
+                }
+
                 risk.RiskScore = risk.ImpactRating * risk.LikelihoodRating;
+                risk.InherentScore = risk.RiskScore;
+                risk.ResidualScore = (risk.ResidualImpact ?? 0) * (risk.ResidualLikelihood ?? 0);
                 risk.CreatedAt = DateTime.UtcNow;
                 risk.UpdatedAt = DateTime.UtcNow;
                 risk.IsDeleted = false;
-                
+
                 _context.Add(risk);
                 await _context.SaveChangesAsync();
 
-                // Add risk types
                 if (selectedRiskTypes != null && selectedRiskTypes.Length > 0)
                 {
-                    _logger.LogInformation("Adding {Count} risk types to risk {RiskId}", selectedRiskTypes.Length, risk.Id);
-                    foreach (var riskTypeId in selectedRiskTypes)
+                    foreach (var riskTypeId in selectedRiskTypes.Distinct())
                     {
-                        _logger.LogInformation("Adding risk type {RiskTypeId} to risk {RiskId}", riskTypeId, risk.Id);
                         _context.RiskRiskTypes.Add(new RiskRiskType
                         {
                             RiskId = risk.Id,
@@ -363,12 +384,6 @@ public class RiskController : Controller
                             CreatedAt = DateTime.UtcNow
                         });
                     }
-                    await _context.SaveChangesAsync();
-                    _logger.LogInformation("Risk types saved successfully");
-                }
-                else
-                {
-                    _logger.LogWarning("No risk types to add");
                 }
 
                 if (milestoneContext != null)
@@ -378,11 +393,14 @@ public class RiskController : Controller
                         MilestoneId = milestoneContext.Id,
                         RiskId = risk.Id
                     });
-                    await _context.SaveChangesAsync();
                 }
-                
+
+                await ReplaceRiskTagsAsync(risk.Id, tagValues);
+
+                await _context.SaveChangesAsync();
+
                 TempData["SuccessMessage"] = $"Risk '{risk.Title}' has been created successfully.";
-                
+
                 if (milestoneContext != null)
                 {
                     if (!string.IsNullOrWhiteSpace(returnTo) && returnTo.Equals("project-milestone", StringComparison.OrdinalIgnoreCase))
@@ -397,6 +415,7 @@ public class RiskController : Controller
                 {
                     return RedirectToAction(nameof(Index), new { objectiveId = risk.ObjectiveId });
                 }
+
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -405,17 +424,18 @@ public class RiskController : Controller
                 ModelState.AddModelError("", "An error occurred while creating the risk. Please try again.");
             }
         }
-        
+
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", risk.ObjectiveId);
         ViewBag.RiskTypes = await _context.RiskTypes.Where(rt => rt.IsActive).OrderBy(rt => rt.Name).ToListAsync();
-        ViewBag.RiskTiers = new SelectList(await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync(), "Id", "Name");
-        
+        ViewBag.RiskTiers = new SelectList(await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync(), "Id", "Name", risk.RiskTierId);
+        ViewBag.SelectedRiskTypeIds = selectedRiskTypes?.ToList() ?? new List<int>();
+
         var products = await _productsApiService.GetProductsAsync(null);
         ViewBag.Products = products.OrderBy(p => p.Title).ToList();
-        
+
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
-        
+
         ViewBag.MilestoneId = milestoneId;
         ViewBag.ReturnTo = returnTo;
         if (milestoneContext != null)
@@ -423,10 +443,13 @@ public class RiskController : Controller
             ViewBag.SourceMilestone = milestoneContext;
         }
 
+        await PopulateRiskLookupsAsync();
+        ViewBag.TagList = tagList ?? string.Empty;
+
         return View(risk);
     }
 
-    // GET: Risk/Edit/5
+// GET: Risk/Edit/5
     public async Task<IActionResult> Edit(int? id)
     {
         if (id == null)
@@ -436,70 +459,67 @@ public class RiskController : Controller
 
         var risk = await _context.Risks
             .Include(r => r.RiskRiskTypes)
+            .Include(r => r.Tags)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
+
         if (risk == null)
         {
             return NotFound();
         }
+
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", risk.ObjectiveId);
         ViewBag.RiskTypes = await _context.RiskTypes.Where(rt => rt.IsActive).OrderBy(rt => rt.Name).ToListAsync();
         ViewBag.SelectedRiskTypeIds = risk.RiskRiskTypes.Select(rrt => rrt.RiskTypeId).ToList();
         ViewBag.RiskTiers = new SelectList(await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync(), "Id", "Name", risk.RiskTierId);
-        
+
         var products = await _productsApiService.GetProductsAsync(null);
         ViewBag.Products = products.OrderBy(p => p.Title).ToList();
-        
+
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
-        
+
+        await PopulateRiskLookupsAsync();
+        ViewBag.TagList = string.Join(", ", risk.Tags.Select(t => t.Value));
+
         return View(risk);
     }
 
     // POST: Risk/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, [Bind("Id,ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,ClosedDate,Notes")] Risk risk, int[] selectedRiskTypes)
+    public async Task<IActionResult> Edit(int id, [Bind("Id,ObjectiveId,FipsId,Title,Description,BusinessArea,RiskTierId,OwnerEmail,ImpactRating,LikelihoodRating,ProximityDate,Response,ResidualImpact,ResidualLikelihood,TargetDate,Status,ClosedDate,Notes,RiskStatusId,RiskPriorityId,RiskLikelihoodId,RiskImpactLevelId,RiskProximityId,RiskCategoryId,IdentifiedDate,NextReviewDate,LastReviewDate,GovernanceBoardId,ResponseStrategy,Source,SourceId,PrimaryProductId")] Risk risk, int[] selectedRiskTypes, string? tagList)
     {
-        _logger.LogInformation("=== EDIT RISK POST ===");
-        _logger.LogInformation("Risk ID: {RiskId}", id);
-        _logger.LogInformation("OwnerEmail received: {OwnerEmail}", risk.OwnerEmail);
-        _logger.LogInformation("OwnerEmail from Request.Form: {FormValue}", Request.Form["OwnerEmail"].ToString());
-        _logger.LogInformation("Risk types parameter is null: {IsNull}", selectedRiskTypes == null);
-        _logger.LogInformation("Risk types count: {Count}", selectedRiskTypes?.Length ?? 0);
-        _logger.LogInformation("Risk types values: {RiskTypes}", selectedRiskTypes != null ? string.Join(", ", selectedRiskTypes) : "none");
-        _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
-        
         if (id != risk.Id)
         {
             return NotFound();
         }
 
-        if (!ModelState.IsValid)
+        var tagValues = ParseTags(tagList);
+
+        var existingRisk = await _context.Risks
+            .Include(r => r.RiskRiskTypes)
+            .Include(r => r.Tags)
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
+
+        if (existingRisk == null)
         {
-            foreach (var modelState in ModelState.Values)
-            {
-                foreach (var error in modelState.Errors)
-                {
-                    _logger.LogWarning("ModelState Error: {Error}", error.ErrorMessage);
-                }
-            }
+            return NotFound();
         }
+
+        risk.ObjectiveId = risk.ObjectiveId == 0 ? null : risk.ObjectiveId;
+        risk.RiskTierId = risk.RiskTierId == 0 ? null : risk.RiskTierId;
+        risk.RiskStatusId = risk.RiskStatusId == 0 ? null : risk.RiskStatusId;
+        risk.RiskPriorityId = risk.RiskPriorityId == 0 ? null : risk.RiskPriorityId;
+        risk.RiskLikelihoodId = risk.RiskLikelihoodId == 0 ? null : risk.RiskLikelihoodId;
+        risk.RiskImpactLevelId = risk.RiskImpactLevelId == 0 ? null : risk.RiskImpactLevelId;
+        risk.RiskProximityId = risk.RiskProximityId == 0 ? null : risk.RiskProximityId;
+        risk.RiskCategoryId = risk.RiskCategoryId == 0 ? null : risk.RiskCategoryId;
+        if (string.IsNullOrWhiteSpace(risk.OwnerEmail)) risk.OwnerEmail = null;
 
         if (ModelState.IsValid)
         {
             try
             {
-                var existingRisk = await _context.Risks.FindAsync(id);
-                if (existingRisk == null || existingRisk.IsDeleted)
-                {
-                    return NotFound();
-                }
-
-                // Ensure nullable foreign keys are set to null if they're 0 or invalid
-                if (risk.ObjectiveId == 0) risk.ObjectiveId = null;
-                if (risk.RiskTierId == 0) risk.RiskTierId = null;
-                if (string.IsNullOrWhiteSpace(risk.OwnerEmail)) risk.OwnerEmail = null;
-
                 existingRisk.ObjectiveId = risk.ObjectiveId;
                 existingRisk.FipsId = risk.FipsId;
                 existingRisk.Title = risk.Title;
@@ -508,53 +528,96 @@ public class RiskController : Controller
                 existingRisk.BusinessArea = risk.BusinessArea;
                 existingRisk.RiskTierId = risk.RiskTierId;
                 existingRisk.OwnerEmail = risk.OwnerEmail;
+                existingRisk.RiskStatusId = risk.RiskStatusId;
+                existingRisk.RiskPriorityId = risk.RiskPriorityId;
+                existingRisk.RiskLikelihoodId = risk.RiskLikelihoodId;
+                existingRisk.RiskImpactLevelId = risk.RiskImpactLevelId;
+                existingRisk.RiskProximityId = risk.RiskProximityId;
+                existingRisk.RiskCategoryId = risk.RiskCategoryId;
+                existingRisk.IdentifiedDate = risk.IdentifiedDate ?? existingRisk.IdentifiedDate;
+                existingRisk.NextReviewDate = risk.NextReviewDate;
+                existingRisk.LastReviewDate = risk.LastReviewDate;
+                existingRisk.GovernanceBoardId = risk.GovernanceBoardId;
+                existingRisk.ResponseStrategy = string.IsNullOrWhiteSpace(risk.ResponseStrategy) ? null : risk.ResponseStrategy.Trim();
+                existingRisk.Source = string.IsNullOrWhiteSpace(risk.Source) ? null : risk.Source.Trim();
+                existingRisk.SourceId = string.IsNullOrWhiteSpace(risk.SourceId) ? null : risk.SourceId.Trim();
+                existingRisk.PrimaryProductId = risk.PrimaryProductId;
+
+                if (!string.IsNullOrWhiteSpace(risk.OwnerEmail))
+                {
+                    var ownerUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == risk.OwnerEmail.ToLower());
+                    existingRisk.OwnerUserId = ownerUser?.Id;
+                }
+                else
+                {
+                    existingRisk.OwnerUserId = null;
+                }
+
+                if (risk.RiskStatusId.HasValue)
+                {
+                    var statusLookup = await _context.RiskStatuses.FirstOrDefaultAsync(s => s.Id == risk.RiskStatusId.Value);
+                    if (statusLookup != null)
+                    {
+                        existingRisk.Status = statusLookup.Label;
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(risk.Status))
+                {
+                    existingRisk.Status = risk.Status;
+                }
+
                 existingRisk.ImpactRating = risk.ImpactRating;
                 existingRisk.LikelihoodRating = risk.LikelihoodRating;
                 existingRisk.RiskScore = risk.ImpactRating * risk.LikelihoodRating;
-                existingRisk.ProximityDate = risk.ProximityDate;
-                existingRisk.Response = risk.Response;
+                existingRisk.InherentScore = existingRisk.RiskScore;
                 existingRisk.ResidualImpact = risk.ResidualImpact;
                 existingRisk.ResidualLikelihood = risk.ResidualLikelihood;
+                existingRisk.ResidualScore = (risk.ResidualImpact ?? 0) * (risk.ResidualLikelihood ?? 0);
+                existingRisk.ProximityDate = risk.ProximityDate;
+                existingRisk.Response = risk.Response;
                 existingRisk.TargetDate = risk.TargetDate;
-                existingRisk.Status = risk.Status;
                 existingRisk.ClosedDate = risk.ClosedDate;
                 existingRisk.Notes = risk.Notes;
+
+                var currentUserEmail = User.Identity?.Name;
+                if (!string.IsNullOrWhiteSpace(currentUserEmail))
+                {
+                    var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == currentUserEmail.ToLower());
+                    if (currentUser != null)
+                    {
+                        existingRisk.UpdatedByUserId = currentUser.Id;
+                    }
+                }
+
                 existingRisk.UpdatedAt = DateTime.UtcNow;
-                
-                await _context.SaveChangesAsync();
-                
-                // Update risk types - remove old ones and add new ones
-                var existingRiskTypes = _context.RiskRiskTypes.Where(rrt => rrt.RiskId == risk.Id);
+
+                var existingRiskTypes = _context.RiskRiskTypes.Where(rrt => rrt.RiskId == existingRisk.Id);
                 _context.RiskRiskTypes.RemoveRange(existingRiskTypes);
-                
+
                 if (selectedRiskTypes != null && selectedRiskTypes.Length > 0)
                 {
-                    _logger.LogInformation("Adding {Count} risk types to risk {RiskId}", selectedRiskTypes.Length, risk.Id);
-                    foreach (var riskTypeId in selectedRiskTypes)
+                    foreach (var riskTypeId in selectedRiskTypes.Distinct())
                     {
-                        _logger.LogInformation("Adding risk type {RiskTypeId} to risk {RiskId}", riskTypeId, risk.Id);
                         _context.RiskRiskTypes.Add(new RiskRiskType
                         {
-                            RiskId = risk.Id,
+                            RiskId = existingRisk.Id,
                             RiskTypeId = riskTypeId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
                 }
-                else
-                {
-                    _logger.LogInformation("No risk types to add (clearing all risk types)");
-                }
-                
+
+                await ReplaceRiskTagsAsync(existingRisk.Id, tagValues);
+
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Risk types updated successfully");
-                
-                TempData["SuccessMessage"] = $"Risk '{risk.Title}' has been updated successfully.";
-                
-                if (risk.ObjectiveId.HasValue)
+
+                TempData["SuccessMessage"] = $"Risk '{existingRisk.Title}' has been updated successfully.";
+
+                if (existingRisk.ObjectiveId.HasValue)
                 {
-                    return RedirectToAction(nameof(Index), new { objectiveId = risk.ObjectiveId });
+                    return RedirectToAction(nameof(Index), new { objectiveId = existingRisk.ObjectiveId });
                 }
+
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -563,22 +626,25 @@ public class RiskController : Controller
                 ModelState.AddModelError("", "An error occurred while updating the risk. Please try again.");
             }
         }
-        
+
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", risk.ObjectiveId);
         ViewBag.RiskTypes = await _context.RiskTypes.Where(rt => rt.IsActive).OrderBy(rt => rt.Name).ToListAsync();
-        ViewBag.SelectedRiskTypeIds = risk.RiskRiskTypes?.Select(rrt => rrt.RiskTypeId).ToList() ?? new List<int>();
+        ViewBag.SelectedRiskTypeIds = selectedRiskTypes?.ToList() ?? new List<int>();
         ViewBag.RiskTiers = new SelectList(await _context.RiskTiers.Where(rt => rt.IsActive).OrderBy(rt => rt.SortOrder).ToListAsync(), "Id", "Name", risk.RiskTierId);
-        
+
         var products = await _productsApiService.GetProductsAsync(null);
         ViewBag.Products = products.OrderBy(p => p.Title).ToList();
-        
+
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
-        
+
+        await PopulateRiskLookupsAsync();
+        ViewBag.TagList = tagList ?? string.Join(", ", existingRisk?.Tags.Select(t => t.Value) ?? Array.Empty<string>());
+
         return View(risk);
     }
 
-    // GET: Risk/Delete/5
+// GET: Risk/Delete/5
     public async Task<IActionResult> Delete(int? id)
     {
         if (id == null)
@@ -623,5 +689,83 @@ public class RiskController : Controller
         
         return RedirectToAction(nameof(Index));
     }
-}
 
+    private async Task PopulateRiskLookupsAsync()
+    {
+        ViewBag.RiskStatuses = new SelectList(
+            await _context.RiskStatuses.Where(s => s.IsActive).OrderBy(s => s.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.RiskPriorities = new SelectList(
+            await _context.RiskPriorities.Where(p => p.IsActive).OrderBy(p => p.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.RiskLikelihoods = new SelectList(
+            await _context.RiskLikelihoods.Where(l => l.IsActive).OrderBy(l => l.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.RiskImpactLevels = new SelectList(
+            await _context.RiskImpactLevels.Where(i => i.IsActive).OrderBy(i => i.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.RiskProximities = new SelectList(
+            await _context.RiskProximities.Where(p => p.IsActive).OrderBy(p => p.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.RiskCategories = new SelectList(
+            await _context.RiskCategories.Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+
+        ViewBag.GovernanceBoards = new SelectList(
+            await _context.GovernanceBoards.Where(g => g.IsActive).OrderBy(g => g.SortOrder).ToListAsync(),
+            "Id",
+            "Label");
+    }
+
+    private static IReadOnlyList<string> ParseTags(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return Array.Empty<string>();
+        }
+
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(tag => tag.Trim())
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task ReplaceRiskTagsAsync(int riskId, IReadOnlyCollection<string> tagValues)
+    {
+        var existing = await _context.RiskTags
+            .Where(t => t.RiskId == riskId)
+            .ToListAsync();
+
+        if (existing.Any())
+        {
+            _context.RiskTags.RemoveRange(existing);
+        }
+
+        if (tagValues.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var value in tagValues)
+        {
+            _context.RiskTags.Add(new RiskTag
+            {
+                RiskId = riskId,
+                Value = value
+            });
+        }
+    }
+
+}
