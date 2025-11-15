@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Compass.Models;
 
@@ -24,6 +25,7 @@ public class SurveyResponse
 	[StringLength(2000)]
 	public string? FreeText { get; set; }
 
+	[Column(TypeName = "decimal(18,2)")]
 	public decimal UssComputed { get; set; }
 
 	[StringLength(10)]

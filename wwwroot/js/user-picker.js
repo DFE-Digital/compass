@@ -8,6 +8,8 @@
             this.root = root;
             this.input = root.querySelector('.js-user-picker-input');
             this.hidden = root.querySelector('.js-user-picker-value');
+            this.nameInput = root.querySelector('.js-user-picker-name');
+            this.emailInput = root.querySelector('.js-user-picker-email');
             this.results = root.querySelector('.js-user-picker-results');
             this.message = root.querySelector('.js-user-picker-message');
             this.spinner = root.querySelector('.js-user-picker-spinner');
@@ -175,6 +177,12 @@
             if (this.hidden) {
                 this.hidden.value = user?.id ?? '';
             }
+            if (this.nameInput) {
+                this.nameInput.value = user?.name ?? '';
+            }
+            if (this.emailInput) {
+                this.emailInput.value = user?.email ?? '';
+            }
 
             if (this.summary) {
                 if (user?.id) {
@@ -201,6 +209,12 @@
         clearSelection() {
             if (this.hidden) {
                 this.hidden.value = '';
+            }
+            if (this.nameInput) {
+                this.nameInput.value = '';
+            }
+            if (this.emailInput) {
+                this.emailInput.value = '';
             }
             if (this.summary) {
                 this.summary.innerHTML = `<span class="text-muted">${this.defaultSummary}</span>`;

@@ -1,12 +1,25 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Text.Json;
 using Compass.Models;
+using Compass.Services;
 
 namespace Compass.Data;
 
 public partial class CompassDbContext : DbContext
 {
-    public CompassDbContext(DbContextOptions<CompassDbContext> options) : base(options)
+    private readonly IAuditContextProvider _auditContextProvider;
+    private bool _suppressAuditLogging;
+
+    public CompassDbContext(DbContextOptions<CompassDbContext> options) : this(options, new NullAuditContextProvider())
     {
+    }
+
+    public CompassDbContext(
+        DbContextOptions<CompassDbContext> options,
+        IAuditContextProvider auditContextProvider) : base(options)
+    {
+        _auditContextProvider = auditContextProvider;
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -166,9 +179,206 @@ public partial class CompassDbContext : DbContext
     public DbSet<DemandRequestRiskType> DemandRequestRiskTypes { get; set; }
     public DbSet<TriageMeeting> TriageMeetings { get; set; }
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        if (_suppressAuditLogging)
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        var auditEntries = PrepareAuditEntries();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        AppendAuditEntries(auditEntries, acceptAllChangesOnSuccess);
+        return result;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        if (_suppressAuditLogging)
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        var auditEntries = PrepareAuditEntries();
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        await AppendAuditEntriesAsync(auditEntries, acceptAllChangesOnSuccess, cancellationToken);
+        return result;
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => SaveChangesAsync(true, cancellationToken);
+
+    private List<AuditLog> PrepareAuditEntries()
+    {
+        ChangeTracker.DetectChanges();
+        var auditEntries = new List<AuditLog>();
+        var timestamp = DateTime.UtcNow;
+        var currentUserId = _auditContextProvider.UserId;
+        var currentUserName = _auditContextProvider.UserName;
+        var currentUserEmail = _auditContextProvider.UserEmail;
+        var ipAddress = _auditContextProvider.IpAddress;
+        var userAgent = _auditContextProvider.UserAgent;
+
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Entity is AuditLog)
+            {
+                continue;
+            }
+
+            if (entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            {
+                continue;
+            }
+
+            var entityName = entry.Metadata.ClrType.Name;
+            var primaryKey = GetPrimaryKey(entry);
+            var audit = new AuditLog
+            {
+                Entity = entityName,
+                EntityId = primaryKey,
+                EntityReference = entry.Entity.ToString(),
+                Action = entry.State switch
+                {
+                    EntityState.Added => "Create",
+                    EntityState.Modified => "Update",
+                    EntityState.Deleted => "Delete",
+                    _ => entry.State.ToString()
+                },
+                ChangedUtc = timestamp,
+                ChangedBy = currentUserName,
+                ChangedByUserId = currentUserId,
+                ChangedByEmail = currentUserEmail,
+                IpAddress = ipAddress,
+                UserAgent = userAgent
+            };
+
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    audit.AfterJson = SerializePropertyValues(entry.Properties, includeOriginalValues: false);
+                    break;
+                case EntityState.Deleted:
+                    audit.BeforeJson = SerializePropertyValues(entry.Properties, includeOriginalValues: true);
+                    break;
+                case EntityState.Modified:
+                    audit.BeforeJson = SerializeChangedValues(entry.Properties, useOriginalValues: true);
+                    audit.AfterJson = SerializeChangedValues(entry.Properties, useOriginalValues: false);
+                    break;
+            }
+
+            auditEntries.Add(audit);
+        }
+
+        return auditEntries;
+    }
+
+    private string SerializePropertyValues(IEnumerable<PropertyEntry> properties, bool includeOriginalValues)
+    {
+        var dictionary = new Dictionary<string, object?>();
+        foreach (var property in properties)
+        {
+            if (property.Metadata.IsPrimaryKey())
+            {
+                continue;
+            }
+
+            dictionary[property.Metadata.Name] = includeOriginalValues
+                ? property.OriginalValue
+                : property.CurrentValue;
+        }
+
+        return JsonSerializer.Serialize(dictionary);
+    }
+
+    private string SerializeChangedValues(IEnumerable<PropertyEntry> properties, bool useOriginalValues)
+    {
+        var dictionary = new Dictionary<string, object?>();
+        foreach (var property in properties)
+        {
+            if (!property.IsModified)
+            {
+                continue;
+            }
+
+            if (property.Metadata.IsPrimaryKey())
+            {
+                continue;
+            }
+
+            dictionary[property.Metadata.Name] = useOriginalValues
+                ? property.OriginalValue
+                : property.CurrentValue;
+        }
+
+        return JsonSerializer.Serialize(dictionary);
+    }
+
+    private string GetPrimaryKey(EntityEntry entry)
+    {
+        var key = entry.Properties
+            .Where(p => p.Metadata.IsPrimaryKey())
+            .Select(p => p.CurrentValue?.ToString() ?? p.OriginalValue?.ToString())
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        return key ?? string.Empty;
+    }
+
+    private void AppendAuditEntries(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess)
+    {
+        var entries = auditEntries.ToList();
+        if (!entries.Any())
+        {
+            return;
+        }
+
+        try
+        {
+            _suppressAuditLogging = true;
+            AuditLogs.AddRange(entries);
+            base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        finally
+        {
+            _suppressAuditLogging = false;
+        }
+    }
+
+    private async Task AppendAuditEntriesAsync(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+    {
+        var entries = auditEntries.ToList();
+        if (!entries.Any())
+        {
+            return;
+        }
+
+        try
+        {
+            _suppressAuditLogging = true;
+            AuditLogs.AddRange(entries);
+            await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        finally
+        {
+            _suppressAuditLogging = false;
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.AzureObjectId)
+            .IsUnique()
+            .HasFilter("[AzureObjectId] IS NOT NULL");
+
         // Surveys configuration
         modelBuilder.Entity<FipsService>()
             .HasIndex(s => s.FipsId)
@@ -1555,5 +1765,14 @@ public partial class CompassDbContext : DbContext
             .Property(tm => tm.Title)
             .HasMaxLength(150);
     }
+}
+
+file sealed class NullAuditContextProvider : IAuditContextProvider
+{
+    public string? UserId => null;
+    public string? UserEmail => null;
+    public string? UserName => null;
+    public string? IpAddress => null;
+    public string? UserAgent => null;
 }
 

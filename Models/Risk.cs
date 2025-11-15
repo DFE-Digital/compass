@@ -125,8 +125,10 @@ public class Risk
     [ForeignKey(nameof(RiskCategoryId))]
     public RiskCategory? RiskCategory { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
     public decimal? InherentScore { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
     public decimal? ResidualScore { get; set; }
 
     public DateTime? IdentifiedDate { get; set; }
@@ -175,8 +177,13 @@ public class Risk
     // Navigation properties
     public ICollection<RiskAction> RiskActions { get; set; } = new List<RiskAction>();
     public ICollection<MilestoneRisk> MilestoneRisks { get; set; } = new List<MilestoneRisk>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
+
     public ICollection<RiskRiskType> RiskRiskTypes { get; set; } = new List<RiskRiskType>();
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
 }

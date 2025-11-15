@@ -17,6 +17,18 @@ public class ProjectActionFormViewModel
 
     public IEnumerable<SelectListItem> PriorityOptions { get; set; } = Enumerable.Empty<SelectListItem>();
 
+    public IEnumerable<SelectListItem> ActionTypeOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> ActionCategoryOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> ImpactLevelOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> EvidenceTypeOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> ReminderFrequencyOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
+    public IEnumerable<SelectListItem> EscalationThresholdOptions { get; set; } = Enumerable.Empty<SelectListItem>();
+
     public IEnumerable<SelectListItem> ActionSourceOptions { get; set; } = Enumerable.Empty<SelectListItem>();
 
     public IEnumerable<SelectListItem> BusinessAreaOptions { get; set; } = Enumerable.Empty<SelectListItem>();

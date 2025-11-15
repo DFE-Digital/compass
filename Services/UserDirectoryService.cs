@@ -46,8 +46,24 @@ public class UserDirectoryService : IUserDirectoryService
             throw new InvalidOperationException($"Unable to locate Graph user {objectIdString}.");
         }
 
+        var directoryUser = MapGraphUser(graphUser);
+        var normalizedEmail = directoryUser.Email?.Trim().ToLowerInvariant();
+
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.AzureObjectId == objectIdString, cancellationToken);
+
+        if (user == null && !string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            user = await _context.Users
+                .FirstOrDefaultAsync(
+                    u => u.Email != null && u.Email.ToLower() == normalizedEmail,
+                    cancellationToken);
+
+            if (user != null && string.IsNullOrWhiteSpace(user.AzureObjectId))
+            {
+                user.AzureObjectId = objectIdString;
+            }
+        }
 
         if (user == null)
         {
@@ -59,7 +75,6 @@ public class UserDirectoryService : IUserDirectoryService
             _context.Users.Add(user);
         }
 
-        var directoryUser = MapGraphUser(graphUser);
         UpdateUserFromDirectoryPayload(user, directoryUser);
 
         var photo = await TryDownloadPhotoAsync(objectIdString, cancellationToken);

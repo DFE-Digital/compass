@@ -60,6 +60,9 @@ public class Project
     [ForeignKey(nameof(DeliveryPriorityId))]
     public DeliveryPriority? DeliveryPriority { get; set; }
 
+    [MaxLength(500)]
+    public string? DeliveryPriorityChangeReason { get; set; }
+
     // Organizational structure fields
     public int? PrimaryOrganizationalGroupId { get; set; }
     public OrganizationalGroup? PrimaryOrganizationalGroup { get; set; }
@@ -95,8 +98,13 @@ public class Project
     public ICollection<ProjectResourceFundingHistory> FundingHistory { get; set; } = new List<ProjectResourceFundingHistory>();
     public ICollection<ProjectContact> ProjectContacts { get; set; } = new List<ProjectContact>();
     public ICollection<ProjectObjective> ProjectObjectives { get; set; } = new List<ProjectObjective>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();
+
+    [NotMapped]
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
+
     public ICollection<ProjectProduct> ProjectProducts { get; set; } = new List<ProjectProduct>();
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<Risk> Risks { get; set; } = new List<Risk>();
