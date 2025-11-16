@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251115130008_AddLeadershipAssignments")]
+    partial class AddLeadershipAssignments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -6660,15 +6663,8 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("BusinessAreaKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("BusinessAreaName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -6684,7 +6680,9 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "BusinessAreaKey", "Role")
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("UserId", "BusinessAreaLookupId", "Role")
                         .IsUnique();
 
                     b.ToTable("UserBusinessAreaRoleAssignments");
@@ -8297,11 +8295,19 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.UserBusinessAreaRoleAssignment", b =>
                 {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessArea")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Compass.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("BusinessArea");
 
                     b.Navigation("User");
                 });

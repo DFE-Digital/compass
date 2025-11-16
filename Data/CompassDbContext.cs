@@ -1,5 +1,7 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Data;
 using System.Text.Json;
 using Compass.Models;
 using Compass.Services;
@@ -10,6 +12,8 @@ public partial class CompassDbContext : DbContext
 {
     private readonly IAuditContextProvider _auditContextProvider;
     private bool _suppressAuditLogging;
+    private bool _auditSchemaChecked;
+    private bool _auditColumnsAvailable = true;
 
     public CompassDbContext(DbContextOptions<CompassDbContext> options) : this(options, new NullAuditContextProvider())
     {
@@ -38,6 +42,7 @@ public partial class CompassDbContext : DbContext
 
     // User management
     public DbSet<User> Users { get; set; }
+    public DbSet<UserBusinessAreaRoleAssignment> UserBusinessAreaRoleAssignments { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
     
     // Role-based access control
@@ -326,10 +331,74 @@ public partial class CompassDbContext : DbContext
         return key ?? string.Empty;
     }
 
+    private bool EnsureAuditColumnsAvailable()
+    {
+        if (_auditSchemaChecked)
+        {
+            return _auditColumnsAvailable;
+        }
+
+        var connection = Database.GetDbConnection();
+        var wasOpen = connection.State == ConnectionState.Open;
+
+        try
+        {
+            if (!wasOpen)
+            {
+                connection.Open();
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandType = CommandType.Text;
+            command.CommandText = @"
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = 'AuditLogs' 
+                  AND COLUMN_NAME IN ('AfterJson','BeforeJson','ChangedByEmail','ChangedByUserId','EntityReference','IpAddress','UserAgent')";
+
+            var count = Convert.ToInt32(command.ExecuteScalar() ?? 0);
+            _auditColumnsAvailable = count >= 7;
+        }
+        catch
+        {
+            _auditColumnsAvailable = false;
+        }
+        finally
+        {
+            _auditSchemaChecked = true;
+            if (!wasOpen && connection.State == ConnectionState.Open)
+            {
+                connection.Close();
+            }
+        }
+
+        return _auditColumnsAvailable;
+    }
+
+    private static bool IsMissingAuditColumnException(Exception? exception)
+    {
+        if (exception == null)
+        {
+            return false;
+        }
+
+        if (exception is SqlException sqlException && sqlException.Number == 207)
+        {
+            return true;
+        }
+
+        return IsMissingAuditColumnException(exception.InnerException);
+    }
+
     private void AppendAuditEntries(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess)
     {
         var entries = auditEntries.ToList();
         if (!entries.Any())
+        {
+            return;
+        }
+
+        if (!EnsureAuditColumnsAvailable())
         {
             return;
         }
@@ -339,6 +408,10 @@ public partial class CompassDbContext : DbContext
             _suppressAuditLogging = true;
             AuditLogs.AddRange(entries);
             base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (Exception ex) when (IsMissingAuditColumnException(ex))
+        {
+            _auditColumnsAvailable = false;
         }
         finally
         {
@@ -354,11 +427,20 @@ public partial class CompassDbContext : DbContext
             return;
         }
 
+        if (!EnsureAuditColumnsAvailable())
+        {
+            return;
+        }
+
         try
         {
             _suppressAuditLogging = true;
             AuditLogs.AddRange(entries);
             await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (Exception ex) when (IsMissingAuditColumnException(ex))
+        {
+            _auditColumnsAvailable = false;
         }
         finally
         {
@@ -373,6 +455,15 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
             .IsUnique();
+        modelBuilder.Entity<UserBusinessAreaRoleAssignment>()
+            .HasIndex(a => new { a.UserId, a.BusinessAreaKey, a.Role })
+            .IsUnique();
+
+        modelBuilder.Entity<UserBusinessAreaRoleAssignment>()
+            .HasOne(a => a.User)
+            .WithMany()
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<User>()
             .HasIndex(u => u.AzureObjectId)
@@ -463,6 +554,18 @@ public partial class CompassDbContext : DbContext
             .HasIndex(u => u.AzureObjectId)
             .IsUnique()
             .HasFilter("[AzureObjectId] IS NOT NULL");
+
+        modelBuilder.Entity<UserPreference>()
+            .Property(p => p.DashboardLayout)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.AfterJson)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.BeforeJson)
+            .HasColumnType("nvarchar(max)");
 
         // Configure PerformanceMetric entity
         modelBuilder.Entity<PerformanceMetric>()
