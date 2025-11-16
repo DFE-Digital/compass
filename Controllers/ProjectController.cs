@@ -1096,12 +1096,12 @@ namespace Compass.Controllers
             }
 
             var emailSet = contactsNeedingLink
-                .Select(pc => pc.Email.Trim().ToLowerInvariant())
+                .Select(pc => pc.Email.Trim().ToLower())
                 .Distinct()
                 .ToList();
 
             var usersByEmail = await _context.Users
-                .Where(u => emailSet.Contains(u.Email.Trim().ToLowerInvariant()))
+                .Where(u => emailSet.Contains(u.Email.Trim().ToLower()))
                 .ToListAsync();
 
             if (!usersByEmail.Any())
@@ -1110,7 +1110,7 @@ namespace Compass.Controllers
             }
 
             var emailLookup = usersByEmail
-                .GroupBy(u => u.Email.Trim().ToLowerInvariant())
+                .GroupBy(u => u.Email.Trim().ToLower())
                 .ToDictionary(group => group.Key, group => group.Last());
 
             var now = DateTime.UtcNow;
