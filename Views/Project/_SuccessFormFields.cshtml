@@ -1,0 +1,55 @@
+@model Compass.ViewModels.ProjectSuccessFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+<div class="form-group @(hasError("SuccessDescription") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.SuccessDescription" class="font-weight-bold">Success description</label>
+    <small class="form-text text-muted">Describe the success achieved and why it matters.</small>
+    <span asp-validation-for="Input.SuccessDescription" class="form-error-message"></span>
+    <textarea asp-for="Input.SuccessDescription" class="form-control @(hasError("SuccessDescription") ? "form-control--error" : string.Empty)" rows="5" maxlength="2000"></textarea>
+</div>
+
+<div class="form-group form-check">
+    <input asp-for="Input.IsReportedToSlt" class="form-check-input" />
+    <label class="form-check-label" asp-for="Input.IsReportedToSlt">Add this success to the weekly SLT report</label>
+</div>
+
+@if (Model.RecordedAt.HasValue || !string.IsNullOrWhiteSpace(Model.RecordedByName) || !string.IsNullOrWhiteSpace(Model.RecordedByEmail))
+{
+    <div class="alert alert-secondary" role="note">
+        <strong>Recorded by:</strong>
+        @if (!string.IsNullOrWhiteSpace(Model.RecordedByName))
+        {
+            <span>@Model.RecordedByName</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.RecordedByEmail))
+        {
+            <span class="text-muted ml-2">@Model.RecordedByEmail</span>
+        }
+        @if (Model.RecordedAt.HasValue)
+        {
+            <br /><small class="text-muted">Recorded @Model.RecordedAt.Value.ToString("dd MMM yyyy HH:mm") (UTC)</small>
+        }
+    </div>
+}

@@ -331,8 +331,9 @@ Task<List<string>> GetBusinessAreasAsync();
 6. **RAID_CLASSIFICATION_COMPLETE.md** - Complete classification system
 7. **FILTERING_AND_PERSONALIZATION.md** - Filter design and user preferences
 8. **SETTINGS_NAVIGATION_UPDATE.md** - Sidebar navigation enhancement
+9. **ACCESSIBILITY_ISSUES_AND_STATEMENT_SERVICE.md** - Accessibility enrolment, issue tracking, and statement workflows
 
-**Total:** 8 comprehensive documentation files ✅
+**Total:** 9 comprehensive documentation files ✅
 
 ## Feature matrix
 

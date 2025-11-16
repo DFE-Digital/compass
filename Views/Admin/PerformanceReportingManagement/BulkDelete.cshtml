@@ -1,0 +1,156 @@
+@{
+    ViewData["Title"] = "Bulk delete metric submissions";
+    var periods = ViewBag.Periods as List<(int Year, int Month, int Count)> ?? new List<(int Year, int Month, int Count)>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Bulk delete metric submissions</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index">Admin</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Performance reporting management</a></li>
+                    <li class="breadcrumb-item active">Bulk delete</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <strong>Warning:</strong> Bulk deletion will remove all metric submissions for the selected month across all products. This action cannot be undone.
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Select reporting period</h3>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Reporting period</th>
+                            <th>Submissions count</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var period in periods)
+                        {
+                            var periodDate = new DateTime(period.Year, period.Month, 1);
+                            <tr>
+                                <td><strong>@periodDate.ToString("MMMM yyyy")</strong></td>
+                                <td>
+                                    @if (period.Count > 0)
+                                    {
+                                        <span class="badge badge-info">@period.Count submissions</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No submissions</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (period.Count > 0)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                data-toggle="modal" 
+                                                data-target="#confirmDeleteModal"
+                                                data-year="@period.Year"
+                                                data-month="@period.Month"
+                                                data-period="@periodDate.ToString("MMMM yyyy")"
+                                                data-count="@period.Count">
+                                            <i class="fas fa-trash-alt mr-1"></i>Delete all
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No action needed</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <a asp-action="Index" class="btn btn-default">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to management
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger">
+                <h5 class="modal-title">Confirm bulk deletion</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2"><strong>Are you sure you want to delete all metric submissions for <span id="modalPeriod"></span>?</strong></p>
+                <p class="mb-2">This will delete <strong><span id="modalCount"></span> submissions</strong> across all products.</p>
+                <p class="mb-0 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <form asp-action="BulkDeleteConfirm" method="post" id="deleteForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="year" id="deleteYear" />
+                    <input type="hidden" name="month" id="deleteMonth" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt mr-2"></i>Delete all submissions
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#confirmDeleteModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var year = button.data('year');
+                var month = button.data('month');
+                var period = button.data('period');
+                var count = button.data('count');
+                
+                var modal = $(this);
+                modal.find('#modalPeriod').text(period);
+                modal.find('#modalCount').text(count);
+                modal.find('#deleteYear').val(year);
+                modal.find('#deleteMonth').val(month);
+            });
+        });
+    </script>
+}
+

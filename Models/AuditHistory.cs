@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Compass.Models
 {
@@ -18,6 +19,7 @@ namespace Compass.Models
         [Required]
         public string AuditType { get; set; } = string.Empty; // Internal, External
         
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? Cost { get; set; } // Cost of the audit (optional)
         
         public string? Notes { get; set; } // Optional notes about the audit

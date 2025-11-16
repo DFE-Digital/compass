@@ -1,3 +1,5 @@
+using ClosedXML.Excel;
+using System.IO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,17 @@ public class DdtReportsController : Controller
     private readonly ILogger<DdtReportsController> _logger;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
+    private static readonly string[] UserGroupCategoryTypeNames =
+    {
+        "User group", "User Group", "User groups", "User Groups",
+        "User Type", "User Types", "Audience", "Target Audience"
+    };
+    private static readonly string[] SeniorResponsibleOfficerRoleKeywords =
+        { "senior responsible", "sro" };
+    private static readonly string[] InformationAssetOwnerRoleKeywords =
+        { "information asset owner", "information asset", "iao" };
+    private static readonly string[] DeliveryManagerRoleKeywords =
+        { "delivery manager", "delivery lead", "delivery owner", "dm" };
 
     public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService)
     {
@@ -287,82 +300,95 @@ public class DdtReportsController : Controller
     {
         try
         {
-            // Get all business areas
+            // Get all business areas for selection
             var businessAreas = await _productsApiService.GetBusinessAreasAsync();
             ViewBag.BusinessAreas = businessAreas;
-            
-            // If no area is selected, default to the first one
-            if (string.IsNullOrEmpty(area) && businessAreas.Any())
+
+            // Determine the reporting week range
+            DateTime resolvedWeekStart;
+            if (weekStart.HasValue)
             {
-                area = businessAreas.First();
+                resolvedWeekStart = weekStart.Value;
             }
-            
-            // Calculate week start if not provided
-            if (!weekStart.HasValue)
+            else
             {
                 var today = DateTime.Today;
                 var dayOfWeek = (int)today.DayOfWeek;
                 var diff = dayOfWeek == 0 ? -6 : 1 - dayOfWeek; // Monday = start of week
-                weekStart = today.AddDays(diff);
+                resolvedWeekStart = today.AddDays(diff);
             }
 
-            // Get all active projects for the specified business area
-            var projects = await _context.Projects
-                .Include(p => p.Successes)
-                .Include(p => p.Milestones)
-                .Include(p => p.RagHistory)
-                .Where(p => !p.IsDeleted && p.Status == "Active" && p.BusinessArea == area)
-                .OrderBy(p => p.Title)
-                .ToListAsync();
+            // Defaults when no area selected
+            var projects = new List<Project>();
+            var businessAreaProducts = new List<ProductDto>();
+            var accessibilityEnrollments = new Dictionary<string, ProductAccessibility>();
+            var totalProducts = 0;
+            var enrolledProducts = 0;
+            var totalAccessibilityIssues = 0;
+            PerformanceMetric? perfUx1Metric = null;
+            PerformanceMetric? perfAcc3Metric = null;
+            var latestReturns = new Dictionary<string, ProductReturn>();
 
-            // Get all products from CMS
-            var allProducts = await _productsApiService.GetProductsAsync(null);
-            
-            // Filter products by business area
-            var businessAreaProducts = allProducts
-                .Where(p => p.CategoryValues?.Any(cv => 
-                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
-                    cv.Name?.Equals(area, StringComparison.OrdinalIgnoreCase) == true) == true)
-                .ToList();
-            
-            // Get accessibility data for products
-            var accessibilityEnrollments = await _context.ProductAccessibilities
-                .Where(pa => !pa.IsDeleted)
-                .Include(pa => pa.Issues)
-                .ToDictionaryAsync(pa => pa.FipsId);
-            
-            // Calculate product metrics
-            var totalProducts = businessAreaProducts.Count;
-            var enrolledProducts = businessAreaProducts.Count(p => 
-                !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId));
-            var totalAccessibilityIssues = businessAreaProducts
-                .Where(p => !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId))
-                .Sum(p => accessibilityEnrollments[p.FipsId].Issues?.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")) ?? 0);
+            if (!string.IsNullOrWhiteSpace(area))
+            {
+                // Get all active projects for the specified business area
+                projects = await _context.Projects
+                    .Include(p => p.Successes)
+                    .Include(p => p.Milestones)
+                    .Include(p => p.RagHistory)
+                    .Where(p => !p.IsDeleted && p.Status == "Active" && p.BusinessArea == area)
+                    .OrderBy(p => p.Title)
+                    .ToListAsync();
 
-            // Get performance metrics
-            var perfUx1Metric = await _context.PerformanceMetrics
-                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-ux-1");
-            var perfAcc3Metric = await _context.PerformanceMetrics
-                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-acc-3");
-            
-            // Get latest product returns for products in this business area
-            var productFipsIds = businessAreaProducts
-                .Where(p => !string.IsNullOrEmpty(p.FipsId))
-                .Select(p => p.FipsId)
-                .ToList();
-                
-            var latestReturns = await _context.ProductReturns
-                .Where(pr => productFipsIds.Contains(pr.FipsId) && pr.Status == ReturnStatus.Submitted)
-                .Include(pr => pr.MetricValues)
-                .GroupBy(pr => pr.FipsId)
-                .Select(g => g.OrderByDescending(pr => pr.Year)
-                               .ThenByDescending(pr => pr.Month)
-                               .First())
-                .ToDictionaryAsync(pr => pr.FipsId);
+                // Get all products from CMS
+                var allProducts = await _productsApiService.GetProductsAsync(null);
+
+                // Filter products by business area
+                businessAreaProducts = allProducts
+                    .Where(p => p.CategoryValues?.Any(cv =>
+                        cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                        cv.Name?.Equals(area, StringComparison.OrdinalIgnoreCase) == true) == true)
+                    .ToList();
+
+                // Get accessibility data for products
+                accessibilityEnrollments = await _context.ProductAccessibilities
+                    .Where(pa => !pa.IsDeleted)
+                    .Include(pa => pa.Issues)
+                    .ToDictionaryAsync(pa => pa.FipsId);
+
+                // Calculate product metrics
+                totalProducts = businessAreaProducts.Count;
+                enrolledProducts = businessAreaProducts.Count(p =>
+                    !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId));
+                totalAccessibilityIssues = businessAreaProducts
+                    .Where(p => !string.IsNullOrEmpty(p.FipsId) && accessibilityEnrollments.ContainsKey(p.FipsId))
+                    .Sum(p => accessibilityEnrollments[p.FipsId].Issues?.Count(i => !i.IsDeleted && (i.Status == "open" || i.Status == "in_progress")) ?? 0);
+
+                // Get performance metrics
+                perfUx1Metric = await _context.PerformanceMetrics
+                    .FirstOrDefaultAsync(pm => pm.Identifier == "perf-ux-1");
+                perfAcc3Metric = await _context.PerformanceMetrics
+                    .FirstOrDefaultAsync(pm => pm.Identifier == "perf-acc-3");
+
+                // Get latest product returns for products in this business area
+                var productFipsIds = businessAreaProducts
+                    .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                    .Select(p => p.FipsId)
+                    .ToList();
+
+                latestReturns = await _context.ProductReturns
+                    .Where(pr => productFipsIds.Contains(pr.FipsId) && pr.Status == ReturnStatus.Submitted)
+                    .Include(pr => pr.MetricValues)
+                    .GroupBy(pr => pr.FipsId)
+                    .Select(g => g.OrderByDescending(pr => pr.Year)
+                                   .ThenByDescending(pr => pr.Month)
+                                   .First())
+                    .ToDictionaryAsync(pr => pr.FipsId);
+            }
 
             ViewBag.CurrentSection = section;
-            ViewBag.WeekStart = weekStart.Value;
-            ViewBag.WeekEnd = weekStart.Value.AddDays(6);
+            ViewBag.WeekStart = resolvedWeekStart;
+            ViewBag.WeekEnd = resolvedWeekStart.AddDays(6);
             ViewBag.BusinessArea = area;
             ViewBag.SelectedBusinessArea = area;
             ViewBag.BusinessAreaProducts = businessAreaProducts;
@@ -373,7 +399,7 @@ public class DdtReportsController : Controller
             ViewBag.PerfUx1Metric = perfUx1Metric;
             ViewBag.PerfAcc3Metric = perfAcc3Metric;
             ViewBag.LatestReturns = latestReturns;
-            
+
             return View(projects);
         }
         catch (Exception ex)
@@ -528,74 +554,18 @@ public class DdtReportsController : Controller
         try
         {
             var products = await _productsApiService.GetProductsAsync(null);
-            var completionItems = new List<ProductCompletionItem>();
-            
-            // User group category type name variations
-            var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
-            
-            foreach (var product in products.OrderBy(p => p.Title))
-            {
-                if (string.IsNullOrEmpty(product.FipsId)) continue;
-                
-                // Check Phase
-                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
-                              (product.CategoryValues?.Any(cv => 
-                                  cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
-                
-                // Check Business Area
-                var hasBusinessArea = product.CategoryValues?.Any(cv => 
-                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
-                
-                // Extract Business Area name
-                var businessAreaName = product.CategoryValues?
-                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
-                    ?.Name ?? "Unassigned";
-                
-                // Count Contacts
-                var contactsCount = product.ProductContacts?.Count ?? 0;
-                
-                // Check Product URL
-                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
-                
-                // Count User Groups
-                var userGroupsCount = product.CategoryValues?
-                    .Count(cv => cv.CategoryType != null && 
-                                userGroupVariations.Any(v => 
-                                    cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
-                
-                // Calculate completion percentage (5 criteria, 20% each)
-                var completedCriteria = 0;
-                if (hasPhase) completedCriteria++;
-                if (hasBusinessArea) completedCriteria++;
-                if (contactsCount > 0) completedCriteria++;
-                if (hasProductUrl) completedCriteria++;
-                if (userGroupsCount > 0) completedCriteria++;
-                
-                var completionPercentage = (completedCriteria / 5.0) * 100;
-                
-                completionItems.Add(new ProductCompletionItem
-                {
-                    FipsId = product.FipsId,
-                    ProductTitle = product.Title,
-                    BusinessArea = businessAreaName,
-                    State = product.State,
-                    HasPhase = hasPhase,
-                    HasBusinessArea = hasBusinessArea,
-                    ContactsCount = contactsCount,
-                    HasProductUrl = hasProductUrl,
-                    UserGroupsCount = userGroupsCount,
-                    CompletionPercentage = completionPercentage
-                });
-            }
-            
-            // Calculate average completion percentage
-            var averageCompletion = completionItems.Any() 
-                ? completionItems.Average(p => p.CompletionPercentage) 
+            var completionItems = products
+                .OrderBy(p => p.Title)
+                .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            var averageCompletion = completionItems.Any()
+                ? completionItems.Average(p => p.CompletionPercentage)
                 : 0;
-            
-            // Calculate business area completions
+
             var businessAreaCompletions = completionItems
-                .GroupBy(p => p.BusinessArea)
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
                 .Select(g => new BusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
@@ -604,20 +574,18 @@ public class DdtReportsController : Controller
                 })
                 .OrderByDescending(ba => ba.AverageCompletionPercentage)
                 .ToList();
-            
-            // Count products with 0% and 100% completion
-            var zeroCompletionCount = completionItems.Count(p => p.CompletionPercentage == 0);
-            var fullCompletionCount = completionItems.Count(p => p.CompletionPercentage == 100);
-            
-            // Count completed fields
+
+            var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
+            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
             var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
-            
-            // Get category values for dropdowns
+
             var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
             var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
-            
+            var userGroupCategoryValues = await _productsApiService.GetUserGroupCategoryValuesAsync();
+
             var viewModel = new FipsCompletionViewModel
             {
                 Products = completionItems,
@@ -632,6 +600,7 @@ public class DdtReportsController : Controller
             
             ViewBag.PhaseCategoryValues = phaseCategoryValues;
             ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            ViewBag.UserGroupCategoryValues = userGroupCategoryValues;
             
             return View(viewModel);
         }
@@ -640,6 +609,101 @@ public class DdtReportsController : Controller
             _logger.LogError(ex, "Error generating FIPS completion report");
             TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
             return View(new FipsCompletionViewModel());
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportFipsCompletion(bool includeAll = false)
+    {
+        try
+        {
+            var products = includeAll
+                ? await _productsApiService.GetAllProductsAsync(null)
+                : await _productsApiService.GetProductsAsync(null);
+
+            var completionItems = products
+                .OrderBy(p => p.Title)
+                .Where(p => includeAll || !string.IsNullOrEmpty(p.FipsId))
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("FIPS completion");
+
+            var headers = new[]
+            {
+                "Product title",
+                "FIPS ID",
+                "State",
+                "Phase",
+                "Has phase",
+                "Business area",
+                "Has business area",
+                "Contacts count",
+                "Contacts",
+                "Senior responsible officer",
+                "Information asset owner",
+                "Delivery manager",
+                "Product URL",
+                "Has product URL",
+                "User groups",
+                "User groups count",
+                "Completion %"
+            };
+
+            for (var column = 0; column < headers.Length; column++)
+            {
+                var cell = worksheet.Cell(1, column + 1);
+                cell.Value = headers[column];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            var currentRow = 2;
+
+            foreach (var item in completionItems)
+            {
+                worksheet.Cell(currentRow, 1).Value = item.ProductTitle;
+                worksheet.Cell(currentRow, 2).Value = item.FipsId;
+                worksheet.Cell(currentRow, 3).Value = item.State;
+                worksheet.Cell(currentRow, 4).Value = item.PhaseName ?? string.Empty;
+                worksheet.Cell(currentRow, 5).Value = item.HasPhase ? "Yes" : "No";
+                worksheet.Cell(currentRow, 6).Value = item.BusinessArea;
+                worksheet.Cell(currentRow, 7).Value = item.HasBusinessArea ? "Yes" : "No";
+                worksheet.Cell(currentRow, 8).Value = item.ContactsCount;
+                worksheet.Cell(currentRow, 9).Value = item.ContactDetails.Any()
+                    ? string.Join(Environment.NewLine, item.ContactDetails)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
+                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                    ? string.Join(", ", item.UserGroupNames)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+
+                currentRow++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+            worksheet.Column(9).Style.Alignment.WrapText = true;
+            worksheet.SheetView.FreezeRows(1);
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"fips-completion{(includeAll ? "-all" : string.Empty)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting FIPS completion report");
+            TempData["ErrorMessage"] = "An error occurred while exporting the report. Please try again.";
+            return RedirectToAction("FipsCompletion");
         }
     }
 
@@ -705,74 +769,17 @@ public class DdtReportsController : Controller
         try
         {
             var products = await _productsApiService.GetAllProductsAsync(null);
-            var completionItems = new List<ProductCompletionItem>();
-            
-            // User group category type name variations
-            var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
-            
-            foreach (var product in products.OrderBy(p => p.Title))
-            {
-                // Include products even without FipsId for full CMS visibility
-                
-                // Check Phase
-                var hasPhase = !string.IsNullOrEmpty(product.Phase) ||
-                              (product.CategoryValues?.Any(cv => 
-                                  cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true) == true);
-                
-                // Check Business Area
-                var hasBusinessArea = product.CategoryValues?.Any(cv => 
-                    cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true) == true;
-                
-                // Extract Business Area name
-                var businessAreaName = product.CategoryValues?
-                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
-                    ?.Name ?? "Unassigned";
-                
-                // Count Contacts
-                var contactsCount = product.ProductContacts?.Count ?? 0;
-                
-                // Check Product URL
-                var hasProductUrl = !string.IsNullOrEmpty(product.ProductUrl);
-                
-                // Count User Groups
-                var userGroupsCount = product.CategoryValues?
-                    .Count(cv => cv.CategoryType != null && 
-                                userGroupVariations.Any(v => 
-                                    cv.CategoryType.Name.Equals(v, StringComparison.OrdinalIgnoreCase))) ?? 0;
-                
-                // Calculate completion percentage (5 criteria, 20% each)
-                var completedCriteria = 0;
-                if (hasPhase) completedCriteria++;
-                if (hasBusinessArea) completedCriteria++;
-                if (contactsCount > 0) completedCriteria++;
-                if (hasProductUrl) completedCriteria++;
-                if (userGroupsCount > 0) completedCriteria++;
-                
-                var completionPercentage = (completedCriteria / 5.0) * 100;
-                
-                completionItems.Add(new ProductCompletionItem
-                {
-                    FipsId = product.FipsId ?? string.Empty,
-                    ProductTitle = product.Title,
-                    BusinessArea = businessAreaName,
-                    State = product.State,
-                    HasPhase = hasPhase,
-                    HasBusinessArea = hasBusinessArea,
-                    ContactsCount = contactsCount,
-                    HasProductUrl = hasProductUrl,
-                    UserGroupsCount = userGroupsCount,
-                    CompletionPercentage = completionPercentage
-                });
-            }
-            
-            // Calculate average completion percentage
-            var averageCompletion = completionItems.Any() 
-                ? completionItems.Average(p => p.CompletionPercentage) 
+            var completionItems = products
+                .OrderBy(p => p.Title)
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            var averageCompletion = completionItems.Any()
+                ? completionItems.Average(p => p.CompletionPercentage)
                 : 0;
-            
-            // Calculate business area completions
+
             var businessAreaCompletions = completionItems
-                .GroupBy(p => p.BusinessArea)
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
                 .Select(g => new BusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
@@ -781,20 +788,18 @@ public class DdtReportsController : Controller
                 })
                 .OrderByDescending(ba => ba.AverageCompletionPercentage)
                 .ToList();
-            
-            // Count products with 0% and 100% completion
-            var zeroCompletionCount = completionItems.Count(p => p.CompletionPercentage == 0);
-            var fullCompletionCount = completionItems.Count(p => p.CompletionPercentage == 100);
-            
-            // Count completed fields
+
+            var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
+            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+
             var completedPhaseCount = completionItems.Count(p => p.HasPhase);
             var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
             var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
-            
-            // Get category values for dropdowns
+
             var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
             var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
-            
+            var userGroupCategoryValues = await _productsApiService.GetUserGroupCategoryValuesAsync();
+
             var viewModel = new FipsCompletionViewModel
             {
                 Products = completionItems,
@@ -809,6 +814,7 @@ public class DdtReportsController : Controller
             
             ViewBag.PhaseCategoryValues = phaseCategoryValues;
             ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            ViewBag.UserGroupCategoryValues = userGroupCategoryValues;
             
             return View(viewModel);
         }
@@ -839,11 +845,26 @@ public class DdtReportsController : Controller
             
             if (success)
             {
-                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Phase updated to <strong>{phaseName}</strong>.";
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var successMessage = $"<strong>{productTitle}</strong> - Phase updated to <strong>{phaseName}</strong>.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
             }
             else
             {
-                TempData["ErrorMessage"] = "Failed to update product Phase. Please try again.";
+                const string errorMessage = "Failed to update product Phase. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
             }
             
             return RedirectToAction("FipsCompletion");
@@ -851,7 +872,13 @@ public class DdtReportsController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product Phase for {FipsId}", fipsId);
-            TempData["ErrorMessage"] = "An error occurred while updating the product Phase.";
+            const string errorMessage = "An error occurred while updating the product Phase.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
             return RedirectToAction("FipsCompletion");
         }
     }
@@ -881,23 +908,40 @@ public class DdtReportsController : Controller
             
             if (success)
             {
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                string successMessage;
+
                 // Provide different messages based on whether multiple business areas were removed
                 if (existingBusinessAreas.Count > 1)
                 {
-                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Removed {existingBusinessAreas.Count} existing business area(s) ({string.Join(", ", existingBusinessAreas)}) and assigned <strong>{businessAreaName}</strong>.";
+                    successMessage = $"<strong>{productTitle}</strong> - Removed {existingBusinessAreas.Count} existing business area(s) ({string.Join(", ", existingBusinessAreas)}) and assigned <strong>{businessAreaName}</strong>.";
                 }
                 else if (existingBusinessAreas.Count == 1)
                 {
-                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business area updated from <strong>{existingBusinessAreas[0]}</strong> to <strong>{businessAreaName}</strong>.";
+                    successMessage = $"<strong>{productTitle}</strong> - Business area updated from <strong>{existingBusinessAreas[0]}</strong> to <strong>{businessAreaName}</strong>.";
                 }
                 else
                 {
-                    TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Business area assigned to <strong>{businessAreaName}</strong>.";
+                    successMessage = $"<strong>{productTitle}</strong> - Business area assigned to <strong>{businessAreaName}</strong>.";
                 }
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
             }
             else
             {
-                TempData["ErrorMessage"] = "Failed to update product Business Area. Please try again.";
+                const string errorMessage = "Failed to update product Business Area. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
             }
             
             // Redirect back to the referring page or default to FipsCompletion
@@ -911,7 +955,13 @@ public class DdtReportsController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product Business Area for {FipsId}", fipsId);
-            TempData["ErrorMessage"] = "An error occurred while updating the product Business Area.";
+            const string errorMessage = "An error occurred while updating the product Business Area.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
             return RedirectToAction("FipsCompletion");
         }
     }
@@ -925,7 +975,13 @@ public class DdtReportsController : Controller
         {
             if (string.IsNullOrWhiteSpace(productUrl))
             {
-                TempData["ErrorMessage"] = "Product URL cannot be empty.";
+                const string message = "Product URL cannot be empty.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message });
+                }
+
+                TempData["ErrorMessage"] = message;
                 return RedirectToAction("FipsCompletion");
             }
 
@@ -933,7 +989,13 @@ public class DdtReportsController : Controller
             if (!Uri.TryCreate(productUrl, UriKind.Absolute, out var uri) || 
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
-                TempData["ErrorMessage"] = "Please provide a valid HTTP or HTTPS URL.";
+                const string message = "Please provide a valid HTTP or HTTPS URL.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message });
+                }
+
+                TempData["ErrorMessage"] = message;
                 return RedirectToAction("FipsCompletion");
             }
 
@@ -945,11 +1007,26 @@ public class DdtReportsController : Controller
             
             if (success)
             {
-                TempData["SuccessMessage"] = $"<strong>{productTitle}</strong> - Product URL updated to <strong>{productUrl}</strong>.";
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var successMessage = $"<strong>{productTitle}</strong> - Product URL updated to <strong>{productUrl}</strong>.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
             }
             else
             {
-                TempData["ErrorMessage"] = "Failed to update product URL. Please try again.";
+                const string errorMessage = "Failed to update product URL. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
             }
             
             return RedirectToAction("FipsCompletion");
@@ -957,7 +1034,68 @@ public class DdtReportsController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product URL for {FipsId}", fipsId);
-            TempData["ErrorMessage"] = "An error occurred while updating the product URL.";
+            const string errorMessage = "An error occurred while updating the product URL.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProductUserGroups
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductUserGroups(string fipsId, List<int> userGroupCategoryValueIds)
+    {
+        try
+        {
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+
+            var success = await _productsApiService.UpdateProductUserGroupsAsync(fipsId, userGroupCategoryValueIds);
+
+            if (success)
+            {
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var userGroupNames = completionItem?.UserGroupNames ?? new List<string>();
+                var successMessage = userGroupNames.Any()
+                    ? $"<strong>{productTitle}</strong> - User groups updated ({string.Join(", ", userGroupNames)})"
+                    : $"<strong>{productTitle}</strong> - User groups cleared.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
+            }
+            else
+            {
+                const string errorMessage = "Failed to update product user groups. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+            }
+
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product user groups for {FipsId}", fipsId);
+            const string errorMessage = "An error occurred while updating the product user groups.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
             return RedirectToAction("FipsCompletion");
         }
     }
@@ -1241,5 +1379,180 @@ public class DdtReportsController : Controller
             return View(new DesignAndRunBoardViewModel());
         }
     }
+
+    private ProductCompletionItem CreateProductCompletionItem(ProductDto product)
+    {
+        if (product == null)
+        {
+            return new ProductCompletionItem();
+        }
+
+        var categoryValues = product.CategoryValues ?? new List<CategoryValueDto>();
+
+        var phaseValue = categoryValues
+            .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+
+        var phaseName = !string.IsNullOrWhiteSpace(product.Phase)
+            ? product.Phase
+            : phaseValue?.Name;
+
+        var hasPhase = !string.IsNullOrWhiteSpace(phaseName);
+
+        var businessAreaValue = categoryValues
+            .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true);
+        var hasBusinessArea = businessAreaValue != null;
+        var businessAreaName = businessAreaValue?.Name ?? "Unassigned";
+
+        var contactsCount = product.ProductContacts?.Count ?? 0;
+        var productUrl = string.IsNullOrWhiteSpace(product.ProductUrl) ? null : product.ProductUrl;
+        var hasProductUrl = !string.IsNullOrEmpty(productUrl);
+
+        var userGroupCategories = categoryValues
+            .Where(cv => IsUserGroupCategory(cv.CategoryType?.Name))
+            .ToList();
+
+        var userGroupNames = userGroupCategories
+            .Select(cv => cv.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var userGroupIds = userGroupCategories
+            .Select(cv => cv.Id)
+            .Distinct()
+            .ToList();
+
+        var sroContacts = new List<string>();
+        var iaoContacts = new List<string>();
+        var deliveryManagerContacts = new List<string>();
+        var contactDetails = new List<string>();
+
+        if (product.ProductContacts != null)
+        {
+            foreach (var contact in product.ProductContacts)
+            {
+                if (contact == null) continue;
+                var role = contact.Role?.Trim();
+                if (string.IsNullOrEmpty(role)) continue;
+
+                var display = BuildContactDisplay(contact);
+                if (string.IsNullOrEmpty(display)) continue;
+
+                var detail = string.IsNullOrWhiteSpace(role)
+                    ? display
+                    : $"{display} - {role}";
+                contactDetails.Add(detail);
+
+                if (RoleContainsAny(role, SeniorResponsibleOfficerRoleKeywords))
+                {
+                    AddContactIfMissing(sroContacts, display);
+                }
+                else if (RoleContainsAny(role, InformationAssetOwnerRoleKeywords))
+                {
+                    AddContactIfMissing(iaoContacts, display);
+                }
+                else if (RoleContainsAny(role, DeliveryManagerRoleKeywords))
+                {
+                    AddContactIfMissing(deliveryManagerContacts, display);
+                }
+            }
+        }
+
+        var userGroupsCount = userGroupNames.Count;
+
+        var completedCriteria = 0;
+        if (hasPhase) completedCriteria++;
+        if (hasBusinessArea) completedCriteria++;
+        if (contactsCount > 0) completedCriteria++;
+        if (hasProductUrl) completedCriteria++;
+        if (userGroupsCount > 0) completedCriteria++;
+
+        var completionPercentage = (completedCriteria / 5.0) * 100;
+
+        return new ProductCompletionItem
+        {
+            FipsId = product.FipsId ?? string.Empty,
+            ProductTitle = product.Title,
+            BusinessArea = businessAreaName,
+            PhaseName = phaseName,
+            State = product.State,
+            SeniorResponsibleOfficer = sroContacts.Count > 0 ? string.Join(", ", sroContacts) : null,
+            InformationAssetOwner = iaoContacts.Count > 0 ? string.Join(", ", iaoContacts) : null,
+            DeliveryManager = deliveryManagerContacts.Count > 0 ? string.Join(", ", deliveryManagerContacts) : null,
+            SeniorResponsibleOfficerContacts = new List<string>(sroContacts),
+            InformationAssetOwnerContacts = new List<string>(iaoContacts),
+            DeliveryManagerContacts = new List<string>(deliveryManagerContacts),
+            ContactDetails = contactDetails,
+            UserGroupNames = userGroupNames,
+            UserGroupCategoryValueIds = userGroupIds,
+            ProductUrl = productUrl,
+            HasPhase = hasPhase,
+            HasBusinessArea = hasBusinessArea,
+            ContactsCount = contactsCount,
+            HasProductUrl = hasProductUrl,
+            UserGroupsCount = userGroupsCount,
+            CompletionPercentage = completionPercentage
+        };
+    }
+
+    private static string? BuildContactDisplay(ProductContactDto contact)
+    {
+        var nameCandidates = new[]
+        {
+            contact.ContactName,
+            contact.LegacyName,
+            contact.UsersPermissionsUser?.Username
+        };
+
+        var emailCandidates = new[]
+        {
+            contact.ContactEmail,
+            contact.UsersPermissionsUser?.Email
+        };
+
+        var displayName = nameCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        var email = emailCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        if (!string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(email))
+        {
+            return $"{displayName} ({email})";
+        }
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            return email;
+        }
+
+        return null;
+    }
+
+    private static void AddContactIfMissing(List<string> contacts, string value)
+    {
+        if (!contacts.Any(existing => existing.Equals(value, StringComparison.OrdinalIgnoreCase)))
+        {
+            contacts.Add(value);
+        }
+    }
+
+    private static bool IsUserGroupCategory(string? categoryTypeName) =>
+        !string.IsNullOrWhiteSpace(categoryTypeName) &&
+        UserGroupCategoryTypeNames.Any(name => name.Equals(categoryTypeName, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsAjaxRequest() =>
+        string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+
+    private static bool RoleContains(string role, string keyword) =>
+        !string.IsNullOrWhiteSpace(role) &&
+        !string.IsNullOrWhiteSpace(keyword) &&
+        role.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+
+    private static bool RoleContainsAny(string role, IEnumerable<string> keywords) =>
+        !string.IsNullOrWhiteSpace(role) &&
+        keywords.Any(keyword => RoleContains(role, keyword));
 }
 

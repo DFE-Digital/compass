@@ -8,6 +8,9 @@ public class User
     [Key]
     public int Id { get; set; }
 
+    [MaxLength(36)]
+    public string? AzureObjectId { get; set; }
+
     [Required]
     [StringLength(255)]
     public string Email { get; set; } = string.Empty;
@@ -15,6 +18,22 @@ public class User
     [Required]
     [StringLength(255)]
     public string Name { get; set; } = string.Empty;
+
+    [StringLength(150)]
+    public string? FirstName { get; set; }
+
+    [StringLength(150)]
+    public string? LastName { get; set; }
+
+    [StringLength(255)]
+    public string? UserPrincipalName { get; set; }
+
+    [StringLength(255)]
+    public string? JobTitle { get; set; }
+
+    public byte[]? Photo { get; set; }
+
+    public DateTime? PhotoUpdatedAt { get; set; }
 
     [Required]
     public UserRole Role { get; set; } = UserRole.Visitor;

@@ -1,0 +1,75 @@
+@model Compass.ViewModels.ProjectTeamMemberFormViewModel
+
+@{
+    ViewData["Title"] = $"Edit team member – {Model.ProjectTitle}";
+    var returnUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "team" });
+    var showMicrosoftAccountBadge = Model.Input.UserId.HasValue;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@returnUrl" aria-label="Back to project team">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to team
+                </a>
+                <h1 class="mb-1">Edit team member</h1>
+                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <aside class="col-xl-3 col-lg-4 mb-4">
+                <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
+            </aside>
+            <div class="col-xl-9 col-lg-8">
+                <form asp-action="UpdateTeamMember" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center">
+                            <h3 class="card-title mb-0">Team member details</h3>
+                            @if (showMicrosoftAccountBadge)
+                            {
+                                <span class="badge badge-info text-uppercase ml-auto">Microsoft account</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <partial name="_TeamMemberFormFields" model="Model" />
+                        </div>
+                        <div class="card-footer d-flex align-items-center">
+                            <button type="submit" class="btn btn-primary mr-3">Save changes</button>
+                            <a class="btn btn-outline-secondary" href="@returnUrl">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        (function () {
+            var statusInput = document.querySelector('.js-team-status');
+            var leaveReasonGroup = document.getElementById('leaveReasonGroup');
+            if (!statusInput || !leaveReasonGroup) {
+                return;
+            }
+
+            function toggleLeaveReason() {
+                var isPrevious = statusInput.value.toLowerCase() === 'previous';
+                leaveReasonGroup.style.display = isPrevious ? 'block' : 'none';
+            }
+
+            statusInput.addEventListener('change', toggleLeaveReason);
+            toggleLeaveReason();
+        })();
+    </script>
+}
+

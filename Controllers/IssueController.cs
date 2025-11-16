@@ -5,6 +5,7 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
+using System;
 
 namespace Compass.Controllers;
 
@@ -232,7 +233,7 @@ public class IssueController : Controller
     }
 
     // GET: Issue/Create
-    public async Task<IActionResult> Create(int? objectiveId)
+    public async Task<IActionResult> Create(int? objectiveId, int? milestoneId, string? returnTo)
     {
         ViewBag.Users = new SelectList(await _context.Users.OrderBy(u => u.Name).ToListAsync(), "Id", "Name");
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", objectiveId);
@@ -242,6 +243,21 @@ public class IssueController : Controller
         
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
+
+        ViewBag.MilestoneId = milestoneId;
+        ViewBag.ReturnTo = returnTo;
+
+        if (milestoneId.HasValue)
+        {
+            var milestone = await _context.Milestones
+                .Include(m => m.Project)
+                .FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
+
+            if (milestone != null)
+            {
+                ViewBag.SourceMilestone = milestone;
+            }
+        }
         
         return View();
     }
@@ -249,8 +265,28 @@ public class IssueController : Controller
     // POST: Issue/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,Category,BusinessArea,OwnerUserId,Severity,Priority,DetectedDate,TargetResolutionDate,Status,ResolutionSummary,Workaround,BlockedFlag")] Issue issue)
+    public async Task<IActionResult> Create([Bind("ObjectiveId,FipsId,Title,Description,Category,BusinessArea,OwnerUserId,Severity,Priority,DetectedDate,TargetResolutionDate,Status,ResolutionSummary,Workaround,BlockedFlag")] Issue issue, int? milestoneId, string? returnTo)
     {
+        Milestone? milestoneContext = null;
+        if (milestoneId.HasValue)
+        {
+            milestoneContext = await _context.Milestones
+                .FirstOrDefaultAsync(m => m.Id == milestoneId.Value && !m.IsDeleted);
+
+            if (milestoneContext != null)
+            {
+                if (!issue.ProjectId.HasValue && milestoneContext.ProjectId.HasValue)
+                {
+                    issue.ProjectId = milestoneContext.ProjectId;
+                }
+
+                if (!issue.ObjectiveId.HasValue && milestoneContext.ObjectiveId.HasValue)
+                {
+                    issue.ObjectiveId = milestoneContext.ObjectiveId;
+                }
+            }
+        }
+
         if (ModelState.IsValid)
         {
             try
@@ -265,9 +301,29 @@ public class IssueController : Controller
                 
                 _context.Add(issue);
                 await _context.SaveChangesAsync();
+
+                if (milestoneContext != null)
+                {
+                    _context.MilestoneIssues.Add(new MilestoneIssue
+                    {
+                        MilestoneId = milestoneContext.Id,
+                        IssueId = issue.Id
+                    });
+                    await _context.SaveChangesAsync();
+                }
                 
                 TempData["SuccessMessage"] = $"Issue '{issue.Title}' has been created successfully.";
                 
+                if (milestoneContext != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(returnTo) && returnTo.Equals("project-milestone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return RedirectToAction("MilestoneDetails", "Project", new { id = milestoneContext.Id });
+                    }
+
+                    return RedirectToAction("Details", "Milestone", new { id = milestoneContext.Id });
+                }
+
                 if (issue.ObjectiveId.HasValue)
                 {
                     return RedirectToAction(nameof(Index), new { objectiveId = issue.ObjectiveId });
@@ -289,6 +345,13 @@ public class IssueController : Controller
         
         var businessAreas = await _productsApiService.GetBusinessAreasAsync();
         ViewBag.BusinessAreas = businessAreas;
+
+        ViewBag.MilestoneId = milestoneId;
+        ViewBag.ReturnTo = returnTo;
+        if (milestoneContext != null)
+        {
+            ViewBag.SourceMilestone = milestoneContext;
+        }
         
         return View(issue);
     }

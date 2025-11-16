@@ -15,6 +15,11 @@ public class ProjectContact
     [ForeignKey(nameof(ProjectId))]
     public Project Project { get; set; } = null!;
 
+    public int? UserId { get; set; }
+
+    [ForeignKey(nameof(UserId))]
+    public User? User { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Role { get; set; } = string.Empty;
@@ -33,6 +38,20 @@ public class ProjectContact
 
     [Required]
     public int SortOrder { get; set; } = 1;
+
+    [MaxLength(200)]
+    public string FundingArrangement { get; set; } = "Not specified";
+
+    [MaxLength(20)]
+    public string EmploymentType { get; set; } = "Permanent";
+
+    [MaxLength(20)]
+    public string TeamStatus { get; set; } = "current";
+
+    [MaxLength(500)]
+    public string? LeaveReason { get; set; }
+
+    public DateTime? LeftAt { get; set; }
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

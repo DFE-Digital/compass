@@ -1,0 +1,117 @@
+@model Compass.ViewModels.ProjectSummaryViewModel
+
+@if (Model?.Id > 0)
+{
+    var deliveryCode = $"DEL-DDT-{Model.Id}";
+
+    <div class="card project-summary-card mb-4">
+        <div class="card-header">
+            <h3 class="card-title mb-0">Project overview</h3>
+        </div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush project-summary-list">
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Title</small>
+                    <a asp-controller="Project"
+                       asp-action="Details"
+                       asp-route-id="@Model.Id"
+                       class="font-weight-semibold">@Model.Title</a>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Delivery code</small>
+                    <span class="font-weight-medium">@deliveryCode</span>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Status</small>
+                    @if (!string.IsNullOrWhiteSpace(Model.Status))
+                    {
+                        <span class="@GetProjectStatusBadgeClass(Model.Status)">@Model.Status</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Not set</span>
+                    }
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">RAG status</small>
+                    @if (!string.IsNullOrWhiteSpace(Model.RagStatus))
+                    {
+                        <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Not set</span>
+                    }
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Phase</small>
+                    <span>@(!string.IsNullOrWhiteSpace(Model.Phase) ? Model.Phase : "Not set")</span>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Business area</small>
+                    <span>@(!string.IsNullOrWhiteSpace(Model.BusinessArea) ? Model.BusinessArea : "Not set")</span>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Start date</small>
+                    <span>@(Model.StartDate.HasValue ? Model.StartDate.Value.ToString("d MMMM yyyy") : "Not set")</span>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Target end date</small>
+                    <span>@(Model.TargetDeliveryDate.HasValue ? Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy") : "Not set")</span>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Primary contact</small>
+                    @if (!string.IsNullOrWhiteSpace(Model.PrimaryContactName))
+                    {
+                        <div>
+                            <span class="font-weight-medium">@Model.PrimaryContactName</span><br />
+                            <span class="text-muted">@Model.PrimaryContactEmail</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Not set</span>
+                    }
+                </li>
+            </ul>
+        </div>
+    </div>
+}
+
+@functions {
+    string GetProjectStatusBadgeClass(string status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "badge badge-secondary";
+        }
+
+        switch (status.Trim().ToLowerInvariant())
+        {
+            case "active":
+                return "badge badge-success";
+            case "paused":
+                return "badge badge-warning";
+            case "completed":
+                return "badge badge-info";
+            case "cancelled":
+                return "badge badge-secondary";
+            default:
+                return "badge badge-secondary";
+        }
+    }
+
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+

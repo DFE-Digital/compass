@@ -70,6 +70,22 @@
                     </div>
                 </div>
 
+            <div class="alert alert-secondary mt-4">
+                <h2 class="h5 mb-2">What changed recently</h2>
+                <p class="mb-0">The latest schema introduces richer lookup entities and junction tables that allow multiple classifications per record. Risk types now live in their own managed table, risks can hold more than one type through <code>RiskRiskType</code>, and actions inherit structured provenance through <code>ActionSource</code>. These additions support the multi-select risk type feature and reporting improvements delivered in Q3 2025.</p>
+            </div>
+
+            <h3 class="h5 mt-4">Key identifiers reused across domains</h3>
+            <p>The following identifiers act as the primary hooks between features:</p>
+            <ul>
+                <li><strong>FipsId</strong> – links Compass records back to the authoritative product record in FIPS CMS.</li>
+                <li><strong>ObjectiveId</strong> – optional strategic alignment reference shared by risks, issues, milestones, actions, and projects.</li>
+                <li><strong>RiskTierId</strong> and <strong>RiskTypeIds</strong> – lookups that drive governance tiering and thematic categorisation respectively.</li>
+                <li><strong>IsDeleted</strong> – soft-delete marker applied consistently so that historical context is preserved across reports.</li>
+            </ul>
+
+            <p class="small text-muted">Whenever you design a new integration, check which of these identifiers are available so you can maintain referential integrity without denormalising data.</p>
+
                 <hr class="my-4">
 
                 <h2 id="raid">RAID entities</h2>
@@ -1375,6 +1391,24 @@
                     <p class="mb-0">All entities include <code>CreatedAt</code> and <code>UpdatedAt</code> DateTime fields for tracking when records were created and last modified.</p>
                 </div>
 
+                <h3 class="h5 mt-4">Worked example: risk classification data flow</h3>
+                <ol>
+                    <li>Create or update a risk with one or more <code>RiskTypeIds</code> using the API or user interface – this persists entries in <code>RiskRiskType</code>.</li>
+                    <li>Administrators adjust reference data in <code>RiskType</code> (name, description, active flag) without touching historical risk records.</li>
+                    <li>Portfolio reports join <code>Risk</code>, <code>RiskRiskType</code>, and <code>RiskType</code> to surface cross-cutting themes by programme, business area, or tier.</li>
+                </ol>
+
+                <div class="bg-light border rounded p-3 mb-4">
+                    <pre class="mb-0 small">Risk ──┐
+│      │  (has many)        (lookup)
+└─ RiskRiskType ──► RiskType
+
+Action ──┬─► ActionSource (lookup provenance)
+         └─► Risk / Issue / Milestone (contextual owner)</pre>
+                </div>
+
+                <p class="small text-muted">This map shows how a single risk can belong to multiple thematic categories while actions retain their origin, allowing downstream tools to filter by both mitigation owner and risk theme.</p>
+
                 <hr class="my-4">
 
                 <h2>Common patterns</h2>
@@ -1395,6 +1429,15 @@
                     <li>Actions: <code>not_started</code>, <code>in_progress</code>, <code>blocked</code>, <code>done</code>, <code>cancelled</code></li>
                     <li>Milestones: <code>not_started</code>, <code>on_track</code>, <code>at_risk</code>, <code>delayed</code>, <code>complete</code>, <code>cancelled</code></li>
                 </ul>
+
+                <h3 class="h5 mt-4">DTOs and reporting projections</h3>
+                <p>Compass avoids exposing Entity Framework tracking proxies via the API. Dedicated DTOs and LINQ projections shape the payloads instead:</p>
+                <ul>
+                    <li><strong>Create/Update DTOs</strong> – <code>RiskCreateDto</code>, <code>RiskUpdateDto</code>, and <code>ActionCreateDto</code> validate inbound data, perform range checks, and control which fields can be changed.</li>
+                    <li><strong>List projections</strong> – <code>RisksController</code> and <code>ActionsController</code> project to anonymous types that flatten lookup information (tier names, risk types, action sources) for lighter responses.</li>
+                    <li><strong>Reporting view models</strong> – classes in <code>Models/DashboardViewModel.cs</code>, <code>PortfolioReportViewModel.cs</code>, and similar files aggregate pre-calculated metrics for dashboards without overloading the base entities.</li>
+                </ul>
+                <p class="small text-muted">If you extend the API, create a new DTO rather than posting raw entities. This keeps validation logic centralised and stops accidental exposure of internal-only fields such as audit metadata.</p>
 
                 <div class="alert alert-success mt-4">
                     <h3 class="h6">See also</h3>

@@ -43,6 +43,7 @@ public class PerformanceMetricController : Controller
             ValidFromYear = DateTime.UtcNow.Year,
             ValidFromMonth = 10 // Default to October
         };
+        metric.ValidationRules = "{\"required\": true, \"allowNull\": false}";
         
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
         ViewBag.Types = await _productsApiService.GetTypesAsync();
@@ -59,6 +60,8 @@ public class PerformanceMetricController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(PerformanceMetric metric, string validationRulesJson, List<string>? selectedPhases, List<string>? selectedTypes)
     {
+        ModelState.Remove(nameof(PerformanceMetric.Identifier));
+
         if (ModelState.IsValid)
         {
             try
@@ -74,6 +77,7 @@ public class PerformanceMetricController : Controller
                     catch
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
+                        metric.ValidationRules = validationRulesJson;
                         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
                         ViewBag.Types = await _productsApiService.GetTypesAsync();
                         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
@@ -82,6 +86,10 @@ public class PerformanceMetricController : Controller
                             .ToListAsync();
                         return View("~/Views/Admin/PerformanceMetric/Create.cshtml", metric);
                     }
+                }
+                else
+                {
+                    metric.ValidationRules = "{}";
                 }
                 
                 // Store selected phases as comma-separated string
@@ -96,8 +104,13 @@ public class PerformanceMetricController : Controller
                 
                 metric.CreatedAt = DateTime.UtcNow;
                 metric.UpdatedAt = DateTime.UtcNow;
+                metric.Identifier = $"perf-temp-{Guid.NewGuid():N}";
                 
                 _context.PerformanceMetrics.Add(metric);
+                await _context.SaveChangesAsync();
+
+                metric.Identifier = $"perf-{metric.Id}";
+                metric.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = $"Performance metric '{metric.Title}' has been created successfully.";
@@ -116,6 +129,10 @@ public class PerformanceMetricController : Controller
             .Where(m => !m.IsDisabled)
             .OrderBy(m => m.Title)
             .ToListAsync();
+        
+        metric.ValidationRules = !string.IsNullOrWhiteSpace(validationRulesJson)
+            ? validationRulesJson
+            : (metric.ValidationRules ?? "{}");
         
         return View("~/Views/Admin/PerformanceMetric/Create.cshtml", metric);
     }
@@ -154,48 +171,59 @@ public class PerformanceMetricController : Controller
             return NotFound();
         }
 
+        ModelState.Remove(nameof(PerformanceMetric.Identifier));
+
+        var existingMetric = await _context.PerformanceMetrics.FindAsync(id);
+        if (existingMetric == null)
+        {
+            return NotFound();
+        }
+
         if (ModelState.IsValid)
         {
             try
             {
-                // Validate JSON structure
-                if (!string.IsNullOrEmpty(validationRulesJson))
+                var validationRulesToPersist = existingMetric.ValidationRules;
+
+                if (!string.IsNullOrWhiteSpace(validationRulesJson))
                 {
                     try
                     {
                         JsonConvert.DeserializeObject<ValidationRules>(validationRulesJson);
-                        metric.ValidationRules = validationRulesJson;
+                        validationRulesToPersist = validationRulesJson;
                     }
                     catch
                     {
                         ModelState.AddModelError("ValidationRules", "Invalid JSON format for validation rules.");
-                        ViewBag.Phases = await _productsApiService.GetPhasesAsync();
-                        ViewBag.Types = await _productsApiService.GetTypesAsync();
-                        ViewBag.AvailableMetrics = await _context.PerformanceMetrics
-                            .Where(m => !m.IsDisabled && m.Id != id)
-                            .OrderBy(m => m.Title)
-                            .ToListAsync();
-                        return View("~/Views/Admin/PerformanceMetric/Edit.cshtml", metric);
                     }
                 }
-                
-                // Store selected phases as comma-separated string
-                metric.ApplicablePhases = selectedPhases != null && selectedPhases.Any() 
-                    ? string.Join(",", selectedPhases) 
-                    : string.Empty;
-                
-                // Store selected types as comma-separated string
-                metric.ApplicableTypes = selectedTypes != null && selectedTypes.Any() 
-                    ? string.Join(",", selectedTypes) 
-                    : string.Empty;
-                
-                metric.UpdatedAt = DateTime.UtcNow;
-                
-                _context.Update(metric);
-                await _context.SaveChangesAsync();
-                
-                TempData["SuccessMessage"] = $"Performance metric '{metric.Title}' has been updated successfully.";
-                return RedirectToAction(nameof(Index));
+
+                if (ModelState.ErrorCount == 0)
+                {
+                    existingMetric.ValidationRules = validationRulesToPersist;
+                    existingMetric.ApplicablePhases = selectedPhases != null && selectedPhases.Any()
+                        ? string.Join(",", selectedPhases)
+                        : string.Empty;
+
+                    existingMetric.ApplicableTypes = selectedTypes != null && selectedTypes.Any()
+                        ? string.Join(",", selectedTypes)
+                        : string.Empty;
+
+                    existingMetric.Title = metric.Title;
+                    existingMetric.Description = metric.Description;
+                    existingMetric.HintText = metric.HintText;
+                    existingMetric.ValueType = metric.ValueType;
+                    existingMetric.ValidFromYear = metric.ValidFromYear;
+                    existingMetric.ValidFromMonth = metric.ValidFromMonth;
+                    existingMetric.ConditionalOnMetricId = metric.ConditionalOnMetricId;
+                    existingMetric.IsDisabled = metric.IsDisabled;
+                    existingMetric.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Performance metric '{existingMetric.Title}' has been updated successfully.";
+                    return RedirectToAction(nameof(Index));
+                }
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -214,14 +242,25 @@ public class PerformanceMetricController : Controller
                 ModelState.AddModelError("", "An error occurred while updating the performance metric. Please try again.");
             }
         }
-        
+
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
         ViewBag.Types = await _productsApiService.GetTypesAsync();
         ViewBag.AvailableMetrics = await _context.PerformanceMetrics
             .Where(m => !m.IsDisabled && m.Id != id)
             .OrderBy(m => m.Title)
             .ToListAsync();
-        
+
+        metric.ValidationRules = !string.IsNullOrWhiteSpace(validationRulesJson)
+            ? validationRulesJson
+            : existingMetric.ValidationRules;
+        metric.ApplicablePhases = selectedPhases != null && selectedPhases.Any()
+            ? string.Join(",", selectedPhases)
+            : existingMetric.ApplicablePhases;
+        metric.ApplicableTypes = selectedTypes != null && selectedTypes.Any()
+            ? string.Join(",", selectedTypes)
+            : existingMetric.ApplicableTypes;
+        metric.Identifier = existingMetric.Identifier;
+
         return View("~/Views/Admin/PerformanceMetric/Edit.cshtml", metric);
     }
 

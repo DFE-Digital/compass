@@ -13,13 +13,16 @@
  * LAST MODIFIED: 2025-10-14
  *@
 
+@using System
+@inject IConfiguration Configuration
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@ViewData["Title"] - COMPASS</title>
-
+ <link rel="icon" sizes="any" href="~/images/favicon.svg" type="image/svg+xml">
     <!-- Google Font: Inter -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" nonce="@Context.Items["Nonce"]">
     <!-- Font Awesome -->
@@ -44,6 +47,14 @@
     <!-- Skip link for keyboard navigation -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <div class="wrapper">
+
+        @{
+            Compass.Models.User? currentUser = null;
+            string? userPhotoDataUrl = null;
+            string? currentUserDisplayName = User.Identity?.Name;
+            string? currentUserEmail = null;
+            bool hasAdminRole = false;
+        }
 
         <!-- Preloader -->
         <div class="preloader flex-column justify-content-center align-items-center">
@@ -82,87 +93,160 @@
                         </div>
                     </li>
                     @{
-                        var isAdminView = ViewContext.RouteData.Values["Controller"]?.ToString() == "Admin";
-                        var isStandardController = ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard";
-                        var isDdtStandardsActive = isStandardController;
+                        var controllerName = ViewContext.RouteData.Values["Controller"]?.ToString();
+                        var actionName = ViewContext.RouteData.Values["Action"]?.ToString();
+                        var isAdminView = controllerName == "Admin";
+                        var isStandardController = controllerName == "Standard";
+                        var functionalStandardsActions = new[] { "FunctionalStandards", "SelectStandard", "ConductAssessment", "ViewAssessmentSummary", "StartAssessment" };
+                        var isFunctionalStandardsContext = controllerName == "EnterpriseReporting" && functionalStandardsActions.Contains(actionName ?? string.Empty);
+                        var isServiceStandardsContext = isStandardController && string.Equals(actionName, "Service", StringComparison.OrdinalIgnoreCase);
+                        var isStandardsHome = isStandardController && string.Equals(actionName, "Index", StringComparison.OrdinalIgnoreCase);
+                        var isStandardsDropdownActive = isStandardsHome || isStandardController || isFunctionalStandardsContext || isServiceStandardsContext;
+                        var isDdtReportsController = controllerName == "DdtReports";
+
+                        try
+                        {
+                            currentUserEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                                ?? User.Identity?.Name
+                                ?? string.Empty;
+
+                            if (!string.IsNullOrEmpty(currentUserEmail))
+                            {
+                                currentUser = DbContext.Users
+                                    .FirstOrDefault(u => u.Email.ToLower() == currentUserEmail.ToLower());
+
+                                if (currentUser != null)
+                                {
+                                    currentUserDisplayName = currentUser.Name;
+                                    hasAdminRole = currentUser.Role == UserRole.Admin ||
+                                        currentUser.Role == UserRole.SuperAdmin;
+
+                                    if (currentUser.Photo != null && currentUser.Photo.Length > 0)
+                                    {
+                                        userPhotoDataUrl = $"data:image/png;base64,{Convert.ToBase64String(currentUser.Photo)}";
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Non-blocking: fallback handled below.
+                        }
                     }
                     @if (!isAdminView)
                     {
                         <li class="nav-item dropdown d-none d-sm-inline-block">
-                            <a class="nav-link dropdown-toggle @(isDdtStandardsActive ? "active" : "")" href="#" id="ddtStandardsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                DDT Standards
+                            <a class="nav-link dropdown-toggle @(isStandardsDropdownActive ? "active" : "")" href="#" id="standardsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                Standards
                             </a>
-                            <div class="dropdown-menu" aria-labelledby="ddtStandardsDropdown">
+                            <div class="dropdown-menu" aria-labelledby="standardsDropdown">
+                                <a class="dropdown-item @(isStandardsHome ? "active" : "")" href="@Url.Action("Index", "Standard")">
+                                    <i class="fas fa-compass mr-2" aria-hidden="true"></i>
+                                    Standards overview
+                                </a>
+                                <div class="dropdown-divider"></div>
                                 <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Published" ? "active" : "")" href="@Url.Action("Published", "Standard")">
                                     <i class="fas fa-check-circle mr-2" aria-hidden="true"></i>
-                                    Published standards
+                                    Published DDT Standards
                                 </a>
                                 <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Draft" ? "active" : "")" href="@Url.Action("Draft", "Standard")">
                                     <i class="fas fa-file-alt mr-2" aria-hidden="true"></i>
-                                    Draft standards
+                                    Draft DDT Standards
                                 </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Standard" && ViewContext.RouteData.Values["Action"]?.ToString() == "Create" ? "active" : "")" href="@Url.Action("Create", "Standard")">
                                     <i class="fas fa-plus-circle mr-2" aria-hidden="true"></i>
-                                    Publish a standard
+                                    Create DDT Standard
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item @(isFunctionalStandardsContext ? "active" : "")" href="@Url.Action("FunctionalStandards", "EnterpriseReporting")">
+                                    <i class="fas fa-clipboard-check mr-2" aria-hidden="true"></i>
+                                    Functional Standards
+                                </a>
+                                <a class="dropdown-item @(isServiceStandardsContext ? "active" : "")" href="@Url.Action("Service", "Standard")">
+                                    <i class="fas fa-seedling mr-2" aria-hidden="true"></i>
+                                    Service Standards
                                 </a>
                             </div>
                         </li>
                     }
+                    <li class="nav-item dropdown d-none d-sm-inline-block">
+                        <a class="nav-link dropdown-toggle @(isDdtReportsController ? "active" : "")" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Reports
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="reportsDropdown">
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "Index" ? "active" : "")" href="@Url.Action("Index", "DdtReports")">
+                                <i class="fas fa-chart-line mr-2" aria-hidden="true"></i>
+                                Reports overview
+                            </a>
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "MyReports" ? "active" : "")" href="@Url.Action("MyReports", "DdtReports")">
+                                <i class="fas fa-user-circle mr-2" aria-hidden="true"></i>
+                                My reports
+                            </a>
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "ViewReport" ? "active" : "")" href="@Url.Action("ViewReport", "DdtReports")">
+                                <i class="fas fa-chart-line mr-2" aria-hidden="true"></i>
+                                All DDT
+                            </a>
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "FlagshipProjects" ? "active" : "")" href="@Url.Action("FlagshipProjects", "DdtReports")">
+                                <i class="fas fa-flag mr-2" aria-hidden="true"></i>
+                                Flagship projects
+                            </a>
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "AccessibilityReport" ? "active" : "")" href="@Url.Action("AccessibilityReport", "DdtReports")">
+                                <i class="fas fa-universal-access mr-2" aria-hidden="true"></i>
+                                Accessibility report
+                            </a>
+                            <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "BusinessArea" ? "active" : "")" href="@Url.Action("BusinessArea", "DdtReports")">
+                                <i class="fas fa-building mr-2" aria-hidden="true"></i>
+                                Business area reports
+                            </a>
+                        </div>
+                    </li>
                     @{
-                        // Check if user has Admin or SuperAdmin role
-                        bool hasAdminRole = false;
-                        
-                        if (User?.Identity?.IsAuthenticated == true)
+                        if (!hasAdminRole && User?.Identity?.IsAuthenticated == true)
                         {
-                            // Get all role claims from various claim types
                             var roleClaims = User.FindAll(System.Security.Claims.ClaimTypes.Role)
                                 .Concat(User.FindAll("role"))
                                 .Concat(User.FindAll("roles"))
                                 .Select(c => c.Value)
                                 .Distinct()
                                 .ToList();
-                            
-                            // Check for admin roles in claims - supporting various formats
+
                             var validRoles = new[] { "super_admin", "admin", "Super admin", "SuperAdmin", "Admin", "Super Admin" };
                             hasAdminRole = validRoles.Any(role =>
                                 User.IsInRole(role) ||
                                 roleClaims.Any(rc => rc.Equals(role, StringComparison.OrdinalIgnoreCase)));
-                            
-                            // Also check if any role contains both "super" and "admin" (case-insensitive)
+
                             if (!hasAdminRole)
                             {
                                 hasAdminRole = roleClaims.Any(role =>
                                     role.Contains("super", StringComparison.OrdinalIgnoreCase) &&
                                     role.Contains("admin", StringComparison.OrdinalIgnoreCase));
                             }
-                            
-                            // If still not found in claims, check User model in database
+
                             if (!hasAdminRole)
                             {
-                                var userEmail = User.Identity?.Name 
-                                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+                                var fallbackEmail = User.Identity?.Name
+                                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                                     ?? User.FindFirst("preferred_username")?.Value
                                     ?? User.FindFirst("email")?.Value
                                     ?? string.Empty;
-                                
-                                if (!string.IsNullOrEmpty(userEmail))
+
+                                if (!string.IsNullOrEmpty(fallbackEmail))
                                 {
                                     try
                                     {
                                         var user = DbContext.Users
-                                            .FirstOrDefault(u => u.Email.ToLower() == userEmail.ToLower());
-                                        
+                                            .FirstOrDefault(u => u.Email.ToLower() == fallbackEmail.ToLower());
+
                                         if (user != null)
                                         {
-                                            // User model uses enum: Admin = 2, SuperAdmin = 3
-                                            hasAdminRole = user.Role == UserRole.Admin || 
-                                                          user.Role == UserRole.SuperAdmin;
+                                            hasAdminRole = user.Role == UserRole.Admin ||
+                                                user.Role == UserRole.SuperAdmin;
                                         }
                                     }
                                     catch
                                     {
-                                        // If database check fails, fall back to claims only
+                                        // ignore
                                     }
                                 }
                             }
@@ -182,10 +266,24 @@
                 <ul class="navbar-nav ml-auto">
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="User menu">
-                        <i class="fas fa-user" aria-hidden="true"></i>
+                        @if (!string.IsNullOrEmpty(userPhotoDataUrl))
+                        {
+                            <img src="@userPhotoDataUrl" alt="User profile" class="navbar-user-avatar" />
+                        }
+                        else
+                        {
+                            <i class="fas fa-user" aria-hidden="true"></i>
+                        }
                     </a>
                     <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                        <h6 class="dropdown-header">@User.Identity?.Name</h6>
+                        <h6 class="dropdown-header">
+                            @(currentUserDisplayName ?? "Signed in user")
+                            @if (!string.IsNullOrWhiteSpace(currentUserEmail))
+                            {
+                                <br />
+                                <small class="text-muted">@currentUserEmail</small>
+                            }
+                        </h6>
                         <div class="dropdown-divider"></div>
                         <a class="dropdown-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "StaffRoleReturn" ? "active" : "")" href="@Url.Action("Index", "StaffRoleReturn")">
                             <i class="fas fa-id-card" aria-hidden="true"></i> Role profile
@@ -224,6 +322,55 @@
                             </a>
                         </li>
 
+                        <!-- Demand Management Section -->
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false))
+                        {
+                            var demandRequestActions = new[] { "Requests", "CreateRequest", "Details", "Edit" };
+                            var demandPrioritisationActions = new[] { "Prioritisation", "ScoreRequest" };
+                            var demandTriageActions = new[] { "Triage" };
+                            var isDemandSectionActive = controllerName == "DemandManagement";
+                            var isDemandRequestsActive = controllerName == "DemandManagement" && demandRequestActions.Contains(actionName ?? string.Empty);
+                            var isDemandPrioritisationActive = controllerName == "DemandManagement" && demandPrioritisationActions.Contains(actionName ?? string.Empty);
+                            var isDemandTriageActive = controllerName == "DemandManagement" && demandTriageActions.Contains(actionName ?? string.Empty);
+                            var isDemandReportingActive = controllerName == "DemandManagement" && string.Equals(actionName, "Reporting", StringComparison.OrdinalIgnoreCase);
+                            <li class="nav-header">Demand management</li>
+                            <li class="nav-item @(isDemandSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isDemandSectionActive ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(isDemandSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-clipboard-list" aria-hidden="true"></i>
+                                    <p>
+                                        Demand management
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="menu">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Requests", "DemandManagement")" class="nav-link @(isDemandRequestsActive ? "active" : "")" role="menuitem">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Requests</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Prioritisation", "DemandManagement")" class="nav-link @(isDemandPrioritisationActive ? "active" : "")" role="menuitem">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Prioritisation</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Triage", "DemandManagement")" class="nav-link @(isDemandTriageActive ? "active" : "")" role="menuitem">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Triage</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Reporting", "DemandManagement")" class="nav-link @(isDemandReportingActive ? "active" : "")" role="menuitem">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Reporting</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+
                         <!-- Reporting Section -->
                         <li class="nav-header">Reporting</li>
                         <li class="nav-item">
@@ -244,31 +391,10 @@
                             </a>
                         </li>
                         @{
-                            var functionalStandardsActions = new[] { "FunctionalStandards", "SelectStandard", "ConductAssessment", "ViewAssessmentSummary", "StartAssessment" };
-                            var isFunctionalStandardsActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "EnterpriseReporting" && 
-                                                              functionalStandardsActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
+                            var isFunctionalStandardsActive = controllerName == "EnterpriseReporting" &&
+                                                              functionalStandardsActions.Contains(actionName ?? string.Empty);
                         }
-                        <li class="nav-item">
-                            <a href="@Url.Action("FunctionalStandards", "EnterpriseReporting")" class="nav-link @(isFunctionalStandardsActive ? "active" : "")" role="menuitem">
-                                <i class="nav-icon fas fa-clipboard-check" aria-hidden="true"></i>
-                                <p>Functional standards</p>
-                            </a>
-                        </li>
-
-
-                        <!-- DDT Reports -->
-                        <li class="nav-item @(ViewContext.RouteData.Values["Controller"]?.ToString() == "DdtReports" ? "menu-open" : "")" >
-                            <a href="#" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "DdtReports" ? "active" : "")" role="menuitem" aria-haspopup="true" aria-expanded="@(ViewContext.RouteData.Values["Controller"]?.ToString() == "DdtReports" ? "true" : "false")">
-                                <i class="nav-icon fas fa-file-contract" aria-hidden="true"></i>
-                                <p>
-                                    DDT Reports
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview" role="menu">
-                                @await Component.InvokeAsync("BusinessAreasNavigation")
-                            </ul>
-                        </li>
+                        @* Functional standards navigation moved to the header dropdown *@
 
 
                         <!-- Product Governance - Hidden from navigation -->

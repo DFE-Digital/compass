@@ -1,0 +1,222 @@
+@model Compass.ViewModels.ProjectDecisionDetailsViewModel
+@{
+    ViewData["Title"] = $"Decision · {Model.ProjectTitle}";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Decision</h1>
+                <p class="text-muted mb-0">Review decision details for @Model.ProjectTitle.</p>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Index">Projects</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Details" asp-route-id="@Model.ProjectId" asp-route-tab="decisions">@Model.ProjectTitle</a></li>
+                    <li class="breadcrumb-item active">Decision</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-xxl-8 col-xl-9 col-lg-10 col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">Summary</h3>
+                        <div class="btn-group">
+                            <a class="btn btn-outline-secondary" asp-action="EditDecision" asp-controller="Project" asp-route-projectId="@Model.ProjectId" asp-route-decisionId="@Model.Decision.Id">Edit</a>
+                            <form asp-action="DeleteDecision" asp-controller="Project" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this decision?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="projectId" value="@Model.ProjectId" />
+                                <input type="hidden" name="decisionId" value="@Model.Decision.Id" />
+                                <button type="submit" class="btn btn-outline-danger">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Title</dt>
+                            <dd class="col-sm-8">@Model.Decision.Title</dd>
+
+                            <dt class="col-sm-4">Status</dt>
+                            <dd class="col-sm-8">
+                                @switch (Model.Decision.Status)
+                                {
+                                    case "approved":
+                                        <span class="badge badge-success">Approved</span>
+                                        break;
+                                    case "rejected":
+                                        <span class="badge badge-danger">Rejected</span>
+                                        break;
+                                    case "superseded":
+                                        <span class="badge badge-secondary">Superseded</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-warning text-dark">Pending</span>
+                                        break;
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Decision date</dt>
+                            <dd class="col-sm-8">@(Model.Decision.DecisionDate?.ToString("dd MMM yyyy") ?? "Not set")</dd>
+
+                            <dt class="col-sm-4">Type</dt>
+                            <dd class="col-sm-8">@(Model.Decision.DecisionType ?? "Not recorded")</dd>
+
+                            <dt class="col-sm-4">Owner</dt>
+                            <dd class="col-sm-8">
+                                @if (Model.Decision.OwnerUser != null)
+                                {
+                                    <span>@Model.Decision.OwnerUser.Name</span>
+                                    if (!string.IsNullOrWhiteSpace(Model.Decision.OwnerUser.Email))
+                                    {
+                                        <br />
+                                        <small class="text-muted">@Model.Decision.OwnerUser.Email</small>
+                                    }
+                                }
+                                else if (!string.IsNullOrWhiteSpace(Model.Decision.OwnerUserId?.ToString()))
+                                {
+                                    <span>@Model.Decision.OwnerUserId</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not assigned</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Business area</dt>
+                            <dd class="col-sm-8">@(Model.Decision.BusinessArea ?? "Not set")</dd>
+
+                            <dt class="col-sm-4">FIPS ID</dt>
+                            <dd class="col-sm-8">@(Model.Decision.FipsId ?? "Not set")</dd>
+
+                            <dt class="col-sm-4">Source</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrWhiteSpace(Model.Decision.SourceType)
+                                    || !string.IsNullOrWhiteSpace(Model.Decision.SourceReference)
+                                    || !string.IsNullOrWhiteSpace(Model.Decision.SourceRecordUrl))
+                                {
+                                    if (!string.IsNullOrWhiteSpace(Model.Decision.SourceType) || !string.IsNullOrWhiteSpace(Model.Decision.SourceReference))
+                                    {
+                                        <div>
+                                            <strong>@(Model.Decision.SourceType ?? "Source"):</strong>
+                                            @(Model.Decision.SourceReference ?? "Not specified")
+                                        </div>
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(Model.Decision.SourceRecordUrl))
+                                    {
+                                        <div>
+                                            <a href="@Model.Decision.SourceRecordUrl"
+                                               target="_blank"
+                                               rel="noopener noreferrer">Open source record</a>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not recorded</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Created</dt>
+                            <dd class="col-sm-8">@Model.Decision.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+
+                            <dt class="col-sm-4">Updated</dt>
+                            <dd class="col-sm-8">@Model.Decision.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Decision.Summary))
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Summary</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@Model.Decision.Summary</p>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Decision.Outcome) || !string.IsNullOrWhiteSpace(Model.Decision.Notes))
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Outcome and notes</h3>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrWhiteSpace(Model.Decision.Outcome))
+                            {
+                                <p><strong>Outcome:</strong> @Model.Decision.Outcome</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.Decision.Notes))
+                            {
+                                <p class="mb-0"><strong>Notes:</strong> @Model.Decision.Notes</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Linked items</h3>
+                    </div>
+                    <div class="card-body">
+                        <h4>Risks</h4>
+                        @if (Model.LinkedRisks.Any())
+                        {
+                            <ul class="mb-4">
+                                @foreach (var risk in Model.LinkedRisks)
+                                {
+                                    <li><a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id">@risk.Title</a></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-4">No linked risks.</p>
+                        }
+
+                        <h4>Issues</h4>
+                        @if (Model.LinkedIssues.Any())
+                        {
+                            <ul class="mb-4">
+                                @foreach (var issue in Model.LinkedIssues)
+                                {
+                                    <li><a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-4">No linked issues.</p>
+                        }
+
+                        <h4>Actions</h4>
+                        @if (Model.LinkedActions.Any())
+                        {
+                            <ul class="mb-0">
+                                @foreach (var action in Model.LinkedActions)
+                                {
+                                    <li><a asp-controller="Action" asp-action="Details" asp-route-id="@action.Id">@action.Title</a></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">No linked actions.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

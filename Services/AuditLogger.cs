@@ -26,7 +26,7 @@ public class AuditLogger : IAuditLogger
 				Action = action,
 				ChangedBy = changedBy,
 				ChangedUtc = DateTime.UtcNow,
-				PayloadJson = payloadJson
+				AfterJson = payloadJson
 			});
 			await _db.SaveChangesAsync();
 		}

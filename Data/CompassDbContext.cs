@@ -1,12 +1,29 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Data;
+using System.Text.Json;
 using Compass.Models;
+using Compass.Services;
 
 namespace Compass.Data;
 
-public class CompassDbContext : DbContext
+public partial class CompassDbContext : DbContext
 {
-    public CompassDbContext(DbContextOptions<CompassDbContext> options) : base(options)
+    private readonly IAuditContextProvider _auditContextProvider;
+    private bool _suppressAuditLogging;
+    private bool _auditSchemaChecked;
+    private bool _auditColumnsAvailable = true;
+
+    public CompassDbContext(DbContextOptions<CompassDbContext> options) : this(options, new NullAuditContextProvider())
     {
+    }
+
+    public CompassDbContext(
+        DbContextOptions<CompassDbContext> options,
+        IAuditContextProvider auditContextProvider) : base(options)
+    {
+        _auditContextProvider = auditContextProvider;
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -25,6 +42,7 @@ public class CompassDbContext : DbContext
 
     // User management
     public DbSet<User> Users { get; set; }
+    public DbSet<UserBusinessAreaRoleAssignment> UserBusinessAreaRoleAssignments { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
     
     // Role-based access control
@@ -51,6 +69,16 @@ public class CompassDbContext : DbContext
     public DbSet<ProductReturn> ProductReturns { get; set; }
     public DbSet<ProductMetricValue> ProductMetricValues { get; set; }
     
+    // Performance reporting management
+    public DbSet<PerformanceReportingDueDateOverride> PerformanceReportingDueDateOverrides { get; set; }
+    public DbSet<PerformanceReportingBusinessAreaConfig> PerformanceReportingBusinessAreaConfigs { get; set; }
+    public DbSet<PerformanceReportingProductExclusion> PerformanceReportingProductExclusions { get; set; }
+    public DbSet<PerformanceReportingPeriodExclusion> PerformanceReportingPeriodExclusions { get; set; }
+    
+    // KPI management
+    public DbSet<Kpi> Kpis { get; set; }
+    public DbSet<KpiDataPoint> KpiDataPoints { get; set; }
+
     // Enterprise reporting - Functional Standard Assessments
     public DbSet<FunctionalStandardAssessment> FunctionalStandardAssessments { get; set; }
     public DbSet<AssessmentCriteriaResponse> AssessmentCriteriaResponses { get; set; }
@@ -90,6 +118,7 @@ public class CompassDbContext : DbContext
     public DbSet<Issue> Issues { get; set; }
     public DbSet<Milestone> Milestones { get; set; }
     public DbSet<Models.Action> Actions { get; set; }
+    public DbSet<Decision> Decisions { get; set; }
     public DbSet<Comment> Comments { get; set; }
 
     // Surveys (Apps)
@@ -131,19 +160,316 @@ public class CompassDbContext : DbContext
     // Project Lookups
     public DbSet<BusinessAreaLookup> BusinessAreaLookups { get; set; }
     public DbSet<PhaseLookup> PhaseLookups { get; set; }
+    public DbSet<DeliveryPriority> DeliveryPriorities { get; set; }
+    public DbSet<KpiCategory> KpiCategories { get; set; }
     
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
     public DbSet<RiskRiskType> RiskRiskTypes { get; set; }
     public DbSet<IssueAction> IssueActions { get; set; }
+    public DbSet<RiskDecision> RiskDecisions { get; set; }
+    public DbSet<IssueDecision> IssueDecisions { get; set; }
     public DbSet<MilestoneAction> MilestoneActions { get; set; }
     public DbSet<MilestoneRisk> MilestoneRisks { get; set; }
     public DbSet<MilestoneIssue> MilestoneIssues { get; set; }
     public DbSet<MilestoneUpdate> MilestoneUpdates { get; set; }
+    
+    // Demand Management
+    public DbSet<DemandRequest> DemandRequests { get; set; }
+    public DbSet<DemandRequestContact> DemandRequestContacts { get; set; }
+    public DbSet<DemandRequestPrioritisation> DemandRequestPrioritisations { get; set; }
+    public DbSet<DemandRequestNote> DemandRequestNotes { get; set; }
+    public DbSet<DemandRequestAssessment> DemandRequestAssessments { get; set; }
+    public DbSet<DemandRequestSectionCompletion> DemandRequestSectionCompletions { get; set; }
+    public DbSet<DemandRequestRiskType> DemandRequestRiskTypes { get; set; }
+    public DbSet<TriageMeeting> TriageMeetings { get; set; }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        if (_suppressAuditLogging)
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        var auditEntries = PrepareAuditEntries();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        AppendAuditEntries(auditEntries, acceptAllChangesOnSuccess);
+        return result;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        if (_suppressAuditLogging)
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        var auditEntries = PrepareAuditEntries();
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        await AppendAuditEntriesAsync(auditEntries, acceptAllChangesOnSuccess, cancellationToken);
+        return result;
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => SaveChangesAsync(true, cancellationToken);
+
+    private List<AuditLog> PrepareAuditEntries()
+    {
+        ChangeTracker.DetectChanges();
+        var auditEntries = new List<AuditLog>();
+        var timestamp = DateTime.UtcNow;
+        var currentUserId = _auditContextProvider.UserId;
+        var currentUserName = _auditContextProvider.UserName;
+        var currentUserEmail = _auditContextProvider.UserEmail;
+        var ipAddress = _auditContextProvider.IpAddress;
+        var userAgent = _auditContextProvider.UserAgent;
+
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Entity is AuditLog)
+            {
+                continue;
+            }
+
+            if (entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            {
+                continue;
+            }
+
+            var entityName = entry.Metadata.ClrType.Name;
+            var primaryKey = GetPrimaryKey(entry);
+            var audit = new AuditLog
+            {
+                Entity = entityName,
+                EntityId = primaryKey,
+                EntityReference = entry.Entity.ToString(),
+                Action = entry.State switch
+                {
+                    EntityState.Added => "Create",
+                    EntityState.Modified => "Update",
+                    EntityState.Deleted => "Delete",
+                    _ => entry.State.ToString()
+                },
+                ChangedUtc = timestamp,
+                ChangedBy = currentUserName,
+                ChangedByUserId = currentUserId,
+                ChangedByEmail = currentUserEmail,
+                IpAddress = ipAddress,
+                UserAgent = userAgent
+            };
+
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    audit.AfterJson = SerializePropertyValues(entry.Properties, includeOriginalValues: false);
+                    break;
+                case EntityState.Deleted:
+                    audit.BeforeJson = SerializePropertyValues(entry.Properties, includeOriginalValues: true);
+                    break;
+                case EntityState.Modified:
+                    audit.BeforeJson = SerializeChangedValues(entry.Properties, useOriginalValues: true);
+                    audit.AfterJson = SerializeChangedValues(entry.Properties, useOriginalValues: false);
+                    break;
+            }
+
+            auditEntries.Add(audit);
+        }
+
+        return auditEntries;
+    }
+
+    private string SerializePropertyValues(IEnumerable<PropertyEntry> properties, bool includeOriginalValues)
+    {
+        var dictionary = new Dictionary<string, object?>();
+        foreach (var property in properties)
+        {
+            if (property.Metadata.IsPrimaryKey())
+            {
+                continue;
+            }
+
+            dictionary[property.Metadata.Name] = includeOriginalValues
+                ? property.OriginalValue
+                : property.CurrentValue;
+        }
+
+        return JsonSerializer.Serialize(dictionary);
+    }
+
+    private string SerializeChangedValues(IEnumerable<PropertyEntry> properties, bool useOriginalValues)
+    {
+        var dictionary = new Dictionary<string, object?>();
+        foreach (var property in properties)
+        {
+            if (!property.IsModified)
+            {
+                continue;
+            }
+
+            if (property.Metadata.IsPrimaryKey())
+            {
+                continue;
+            }
+
+            dictionary[property.Metadata.Name] = useOriginalValues
+                ? property.OriginalValue
+                : property.CurrentValue;
+        }
+
+        return JsonSerializer.Serialize(dictionary);
+    }
+
+    private string GetPrimaryKey(EntityEntry entry)
+    {
+        var key = entry.Properties
+            .Where(p => p.Metadata.IsPrimaryKey())
+            .Select(p => p.CurrentValue?.ToString() ?? p.OriginalValue?.ToString())
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        return key ?? string.Empty;
+    }
+
+    private bool EnsureAuditColumnsAvailable()
+    {
+        if (_auditSchemaChecked)
+        {
+            return _auditColumnsAvailable;
+        }
+
+        var connection = Database.GetDbConnection();
+        var wasOpen = connection.State == ConnectionState.Open;
+
+        try
+        {
+            if (!wasOpen)
+            {
+                connection.Open();
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandType = CommandType.Text;
+            command.CommandText = @"
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = 'AuditLogs' 
+                  AND COLUMN_NAME IN ('AfterJson','BeforeJson','ChangedByEmail','ChangedByUserId','EntityReference','IpAddress','UserAgent')";
+
+            var count = Convert.ToInt32(command.ExecuteScalar() ?? 0);
+            _auditColumnsAvailable = count >= 7;
+        }
+        catch
+        {
+            _auditColumnsAvailable = false;
+        }
+        finally
+        {
+            _auditSchemaChecked = true;
+            if (!wasOpen && connection.State == ConnectionState.Open)
+            {
+                connection.Close();
+            }
+        }
+
+        return _auditColumnsAvailable;
+    }
+
+    private static bool IsMissingAuditColumnException(Exception? exception)
+    {
+        if (exception == null)
+        {
+            return false;
+        }
+
+        if (exception is SqlException sqlException && sqlException.Number == 207)
+        {
+            return true;
+        }
+
+        return IsMissingAuditColumnException(exception.InnerException);
+    }
+
+    private void AppendAuditEntries(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess)
+    {
+        var entries = auditEntries.ToList();
+        if (!entries.Any())
+        {
+            return;
+        }
+
+        if (!EnsureAuditColumnsAvailable())
+        {
+            return;
+        }
+
+        try
+        {
+            _suppressAuditLogging = true;
+            AuditLogs.AddRange(entries);
+            base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (Exception ex) when (IsMissingAuditColumnException(ex))
+        {
+            _auditColumnsAvailable = false;
+        }
+        finally
+        {
+            _suppressAuditLogging = false;
+        }
+    }
+
+    private async Task AppendAuditEntriesAsync(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+    {
+        var entries = auditEntries.ToList();
+        if (!entries.Any())
+        {
+            return;
+        }
+
+        if (!EnsureAuditColumnsAvailable())
+        {
+            return;
+        }
+
+        try
+        {
+            _suppressAuditLogging = true;
+            AuditLogs.AddRange(entries);
+            await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (Exception ex) when (IsMissingAuditColumnException(ex))
+        {
+            _auditColumnsAvailable = false;
+        }
+        finally
+        {
+            _suppressAuditLogging = false;
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique();
+        modelBuilder.Entity<UserBusinessAreaRoleAssignment>()
+            .HasIndex(a => new { a.UserId, a.BusinessAreaKey, a.Role })
+            .IsUnique();
+
+        modelBuilder.Entity<UserBusinessAreaRoleAssignment>()
+            .HasOne(a => a.User)
+            .WithMany()
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.AzureObjectId)
+            .IsUnique()
+            .HasFilter("[AzureObjectId] IS NOT NULL");
+
         // Surveys configuration
         modelBuilder.Entity<FipsService>()
             .HasIndex(s => s.FipsId)
@@ -224,6 +550,23 @@ public class CompassDbContext : DbContext
             .HasIndex(u => u.Email)
             .IsUnique();
 
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.AzureObjectId)
+            .IsUnique()
+            .HasFilter("[AzureObjectId] IS NOT NULL");
+
+        modelBuilder.Entity<UserPreference>()
+            .Property(p => p.DashboardLayout)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.AfterJson)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.BeforeJson)
+            .HasColumnType("nvarchar(max)");
+
         // Configure PerformanceMetric entity
         modelBuilder.Entity<PerformanceMetric>()
             .HasIndex(pm => pm.Identifier)
@@ -279,6 +622,39 @@ public class CompassDbContext : DbContext
         modelBuilder.Entity<ProductMetricValue>()
             .HasIndex(mv => new { mv.ProductReturnId, mv.PerformanceMetricId })
             .IsUnique();
+
+        // Configure PerformanceReportingDueDateOverride
+        modelBuilder.Entity<PerformanceReportingDueDateOverride>()
+            .HasIndex(prdo => new { prdo.ReportingYear, prdo.ReportingMonth })
+            .IsUnique();
+
+        modelBuilder.Entity<PerformanceReportingDueDateOverride>()
+            .HasIndex(prdo => prdo.IsActive);
+
+        // Configure PerformanceReportingBusinessAreaConfig
+        modelBuilder.Entity<PerformanceReportingBusinessAreaConfig>()
+            .HasIndex(prbac => prbac.BusinessAreaName);
+
+        modelBuilder.Entity<PerformanceReportingBusinessAreaConfig>()
+            .HasIndex(prbac => prbac.IsActive);
+
+        // Configure PerformanceReportingProductExclusion
+        modelBuilder.Entity<PerformanceReportingProductExclusion>()
+            .HasIndex(prpe => prpe.FipsId);
+
+        modelBuilder.Entity<PerformanceReportingProductExclusion>()
+            .HasIndex(prpe => prpe.IsActive);
+
+        modelBuilder.Entity<PerformanceReportingProductExclusion>()
+            .HasIndex(prpe => new { prpe.FipsId, prpe.IsActive });
+
+        // Configure PerformanceReportingPeriodExclusion
+        modelBuilder.Entity<PerformanceReportingPeriodExclusion>()
+            .HasIndex(prpe => new { prpe.Year, prpe.Month })
+            .IsUnique();
+
+        modelBuilder.Entity<PerformanceReportingPeriodExclusion>()
+            .HasIndex(prpe => prpe.IsActive);
 
         // Configure FunctionalStandardAssessment
         modelBuilder.Entity<FunctionalStandardAssessment>()
@@ -417,6 +793,152 @@ public class CompassDbContext : DbContext
         modelBuilder.Entity<Milestone>()
             .HasIndex(m => m.DueDate);
 
+        // KPI configuration
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Name)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Code)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Category)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.UnitOfMeasure)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Frequency)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.ReportingStage)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Status)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.AssignedToEntityId)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.EntityType)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.ProductFipsId)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Description)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.CalculationMethod)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.Thresholds)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.DataSource)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.ValidationRule)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => new { k.AssignedToEntityId, k.EntityType });
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.ProjectId);
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.ObjectiveId);
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.MilestoneId);
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.OwnerUserId);
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.Active);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.TargetValue)
+            .HasPrecision(18, 4);
+
+        modelBuilder.Entity<Kpi>()
+            .HasOne(k => k.Project)
+            .WithMany(p => p.Kpis)
+            .HasForeignKey(k => k.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Kpi>()
+            .HasOne(k => k.Objective)
+            .WithMany(o => o.Kpis)
+            .HasForeignKey(k => k.ObjectiveId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Kpi>()
+            .HasOne(k => k.Milestone)
+            .WithMany(m => m.Kpis)
+            .HasForeignKey(k => k.MilestoneId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Kpi>()
+            .HasOne(k => k.OwnerUser)
+            .WithMany()
+            .HasForeignKey(k => k.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // KPI performance data configuration
+        modelBuilder.Entity<KpiDataPoint>()
+            .HasOne(dp => dp.Kpi)
+            .WithMany(k => k.PerformanceData)
+            .HasForeignKey(dp => dp.KpiId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .HasOne(dp => dp.SubmittedByUser)
+            .WithMany()
+            .HasForeignKey(dp => dp.SubmittedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .HasIndex(dp => dp.KpiId);
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .HasIndex(dp => dp.ReportingPeriodStart);
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .Property(dp => dp.SubmissionStatus)
+            .HasMaxLength(30);
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .Property(dp => dp.ValueNarrative)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .Property(dp => dp.Notes)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<KpiDataPoint>()
+            .Property(dp => dp.Value)
+            .HasPrecision(20, 4);
+ 
         // Action configuration
         modelBuilder.Entity<Models.Action>()
             .HasOne(a => a.Objective)
@@ -453,6 +975,49 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.DueDate);
+
+        modelBuilder.Entity<Models.Action>()
+            .HasOne(a => a.Decision)
+            .WithMany(d => d.Actions)
+            .HasForeignKey(a => a.DecisionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Decision configuration
+        modelBuilder.Entity<Decision>()
+            .HasOne(d => d.Objective)
+            .WithMany(o => o.Decisions)
+            .HasForeignKey(d => d.ObjectiveId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Decision>()
+            .HasOne(d => d.Project)
+            .WithMany(p => p.Decisions)
+            .HasForeignKey(d => d.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Decision>()
+            .HasOne(d => d.OwnerUser)
+            .WithMany()
+            .HasForeignKey(d => d.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.ObjectiveId);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.ProjectId);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.OwnerUserId);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.FipsId);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.Status);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.DecisionDate);
 
         // Junction table configurations
         
@@ -493,6 +1058,44 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<IssueAction>()
             .HasIndex(ia => ia.ActionId);
+
+        // RiskDecision
+        modelBuilder.Entity<RiskDecision>()
+            .HasKey(rd => new { rd.RiskId, rd.DecisionId });
+
+        modelBuilder.Entity<RiskDecision>()
+            .HasOne(rd => rd.Risk)
+            .WithMany(r => r.RiskDecisions)
+            .HasForeignKey(rd => rd.RiskId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RiskDecision>()
+            .HasOne(rd => rd.Decision)
+            .WithMany(d => d.RiskDecisions)
+            .HasForeignKey(rd => rd.DecisionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RiskDecision>()
+            .HasIndex(rd => rd.DecisionId);
+
+        // IssueDecision
+        modelBuilder.Entity<IssueDecision>()
+            .HasKey(id => new { id.IssueId, id.DecisionId });
+
+        modelBuilder.Entity<IssueDecision>()
+            .HasOne(id => id.Issue)
+            .WithMany(i => i.IssueDecisions)
+            .HasForeignKey(id => id.IssueId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<IssueDecision>()
+            .HasOne(id => id.Decision)
+            .WithMany(d => d.IssueDecisions)
+            .HasForeignKey(id => id.DecisionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<IssueDecision>()
+            .HasIndex(id => id.DecisionId);
 
         // MilestoneAction
         modelBuilder.Entity<MilestoneAction>()
@@ -618,6 +1221,26 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<PhaseLookup>()
             .HasIndex(p => p.SortOrder);
+
+        modelBuilder.Entity<KpiCategory>()
+            .HasIndex(k => k.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<KpiCategory>()
+            .HasIndex(k => k.IsActive);
+
+        modelBuilder.Entity<KpiCategory>()
+            .HasIndex(k => k.SortOrder);
+
+        modelBuilder.Entity<DeliveryPriority>()
+            .HasIndex(dp => dp.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<DeliveryPriority>()
+            .HasIndex(dp => dp.IsActive);
+
+        modelBuilder.Entity<DeliveryPriority>()
+            .HasIndex(dp => dp.SortOrder);
 
         // User preferences
         modelBuilder.Entity<UserPreference>()
@@ -835,6 +1458,12 @@ public class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ProjectContact>()
+            .HasOne(pc => pc.User)
+            .WithMany()
+            .HasForeignKey(pc => pc.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ProjectContact>()
             .HasIndex(pc => pc.ProjectId);
 
         modelBuilder.Entity<ProjectContact>()
@@ -842,6 +1471,9 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectContact>()
             .HasIndex(pc => pc.Role);
+
+        modelBuilder.Entity<ProjectContact>()
+            .HasIndex(pc => pc.TeamStatus);
 
         // ProjectObjective configuration
         modelBuilder.Entity<ProjectObjective>()
@@ -1101,6 +1733,149 @@ public class CompassDbContext : DbContext
 
         modelBuilder.Entity<GroupFeaturePermission>()
             .HasIndex(gfp => gfp.Permission);
+        
+        // ========================================
+        // DEMAND MANAGEMENT CONFIGURATION
+        // ========================================
+        
+        // DemandRequest configuration
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.ReferenceNumber)
+            .IsUnique();
+        
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.Status);
+        
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.AssignedToEmail);
+        
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.SubmittedAt);
+        
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.ApplicantEmail);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.TriageMeetingId);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.IsSubmittedToTriage);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.ConvertedProjectId);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasOne(dr => dr.TriageMeeting)
+            .WithMany(tm => tm.DemandRequests)
+            .HasForeignKey(dr => dr.TriageMeetingId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasOne(dr => dr.ConvertedProject)
+            .WithMany()
+            .HasForeignKey(dr => dr.ConvertedProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        // DemandRequestContact configuration
+        modelBuilder.Entity<DemandRequestContact>()
+            .HasOne(drc => drc.DemandRequest)
+            .WithMany(dr => dr.Contacts)
+            .HasForeignKey(drc => drc.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<DemandRequestContact>()
+            .HasIndex(drc => drc.DemandRequestId);
+        
+        // DemandRequestPrioritisation configuration
+        modelBuilder.Entity<DemandRequestPrioritisation>()
+            .HasOne(drp => drp.DemandRequest)
+            .WithOne(dr => dr.Prioritisation)
+            .HasForeignKey<DemandRequestPrioritisation>(drp => drp.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<DemandRequestPrioritisation>()
+            .HasIndex(drp => drp.TotalPriorityScore)
+            .IsDescending();
+        
+        modelBuilder.Entity<DemandRequestPrioritisation>()
+            .HasIndex(drp => drp.PriorityTier);
+        
+        // DemandRequestNote configuration
+        modelBuilder.Entity<DemandRequestNote>()
+            .HasOne(drn => drn.DemandRequest)
+            .WithMany(dr => dr.Notes)
+            .HasForeignKey(drn => drn.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<DemandRequestNote>()
+            .HasIndex(drn => drn.DemandRequestId);
+        
+        // DemandRequestAssessment configuration
+        modelBuilder.Entity<DemandRequestAssessment>()
+            .HasOne(dra => dra.DemandRequest)
+            .WithMany(dr => dr.Assessments)
+            .HasForeignKey(dra => dra.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<DemandRequestAssessment>()
+            .HasIndex(dra => new { dra.DemandRequestId, dra.AssessmentType });
+        
+        // DemandRequestSectionCompletion configuration
+        modelBuilder.Entity<DemandRequestSectionCompletion>()
+            .HasOne(drsc => drsc.DemandRequest)
+            .WithMany(dr => dr.SectionCompletions)
+            .HasForeignKey(drsc => drsc.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<DemandRequestSectionCompletion>()
+            .HasIndex(drsc => new { drsc.DemandRequestId, drsc.SectionName })
+            .IsUnique();
+
+        // DemandRequestRiskType configuration
+        modelBuilder.Entity<DemandRequestRiskType>()
+            .HasKey(drrt => new { drrt.DemandRequestId, drrt.RiskTypeId });
+
+        modelBuilder.Entity<DemandRequestRiskType>()
+            .HasOne(drrt => drrt.DemandRequest)
+            .WithMany(dr => dr.RiskTypeLinks)
+            .HasForeignKey(drrt => drrt.DemandRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DemandRequestRiskType>()
+            .HasOne(drrt => drrt.RiskType)
+            .WithMany(rt => rt.DemandRequestLinks)
+            .HasForeignKey(drrt => drrt.RiskTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DemandRequestRiskType>()
+            .HasIndex(drrt => drrt.RiskTypeId);
+
+        modelBuilder.Entity<DemandRequestRiskType>()
+            .Property(drrt => drrt.CreatedAt)
+            .HasDefaultValueSql("GETUTCDATE()");
+ 
+        // TriageMeeting configuration
+        modelBuilder.Entity<TriageMeeting>()
+            .HasIndex(tm => tm.StartAt);
+
+        modelBuilder.Entity<TriageMeeting>()
+            .HasIndex(tm => tm.EndAt);
+
+        modelBuilder.Entity<TriageMeeting>()
+            .HasIndex(tm => tm.IsActive);
+
+        modelBuilder.Entity<TriageMeeting>()
+            .Property(tm => tm.Title)
+            .HasMaxLength(150);
     }
+}
+
+file sealed class NullAuditContextProvider : IAuditContextProvider
+{
+    public string? UserId => null;
+    public string? UserEmail => null;
+    public string? UserName => null;
+    public string? IpAddress => null;
+    public string? UserAgent => null;
 }
 

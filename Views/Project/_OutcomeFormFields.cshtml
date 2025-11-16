@@ -1,0 +1,59 @@
+@model Compass.ViewModels.ProjectOutcomeFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+<div class="form-group @(hasError("Outcome") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Outcome" class="font-weight-bold">Outcome</label>
+    <small class="form-text text-muted">Describe the change or result the project aims to deliver.</small>
+    <span asp-validation-for="Input.Outcome" class="form-error-message"></span>
+    <textarea asp-for="Input.Outcome" class="form-control @(hasError("Outcome") ? "form-control--error" : string.Empty)" rows="4" maxlength="500"></textarea>
+</div>
+
+<div class="form-group @(hasError("MeasureOfSuccess") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.MeasureOfSuccess">Measure of success</label>
+    <small class="form-text text-muted">Explain how progress towards this outcome will be assessed.</small>
+    <span asp-validation-for="Input.MeasureOfSuccess" class="form-error-message"></span>
+    <textarea asp-for="Input.MeasureOfSuccess" class="form-control @(hasError("MeasureOfSuccess") ? "form-control--error" : string.Empty)" rows="3" maxlength="500"></textarea>
+</div>
+
+<div class="form-group @(hasError("ConfidenceLevel") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.ConfidenceLevel">Confidence level</label>
+    <small class="form-text text-muted">Select your level of confidence in achieving this outcome.</small>
+    <span asp-validation-for="Input.ConfidenceLevel" class="form-error-message"></span>
+    <select asp-for="Input.ConfidenceLevel" class="form-control @(hasError("ConfidenceLevel") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.ConfidenceOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group @(hasError("ConfidenceExplanation") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.ConfidenceExplanation">Confidence explanation (optional)</label>
+    <small class="form-text text-muted">Provide a short rationale for the confidence level.</small>
+    <span asp-validation-for="Input.ConfidenceExplanation" class="form-error-message"></span>
+    <textarea asp-for="Input.ConfidenceExplanation" class="form-control @(hasError("ConfidenceExplanation") ? "form-control--error" : string.Empty)" rows="3"></textarea>
+</div>
+
+<input asp-for="Input.SortOrder" type="hidden" />

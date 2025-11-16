@@ -76,6 +76,9 @@
     
     // User group category type name variations (shared across views)
     var userGroupVariations = new[] { "User group", "User Group", "User groups", "User Groups", "User Type", "User Types", "Audience", "Target Audience" };
+    var hasSelectedBusinessArea = !string.IsNullOrWhiteSpace(selectedBusinessArea);
+    var pageBusinessArea = hasSelectedBusinessArea ? selectedBusinessArea : businessArea;
+    var defaultViewMode = string.IsNullOrEmpty(viewMode) ? "projects" : viewMode;
 }
 
 <div class="content-header">
@@ -91,21 +94,16 @@
         </div>
         <div class="row mb-3 align-items-center">
             <div class="col-md-6">
-                <h1 class="m-0">@(businessArea ?? "Business Area Reports")</h1>
+                <h1 class="m-0">@(pageBusinessArea ?? "Business area reports")</h1>
                 <p class="text-muted mb-0">@DateTime.Now.ToString("dd MMMM yyyy")</p>
             </div>
             <div class="col-md-6 text-right">
-                @if (businessAreas.Any())
+                @if (hasSelectedBusinessArea && businessAreas.Any())
                 {
-                    <div class="form-inline justify-content-end">
-                        <label for="businessAreaSelect" class="mr-2 mb-0 font-weight-bold">Business area:</label>
-                        <select class="form-control" id="businessAreaSelect" style="min-width: 250px;">
-                            @foreach (var area in businessAreas.OrderBy(a => a))
-                            {
-                                <option value="@area" selected="@(area == selectedBusinessArea)">@area</option>
-                            }
-                        </select>
-                    </div>
+                    <a class="btn btn-outline-secondary" href="@Url.Action("BusinessArea", "DdtReports")">
+                        <i class="fas fa-th mr-2"></i>
+                        Select another business area
+                    </a>
                 }
             </div>
         </div>
@@ -137,6 +135,40 @@
                     <h4>No business areas available</h4>
                     <p class="text-muted">There are no business areas configured in the system.</p>
                     <a asp-action="Index" class="btn btn-primary mt-3">Back to DDT Reports</a>
+                </div>
+            </div>
+        }
+        else if (!hasSelectedBusinessArea)
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Choose a business area</h3>
+                </div>
+                <div class="card-body pt-4">
+                    <p class="text-muted">Select a business area to view detailed delivery, performance and risk reporting.</p>
+                    <div class="row">
+                        @foreach (var area in businessAreas.OrderBy(a => a))
+                        {
+                            <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                                <a class="business-area-card d-block" href="@Url.Action("BusinessArea", "DdtReports", new { area = area, view = defaultViewMode })" aria-label="View reports for @area">
+                                    <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="business-area-card__icon mb-3">
+                                                <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                                            </div>
+                                            <h3 class="h5 mb-2">@area</h3>
+                                            <p class="text-muted mb-0">View projects, milestones and product performance for this business area.</p>
+                                        </div>
+                                        <div class="card-footer bg-white border-0 text-right">
+                                            <span class="business-area-card__cta">
+                                                View reports <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         }
@@ -1163,6 +1195,53 @@
     background-color: #f8f9fa;
 }
 
+.business-area-card {
+    text-decoration: none;
+    color: inherit;
+}
+
+.business-area-card .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.business-area-card:hover .card,
+.business-area-card:focus .card {
+    transform: translateY(-4px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+.business-area-card__icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background-color: #e6f2ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #0b0c0c;
+}
+
+.business-area-card__cta {
+    font-weight: 600;
+    color: #005eb8;
+    transition: color 0.2s ease;
+}
+
+.business-area-card:hover .business-area-card__cta,
+.business-area-card:focus .business-area-card__cta {
+    color: #003a75;
+}
+
+.business-area-card__cta i {
+    transition: transform 0.2s ease;
+}
+
+.business-area-card:hover .business-area-card__cta i,
+.business-area-card:focus .business-area-card__cta i {
+    transform: translateX(4px);
+}
+
 @@media (max-width: 767px) {
     .small-box h3 {
         font-size: 2rem;
@@ -1177,15 +1256,6 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            // Handle business area dropdown change
-            $('#businessAreaSelect').on('change', function() {
-                var selectedArea = $(this).val();
-                if (selectedArea) {
-                    var currentView = '@viewMode';
-                    window.location.href = '@Url.Action("BusinessArea", "DdtReports")?area=' + encodeURIComponent(selectedArea) + '&view=' + currentView;
-                }
-            });
-            
             // Initialize sortable table for milestones
             initializeSortableTable($('#milestonesTable'));
             

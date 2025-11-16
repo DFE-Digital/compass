@@ -1,0 +1,142 @@
+@model Compass.ViewModels.ProjectIssueFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.ContextDescription))
+{
+    <div class="alert alert-info" role="status">
+        <i class="fas fa-link mr-1"></i>@Model.ContextDescription
+    </div>
+}
+
+<div class="form-group @(hasError("Title") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Title" class="font-weight-bold">Title</label>
+    <small class="form-text text-muted">Give the issue a clear, searchable name.</small>
+    <span asp-validation-for="Input.Title" class="form-error-message"></span>
+    <input asp-for="Input.Title" class="form-control @(hasError("Title") ? "form-control--error" : string.Empty)" maxlength="200" required />
+</div>
+
+<div class="form-group @(hasError("Description") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Description">Description</label>
+    <small class="form-text text-muted">Describe the issue, impact, and context.</small>
+    <span asp-validation-for="Input.Description" class="form-error-message"></span>
+    <textarea asp-for="Input.Description" class="form-control @(hasError("Description") ? "form-control--error" : string.Empty)" rows="4"></textarea>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-6 @(hasError("Severity") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.Severity">Severity</label>
+        <small class="form-text text-muted">How serious is the impact on delivery?</small>
+        <span asp-validation-for="Input.Severity" class="form-error-message"></span>
+        <select asp-for="Input.Severity" class="form-control @(hasError("Severity") ? "form-control--error" : string.Empty)" asp-items="Model.SeverityOptions"></select>
+    </div>
+    <div class="form-group col-md-6 @(hasError("Status") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.Status">Status</label>
+        <small class="form-text text-muted">Track whether the issue is open, resolved, or closed.</small>
+        <span asp-validation-for="Input.Status" class="form-error-message"></span>
+        <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)" asp-items="Model.StatusOptions"></select>
+    </div>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-6 @(hasError("DetectedDate") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.DetectedDate">Detected date</label>
+        <small class="form-text text-muted">When the issue was first raised.</small>
+        <span asp-validation-for="Input.DetectedDate" class="form-error-message"></span>
+        <input asp-for="Input.DetectedDate" class="form-control @(hasError("DetectedDate") ? "form-control--error" : string.Empty)" type="date" />
+    </div>
+    <div class="form-group col-md-6 @(hasError("TargetResolutionDate") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.TargetResolutionDate">Target resolution date</label>
+        <small class="form-text text-muted">Set when the issue should be resolved.</small>
+        <span asp-validation-for="Input.TargetResolutionDate" class="form-error-message"></span>
+        <input asp-for="Input.TargetResolutionDate" class="form-control @(hasError("TargetResolutionDate") ? "form-control--error" : string.Empty)" type="date" />
+    </div>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label asp-for="Input.Category">Category</label>
+        <input asp-for="Input.Category" class="form-control" maxlength="100" placeholder="e.g. Technical, Resource, Communication" />
+    </div>
+    <div class="form-group col-md-6">
+        <label asp-for="Input.Workaround">Workaround</label>
+        <textarea asp-for="Input.Workaround" class="form-control" rows="2" placeholder="Document any temporary workaround."></textarea>
+    </div>
+</div>
+
+@if (Model.ShowDeleteButton)
+{
+    <div class="form-group">
+        <label asp-for="Input.ResolutionSummary">Resolution summary</label>
+        <textarea asp-for="Input.ResolutionSummary" class="form-control" rows="3"></textarea>
+    </div>
+}
+
+<div class="form-group">
+    <label asp-for="Input.SourceRiskId">Linked risk</label>
+    <select asp-for="Input.SourceRiskId" class="form-control" asp-items="Model.RiskOptions"></select>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.LinkedActionIds">Linked actions</label>
+    <small class="form-text text-muted">Select actions created to manage this issue.</small>
+    <select asp-for="Input.LinkedActionIds" class="form-control select2" asp-items="Model.ActionOptions" multiple size="8"></select>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-4">
+        <label asp-for="Input.FipsId">FIPS ID</label>
+        <input asp-for="Input.FipsId" class="form-control" maxlength="50" />
+    </div>
+    <div class="form-group col-md-4">
+        <label asp-for="Input.BusinessArea">Business area</label>
+        <select asp-for="Input.BusinessArea" class="form-control" asp-items="Model.BusinessAreaOptions">
+            <option value="">Not set</option>
+        </select>
+    </div>
+    <div class="form-group col-md-4 @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.OwnerEmail">Owner (email)</label>
+        <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
+        <input asp-for="Input.OwnerEmail" class="form-control @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)" placeholder="name@example.com" />
+    </div>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-4">
+        <label asp-for="Input.SourceType">Source type</label>
+        <input asp-for="Input.SourceType" class="form-control" maxlength="100" placeholder="e.g. Service assessment" />
+    </div>
+    <div class="form-group col-md-4">
+        <label asp-for="Input.SourceReference">Source reference</label>
+        <input asp-for="Input.SourceReference" class="form-control" maxlength="100" placeholder="Reference or identifier" />
+    </div>
+    <div class="form-group col-md-4 @(hasError("SourceRecordUrl") ? "form-group--error" : string.Empty)">
+        <label asp-for="Input.SourceRecordUrl">Source record URL</label>
+        <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
+        <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("SourceRecordUrl") ? "form-control--error" : string.Empty)" placeholder="https://" />
+    </div>
+</div>
+
+<input asp-for="Input.ProjectId" type="hidden" />
+<input asp-for="Input.IssueId" type="hidden" />

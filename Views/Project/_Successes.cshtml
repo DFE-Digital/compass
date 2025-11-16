@@ -1,51 +1,51 @@
 @model Compass.Models.Project
 
-<div class="card">
+@{
+    var successes = Model.Successes
+        .OrderByDescending(s => s.RecordedAt)
+        .ToList();
+}
+
+<div class="card" id="successes">
     <div class="card-header">
-        <h3 class="card-title">Project Successes</h3>
+        <h3 class="card-title">Project successes</h3>
         <div class="card-tools">
-            <a href="#" data-toggle="modal" data-target="#addSuccessModal">Add success</a>
+            <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id">Add success</a>
         </div>
     </div>
     <div class="card-body table-responsive p-0">
-        @if (Model.Successes.Any())
+        @if (successes.Any())
         {
             <table class="table table-hover text-nowrap sortable-table successes-table">
                 <thead>
                     <tr>
-                        <th class="col-description sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">
-                            Success Description
-                        </th>
-                        <th class="col-recorded-by sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By">
-                            Recorded By
-                        </th>
-                        <th class="col-recorded-at sortable" data-column="RecordedAt" tabindex="0" role="button" aria-label="Sort by Recorded Date">
-                            Recorded Date
-                        </th>
-                        <th class="col-slt-flag sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report">
-                            DDT Report
-                        </th>
+                        <th class="col-description sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">Success</th>
+                        <th class="col-recorded-by sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By">Recorded by</th>
+                        <th class="col-recorded-at sortable" data-column="RecordedAt" tabindex="0" role="button" aria-label="Sort by Recorded Date">Recorded date</th>
+                        <th class="col-slt-flag sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report">DDT report</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var success in Model.Successes.OrderByDescending(s => s.RecordedAt))
+                    @foreach (var success in successes)
                     {
+                        var displayName = !string.IsNullOrWhiteSpace(success.RecordedByName)
+                            ? success.RecordedByName
+                            : success.RecordedByEmail;
+                        var truncatedDescription = success.SuccessDescription?.Length > 175
+                            ? $"{success.SuccessDescription.Substring(0, 175).TrimEnd()}…"
+                            : success.SuccessDescription;
                         <tr>
                             <td>
-                                @{
-                                    var truncatedDescription = success.SuccessDescription.Length > 60 
-                                        ? success.SuccessDescription.Substring(0, 60) + "..." 
-                                        : success.SuccessDescription;
-                                }
-                                <a href="#" class="view-success-link" 
-                                   data-success-id="@success.Id" 
-                                   data-success-description="@success.SuccessDescription" 
-                                   data-success-recorded-by="@success.RecordedByName" 
-                                   data-success-recorded-at="@success.RecordedAt.ToString("dd MMM yyyy")"
-                                   data-success-slt="@success.IsReportedToSlt">@truncatedDescription</a>
+                                <a asp-controller="Project" asp-action="SuccessDetails" asp-route-projectId="@Model.Id" asp-route-successId="@success.Id" title="@success.SuccessDescription">
+                                    @truncatedDescription
+                                </a>
                             </td>
-                            <td>@success.RecordedByName</td>
-                            <td>@success.RecordedAt.ToString("dd MMM yyyy")</td>
+                            <td>
+                                <span>@displayName</span>
+                                <br />
+                                <small class="text-muted">@success.RecordedByEmail</small>
+                            </td>
+                            <td>@success.RecordedAt.ToString("d MMMM yyyy")</td>
                             <td>
                                 @if (success.IsReportedToSlt)
                                 {
@@ -63,239 +63,10 @@
         }
         else
         {
-            <div class="text-center p-4">
-                <p class="text-muted">No successes recorded yet.</p>
-                <a href="#" data-toggle="modal" data-target="#addSuccessModal" class="btn btn-success">Record First Success</a>
+            <div class="p-4">
+                <p class="text-muted mb-2">No successes recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id">Add the first success</a>
             </div>
         }
     </div>
 </div>
-
-<!-- Add Success Modal -->
-<div class="modal fade" id="addSuccessModal" tabindex="-1" role="dialog" aria-labelledby="addSuccessModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addSuccessModalLabel">Record New Success</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="AddSuccess" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="successDescription">Success Description</label>
-                        <textarea class="form-control" id="successDescription" name="successDescription" rows="4" placeholder="Describe the success achieved..." required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="isReportedToSlt" name="isReportedToSlt" value="true">
-                            <label class="form-check-label" for="isReportedToSlt">
-                                Reported in weekly update to DDT
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Record Success</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- View/Edit Success Modal -->
-<div class="modal fade" id="viewSuccessModal" tabindex="-1" role="dialog" aria-labelledby="viewSuccessModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewSuccessModalLabel">Success Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateSuccess" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <input type="hidden" id="viewSuccessId" name="successId" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="viewSuccessDescription">Success Description</label>
-                        <textarea class="form-control" id="viewSuccessDescription" name="successDescription" rows="6" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="viewIsReportedToSlt" name="isReportedToSlt" value="true">
-                            <label class="form-check-label" for="viewIsReportedToSlt">
-                                Reported in weekly update to DDT
-                            </label>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Recorded By</label>
-                                <p class="form-control-plaintext" id="viewSuccessRecordedBy"></p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Recorded Date</label>
-                                <p class="form-control-plaintext" id="viewSuccessRecordedAt"></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <button type="button" class="btn btn-danger" id="deleteSuccessBtn">Delete Success</button>
-                    <div>
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Success</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Success Confirmation Modal -->
-<div class="modal fade" id="deleteSuccessModal" tabindex="-1" role="dialog" aria-labelledby="deleteSuccessModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteSuccessModalLabel">Confirm Delete</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete this success?</p>
-                <p class="text-muted">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form asp-action="DeleteSuccess" method="post" class="d-inline">
-                    <input type="hidden" name="projectId" value="@Model.Id" />
-                    <input type="hidden" id="deleteSuccessId" name="successId" />
-                    <button type="submit" class="btn btn-danger">Delete Success</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script nonce="@Context.Items["Nonce"]">
-    (function() {
-        function initSuccessesPage() {
-            // Initialize sortable tables
-            $('.successes-table').each(function() {
-                initializeSuccessesTable($(this));
-            });
-
-            // Handle view success link clicks
-            $(document).on('click', '.view-success-link', function(e) {
-                e.preventDefault();
-                var successId = $(this).attr('data-success-id');
-                var description = $(this).attr('data-success-description');
-                var recordedBy = $(this).attr('data-success-recorded-by');
-                var recordedAt = $(this).attr('data-success-recorded-at');
-                var isReportedToSlt = $(this).attr('data-success-slt') === 'True';
-                
-                viewSuccess(successId, description, recordedBy, recordedAt, isReportedToSlt);
-            });
-
-            // Handle delete success button
-            $('#deleteSuccessBtn').on('click', function() {
-                var successId = $('#viewSuccessId').val();
-                $('#deleteSuccessId').val(successId);
-                $('#viewSuccessModal').modal('hide');
-                $('#deleteSuccessModal').modal('show');
-            });
-        }
-
-        function viewSuccess(successId, description, recordedBy, recordedAt, isReportedToSlt) {
-            $('#viewSuccessId').val(successId);
-            $('#viewSuccessDescription').val(description);
-            $('#viewSuccessRecordedBy').text(recordedBy);
-            $('#viewSuccessRecordedAt').text(recordedAt);
-            $('#viewIsReportedToSlt').prop('checked', isReportedToSlt);
-            $('#viewSuccessModal').modal('show');
-        }
-
-        function initializeSuccessesTable(table) {
-            var currentSort = { column: null, direction: 'asc' };
-
-            table.find('.sortable').on('click keypress', function(e) {
-                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
-                    return;
-                }
-                
-                var column = $(this).data('column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(table, column, direction);
-                currentSort = { column: column, direction: direction };
-            });
-
-            function sortTable(table, column, direction) {
-                var tbody = table.find('tbody');
-                var rows = tbody.find('tr').toArray();
-                
-                rows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
-                    
-                    if (column === 'RecordedAt') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else if (column === 'IsReportedToSlt') {
-                        var aText = $(a).find('td').eq(colIndex).text().trim();
-                        var bText = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = aText === 'Yes' ? 1 : 0;
-                        bVal = bText === 'Yes' ? 1 : 0;
-                    } else {
-                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                tbody.empty();
-                rows.forEach(function(row) {
-                    tbody.append(row);
-                });
-                
-                updateSortIcons(table, column, direction);
-            }
-
-            function updateSortIcons(table, column, direction) {
-                table.find('.sortable i').remove();
-                var header = table.find('.sortable[data-column="' + column + '"]');
-                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
-                header.append(' <i class="fas ' + iconClass + '"></i>');
-            }
-        }
-
-        if (typeof jQuery !== 'undefined') {
-            $(document).ready(initSuccessesPage);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() {
-                if (typeof jQuery !== 'undefined') {
-                    $(document).ready(initSuccessesPage);
-                }
-            });
-        }
-    })();
-</script>

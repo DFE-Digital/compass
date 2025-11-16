@@ -1,0 +1,141 @@
+@model Compass.Models.Project
+@{
+    var decisions = Model.Decisions.Where(d => !d.IsDeleted).OrderByDescending(d => d.DecisionDate ?? d.CreatedAt).ToList();
+    var pendingCount = decisions.Count(d => d.Status == "pending");
+    var approvedCount = decisions.Count(d => d.Status == "approved");
+    var rejectedCount = decisions.Count(d => d.Status == "rejected");
+    var supersededCount = decisions.Count(d => d.Status == "superseded");
+}
+
+<div class="card" id="decisions">
+    <div class="card-header">
+        <h3 class="card-title">Project decisions</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateDecision" asp-route-projectId="@Model.Id">Add decision</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (decisions.Any())
+        {
+            <table class="table table-hover text-nowrap sortable-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                        <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status" style="width: 140px;">Status</th>
+                        <th class="sortable" data-column="DecisionDate" tabindex="0" role="button" aria-label="Sort by Decision date" style="width: 150px;">Decision date</th>
+                        <th class="sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner" style="width: 200px;">Owner</th>
+                        <th style="width: 220px;">Linked risks &amp; issues</th>
+                        <th style="width: 220px;">Linked actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var decision in decisions)
+                    {
+                        var riskLinks = decision.RiskDecisions.Select(rd => rd.Risk).Where(r => r != null && !r.IsDeleted).OrderBy(r => r!.Title).ToList();
+                        var issueLinks = decision.IssueDecisions.Select(idl => idl.Issue).Where(i => i != null && !i.IsDeleted).OrderBy(i => i!.Title).ToList();
+                        var actionLinks = decision.Actions.Where(a => !a.IsDeleted).OrderBy(a => a.Title).ToList();
+                        var decisionReferenceDate = decision.DecisionDate ?? decision.CreatedAt;
+                        <tr>
+                            <td>
+                                <a asp-controller="Decision" asp-action="Details" asp-route-id="@decision.Id">@decision.Title</a>
+                                @if (!string.IsNullOrWhiteSpace(decision.Summary))
+                                {
+                                    <small class="text-muted d-block">@decision.Summary</small>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(decision.Outcome))
+                                {
+                                    <small class="text-muted d-block"><i class="fas fa-flag-checkered mr-1"></i>@decision.Outcome</small>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(decision.BusinessArea))
+                                {
+                                    <small class="text-muted d-block"><i class="fas fa-sitemap mr-1"></i>@decision.BusinessArea</small>
+                                }
+                            </td>
+                            <td>
+                                @switch (decision.Status)
+                                {
+                                    case "pending":
+                                        <span class="badge badge-warning">Pending</span>
+                                        break;
+                                    case "approved":
+                                        <span class="badge badge-success">Approved</span>
+                                        break;
+                                    case "rejected":
+                                        <span class="badge badge-danger">Rejected</span>
+                                        break;
+                                    case "superseded":
+                                        <span class="badge badge-secondary">Superseded</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-secondary">@decision.Status</span>
+                                        break;
+                                }
+                            </td>
+                            <td>
+                                @if (decision.DecisionDate.HasValue)
+                                {
+                                    @decision.DecisionDate.Value.ToString("d MMMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td>
+                                @if (decision.OwnerUser != null)
+                                {
+                                    <span>@decision.OwnerUser.Name</span>
+                                    <br /><small class="text-muted">@decision.OwnerUser.Email</small>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not assigned</span>
+                                }
+                            </td>
+                            <td>
+                                @if (riskLinks.Any())
+                                {
+                                    foreach (var risk in riskLinks)
+                                    {
+                                        <span class="badge badge-warning mr-1 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>@risk!.Title</span>
+                                    }
+                                }
+                                @if (issueLinks.Any())
+                                {
+                                    foreach (var issue in issueLinks)
+                                    {
+                                        <span class="badge badge-info mr-1 mb-1"><i class="fas fa-bug mr-1"></i>@issue!.Title</span>
+                                    }
+                                }
+                                @if (!riskLinks.Any() && !issueLinks.Any())
+                                {
+                                    <span class="text-muted">No linked risks or issues</span>
+                                }
+                            </td>
+                            <td>
+                                @if (actionLinks.Any())
+                                {
+                                    foreach (var action in actionLinks)
+                                    {
+                                        <span class="badge badge-primary mr-1 mb-1"><i class="fas fa-tasks mr-1"></i>@action.Title</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No linked actions</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-2">No decisions recorded for this project yet.</p>
+                <a asp-controller="Project" asp-action="CreateDecision" asp-route-projectId="@Model.Id">Add the first decision</a>
+            </div>
+        }
+    </div>
+</div>

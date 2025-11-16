@@ -1,0 +1,183 @@
+@model (Compass.ViewModels.Dashboard.DashboardBlockInstance Block, Compass.ViewModels.Dashboard.HomeDashboardViewModel Dashboard)
+@using System.Text.Json
+
+@{
+    var block = Model.Block;
+    var dashboard = Model.Dashboard;
+    var blockType = block.Type?.ToLowerInvariant() ?? string.Empty;
+}
+
+@switch (blockType)
+{
+    case "open-risks-count":
+        {
+            var riskCount = dashboard.MyProjects
+                .SelectMany(p => p.Risks ?? new List<Compass.Models.Risk>())
+                .Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase));
+            <div class="dashboard-block metric-block">
+                <div class="metric-value">@riskCount</div>
+                <div class="metric-label">Open risks</div>
+            </div>
+            break;
+        }
+    case "open-issues-count":
+        {
+            var issueCount = dashboard.MyProjects
+                .SelectMany(p => p.Issues ?? new List<Compass.Models.Issue>())
+                .Count(i => !i.IsDeleted && !string.Equals(i.Status, "closed", StringComparison.OrdinalIgnoreCase));
+            <div class="dashboard-block metric-block text-danger">
+                <div class="metric-value">@issueCount</div>
+                <div class="metric-label">Open issues</div>
+            </div>
+            break;
+        }
+    case "open-actions-count":
+        {
+            var actionCount = dashboard.AssignedActions.Count;
+            <div class="dashboard-block metric-block">
+                <div class="metric-value text-primary">@actionCount</div>
+                <div class="metric-label">Actions assigned</div>
+            </div>
+            break;
+        }
+    case "products-by-phase-chart":
+        {
+            var grouped = dashboard.MyProducts
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.Phase) ? "Not set" : p.Phase!)
+                .Select(g => new { Phase = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .ToList();
+            var chartId = $"chart-{block.Id}";
+            var chartConfig = new
+            {
+                type = "doughnut",
+                data = new
+                {
+                    labels = grouped.Select(g => g.Phase),
+                    datasets = new[]
+                    {
+                        new
+                        {
+                            label = "Products",
+                            data = grouped.Select(g => g.Count)
+                        }
+                    }
+                },
+                options = new
+                {
+                    responsive = true,
+                    plugins = new
+                    {
+                        legend = new { position = "bottom" }
+                    }
+                }
+            };
+            <div class="dashboard-block">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Products by phase</h6>
+                    <small class="text-muted">@dashboard.MyProducts.Count total</small>
+                </div>
+                <canvas id="@chartId" data-chart-config='@JsonSerializer.Serialize(chartConfig)'></canvas>
+            </div>
+            break;
+        }
+    case "projects-table":
+        {
+            var projects = dashboard.MyProjects
+                .OrderBy(p => p.RagStatus == "Red" ? 0 : p.RagStatus == "Amber-Red" ? 1 : 2)
+                .ThenBy(p => p.Title)
+                .Take(8)
+                .ToList();
+            <div class="dashboard-block table-block">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Active projects</h6>
+                    <small class="text-muted">Top @projects.Count of @dashboard.MyProjects.Count</small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>RAG</th>
+                                <th>Phase</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var project in projects)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a><br />
+                                        <small class="text-muted">@project.ProjectCode</small>
+                                    </td>
+                                    <td><span class="@GetRagBadgeClass(project.RagStatus ?? string.Empty)">@project.RagStatus</span></td>
+                                    <td>@(project.Phase ?? "Not set")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            break;
+        }
+    case "products-table":
+        {
+            var products = dashboard.MyProducts
+                .OrderBy(p => p.Title)
+                .Take(10)
+                .ToList();
+            <div class="dashboard-block table-block">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Products</h6>
+                    <small class="text-muted">@dashboard.MyProducts.Count total</small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Phase</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in products)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="/Products/Dashboard/@product.FipsId">@product.Title</a><br />
+                                        <small class="text-muted">@product.FipsId</small>
+                                    </td>
+                                    <td>@(product.Phase ?? "Not set")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            break;
+        }
+    default:
+        {
+            <div class="dashboard-block placeholder">
+                <p class="mb-1">Unsupported block</p>
+                <small class="text-muted">Type: @block.Type</small>
+            </div>
+            break;
+        }
+}
+
+@functions {
+    private static string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-info",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-warning",
+            "Red" => "badge badge-danger",
+            _ => "badge badge-secondary"
+        };
+    }
+}
+
