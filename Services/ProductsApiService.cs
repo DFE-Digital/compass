@@ -75,9 +75,11 @@ public class ProductsApiService : IProductsApiService
                     "fields[3]=product_url",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
-                    "populate[product_contacts]=*",
-                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[product_contacts][fields][0]=id",
+                    "populate[product_contacts][fields][1]=role",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=id",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
                     "populate[service_owner][fields][1]=displayName"
                 };
@@ -200,9 +202,11 @@ public class ProductsApiService : IProductsApiService
                     "fields[3]=product_url",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
-                    "populate[product_contacts]=*",
-                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[product_contacts][fields][0]=id",
+                    "populate[product_contacts][fields][1]=role",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=id",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
                     "populate[service_owner][fields][1]=displayName"
                 };
@@ -313,9 +317,11 @@ public class ProductsApiService : IProductsApiService
                     "fields[4]=state",
                     "populate[category_values][fields][0]=name",
                     "populate[category_values][populate][category_type][fields][0]=name",
-                    "populate[product_contacts]=*",
-                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[product_contacts][fields][0]=id",
+                    "populate[product_contacts][fields][1]=role",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=id",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
                     "populate[service_owner][fields][1]=displayName"
                 };
