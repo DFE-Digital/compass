@@ -1,0 +1,322 @@
+@using System.Text.Json
+@model Compass.ViewModels.Admin.RaidLookupListViewModel
+@{
+    ViewData["Title"] = "RAID settings";
+    var activeModal = ViewData["ActiveRaidModal"] as string ?? string.Empty;
+    var editEntryPayload = Model.EditEntry == null ? "null" : JsonSerializer.Serialize(new
+    {
+        Model.EditEntry.Id,
+        Model.EditEntry.Code,
+        Model.EditEntry.Label,
+        Model.EditEntry.Description,
+        Model.EditEntry.SortOrder,
+        Model.EditEntry.IsActive,
+        Model.EditEntry.LookupKey
+    });
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Settings">Settings</a></li>
+                    <li class="breadcrumb-item active">RAID settings</li>
+                </ol>
+                <h1 class="m-0">RAID settings</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span></button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span></button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-lg-3 col-md-4 mb-4">
+                <div class="card sticky-top">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Lookup sets</h3>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var lookup in Model.Lookups)
+                        {
+                            var isActive = string.Equals(lookup.Key, Model.CurrentLookupKey, StringComparison.OrdinalIgnoreCase);
+                            <a class="list-group-item list-group-item-action @(isActive ? "active" : string.Empty)"
+                               href="@Url.Action("RaidSettings", "Admin", new { lookupKey = lookup.Key })">
+                                @lookup.Label
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-9 col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex flex-wrap align-items-center" style="gap: 0.5rem;">
+                        <h3 class="card-title mb-0">@Model.CurrentLookupLabel</h3>
+                        <div class="ml-auto d-flex flex-wrap" style="gap: 0.5rem;">
+                            @if (Model.CanSeedDefaults)
+                            {
+                                <form asp-action="SeedRaidLookupDefaults" method="post" class="m-0">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="lookupKey" value="@Model.CurrentLookupKey" />
+                                    <button type="submit"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            onclick="return confirm('This will add any recommended values missing from this lookup. Continue?');">
+                                        Import recommended values
+                                    </button>
+                                </form>
+                            }
+                            <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#createRaidLookupModal">
+                                Add entry
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrWhiteSpace(Model.CurrentLookupDescription))
+                        {
+                            <p class="text-muted">@Model.CurrentLookupDescription</p>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%">ID</th>
+                                        <th style="width: 20%">Code</th>
+                                        <th style="width: 25%">Label</th>
+                                        <th style="width: 35%">Description</th>
+                                        <th style="width: 7%">Sort</th>
+                                        <th style="width: 5%">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Items.Any())
+                                    {
+                                        foreach (var item in Model.Items)
+                                        {
+                                            <tr class="@(item.IsActive ? string.Empty : "text-muted")">
+                                                <td>@item.Id</td>
+                                                <td>
+                                                    <button type="button"
+                                                            class="btn btn-link p-0 raid-edit-trigger"
+                                                            data-toggle="modal"
+                                                            data-target="#editRaidLookupModal"
+                                                            data-id="@item.Id"
+                                                            data-code="@item.Code"
+                                                            data-label="@item.Label"
+                                                            data-description="@System.Net.WebUtility.HtmlEncode(item.Description ?? string.Empty)"
+                                                            data-sort="@item.SortOrder"
+                                                            data-active="@(item.IsActive ? "true" : "false")"
+                                                            data-lookup-key="@Model.CurrentLookupKey">
+                                                        @item.Code
+                                                    </button>
+                                                </td>
+                                                <td>@item.Label</td>
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                                    {
+                                                        <small class="text-muted">@item.Description</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">&mdash;</span>
+                                                    }
+                                                </td>
+                                                <td>@item.SortOrder</td>
+                                                <td>
+                                                    @if (item.IsActive)
+                                                    {
+                                                        <span class="badge badge-success">Active</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">No entries configured yet.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Create modal -->
+<div class="modal fade" id="createRaidLookupModal" tabindex="-1" role="dialog" aria-labelledby="createRaidLookupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <form asp-action="CreateRaidLookup" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createRaidLookupModalLabel">Add lookup entry</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            <div class="modal-body" id="raidSettingsState"
+                 data-active-modal="@activeModal"
+                data-edit-entry="@System.Net.WebUtility.HtmlEncode(editEntryPayload)"
+                 data-lookup-key="@Model.CurrentLookupKey">
+                    <div asp-validation-summary="All" class="text-danger"></div>
+                    <input type="hidden" asp-for="NewEntry.LookupKey" value="@Model.CurrentLookupKey" />
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label asp-for="NewEntry.Code"></label>
+                            <input asp-for="NewEntry.Code" class="form-control" />
+                            <span asp-validation-for="NewEntry.Code" class="text-danger"></span>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label asp-for="NewEntry.Label"></label>
+                            <input asp-for="NewEntry.Label" class="form-control" />
+                            <span asp-validation-for="NewEntry.Label" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="NewEntry.Description"></label>
+                        <textarea asp-for="NewEntry.Description" class="form-control" rows="2"></textarea>
+                        <span asp-validation-for="NewEntry.Description" class="text-danger"></span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label asp-for="NewEntry.SortOrder"></label>
+                            <input asp-for="NewEntry.SortOrder" class="form-control" type="number" />
+                            <span asp-validation-for="NewEntry.SortOrder" class="text-danger"></span>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" asp-for="NewEntry.IsActive" />
+                                <label class="form-check-label" asp-for="NewEntry.IsActive"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal fade" id="editRaidLookupModal" tabindex="-1" role="dialog" aria-labelledby="editRaidLookupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <form asp-action="UpdateRaidLookup" method="post" id="editRaidLookupForm">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editRaidLookupModalLabel">Edit lookup entry</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div asp-validation-summary="All" class="text-danger"></div>
+                    <input type="hidden" asp-for="EditEntry.Id" />
+                    <input type="hidden" asp-for="EditEntry.LookupKey" value="@Model.CurrentLookupKey" />
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label asp-for="EditEntry.Code"></label>
+                            <input asp-for="EditEntry.Code" class="form-control" />
+                            <span asp-validation-for="EditEntry.Code" class="text-danger"></span>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label asp-for="EditEntry.Label"></label>
+                            <input asp-for="EditEntry.Label" class="form-control" />
+                            <span asp-validation-for="EditEntry.Label" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="EditEntry.Description"></label>
+                        <textarea asp-for="EditEntry.Description" class="form-control" rows="2"></textarea>
+                        <span asp-validation-for="EditEntry.Description" class="text-danger"></span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label asp-for="EditEntry.SortOrder"></label>
+                            <input asp-for="EditEntry.SortOrder" class="form-control" type="number" />
+                            <span asp-validation-for="EditEntry.SortOrder" class="text-danger"></span>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" asp-for="EditEntry.IsActive" />
+                                <label class="form-check-label" asp-for="EditEntry.IsActive"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-danger" id="openDeleteRaidLookupModal">Delete entry</button>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Update entry</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteRaidLookupModal" tabindex="-1" role="dialog" aria-labelledby="deleteRaidLookupModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form asp-action="DeleteRaidLookup" method="post" id="deleteRaidLookupForm">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteRaidLookupModalLabel">Delete lookup entry</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Are you sure you want to delete <strong id="deleteLookupSummary"></strong>?</p>
+                    <input type="hidden" name="lookupKey" id="deleteLookupKey" value="@Model.CurrentLookupKey" />
+                    <input type="hidden" name="id" id="deleteLookupId" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="raidSettingsState"
+     data-active-modal="@activeModal"
+     data-edit-entry="@System.Net.WebUtility.HtmlEncode(editEntryPayload)"
+     data-lookup-key="@Model.CurrentLookupKey"></div>
+
+@section Scripts {
+    <script src="~/js/raid-settings.js" asp-append-version="true"></script>
+}

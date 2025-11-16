@@ -1,54 +1,61 @@
+@model HomeDashboardViewModel
+@using Compass.Models
+
 @{
-    ViewData["Title"] = "Dashboard";
-    
-    var myProjects = ViewBag.MyProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var myProducts = ViewBag.MyProducts as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
-    var currentUser = ViewBag.CurrentUser as Compass.Models.User;
-    
-    var allActiveMilestones = ViewBag.AllActiveMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
-    var milestonesDueThisWeek = ViewBag.MilestonesDueThisWeek as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
-    var overdueMilestones = ViewBag.OverdueMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
-    
-    var allActiveIssues = ViewBag.AllActiveIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
-    var highPriorityIssues = ViewBag.HighPriorityIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
-    var openIssues = ViewBag.OpenIssues as List<Compass.Models.Issue> ?? new List<Compass.Models.Issue>();
-    
-    var redProjects = ViewBag.RedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var amberRedProjects = ViewBag.AmberRedProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var amberProjects = ViewBag.AmberProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var greenProjects = ViewBag.GreenProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    
-    var recentSuccesses = ViewBag.RecentSuccesses as List<Compass.Models.ProjectSuccess> ?? new List<Compass.Models.ProjectSuccess>();
-    
-    // Task data
-    var atRiskProjects = ViewBag.AtRiskProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var projectsNeedingPathToGreen = ViewBag.ProjectsNeedingPathToGreen as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
-    var expiredOpenMilestones = ViewBag.ExpiredOpenMilestones as List<Compass.Models.Milestone> ?? new List<Compass.Models.Milestone>();
-    var productsNeedingReturns = ViewBag.ProductsNeedingReturns as List<(Compass.Models.ProductDto Product, Compass.Models.ReturnStatus Status, System.DateTime DueDate)> ?? new List<(Compass.Models.ProductDto, Compass.Models.ReturnStatus, System.DateTime)>();
-    
-    // Calculate total tasks
-    var totalTasks = projectsNeedingPathToGreen.Count + expiredOpenMilestones.Count + productsNeedingReturns.Count + highPriorityIssues.Count;
-    
-    // Dashboard metrics
-    var tasksDue = ViewBag.TasksDue ?? 0;
-    var serviceHealthIssues = ViewBag.ServiceHealthIssues ?? 0;
-    var projectHealthIssues = ViewBag.ProjectHealthIssues ?? 0;
-    
-    // Extract first name from full name
-    var firstName = "User";
-    if (currentUser?.Name != null)
-    {
-        var nameParts = currentUser.Name.Split(' ');
-        firstName = nameParts.Length > 0 ? nameParts[0] : currentUser.Name;
-    }
+    ViewData["Title"] = "Compass control centre";
 }
 
-<style>
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }
-</style>
+@section Styles {
+    <style>
+        .dashboard-static {
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-pill {
+            border-radius: 14px;
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            background: linear-gradient(145deg, #ffffff, #f8f9ff);
+            padding: 1.25rem;
+            height: 100%;
+            box-shadow: 0 10px 18px rgba(12, 25, 64, 0.06);
+        }
+
+        .metric-pill strong {
+            display: block;
+            font-size: 2rem;
+            line-height: 1.2;
+        }
+
+        .metric-pill span {
+            color: #5c6480;
+            font-size: 0.95rem;
+        }
+
+        .static-table thead th {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #7a819b;
+            border-top: 0;
+        }
+
+        .static-table td {
+            vertical-align: middle;
+        }
+
+        .leadership-panel {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            padding: 1.5rem;
+            background: linear-gradient(160deg, rgba(39, 76, 255, 0.08), rgba(39, 76, 255, 0));
+        }
+
+        .leadership-panel .badge {
+            text-transform: none;
+            font-weight: 500;
+        }
+    </style>
+}
 
 <section class="content">
     <div class="container-fluid">
@@ -67,577 +74,147 @@
             </div>
         }
 
-        <!-- Dashboard Header with Welcome and Metrics -->
-        <div class="row mb-4" style="display: flex;">
-            <!-- Left side: Welcome message and three metric cards -->
-            <div class="col-lg-8" style="display: flex;">
-                <!-- Welcome Banner -->
-                <div class="card border-0 w-100" style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 12px;">
-                    <div class="card-body p-4">
-                        <div class="row align-items-center" style="height: 100%;">
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1" style="font-size: 0.9rem;">@DateTime.Now.ToString("dddd, dd MMMM yyyy")</p>
-                                <h2 class="mb-2" style="font-weight: 600; color: #1976D2;">Hello, @firstName!</h2>
-                                <p class="text-muted mb-0" style="font-size: 0.95rem;">Track & manage your team progress here</p>
+        @{
+            var staticMetrics = new[]
+            {
+                (Label: "Assigned actions", Count: Model.AssignedActions?.Count ?? 0),
+                (Label: "Critical issues", Count: Model.HighPriorityIssues?.Count ?? 0),
+                (Label: "Unreviewed risks", Count: Model.UnmonitoredRisks?.Count ?? 0),
+                (Label: "Milestones this fortnight", Count: Model.MilestonesDueThisWeek?.Count ?? 0)
+            };
+            var myProjectRows = (Model.MyProjects ?? Array.Empty<Project>()).Take(6).ToList();
+            var leadershipRows = (Model.OversightProjects ?? Array.Empty<Project>()).Take(6).ToList();
+            var hasLeadershipScope = Model.LeadershipAssignments?.Any() ?? false;
+            var highestRoleLabel = Model.HighestLeadershipRole switch
+            {
+                LeadershipRoleTier.PermanentSecretary => "Permanent Secretary",
+                LeadershipRoleTier.DirectorGeneral => "Director General",
+                LeadershipRoleTier.CLevel => "C-Level",
+                LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
+                LeadershipRoleTier.PortfolioLead => "Portfolio lead / G6",
+                _ => "Leadership overview"
+            };
+        }
+
+        <div class="card shadow-sm mb-4 dashboard-static">
+            <div class="card-body">
+                <div class="row">
+                    @foreach (var metric in staticMetrics)
+                    {
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@metric.Count</strong>
+                                <span>@metric.Label</span>
                             </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-start">
-                                    <!-- Tasks Due Card -->
-                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@tasksDue</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Tasks due</p>
-                                            </div>
-                                        </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="row align-items-stretch">
+                    <div class="col-lg-7">
+                        <h3 class="h6 text-uppercase text-muted mt-2">My projects</h3>
+                        @if (!myProjectRows.Any())
+                        {
+                            <p class="text-muted mb-0">You are not listed on any project teams yet.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm static-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Project</th>
+                                            <th scope="col">RAG</th>
+                                            <th scope="col">Business area</th>
+                                            <th scope="col">Next milestone</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in myProjectRows)
+                                        {
+                                            var nextMilestone = project.Milestones?
+                                                .Where(m => !m.IsDeleted && m.DueDate >= DateTime.Today)
+                                                .OrderBy(m => m.DueDate)
+                                                .FirstOrDefault();
+                                            <tr>
+                                                <td>@project.Title</td>
+                                                <td>
+                                                    <span class="badge badge-pill badge-light">@project.RagStatus</span>
+                                                </td>
+                                                <td>@project.BusinessArea</td>
+                                                <td>
+                                                    @if (nextMilestone != null)
+                                                    {
+                                                        @($"{nextMilestone.Name} – {nextMilestone.DueDate:dd MMM}")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No upcoming milestone</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                    <div class="col-lg-5 mt-4 mt-lg-0">
+                        @if (hasLeadershipScope)
+                        {
+                            <div class="leadership-panel h-100 d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h3 class="h6 text-uppercase text-muted mb-1">Business area oversight</h3>
+                                        <strong>@highestRoleLabel</strong>
                                     </div>
-                                    <!-- Service Health Card -->
-                                    <div style="flex: 0 0 33.333%; padding-right: 8px;">
-                                    
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@serviceHealthIssues</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Service health</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Project Health Card -->
-                                    <div style="flex: 0 0 33.333%;">
-                                        <div class="card border-0 shadow-sm metric-card" style="border-radius: 8px;">
-                                            <div class="card-body p-3">
-                                                <h3 class="mb-1 text-left" style="font-weight: 700; font-size: 1.8rem;">@projectHealthIssues</h3>
-                                                <p class="text-muted mb-0 text-left" style="font-size: 0.85rem;">Project health</p>
-                                            </div>
-                                        </div>
+                                    <div>
+                                        @foreach (var area in Model.LeadershipBusinessAreas)
+                                        {
+                                            <span class="badge badge-primary mr-1 mb-1">@area</span>
+                                        }
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Right side: What's New card -->
-            <div class="col-lg-4" style="display: flex;">
-                <div class="card border-0 shadow-sm w-100 metric-card" style="border-radius: 12px; background: white;">
-                    <div class="card-body p-4">
-                        <div style="height: 100%;">
-                            <h5 class="mb-2" style="font-weight: 600;">What's new in COMPASS</h5>
-                            <p class="text-muted mb-3" style="font-size: 0.9rem;">Find out whats new and upcoming on the COMPASS roadmap.</p>
-                            <a href="@Url.Action("Index", "DdtReports")" class="btn" style="background: #FF6B35; color: white; border-radius: 6px; font-weight: 500;">
-                                Explore COMPASS
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Your Tasks Section -->
-        @if (totalTasks > 0)
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h3 class="card-title mb-0">Your Tasks (@totalTasks)</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Task Type</th>
-                                        <th>Product / Project</th>
-                                        <th>Status</th>
-                                        <th>Due Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Task 1: Projects Needing Path to Green -->
-                                    @foreach (var project in projectsNeedingPathToGreen)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "rag" })">
-                                                    <strong>Missing Path to Green</strong><br>
-                                                    <small class="text-muted">RAG Reporting</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id, tab = "rag" })">
-                                                    <strong>@project.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@project.ProjectCode</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-warning">Incomplete</span>
-                                            </td>
-                                            <td>
-                                                <span class="text-muted">—</span>
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 2: Expired Open Milestones -->
-                                    @foreach (var milestone in expiredOpenMilestones.OrderBy(m => m.DueDate).Take(50))
-                                    {
-                                        var milestoneProject = myProjects.FirstOrDefault(p => p.Id == milestone.ProjectId);
-                                        var daysOverdue = (DateTime.Today - milestone.DueDate).Days;
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">
-                                                    <strong>Milestone @daysOverdue day@(daysOverdue != 1 ? "s" : "") over</strong><br>
-                                                    <small class="text-muted">Update milestone</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">
-                                                    <strong>@milestone.Name</strong>
-                                                </a><br>
-                                                @if (milestoneProject != null)
-                                                {
-                                                    <small class="text-muted">@milestoneProject.Title</small>
-                                                }
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-danger">Late</span>
-                                            </td>
-                                            <td>
-                                                @milestone.DueDate.ToString("dd MMM yyyy")
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 3: Products Needing Operational Returns -->
-                                    @foreach (var (product, status, dueDate) in productsNeedingReturns)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })">
-                                                    <strong>Return @(status == Compass.Models.ReturnStatus.Late ? "late" : "due")</strong><br>
-                                                    <small class="text-muted">Operational reporting</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId })">
-                                                    <strong>@product.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@product.FipsId</small>
-                                            </td>
-                                            <td>
-                                                @if (status == Compass.Models.ReturnStatus.Late)
-                                                {
-                                                    <span class="badge badge-danger">Late</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-warning">Due</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @dueDate.ToString("dd MMM yyyy")
-                                            </td>
-                                        </tr>
-                                    }
-
-                                    <!-- Task 4: High Priority Issues -->
-                                    @foreach (var issue in highPriorityIssues.OrderByDescending(i => i.DetectedDate).Take(50))
-                                    {
-                                        var issueProject = myProjects.FirstOrDefault(p => p.Id == issue.ProjectId);
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>Review issue</strong><br>
-                                                    <small class="text-muted">High priority</small>
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>@issue.Title</strong>
-                                                </a><br>
-                                                @if (issueProject != null)
-                                                {
-                                                    <small class="text-muted">@issueProject.Title</small>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (issue.Severity == "critical")
-                                                {
-                                                    <span class="badge badge-danger">Critical</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-warning">High</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (issue.TargetResolutionDate.HasValue)
-                                                {
-                                                    @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- My Products -->
-        @if (myProducts.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">My Products (@myProducts.Count)</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Phase</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var product in myProducts)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="/Products/Dashboard/@product.FipsId">
-                                                    <strong>@product.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@product.FipsId</small>
-                                            </td>
-                                            <td>@(product.Phase ?? "Not set")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Projects Requiring Attention (Red & Amber-Red) -->
-        @{
-            var orderedAtRiskProjects = atRiskProjects.OrderBy(p => p.RagStatus == "Red" ? 0 : 1).ToList();
-        }
-        @if (orderedAtRiskProjects.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-danger text-white">
-                            <h3 class="card-title mb-0">Projects Requiring Attention</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Project</th>
-                                        <th>RAG Status</th>
-                                        <th>Justification</th>
-                                        <th>Path to Green</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in orderedAtRiskProjects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                    <strong>@project.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@project.ProjectCode</small>
-                                            </td>
-                                            <td>
-                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagJustification))
-                                                {
-                                                    @project.RagJustification.Substring(0, Math.Min(150, project.RagJustification.Length))@(project.RagJustification.Length > 150 ? "..." : "")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No justification provided</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.PathToGreen))
-                                                {
-                                                    @project.PathToGreen.Substring(0, Math.Min(100, project.PathToGreen.Length))@(project.PathToGreen.Length > 100 ? "..." : "")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-warning">Not documented</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card border-success">
-                        <div class="card-body text-center p-4">
-                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                            <h5>All Projects On Track</h5>
-                            <p class="text-muted mb-0">No projects require immediate attention</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- High Priority Issues -->
-        @if (highPriorityIssues.Any())
-        {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-danger text-white">
-                            <h3 class="card-title mb-0">High Priority Issues (@highPriorityIssues.Count)</h3>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Issue</th>
-                                        <th>Project</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Target Resolution</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var issue in highPriorityIssues.OrderByDescending(i => i.DetectedDate))
-                                    {
-                                        var issueProject = myProjects.FirstOrDefault(p => p.Id == issue.ProjectId);
-                                        <tr>
-                                            <td>
-                                                <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">
-                                                    <strong>@issue.Title</strong>
-                                                </a><br>
-                                                <small class="text-muted">@(issue.Description != null ? (issue.Description.Length > 100 ? issue.Description.Substring(0, 100) : issue.Description) : "")</small>
-                                            </td>
-                                            <td>
-                                                @if (issueProject != null)
-                                                {
-                                                    <a href="@Url.Action("Details", "Project", new { id = issueProject.Id })">@issueProject.Title</a>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">—</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-@(issue.Severity == "critical" ? "danger" : "warning")">
-                                                    @issue.Severity.ToUpper()
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-@(issue.Status == "open" ? "primary" : issue.Status == "in_progress" ? "info" : issue.Status == "blocked" ? "danger" : "secondary")">
-                                                    @issue.Status.Replace("_", " ")
-                                                </span>
-                                            </td>
-                                            <td>
-                                                @if (issue.TargetResolutionDate.HasValue)
-                                                {
-                                                    var isOverdue = issue.TargetResolutionDate.Value < DateTime.Today;
-                                                    <span class="@(isOverdue ? "text-danger" : "text-muted")">
-                                                        @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                                        @if (isOverdue && issue.Status != "resolved" && issue.Status != "closed")
-                                                        {
-                                                            <i class="fas fa-exclamation-triangle"></i>
-                                                        }
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- All My Projects -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">All My Projects (@myProjects.Count)</h3>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
-                            <thead>
-                                <tr>
-                                    <th>Project</th>
-                                    <th>RAG Status</th>
-                                    <th>Phase</th>
-                                    <th>Milestones</th>
-                                    <th>Issues</th>
-                                    <th>Products</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var project in myProjects)
+                                @if (!leadershipRows.Any())
                                 {
-                                    var projectMilestones = project.Milestones?.Where(m => !m.IsDeleted).ToList() ?? new List<Compass.Models.Milestone>();
-                                    var projectIssues = project.Issues?.Where(i => !i.IsDeleted).ToList() ?? new List<Compass.Models.Issue>();
-                                    var projectProducts = project.ProjectProducts?.ToList() ?? new List<Compass.Models.ProjectProduct>();
-                                    var overdueMilestoneCount = projectMilestones.Count(m => m.DueDate < DateTime.Today && m.Status != "complete");
-                                    var openIssueCount = projectIssues.Count(i => i.Status != "resolved" && i.Status != "closed");
-                                    
-                                    <tr>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
-                                                <strong>@project.Title</strong>
-                                            </a><br>
-                                            <small class="text-muted">@project.ProjectCode</small>
-                                        </td>
-                                        <td>
-                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                        </td>
-                                        <td>@(project.Phase ?? "Not set")</td>
-                                        <td>
-                                            <span class="@(overdueMilestoneCount > 0 ? "text-danger" : "")">
-                                                @projectMilestones.Count
-                                                @if (overdueMilestoneCount > 0)
-                                                {
-                                                    <small>(@overdueMilestoneCount overdue)</small>
-                                                }
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="@(openIssueCount > 0 ? "text-danger" : "")">
-                                                @projectIssues.Count
-                                                @if (openIssueCount > 0)
-                                                {
-                                                    <small>(@openIssueCount open)</small>
-                                                }
-                                            </span>
-                                        </td>
-                                        <td>@projectProducts.Count</td>
-                                    </tr>
+                                    <p class="text-muted mb-0">No live projects found in your business areas.</p>
                                 }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Right Column: Milestones, Recent Activity -->
-            <div class="col-lg-4">
-                <!-- Milestones Due This Week -->
-                @if (milestonesDueThisWeek.Any())
-                {
-                    <div class="card mb-4">
-                        <div class="card-header bg-info text-white">
-                            <h3 class="card-title mb-0">Milestones Due This Week</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="list-group list-group-flush">
-                                @foreach (var milestone in milestonesDueThisWeek.OrderBy(m => m.DueDate))
+                                else
                                 {
-                                    var milestoneProject = myProjects.FirstOrDefault(p => p.Id == milestone.ProjectId);
-                                    <div class="list-group-item px-0 py-2">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">
-                                                    <a href="@Url.Action("Details", "Project", new { id = milestone.ProjectId, tab = "milestones" })">@milestone.Name</a>
-                                                </h6>
-                                                @if (milestoneProject != null)
+                                    <div class="table-responsive">
+                                        <table class="table table-sm static-table mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Project</th>
+                                                    <th scope="col">RAG</th>
+                                                    <th scope="col">Issues</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var project in leadershipRows)
                                                 {
-                                                    <small class="text-muted">@milestoneProject.Title</small>
+                                                    var openIssues = project.Issues?.Count(i => !i.IsDeleted && !string.Equals(i.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
+                                                    <tr>
+                                                        <td>@project.Title</td>
+                                                        <td><span class="badge badge-light">@project.RagStatus</span></td>
+                                                        <td>@openIssues</td>
+                                                    </tr>
                                                 }
-                                            </div>
-                                            <small class="text-muted">@milestone.DueDate.ToString("dd MMM")</small>
-                                        </div>
-                                        @if (milestone.ProgressPercent.HasValue)
-                                        {
-                                            <div class="progress mt-2" style="height: 5px;">
-                                                <div class="progress-bar" role="progressbar" style="width: @milestone.ProgressPercent.Value%"></div>
-                                            </div>
-                                        }
+                                            </tbody>
+                                        </table>
                                     </div>
                                 }
                             </div>
-                        </div>
-                    </div>
-                }
-
-                <!-- Recent Successes -->
-                @if (recentSuccesses.Any())
-                {
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <h3 class="card-title mb-0">Recent Successes</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="list-group list-group-flush">
-                                @foreach (var success in recentSuccesses)
-                                {
-                                    var successProject = myProjects.FirstOrDefault(p => p.Id == success.ProjectId);
-                                    <div class="list-group-item px-0 py-2 border-bottom">
-                                        <p class="mb-1">@success.SuccessDescription</p>
-                                        @if (successProject != null)
-                                        {
-                                            <small class="text-muted">
-                                                <a href="@Url.Action("Details", "Project", new { id = successProject.Id })">@successProject.Title</a>
-                                            </small>
-                                        }
-                                        <br>
-                                        <small class="text-muted">
-                                            @success.RecordedAt.ToString("dd MMM yyyy") • @success.RecordedByName
-                                        </small>
-                                    </div>
-                                }
+                        }
+                        else
+                        {
+                            <div class="leadership-panel h-100 d-flex align-items-center">
+                                <p class="mb-0 text-muted">When a user is given business area responsibility, their leadership overview will appear here.</p>
                             </div>
-                        </div>
+                        }
                     </div>
-                }
+                </div>
             </div>
         </div>
     </div>
 </section>
-
-@functions {
-    string GetRagBadgeClass(string ragStatus)
-    {
-        return ragStatus switch
-        {
-            "Green" => "badge badge-success",
-            "Amber-Green" => "badge badge-info",
-            "Amber" => "badge badge-warning",
-            "Amber-Red" => "badge badge-warning",
-            "Red" => "badge badge-danger",
-            _ => "badge badge-secondary"
-        };
-    }
-}

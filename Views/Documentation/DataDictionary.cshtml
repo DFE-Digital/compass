@@ -16,6 +16,7 @@
     <nav class="documentation-toc">
         <div class="toc-title">Table index</div>
         <nav class="nav">
+            <a class="nav-link" href="#conventions">Conventions</a>
             <a class="nav-link" href="#risks">Risks</a>
             <a class="nav-link" href="#issues">Issues</a>
             <a class="nav-link" href="#actions">Actions</a>
@@ -26,6 +27,7 @@
             <a class="nav-link" href="#users">Users</a>
             <a class="nav-link" href="#reporting">Reporting</a>
             <a class="nav-link" href="#objectives">Objectives</a>
+            <a class="nav-link" href="#usage-examples">Usage examples</a>
         </nav>
     </nav>
 }
@@ -35,6 +37,40 @@
 
 <div class="alert alert-info">
     <p class="mb-0"><i class="fas fa-info-circle"></i> This data dictionary is automatically generated from the Entity Framework Core model and reflects the current database schema.</p>
+</div>
+
+<h2 id="conventions">How to read the data dictionary</h2>
+<p>The tables below follow consistent naming conventions and data governance rules. Use this primer before exploring individual entities.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="h6">Column naming</h3>
+                <ul class="small mb-0">
+                    <li><strong>Primary keys</strong> use <code>Id</code> and auto-increment integers unless stated.</li>
+                    <li><strong>Foreign keys</strong> append <code>Id</code> to the related entity name (for example <code>RiskTierId</code>, <code>ObjectiveId</code>).</li>
+                    <li><strong>Audit fields</strong> appear as <code>CreatedAt</code>, <code>UpdatedAt</code>, and <code>IsDeleted</code> for soft deletes where applicable.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="h6">Data types</h3>
+                <ul class="small mb-0">
+                    <li><strong>VARCHAR</strong> lengths mirror EF Core annotations. Values remain case sensitive.</li>
+                    <li><strong>BOOLEAN</strong> flags are stored as <code>bit</code> in SQL Server and default to false unless stated.</li>
+                    <li><strong>DATETIME</strong> values are persisted in UTC. Application services convert to local time zones at display time.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-secondary">
+    <p class="mb-0"><strong>Tip:</strong> Soft-deleted rows remain in the database with <code>IsDeleted = 1</code>. API endpoints and UI queries filter them automatically, but analysts can include them when producing historical reports.</p>
 </div>
 
 <h2 id="risks">Risks table</h2>
@@ -1277,39 +1313,55 @@
 
                 <hr class="my-4">
 
-                <h2>Database conventions</h2>
-                
-                <h3 class="h5 mt-4">Naming conventions</h3>
-                <ul>
-                    <li><strong>Tables:</strong> Plural nouns in Pascal case (e.g., Risks, Actions)</li>
-                    <li><strong>Columns:</strong> Pascal case (e.g., Title, DueDate)</li>
-                    <li><strong>Primary keys:</strong> Always named <code>Id</code></li>
-                    <li><strong>Foreign keys:</strong> Entity name + "Id" (e.g., ObjectiveId, OwnerUserId)</li>
-                    <li><strong>Junction tables:</strong> Combination of both entity names (e.g., RiskActions)</li>
-                </ul>
+                <h2 id="usage-examples">Usage examples</h2>
 
-                <h3 class="h5 mt-4">Data type conventions</h3>
-                <ul>
-                    <li><strong>INTEGER:</strong> Used for IDs, numeric ratings, percentages</li>
-                    <li><strong>VARCHAR:</strong> Used for titles, names, emails with specified max lengths</li>
-                    <li><strong>TEXT:</strong> Used for descriptions, notes, and long-form content</li>
-                    <li><strong>DATETIME:</strong> Always stored in UTC</li>
-                    <li><strong>BOOLEAN:</strong> Used for flags (IsDeleted, IsActive, etc.)</li>
-                </ul>
+                <h3 class="h5 mt-4">SQL join: risks by type and tier</h3>
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>SELECT r.Id,
+       r.Title,
+       rt.Name  AS RiskType,
+       tier.Name AS RiskTier,
+       r.RiskScore,
+       r.BusinessArea
+FROM   Risks r
+       INNER JOIN RiskRiskTypes rrt ON rrt.RiskId = r.Id
+       INNER JOIN RiskTypes rt ON rt.Id = rrt.RiskTypeId
+       LEFT JOIN RiskTiers tier ON tier.Id = r.RiskTierId
+WHERE  r.IsDeleted = 0
+ORDER BY r.RiskScore DESC;</pre>
+                </div>
+                <p class="small text-muted">This mirrors the API projection, demonstrating how multi-select risk types surface alongside tier data for cross-cutting analysis.</p>
 
-                <h3 class="h5 mt-4">Constraints and validation</h3>
-                <ul>
-                    <li>All primary keys are auto-incremented</li>
-                    <li>Required fields are marked as NOT NULL</li>
-                    <li>Foreign keys include ON DELETE CASCADE or RESTRICT as appropriate</li>
-                    <li>Rating fields have CHECK constraints for valid ranges (1-5)</li>
-                    <li>Email fields have format validation</li>
-                    <li>Status fields use CHECK constraints for valid values</li>
-                </ul>
+                <h3 class="h5 mt-4">SQL join: actions with provenance</h3>
+                <div class="bg-light border rounded p-3 mb-3">
+                    <pre>SELECT a.Id,
+       a.Title,
+       a.Status,
+       src.Name       AS ActionSource,
+       r.Title        AS RelatedRisk,
+       i.Title        AS RelatedIssue,
+       m.Title        AS RelatedMilestone
+FROM   Actions a
+       LEFT JOIN ActionSources src ON src.Id = a.ActionSourceId
+       LEFT JOIN RiskActions ra ON ra.ActionId = a.Id
+       LEFT JOIN Risks r ON r.Id = ra.RiskId
+       LEFT JOIN IssueActions ia ON ia.ActionId = a.Id
+       LEFT JOIN Issues i ON i.Id = ia.IssueId
+       LEFT JOIN MilestoneActions ma ON ma.ActionId = a.Id
+       LEFT JOIN Milestones m ON m.Id = ma.MilestoneId
+WHERE  a.IsDeleted = 0;</pre>
+                </div>
+
+                <h3 class="h5 mt-4">API workflow: build a risk register extract</h3>
+                <ol>
+                    <li>Call <code>GET /api/v1/risks?pageSize=100</code> to fetch risks with embedded classification data.</li>
+                    <li>Call <code>GET /api/v1/actions?status=in_progress</code> to retrieve open mitigations and their <code>ActionSource</code>.</li>
+                    <li>Join both datasets in your reporting tool using risk identifiers to present mitigation progress by theme.</li>
+                </ol>
 
                 <div class="alert alert-primary mt-4">
-                    <h3 class="h6"><i class="fas fa-database"></i> Database access</h3>
-                    <p class="mb-0">Direct database access should be avoided in favour of using the application's API or Entity Framework queries. For reporting or analysis needs, contact the system administrators for appropriate access methods.</p>
+                    <h3 class="h6"><i class="fas fa-chart-bar"></i> Reporting tip</h3>
+                    <p class="mb-0">When consuming the API from Power BI or similar tooling, honour the pagination metadata (<code>totalPages</code>, <code>currentPage</code>) and request data in batches to stay within rate limits.</p>
                 </div>
 
                 <div class="alert alert-success mt-4">

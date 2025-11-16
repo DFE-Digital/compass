@@ -26,309 +26,278 @@
 
 <section class="content">
     <div class="container-fluid">
-     
+        <div class="row">
+            <aside class="col-xl-3 col-lg-4 mb-4">
+                <partial name="_ProductSummarySidebar" model="product" />
+            </aside>
+            <div class="col-xl-9 col-lg-8">
+                @{
+                    var currentReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Due || r.Status == Compass.Models.ReturnStatus.Late).ToList() ?? new List<Compass.Models.ProductReturn>();
+                    var upcomingReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Upcoming).ToList() ?? new List<Compass.Models.ProductReturn>();
+                    var submittedReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Submitted).ToList() ?? new List<Compass.Models.ProductReturn>();
+                }
 
-        @{
-            // Extract business area from category values
-            var businessArea = "";
-            if (product?.CategoryValues != null)
-            {
-                var businessAreaCategory = product.CategoryValues
-                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true);
-                businessArea = businessAreaCategory?.Name ?? "";
-            }
-        }
+                <!-- Current Returns (Due/Late) -->
+                @if (currentReturns.Any())
+                {
+                    <div class="card card-warning">
+                        <div class="card-header">
+                            <h3 class="card-title">Current returns</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th class="col-period" style="width: 30%;">Period</th>
+                                        <th class="col-date" style="width: 25%;">Due date</th>
+                                        <th class="col-status" style="width: 20%;">Status</th>
+                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var return_item in currentReturns)
+                                    {
+                                        // Calculate the due date using the service (3rd working day of the following month)
+                                        var dueDate = ReturnStatusService.GetReturnDueDate(return_item.Year, return_item.Month);
 
-        <div class="row mb-3">
-            <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-12">
-                <div class="callout callout-info">
-                    <h5 class="mb-3">@product.Title</h5>
-                    <div class="mb-2">
-                        <strong>Product ID:</strong> @product.FipsId
-                        @if (!string.IsNullOrEmpty(product.Phase))
-                        {
-                            <span class="mx-3">|</span>
-                            <strong>Phase:</strong> @product.Phase
-                        }
-                        @if (!string.IsNullOrEmpty(businessArea))
-                        {
-                            <span class="mx-3">|</span>
-                            <strong>Business area:</strong> @businessArea
-                        }
-                    </div>
-                    <div class="mt-2">
-                        <a class="link-opacity-75-hover" href="https://find-products-services-test.azurewebsites.net/product/@product.FipsId" target="_blank">View entry in FIPS</a>
-                    </div>
-                </div>
-            </div>
-            
-        </div>
+                                        var totalMetrics = return_item.MetricValues?.Count ?? 0;
+                                        var completedMetrics = return_item.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
 
-        @{
-            var currentReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Due || r.Status == Compass.Models.ReturnStatus.Late).ToList() ?? new List<Compass.Models.ProductReturn>();
-            var upcomingReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Upcoming).ToList() ?? new List<Compass.Models.ProductReturn>();
-            var submittedReturns = Model?.Where(r => r.Status == Compass.Models.ReturnStatus.Submitted).ToList() ?? new List<Compass.Models.ProductReturn>();
-        }
-
-        <!-- Current Returns (Due/Late) -->
-        @if (currentReturns.Any())
-        {
-            <div class="card card-warning">
-                <div class="card-header">
-                    <h3 class="card-title">Current returns</h3>
-                </div>
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap">
-                        <thead>
-                            <tr>
-                                <th class="col-period" style="width: 30%;">Period</th>
-                                <th class="col-date" style="width: 25%;">Due date</th>
-                                <th class="col-status" style="width: 20%;">Status</th>
-                                <th class="col-actions text-right" style="width: 25%;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var return_item in currentReturns)
-                            {
-                                // Calculate the due date using the service (3rd working day of the following month)
-                                var dueDate = ReturnStatusService.GetReturnDueDate(return_item.Year, return_item.Month);
-                                
-                                var totalMetrics = return_item.MetricValues?.Count ?? 0;
-                                var completedMetrics = return_item.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
-                                
-                                <tr>
-                                    <td>
-                                        <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
-                                            @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
-                                        </a>
-                                    </td>
-                                    <td>
-                                        @dueDate.ToString("d MMM yyyy")
-                                    </td>
-                                    <td>
-                                        @switch (return_item.Status)
-                                        {
-                                            case Compass.Models.ReturnStatus.Due:
-                                                <span class="badge badge-warning">Due</span>
-                                                break;
-                                            case Compass.Models.ReturnStatus.Late:
-                                                <span class="badge badge-danger">Late</span>
-                                                break;
-                                        }
-                                    </td>
-                                    <td class="text-right">
-                                        @switch (return_item.Status)
-                                        {
-                                            case Compass.Models.ReturnStatus.Due:
-                                            case Compass.Models.ReturnStatus.Late:
-                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-primary">
-                                                    Complete return
-                                                </a>
-                                                break;
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        }
-
-        <!-- Upcoming Returns -->
-        @if (upcomingReturns.Any())
-        {
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">Upcoming returns</h3>
-                </div>
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap">
-                        <thead>
-                            <tr>
-                                <th class="col-period" style="width: 30%;">Period</th>
-                                <th class="col-date" style="width: 25%;">Due date</th>
-                                <th class="col-status" style="width: 20%;">Status</th>
-                                <th class="col-actions text-right" style="width: 25%;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var return_item in upcomingReturns)
-                            {
-                                // Calculate the due date using the service (3rd working day of the following month)
-                                var dueDate = ReturnStatusService.GetReturnDueDate(return_item.Year, return_item.Month);
-                                
-                                <tr>
-                                    <td>
-                                        <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
-                                            @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
-                                        </a>
-                                    </td>
-                                    <td>
-                                        @dueDate.ToString("d MMM yyyy")
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-secondary">Upcoming</span>
-                                    </td>
-                                    <td class="text-right">
-                                        <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-outline-primary">
-                                            View
-                                        </a>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        }
-
-        <!-- Submitted Returns -->
-        @if (submittedReturns.Any())
-        {
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">Submitted returns</h3>
-                </div>
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap">
-                        <thead>
-                            <tr>
-                                <th class="col-period" style="width: 30%;">Period</th>
-                                <th class="col-date" style="width: 25%;">Submitted</th>
-                                <th class="col-status" style="width: 20%;">Status</th>
-                                <th class="col-actions text-right" style="width: 25%;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var return_item in submittedReturns)
-                            {
-                                <tr>
-                                    <td>
-                                        <a href="#" class="font-weight-bold" data-toggle="modal" data-target="#viewModal_@return_item.Id">
-                                            @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
-                                        </a>
-                                    </td>
-                                    <td>
-                                        <span>@return_item.SubmittedDate.Value.ToString("d MMM yyyy HH:mm")</span>
-                                        <br />
-                                        <small class="text-muted">by @return_item.SubmittedBy</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-success">Submitted</span>
-                                    </td>
-                                    <td class="text-right">
-                                        <button type="button" class="btn btn-sm btn-warning" data-toggle="modal" data-target="#unsubmitModal_@return_item.Id">
-                                            Unsubmit
-                                        </button>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Unsubmit Confirmation Modal -->
-                                <div class="modal fade" id="unsubmitModal_@return_item.Id" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog" role="document">
-                                        <div class="modal-content">
-                                            <div class="modal-header bg-warning">
-                                                <h5 class="modal-title">Unsubmit return</h5>
-                                                <button type="button" class="close" data-dismiss="modal">
-                                                    <span>&times;</span>
-                                                </button>
-                                            </div>
-                                            <div class="modal-body text-left">
-                                                <p>Are you sure you want to unsubmit the return for <strong>@(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))</strong>?</p>
-                                                <p class="text-warning">This will make the return available for editing again.</p>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                                                <form asp-action="UnsubmitReturn" method="post" class="d-inline">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="returnId" value="@return_item.Id" />
-                                                    <button type="submit" class="btn btn-warning">
-                                                        Unsubmit return
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Modals for viewing submitted returns -->
-            @foreach (var return_item in submittedReturns)
-            {
-                <div class="modal fade" id="viewModal_@return_item.Id" tabindex="-1" role="dialog" aria-labelledby="viewModalLabel_@return_item.Id" aria-hidden="true">
-                    <div class="modal-dialog modal-lg" role="document">
-                        <div class="modal-content">
-                            <div class="modal-header bg-success">
-                                <h5 class="modal-title" id="viewModalLabel_@return_item.Id">
-                                    Submitted metrics - @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
-                                </h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <strong>Submitted:</strong> @return_item.SubmittedDate.Value.ToString("d MMM yyyy HH:mm")<br/>
-                                    <strong>By:</strong> @return_item.SubmittedBy
-                                </div>
-                                
-                                <table class="table table-sm table-bordered">
-                                    <thead>
                                         <tr>
-                                            <th>Identifier</th>
-                                            <th>Metric</th>
-                                            <th>Value</th>
+                                            <td>
+                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
+                                                    @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
+                                                </a>
+                                            </td>
+                                            <td>
+                                                @dueDate.ToString("d MMMM yyyy")
+                                            </td>
+                                            <td>
+                                                @switch (return_item.Status)
+                                                {
+                                                    case Compass.Models.ReturnStatus.Due:
+                                                        <span class="badge badge-warning">Due</span>
+                                                        break;
+                                                    case Compass.Models.ReturnStatus.Late:
+                                                        <span class="badge badge-danger">Late</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td class="text-right">
+                                                @switch (return_item.Status)
+                                                {
+                                                    case Compass.Models.ReturnStatus.Due:
+                                                    case Compass.Models.ReturnStatus.Late:
+                                                        <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-primary">
+                                                            Complete return
+                                                        </a>
+                                                        break;
+                                                }
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        @if (return_item.MetricValues != null && return_item.MetricValues.Any())
-                                        {
-                                            @foreach (var metricValue in return_item.MetricValues.OrderBy(mv => mv.PerformanceMetric?.Identifier))
-                                            {
-                                                <tr>
-                                                    <td><strong>@metricValue.PerformanceMetric?.Identifier</strong></td>
-                                                    <td>
-                                                        @metricValue.PerformanceMetric?.Title
-                                                        @if (!string.IsNullOrEmpty(metricValue.PerformanceMetric?.Description))
-                                                        {
-                                                            <br/><small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (!string.IsNullOrEmpty(metricValue.Value))
-                                                        {
-                                                            <strong>@metricValue.Value</strong>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">-</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <tr>
-                                                <td colspan="3" class="text-center text-muted">No metrics found</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                            </div>
+                                    }
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
-            }
-        }
+                }
+
+                <!-- Upcoming Returns -->
+                @if (upcomingReturns.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Upcoming returns</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th class="col-period" style="width: 30%;">Period</th>
+                                        <th class="col-date" style="width: 25%;">Due date</th>
+                                        <th class="col-status" style="width: 20%;">Status</th>
+                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var return_item in upcomingReturns)
+                                    {
+                                        // Calculate the due date using the service (3rd working day of the following month)
+                                        var dueDate = ReturnStatusService.GetReturnDueDate(return_item.Year, return_item.Month);
+
+                                        <tr>
+                                            <td>
+                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="font-weight-bold">
+                                                    @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
+                                                </a>
+                                            </td>
+                                            <td>
+                                                @dueDate.ToString("d MMMM yyyy")
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">Upcoming</span>
+                                            </td>
+                                            <td class="text-right">
+                                                <a asp-action="SubmitMetrics" asp-route-fipsId="@return_item.FipsId" asp-route-year="@return_item.Year" asp-route-month="@return_item.Month" class="btn btn-sm btn-outline-primary">
+                                                    View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Submitted Returns -->
+                @if (submittedReturns.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Submitted returns</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th class="col-period" style="width: 30%;">Period</th>
+                                        <th class="col-date" style="width: 25%;">Submitted</th>
+                                        <th class="col-status" style="width: 20%;">Status</th>
+                                        <th class="col-actions text-right" style="width: 25%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var return_item in submittedReturns)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="#" class="font-weight-bold" data-toggle="modal" data-target="#viewModal_@return_item.Id">
+                                                    @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span>@return_item.SubmittedDate.Value.ToString("d MMM yyyy HH:mm")</span>
+                                                <br />
+                                                <small class="text-muted">by @return_item.SubmittedBy</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-success">Submitted</span>
+                                            </td>
+                                            <td class="text-right">
+                                                <button type="button" class="btn btn-sm btn-warning" data-toggle="modal" data-target="#unsubmitModal_@return_item.Id">
+                                                    Unsubmit
+                                                </button>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Unsubmit Confirmation Modal -->
+                                        <div class="modal fade" id="unsubmitModal_@return_item.Id" tabindex="-1" role="dialog">
+                                            <div class="modal-dialog" role="document">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-warning">
+                                                        <h5 class="modal-title">Unsubmit return</h5>
+                                                        <button type="button" class="close" data-dismiss="modal">
+                                                            <span>&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body text-left">
+                                                        <p>Are you sure you want to unsubmit the return for <strong>@(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))</strong>?</p>
+                                                        <p class="text-warning">This will make the return available for editing again.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                                        <form asp-action="UnsubmitReturn" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="returnId" value="@return_item.Id" />
+                                                            <button type="submit" class="btn btn-warning">
+                                                                Unsubmit return
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Modals for viewing submitted returns -->
+                    @foreach (var return_item in submittedReturns)
+                    {
+                        <div class="modal fade" id="viewModal_@return_item.Id" tabindex="-1" role="dialog" aria-labelledby="viewModalLabel_@return_item.Id" aria-hidden="true">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-success">
+                                        <h5 class="modal-title" id="viewModalLabel_@return_item.Id">
+                                            Submitted metrics - @(new DateTime(return_item.Year, return_item.Month, 1).ToString("MMMM yyyy"))
+                                        </h5>
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <strong>Submitted:</strong> @return_item.SubmittedDate.Value.ToString("d MMM yyyy HH:mm")<br/>
+                                            <strong>By:</strong> @return_item.SubmittedBy
+                                        </div>
+
+                                        <table class="table table-sm table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Identifier</th>
+                                                    <th>Metric</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (return_item.MetricValues != null && return_item.MetricValues.Any())
+                                                {
+                                                    @foreach (var metricValue in return_item.MetricValues.OrderBy(mv => mv.PerformanceMetric?.Identifier))
+                                                    {
+                                                        <tr>
+                                                            <td><strong>@metricValue.PerformanceMetric?.Identifier</strong></td>
+                                                            <td>
+                                                                @metricValue.PerformanceMetric?.Title
+                                                                @if (!string.IsNullOrEmpty(metricValue.PerformanceMetric?.Description))
+                                                                {
+                                                                    <br/><small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (!string.IsNullOrEmpty(metricValue.Value))
+                                                                {
+                                                                    <strong>@metricValue.Value</strong>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <tr>
+                                                        <td colspan="3" class="text-center text-muted">No metrics found</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
     </div>
 </section>
 

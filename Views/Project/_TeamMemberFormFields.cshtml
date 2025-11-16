@@ -1,0 +1,97 @@
+@model Compass.ViewModels.ProjectTeamMemberFormViewModel
+
+<input asp-for="Input.ProjectId" type="hidden" />
+<input asp-for="Input.TeamMemberId" type="hidden" />
+
+<div class="form-group">
+    <label class="control-label" for="teamMemberSearch">
+        Team member <span class="text-danger">*</span>
+    </label>
+    <small class="form-text text-muted">Search for a colleague using their name or email address. Their directory name and email are synced automatically.</small>
+    <div class="user-picker"
+         data-user-picker
+         data-search-url="/api/users/search"
+         data-select-url="/api/users/select">
+        <div class="position-relative">
+            <input type="text"
+                   class="form-control js-user-picker-input @(ViewData.ModelState["Input.UserId"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)"
+                   id="teamMemberSearch"
+                   autocomplete="off"
+                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                   value="@(Model.SelectedUserName ?? string.Empty)" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="form-text text-muted js-user-picker-message"></p>
+        <input asp-for="Input.UserId" type="hidden" class="js-user-picker-value" />
+        <div class="user-picker__selected js-user-picker-summary" data-default-text="No team member selected.">
+            @if (!string.IsNullOrWhiteSpace(Model.SelectedUserName))
+            {
+                <div class="user-picker__selected-card">
+                    <div class="user-picker__selected-name">@Model.SelectedUserName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.SelectedUserEmail))
+                    {
+                        <div class="user-picker__selected-meta">@Model.SelectedUserEmail</div>
+                    }
+                    <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                </div>
+            }
+            else
+            {
+                <span class="text-muted">No team member selected.</span>
+            }
+        </div>
+    </div>
+    <span asp-validation-for="Input.UserId" class="form-error-message"></span>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Role" class="control-label">
+        Role <span class="text-danger">*</span>
+    </label>
+    <input asp-for="Input.Role" class="form-control @(ViewData.ModelState["Input.Role"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" placeholder="e.g. Delivery manager, Product manager" />
+    <span asp-validation-for="Input.Role" class="form-error-message"></span>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.FundingArrangement" class="control-label">
+        How is this role funded? <span class="text-danger">*</span>
+    </label>
+    <input asp-for="Input.FundingArrangement" class="form-control @(ViewData.ModelState["Input.FundingArrangement"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" placeholder="Programme, admin, other funding details" />
+    <span asp-validation-for="Input.FundingArrangement" class="form-error-message"></span>
+</div>
+
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label asp-for="Input.EmploymentType" class="control-label">
+            Engagement type <span class="text-danger">*</span>
+        </label>
+        <select asp-for="Input.EmploymentType"
+                class="form-control @(ViewData.ModelState["Input.EmploymentType"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)"
+                asp-items="Model.EmploymentTypeOptions">
+        </select>
+        <span asp-validation-for="Input.EmploymentType" class="form-error-message"></span>
+    </div>
+    <div class="form-group col-md-6">
+        <label asp-for="Input.TeamStatus" class="control-label">
+            Status on team <span class="text-danger">*</span>
+        </label>
+        <select asp-for="Input.TeamStatus"
+                class="form-control js-team-status @(ViewData.ModelState["Input.TeamStatus"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)"
+                asp-items="Model.TeamStatusOptions">
+        </select>
+        <span asp-validation-for="Input.TeamStatus" class="form-error-message"></span>
+    </div>
+</div>
+
+<div class="form-group @(ViewData.ModelState["Input.LeaveReason"]?.Errors?.Any() == true ? "form-group--error" : string.Empty)"
+     id="leaveReasonGroup"
+     style="display:@(string.Equals(Model.Input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? "block" : "none");">
+    <label asp-for="Input.LeaveReason" class="control-label">
+        Reason for leaving <span class="text-danger">*</span>
+    </label>
+    <small class="form-text text-muted">Tell us why this person is no longer on the team.</small>
+    <textarea asp-for="Input.LeaveReason" class="form-control @(ViewData.ModelState["Input.LeaveReason"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" rows="3"></textarea>
+    <span asp-validation-for="Input.LeaveReason" class="form-error-message"></span>
+</div>
+

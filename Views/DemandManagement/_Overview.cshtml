@@ -1,0 +1,293 @@
+@model Compass.ViewModels.DemandManagement.DemandSectionDetailViewModel
+@using System.Linq
+
+@functions {
+    string GetStatusBadgeClass(string? status) => status switch
+    {
+        "Draft" => "badge badge-secondary",
+        "Submitted" => "badge badge-info",
+        "Explore" => "badge badge-info",
+        "Prioritisation" => "badge badge-primary",
+        "Triage" => "badge badge-warning",
+        "Delivery" => "badge badge-success",
+        "Run" => "badge badge-success",
+        "Approved" => "badge badge-success",
+        "Deferred" => "badge badge-secondary",
+        "Rejected" => "badge badge-danger",
+        _ => "badge badge-light"
+    };
+}
+
+@{
+    var request = Model.Request;
+    var status = Model.Status;
+    var businessAreas = Model.BusinessAreas ?? Enumerable.Empty<string>();
+}
+
+<div class="card mb-4 demand-overview-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Overview</h3>
+    </div>
+    <div class="card-body">
+        <dl class="definition-list">
+            <div class="definition-item">
+                <dt>Title</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.ProposedTitle) ? "Untitled" : request.ProposedTitle)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#overview-title-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Reference</dt>
+                <dd>
+                    <div class="definition-value">@request.ReferenceNumber</div>
+                    <div class="definition-actions text-muted small">Auto-generated</div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Business area</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Not specified" : request.BusinessArea)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#overview-business-area-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Requestor</dt>
+                <dd>
+                    <div class="definition-value">
+                        <a href="mailto:@request.ApplicantEmail" class="font-weight-semibold">@request.ApplicantName</a>
+                        <div class="text-muted small">@request.ApplicantEmail</div>
+                    </div>
+                    <div class="definition-actions text-muted small">Managed via profile</div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Senior responsible officer</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.SeniorResponsibleOfficer) ? "Not provided" : request.SeniorResponsibleOfficer)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#overview-sro-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Status</dt>
+                <dd>
+                    <div class="definition-value">
+                        <span class="@GetStatusBadgeClass(request.Status)">@(!string.IsNullOrWhiteSpace(request.Status) ? request.Status : "Not set")</span>
+                        @if (ViewBag.DemandStageName is string stageName && !string.IsNullOrWhiteSpace(stageName))
+                        {
+                            <div class="text-muted small mt-1">@stageName</div>
+                        }
+                        @if (ViewBag.DemandStageSummary is string stageSummary && !string.IsNullOrWhiteSpace(stageSummary))
+                        {
+                            <div class="text-muted small">@stageSummary</div>
+                        }
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#updateStatusModal">Change status</button>
+                    </div>
+                </dd>
+            </div>
+
+            @if (request.Prioritisation != null)
+            {
+                <div class="definition-item">
+                    <dt>Priority</dt>
+                    <dd>
+                        <div class="definition-value">
+                            <strong>@request.Prioritisation.TotalPriorityScore</strong><span class="text-muted"> / 100</span>
+                            <div class="text-muted small">@request.Prioritisation.PriorityTier</div>
+                        </div>
+                        <div class="definition-actions">
+                            <a asp-action="ScoreRequest" asp-route-id="@request.Id" class="btn btn-link btn-sm p-0">Update score</a>
+                        </div>
+                    </dd>
+                </div>
+            }
+
+            <div class="definition-item">
+                <dt>Created</dt>
+                <dd>
+                    <div class="definition-value">@request.CreatedAt.ToString("dd MMM yyyy HH:mm")</div>
+                    <div class="definition-actions text-muted small">System generated</div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Submitted</dt>
+                <dd>
+                    <div class="definition-value">@(request.SubmittedAt.HasValue ? request.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm") : "Not submitted")</div>
+                    <div class="definition-actions">
+                        @if (!request.SubmittedAt.HasValue)
+                        {
+                            <a asp-action="Edit" asp-route-id="@request.Id" class="btn btn-link btn-sm p-0">Submit now</a>
+                        }
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Next review</dt>
+                <dd>
+                    <div class="definition-value">@(request.NextReviewDate.HasValue ? request.NextReviewDate.Value.ToString("dd MMM yyyy") : "Not scheduled")</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#updateStatusModal">Schedule</button>
+                    </div>
+                </dd>
+            </div>
+
+            @if (request.Contacts != null && request.Contacts.Any())
+            {
+                var previewContacts = request.Contacts.Take(3).ToList();
+                <div class="definition-item">
+                    <dt>Points of contact</dt>
+                    <dd>
+                        <div class="definition-value">
+                            <ul class="mb-0 pl-3">
+                                @foreach (var contact in previewContacts)
+                                {
+                                    <li>
+                                        @if (!string.IsNullOrWhiteSpace(contact.Email))
+                                        {
+                                            <a href="mailto:@contact.Email" class="font-weight-semibold">@contact.Name</a>
+                                            <div class="text-muted small">@contact.Email</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="font-weight-semibold">@contact.Name</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(contact.Role))
+                                        {
+                                            <div class="text-muted small">@contact.Role</div>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                        <div class="definition-actions">
+                            <a asp-action="Edit" asp-route-id="@request.Id" class="btn btn-link btn-sm p-0">Manage</a>
+                        </div>
+                    </dd>
+                </div>
+            }
+        </dl>
+    </div>
+</div>
+
+<!-- Title modal -->
+<div class="modal fade" id="overview-title-modal" tabindex="-1" role="dialog" aria-labelledby="overview-title-label" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="overview-title-label">Update request title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="Overview" />
+                <input type="hidden" name="fieldKey" value="Title" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="overview-title-input">Request title</label>
+                        <input type="text"
+                               id="overview-title-input"
+                               name="stringValue"
+                               class="form-control"
+                               value="@request.ProposedTitle"
+                               maxlength="120"
+                               required />
+                        <small class="form-text text-muted">120 characters maximum.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Business area modal -->
+<div class="modal fade" id="overview-business-area-modal" tabindex="-1" role="dialog" aria-labelledby="overview-business-area-label" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="overview-business-area-label">Update business area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="Overview" />
+                <input type="hidden" name="fieldKey" value="BusinessArea" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="overview-business-area-select">Business area</label>
+                        <select id="overview-business-area-select" name="stringValue" class="form-control" required>
+                            <option value="">Select a business area</option>
+                            @foreach (var area in businessAreas)
+                            {
+                                <option value="@area" selected="@(string.Equals(area, request.BusinessArea, StringComparison.OrdinalIgnoreCase))">@area</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Senior responsible officer modal -->
+<div class="modal fade" id="overview-sro-modal" tabindex="-1" role="dialog" aria-labelledby="overview-sro-label" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="overview-sro-label">Update senior responsible officer</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="Overview" />
+                <input type="hidden" name="fieldKey" value="SeniorResponsibleOfficer" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="overview-sro-input">Senior responsible officer (G6+)</label>
+                        <input type="text"
+                               id="overview-sro-input"
+                               name="stringValue"
+                               class="form-control"
+                               value="@request.SeniorResponsibleOfficer"
+                               required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

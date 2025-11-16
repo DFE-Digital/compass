@@ -3,7 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Compass.Models;
 using Compass.Services;
 using Compass.Helpers;
+using Compass.ViewModels;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Compass.Controllers
 {
@@ -19,6 +23,101 @@ namespace Compass.Controllers
             _standardsCmsApiService = standardsCmsApiService;
             _logger = logger;
             _configuration = configuration;
+        }
+
+        // GET: Standard
+        public IActionResult Index()
+        {
+            var sections = new List<StandardLandingSectionViewModel>
+            {
+                new()
+                {
+                    Key = "Published",
+                    Title = "Published DDT standards",
+                    Subtitle = "Fully assured and ready to reference",
+                    Description = "Browse the definitive list of DfE digital, data and technology standards that have cleared the full assurance process.",
+                    IconClass = "fas fa-check-circle",
+                    Highlights = new[]
+                    {
+                        "Search and filter every published standard",
+                        "View categories, stage and publishing metadata",
+                        "Drill into detailed context, rationale and evidence"
+                    },
+                    ActionText = "Browse published standards",
+                    ActionUrl = Url.Action(nameof(Published), "Standard") ?? string.Empty,
+                    ActionAriaLabel = "Browse published DDT standards"
+                },
+                new()
+                {
+                    Key = "Draft",
+                    Title = "Draft DDT standards",
+                    Subtitle = "Work in progress in the CMS",
+                    Description = "Keep track of standards still going through peer review, consultation or approvals before they are published.",
+                    IconClass = "fas fa-file-pen",
+                    Highlights = new[]
+                    {
+                        "See everything currently in drafting or review",
+                        "Filter by category, stage or owner",
+                        "Pick up actions to keep drafts moving"
+                    },
+                    ActionText = "Review draft standards",
+                    ActionUrl = Url.Action(nameof(Draft), "Standard") ?? string.Empty,
+                    ActionAriaLabel = "Review draft DDT standards"
+                },
+                new()
+                {
+                    Key = "Create",
+                    Title = "Create a DDT standard",
+                    Subtitle = "Start a new entry in Strapi",
+                    Description = "Jump straight into the authoring experience with the latest template, governance questions and metadata requirements.",
+                    IconClass = "fas fa-plus-circle",
+                    Highlights = new[]
+                    {
+                        "Use the standardised template and workflow",
+                        "Track progress from Compass once saved",
+                        "Keep drafts aligned with assurance expectations"
+                    },
+                    ActionText = "Create a new standard",
+                    ActionUrl = Url.Action(nameof(Create), "Standard") ?? string.Empty,
+                    ActionAriaLabel = "Create a new DDT standard in the CMS"
+                },
+                new()
+                {
+                    Key = "Service",
+                    Title = "Service standards view",
+                    Subtitle = "Curated for service teams",
+                    Description = "Filter the catalogue to just the items that apply to service design and delivery, including GOV.UK Service Standard alignment.",
+                    IconClass = "fas fa-seedling",
+                    Highlights = new[]
+                    {
+                        "Focus on service-aligned categories and stages",
+                        "Share a tailored list with multidisciplinary teams",
+                        "Export the subset for assurance packs"
+                    },
+                    ActionText = "Explore service standards",
+                    ActionUrl = Url.Action(nameof(Service), "Standard") ?? string.Empty,
+                    ActionAriaLabel = "Explore service standards"
+                },
+                new()
+                {
+                    Key = "Functional",
+                    Title = "Functional standards assessments",
+                    Subtitle = "Plan, run and review assessments",
+                    Description = "Access the Cabinet Office functional standards held in Compass, including themes, practice areas and assessment tooling.",
+                    IconClass = "fas fa-clipboard-check",
+                    Highlights = new[]
+                    {
+                        "Launch the functional standards workspace",
+                        "Track assessment submissions and evidence",
+                        "Review themes, practice areas and criteria"
+                    },
+                    ActionText = "Open functional standards",
+                    ActionUrl = Url.Action("FunctionalStandards", "EnterpriseReporting") ?? string.Empty,
+                    ActionAriaLabel = "Open the functional standards assessment workspace"
+                }
+            };
+
+            return View(sections);
         }
 
         // GET: Standard/Published
@@ -151,6 +250,72 @@ namespace Compass.Controllers
                 return RedirectToAction("Published");
             }
         }
+        public async Task<IActionResult> Service(string search, string category, string stage)
+        {
+            try
+            {
+                var standards = await _standardsCmsApiService.GetStandardsAsync(
+                    published: true,
+                    search: search,
+                    cacheDuration: TimeSpan.FromMinutes(5)
+                );
+
+                var serviceStandards = standards
+                    .Where(s =>
+                        (s.Categories?.Any(c =>
+                            c.Title.Contains("GV", StringComparison.OrdinalIgnoreCase) ||
+                            c.Title.Contains("Service", StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                        (s.Stage?.Title?.Contains("Service", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (!string.IsNullOrWhiteSpace(s.Title) && s.Title.Contains("Service Standard", StringComparison.OrdinalIgnoreCase))
+                    )
+                    .ToList();
+
+                if (!string.IsNullOrWhiteSpace(category))
+                {
+                    serviceStandards = serviceStandards
+                        .Where(s => s.Categories?.Any(c => string.Equals(c.Title, category, StringComparison.OrdinalIgnoreCase)) == true)
+                        .ToList();
+                }
+
+                if (!string.IsNullOrWhiteSpace(stage))
+                {
+                    serviceStandards = serviceStandards
+                        .Where(s => s.Stage != null && string.Equals(s.Stage.Title, stage, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+
+                var categories = serviceStandards
+                    .SelectMany(s => s.Categories ?? new List<StandardCategoryDto>())
+                    .Select(c => c.Title)
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var stages = serviceStandards
+                    .Where(s => s.Stage != null && !string.IsNullOrWhiteSpace(s.Stage.Title))
+                    .Select(s => s.Stage!.Title)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                ViewBag.CurrentSearch = search;
+                ViewBag.CurrentCategory = category;
+                ViewBag.CurrentStage = stage;
+                ViewBag.Categories = categories;
+                ViewBag.Stages = stages;
+                ViewBag.TotalResults = serviceStandards.Count;
+
+                return View(serviceStandards);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading service standards");
+                TempData["ErrorMessage"] = "An error occurred while loading service standards.";
+                return View(new List<StandardDto>());
+            }
+        }
+
     }
 }
 

@@ -1,0 +1,132 @@
+@model List<Compass.Models.ProductDto>
+@{
+    ViewData["Title"] = "Report for another product";
+    var currentYear = ViewBag.CurrentYear as int? ?? DateTime.UtcNow.Year;
+    var currentMonth = ViewBag.CurrentMonth as int? ?? DateTime.UtcNow.Month;
+    var periodDate = new DateTime(currentYear, currentMonth, 1);
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="PerformanceMetrics">Performance reporting</a></li>
+                    <li class="breadcrumb-item active">Report for another product</li>
+                </ol>
+                <h1 class="m-0">Report for another product</h1>
+                <p class="text-muted mb-0">Select a product you're covering or recently joined</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>Reporting period:</strong> @periodDate.ToString("MMMM yyyy")
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Select a product</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
+                {
+                    <div class="form-group">
+                        <label for="productSearch">Search for product</label>
+                        <input type="text" id="productSearch" class="form-control form-control-lg" placeholder="Type to search by product name or FIPS ID..." />
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="productsTable">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>FIPS ID</th>
+                                    <th>Phase</th>
+                                    <th>Business area</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model)
+                                {
+                                    var businessArea = product.CategoryValues?
+                                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                                        ?.Name;
+                                    
+                                    <tr class="product-row" data-search="@product.Title.ToLower() @product.FipsId?.ToLower()">
+                                        <td><strong>@product.Title</strong></td>
+                                        <td><code>@product.FipsId</code></td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(product.Phase))
+                                            {
+                                                <span class="badge badge-info">@product.Phase</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(businessArea))
+                                            {
+                                                @businessArea
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-chart-line mr-1"></i>View reporting
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        No products are currently eligible for reporting in @periodDate.ToString("MMMM yyyy"). This may be because the period is excluded or all products are individually excluded.
+                    </div>
+                }
+            </div>
+            <div class="card-footer">
+                <a asp-action="PerformanceMetrics" class="btn btn-default">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to your products
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Product search functionality
+            $('#productSearch').on('keyup', function() {
+                var searchValue = $(this).val().toLowerCase();
+                
+                $('.product-row').each(function() {
+                    var searchData = $(this).data('search');
+                    if (searchData.indexOf(searchValue) > -1) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            });
+        });
+    </script>
+}
+

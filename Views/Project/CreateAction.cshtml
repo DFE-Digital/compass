@@ -1,0 +1,118 @@
+@model Compass.ViewModels.ProjectActionFormViewModel
+
+@{
+    ViewData["Title"] = "Add action";
+    var projectDetailsUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "actions" });
+
+    Func<string, string> normaliseKey = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = key;
+        var bracketIndex = trimmed.IndexOf('[');
+        if (bracketIndex >= 0)
+        {
+            trimmed = trimmed.Substring(0, bracketIndex);
+        }
+
+        var segments = trimmed.Split('.', System.StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : trimmed;
+    };
+
+    var fieldIdLookup = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+    {
+        ["Title"] = Html.IdFor(m => m.Input.Title),
+        ["Description"] = Html.IdFor(m => m.Input.Description),
+        ["StatusId"] = Html.IdFor(m => m.Input.StatusId),
+        ["PriorityId"] = Html.IdFor(m => m.Input.PriorityId)
+    };
+
+    var modelErrors = ViewData.ModelState
+        .Where(kvp => kvp.Value?.Errors?.Any() == true)
+        .Select(kvp => new
+        {
+            Key = normaliseKey(kvp.Key),
+            Errors = kvp.Value!.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToList()
+        })
+        .Where(entry => entry.Errors.Any())
+        .ToList();
+
+    var hasModelErrors = modelErrors.Any();
+    var errorSummaryClasses = hasModelErrors ? "card error-summary mb-3" : "card error-summary d-none mb-3";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@projectDetailsUrl" aria-label="Back to project">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                </a>
+                <h1 class="m-0">Add action</h1>
+                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <aside class="col-xl-2 col-lg-4 mb-4">
+                <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
+            </aside>
+            <div class="col-xl-9 col-lg-8">
+                <form asp-action="AddAction" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <div id="action-create-error-summary"
+                         class="@errorSummaryClasses"
+                         role="alert"
+                         aria-labelledby="error-summary-title"
+                         @(hasModelErrors ? "tabindex=\"-1\" aria-hidden=\"false\"" : "aria-hidden=\"true\"")
+                         data-module="error-summary">
+                        <div class="card-body">
+                            <h2 id="error-summary-title" class="error-summary__title">There is a problem</h2>
+                            <ul class="error-summary__list">
+                                @if (hasModelErrors)
+                                {
+                                    foreach (var entry in modelErrors)
+                                    {
+                                        string fieldId = string.Empty;
+                                        var hasLink = !string.IsNullOrWhiteSpace(entry.Key) && fieldIdLookup.TryGetValue(entry.Key, out fieldId);
+
+                                        foreach (var message in entry.Errors)
+                                        {
+                                            if (hasLink)
+                                            {
+                                                <li><a href="#@fieldId">@message</a></li>
+                                            }
+                                            else
+                                            {
+                                                <li>@message</li>
+                                            }
+                                        }
+                                    }
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Action details</h3>
+                        </div>
+                        <div class="card-body">
+                            <partial name="_ActionFormFields" model="Model" />
+                        </div>
+                        <div class="card-footer d-flex align-items-center">
+                            <button type="submit" class="btn btn-primary mr-3">Save action</button>
+                            <a class="btn btn-outline-secondary" href="@projectDetailsUrl">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>

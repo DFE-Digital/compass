@@ -1,0 +1,184 @@
+@using System.Globalization
+@model Compass.Models.Project
+
+@{
+    var risks = Model.Risks?
+        .Where(r => !r.IsDeleted)
+        .OrderByDescending(r => r.NextReviewDate ?? r.IdentifiedDate ?? r.CreatedAt)
+        .ToList() ?? new List<Compass.Models.Risk>();
+
+    var textInfo = CultureInfo.InvariantCulture.TextInfo;
+    var returnUrl = Url.Action("Details", "Project", new { id = Model.Id, tab = "risks" });
+
+    string FormatText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not set";
+        }
+
+        return textInfo.ToTitleCase(value.Replace("_", " "));
+    }
+
+    string ResolveStatusClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "badge-secondary";
+        }
+
+        status = status.ToLowerInvariant();
+        return status switch
+        {
+            "closed" or "resolved" => "badge-success",
+            "mitigated" or "monitoring" => "badge-primary",
+            "escalated" or "blocked" => "badge-danger",
+            "at_risk" or "watching" => "badge-warning",
+            _ => "badge-secondary"
+        };
+    }
+
+    string GetStatusLabel(Compass.Models.Risk risk)
+    {
+        if (!string.IsNullOrWhiteSpace(risk.RiskStatus?.Label))
+        {
+            return risk.RiskStatus.Label;
+        }
+
+        return FormatText(risk.Status);
+    }
+
+    string GetOwner(Compass.Models.Risk risk)
+    {
+        if (!string.IsNullOrWhiteSpace(risk.OwnerUser?.Name))
+        {
+            return risk.OwnerUser.Name;
+        }
+
+        if (!string.IsNullOrWhiteSpace(risk.OwnerEmail))
+        {
+            return risk.OwnerEmail;
+        }
+
+        return "Not assigned";
+    }
+
+    string GetScore(Compass.Models.Risk risk)
+    {
+        if (risk.InherentScore.HasValue)
+        {
+            return risk.InherentScore.Value.ToString("0.#");
+        }
+
+        if (risk.RiskScore > 0)
+        {
+            return risk.RiskScore.ToString();
+        }
+
+        return "Not scored";
+    }
+}
+
+<div class="card" id="risks">
+    <div class="card-header">
+        <h3 class="card-title mb-0">Risks</h3>
+        <div class="card-tools d-flex flex-wrap align-items-center">
+            <a class="btn btn-outline-primary btn-sm mr-2 mb-2"
+               asp-controller="Risk"
+               asp-action="Create"
+               asp-route-returnTo="@returnUrl">
+                Add risk
+            </a>
+            <a class="btn btn-outline-secondary btn-sm mb-2"
+               asp-controller="Risk"
+               asp-action="Index">
+                Open risk register
+            </a>
+        </div>
+    </div>
+    @if (!risks.Any())
+    {
+        <div class="card-body">
+            <p class="text-muted mb-2">No risks recorded for this project.</p>
+            <p class="mb-0">
+                <a asp-controller="Risk" asp-action="Create" asp-route-returnTo="@returnUrl">Create a risk</a>
+                or <a asp-controller="Risk" asp-action="Index">open the risk register</a> to link existing entries.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="card-body table-responsive p-0">
+            <table class="table table-hover text-nowrap sortable-table risks-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
+                            Title
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-tier sortable" data-column="Tier" tabindex="0" role="button" aria-label="Sort by Tier">
+                            Tier
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-score sortable" data-column="Score" tabindex="0" role="button" aria-label="Sort by Score">
+                            Score
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-owner sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner">
+                            Owner
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                            Status
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-review sortable" data-column="NextReview" tabindex="0" role="button" aria-label="Sort by Next review">
+                            Next review
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var risk in risks)
+                    {
+                        var tierLabel = risk.RiskTier?.Name ?? FormatText(risk.RiskPriority?.Label);
+                        var ownerLabel = GetOwner(risk);
+                        var statusLabel = GetStatusLabel(risk);
+                        var statusClass = ResolveStatusClass(statusLabel);
+                        var nextReview = risk.NextReviewDate?.ToString("d MMM yyyy") ?? "Not scheduled";
+                        <tr>
+                            <td>
+                                <strong>
+                                    <a asp-controller="Risk" asp-action="Details" asp-route-id="@risk.Id">@risk.Title</a>
+                                </strong>
+                                @if (!string.IsNullOrWhiteSpace(risk.Description))
+                                {
+                                    <div class="text-muted small mt-1">@risk.Description</div>
+                                }
+                            </td>
+                            <td>@tierLabel</td>
+                            <td>@GetScore(risk)</td>
+                            <td>@ownerLabel</td>
+                            <td>
+                                <span class="badge @statusClass">@statusLabel</span>
+                            </td>
+                            <td data-sort-value="@(risk.NextReviewDate?.Ticks ?? 0)">
+                                @nextReview
+                            </td>
+                            <td class="text-right">
+                                <a class="btn btn-link btn-sm"
+                                   asp-controller="Risk"
+                                   asp-action="Details"
+                                   asp-route-id="@risk.Id">
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+

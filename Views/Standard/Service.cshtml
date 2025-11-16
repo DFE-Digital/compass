@@ -1,0 +1,235 @@
+@using System
+@model IEnumerable<Compass.Models.StandardDto>
+
+@{
+    ViewData["Title"] = "Service Standards";
+    var totalResults = ViewBag.TotalResults as int? ?? Model.Count();
+    var categories = ViewBag.Categories as IEnumerable<string> ?? Array.Empty<string>();
+    var stages = ViewBag.Stages as IEnumerable<string> ?? Array.Empty<string>();
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                    <li class="breadcrumb-item active">Service Standards</li>
+                </ol>
+                <h1 class="mb-3">Service Standards</h1>
+                <p class="text-muted">This view shows the latest GOV service standards sourced from the standards CMS. Use the filters to narrow the list by category or lifecycle stage.</p>
+            </div>
+        </div>
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Dismiss success message">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Dismiss error message">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <!-- Navigation column -->
+            <div class="col-lg-3 col-md-4 col-12">
+                @await Html.PartialAsync("_StandardsNavigation", "Service")
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="serviceStandardsFilterForm">
+                            <div class="form-group">
+                                <label for="serviceStandardsSearch">Search</label>
+                                <input id="serviceStandardsSearch" type="text" name="search" class="form-control form-control-sm" placeholder="Search service standards..." value="@ViewBag.CurrentSearch" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="serviceStandardsCategory">Category</label>
+                                <select id="serviceStandardsCategory" name="category" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @foreach (var category in categories)
+                                    {
+                                        var isSelected = string.Equals(ViewBag.CurrentCategory as string, category, StringComparison.OrdinalIgnoreCase);
+                                    <option value="@category" selected="@(isSelected)">@category</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="serviceStandardsStage">Stage</label>
+                                <select id="serviceStandardsStage" name="stage" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    @foreach (var value in stages)
+                                    {
+                                        var isSelected = string.Equals(ViewBag.CurrentStage as string, value, StringComparison.OrdinalIgnoreCase);
+                                    <option value="@value" selected="@(isSelected)">@value</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a href="@Url.Action("Service", "Standard")" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results column -->
+            <div class="col-lg-9 col-md-8 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Standards</h3>
+                        <div class="card-tools">
+                            <span class="badge badge-info" aria-label="@totalResults service standards">@totalResults standards</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (Model.Any())
+                        {
+                            <table class="table table-hover sortable-table standards-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Categories" tabindex="0" role="button" aria-label="Sort by category">Categories <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Stage" tabindex="0" role="button" aria-label="Sort by stage">Stage <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by version">Version <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-column="Updated" tabindex="0" role="button" aria-label="Sort by updated date">Last updated <i class="fas fa-sort sort-icon"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var standard in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong><a asp-controller="Standard" asp-action="Details" asp-route-id="@(standard.DocumentId ?? standard.Id.ToString())">@standard.Title</a></strong>
+                                                @if (!string.IsNullOrEmpty(standard.Summary))
+                                                {
+                                                    <div class="text-muted small mt-1">@(standard.Summary.Length > 140 ? standard.Summary.Substring(0, 140) + "…" : standard.Summary)</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (standard.Categories != null && standard.Categories.Any())
+                                                {
+                                                    <span class="badge badge-secondary">@standard.Categories.First().Title</span>
+                                                    @if (standard.Categories.Count > 1)
+                                                    {
+                                                        <span class="badge badge-light ml-1">+@(standard.Categories.Count - 1)</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @(standard.Stage?.Title ?? "-")
+                                            </td>
+                                            <td>@standard.Version</td>
+                                            <td>@(standard.UpdatedAt?.ToString("dd MMM yyyy") ?? standard.LastUpdated?.ToString("dd MMM yyyy") ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <p class="text-muted mb-0">No service standards matched your filters.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function () {
+            $('.sortable-table').each(function () {
+                initialiseSortableTable($(this));
+            });
+        });
+
+        function initialiseSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function (e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+
+                var column = $(this).data('column');
+                var direction = 'asc';
+
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                var comparator = getComparator(column, direction);
+
+                rows.sort(function (a, b) {
+                    return comparator(getCellValue(a, column, table), getCellValue(b, column, table));
+                });
+
+                tbody.empty();
+                rows.forEach(function (row) {
+                    tbody.append(row);
+                });
+
+                updateSortIcons(table, column, direction);
+            }
+
+            function getCellValue(row, column, table) {
+                var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                var cellValue = $(row).find('td').eq(colIndex).text().trim();
+
+                switch (column) {
+                    case 'Version':
+                        return parseFloat(cellValue) || 0;
+                    case 'Updated':
+                        return cellValue === '-' ? new Date(0) : new Date(cellValue);
+                    default:
+                        return cellValue.toLowerCase();
+                }
+            }
+
+            function getComparator(column, direction) {
+                return function (a, b) {
+                    if (a > b) {
+                        return direction === 'asc' ? 1 : -1;
+                    }
+                    if ( a < b) {
+                        return direction === 'asc' ? -1 : 1;
+                    }
+                    return 0;
+                };
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                table.find('.sortable[data-column="' + column + '"] i').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}

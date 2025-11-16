@@ -38,174 +38,181 @@
 
 <section class="content">
     <div class="container-fluid">
-        @if (TempData["SuccessMessage"] != null)
-        {
-            <div class="alert alert-success alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["SuccessMessage"]
-            </div>
-        }
-        @if (TempData["ErrorMessage"] != null)
-        {
-            <div class="alert alert-danger alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["ErrorMessage"]
-            </div>
-        }
-        @if (TempData["WarningMessage"] != null)
-        {
-            <div class="alert alert-warning alert-dismissible fade show">
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-                @TempData["WarningMessage"]
-            </div>
-        }
-
         <div class="row">
-            <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
-                        <p>Reporting period</p>
+            <aside class="col-xl-3 col-lg-4 mb-4">
+                <partial name="_ProductSummarySidebar" model="product" />
+            </aside>
+            <div class="col-xl-9 col-lg-8">
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        @TempData["SuccessMessage"]
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-calendar-alt"></i>
+                }
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        @TempData["ErrorMessage"]
                     </div>
-                </div>
-            </div>
-            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
-                <div class="small-box @(productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "bg-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "bg-danger" : "bg-warning")">
-                    <div class="inner">
-                        <h3>@productReturn.Status</h3>
-                        <p>Status</p>
+                }
+                @if (TempData["WarningMessage"] != null)
+                {
+                    <div class="alert alert-warning alert-dismissible fade show">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        @TempData["WarningMessage"]
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-flag"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
-                <div class="small-box bg-primary">
-                    <div class="inner">
-                        <h3>@Model.Count(m => m.IsComplete) of @Model.Count complete</h3>
-                        <p>Progress</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-tasks"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+                }
 
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Operational reports</h3>
-            </div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th class="col-identifier">Identifier</th>
-                            <th>Metric</th>
-                            <th class="col-value">Value</th>
-                            <th class="col-status">Status</th>
-                            <th class="col-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var metricValue in Model)
-                        {
-                            <tr id="row-@metricValue.Id">
-                                <td>@metricValue.PerformanceMetric?.Identifier</td>
-                                <td>
-                                    <strong>@metricValue.PerformanceMetric?.Title</strong>
-                                    <br />
-                                    <small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
-                                </td>
-                                <td>
-                                    <span id="display-@metricValue.Id">
-                                        @if (metricValue.IsNotCaptured)
-                                        {
-                                            <span class="text-muted">Not captured</span>
-                                        }
-                                        else if (!string.IsNullOrEmpty(metricValue.Value))
-                                        {
-                                            @metricValue.Value
-                                        }
-                                        else if (metricValue.IsComplete && string.IsNullOrEmpty(metricValue.Value))
-                                        {
-                                            <span class="text-muted">Unreported</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not entered</span>
-                                        }
-                                    </span>
-                                </td>
-                                <td>
-                                    @if (metricValue.IsComplete)
-                                    {
-                                        <span class="badge badge-success">Complete</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge badge-secondary">Pending</span>
-                                    }
-                                </td>
-                                <td class="col-actions">
-                                    @if (!isReadOnly)
-                                    {
-                                        <button type="button" class="btn btn-sm btn-primary edit-metric" 
-                                                data-id="@metricValue.Id" 
-                                                data-identifier="@metricValue.PerformanceMetric?.Identifier"
-                                                data-title="@metricValue.PerformanceMetric?.Title"
-                                                data-value="@metricValue.Value"
-                                                data-previous-value="@metricValue.PreviousValue"
-                                                data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
-                                                data-not-captured-reason="@metricValue.NotCapturedReason"
-                                                data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
-                                                data-rules="@metricValue.PerformanceMetric?.ValidationRules"
-                                                data-hint="@metricValue.PerformanceMetric?.HintText">
-                                            Edit
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Read-only</span>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            @if (!isReadOnly && Model.All(m => m.IsComplete))
-            {
-                <div class="card-footer">
-                    <form asp-action="SubmitReturn" method="post" class="submit-return-form">
-                        <input type="hidden" name="returnId" value="@productReturn.Id" />
-                        <button type="submit" class="btn btn-success">
-                            Submit return
-                        </button>
-                        <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
-                            Back to returns
-                        </a>
-                    </form>
+                <div class="row">
+                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3>@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
+                                <p>Reporting period</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-calendar-alt"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                        <div class="small-box @(productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "bg-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "bg-danger" : "bg-warning")">
+                            <div class="inner">
+                                <h3>@productReturn.Status</h3>
+                                <p>Status</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-flag"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
+                        <div class="small-box bg-primary">
+                            <div class="inner">
+                                <h3>@Model.Count(m => m.IsComplete) of @Model.Count complete</h3>
+                                <p>Progress</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            }
-            else
-            {
-                <div class="card-footer">
-                    <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
-                        Back to returns
-                    </a>
-                    @if (!isReadOnly)
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Operational reports</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th class="col-identifier">Identifier</th>
+                                    <th>Metric</th>
+                                    <th class="col-value">Value</th>
+                                    <th class="col-status">Status</th>
+                                    <th class="col-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var metricValue in Model)
+                                {
+                                    <tr id="row-@metricValue.Id">
+                                        <td>@metricValue.PerformanceMetric?.Identifier</td>
+                                        <td>
+                                            <strong>@metricValue.PerformanceMetric?.Title</strong>
+                                            <br />
+                                            <small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
+                                        </td>
+                                        <td>
+                                            <span id="display-@metricValue.Id">
+                                                @if (metricValue.IsNotCaptured)
+                                                {
+                                                    <span class="text-muted">Not captured</span>
+                                                }
+                                                else if (!string.IsNullOrEmpty(metricValue.Value))
+                                                {
+                                                    @metricValue.Value
+                                                }
+                                                else if (metricValue.IsComplete && string.IsNullOrEmpty(metricValue.Value))
+                                                {
+                                                    <span class="text-muted">Unreported</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not entered</span>
+                                                }
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (metricValue.IsComplete)
+                                            {
+                                                <span class="badge badge-success">Complete</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-secondary">Pending</span>
+                                            }
+                                        </td>
+                                        <td class="col-actions">
+                                            @if (!isReadOnly)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary edit-metric" 
+                                                        data-id="@metricValue.Id" 
+                                                        data-identifier="@metricValue.PerformanceMetric?.Identifier"
+                                                        data-title="@metricValue.PerformanceMetric?.Title"
+                                                        data-value="@metricValue.Value"
+                                                        data-previous-value="@metricValue.PreviousValue"
+                                                        data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
+                                                        data-not-captured-reason="@metricValue.NotCapturedReason"
+                                                        data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
+                                                        data-rules="@metricValue.PerformanceMetric?.ValidationRules"
+                                                        data-hint="@metricValue.PerformanceMetric?.HintText">
+                                                    Edit
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Read-only</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (!isReadOnly && Model.All(m => m.IsComplete))
                     {
-                        <span class="text-muted ml-3">
-                            Complete all metrics to enable submission
-                        </span>
+                        <div class="card-footer">
+                            <form asp-action="SubmitReturn" method="post" class="submit-return-form">
+                                <input type="hidden" name="returnId" value="@productReturn.Id" />
+                                <button type="submit" class="btn btn-success">
+                                    Submit return
+                                </button>
+                                <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
+                                    Back to returns
+                                </a>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-footer">
+                            <a asp-action="ProductHistory" asp-route-fipsId="@product.FipsId" class="btn btn-default">
+                                Back to returns
+                            </a>
+                            @if (!isReadOnly)
+                            {
+                                <span class="text-muted ml-3">
+                                    Complete all metrics to enable submission
+                                </span>
+                            }
+                        </div>
                     }
                 </div>
-            }
+            </div>
         </div>
     </div>
 </section>

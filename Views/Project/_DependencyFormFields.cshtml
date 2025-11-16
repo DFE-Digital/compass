@@ -1,0 +1,120 @@
+@model Compass.ViewModels.ProjectDependencyFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+
+    var selectedType = Model.Input.TargetEntityType;
+    var selectedId = Model.Input.TargetEntityId?.ToString();
+}
+
+<input type="hidden" asp-for="Input.ProjectId" />
+<input type="hidden" asp-for="Input.SourceEntityType" />
+<input type="hidden" asp-for="Input.SourceEntityId" />
+<input type="hidden" asp-for="Input.DependencyId" />
+
+<div class="form-group @(hasError("TargetEntityType") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.TargetEntityType">Depends on</label>
+    <small class="form-text text-muted">Select the type of item this project relies on.</small>
+    <span asp-validation-for="Input.TargetEntityType" class="form-error-message"></span>
+    <select asp-for="Input.TargetEntityType" class="form-control @(hasError("TargetEntityType") ? "form-control--error" : string.Empty)" id="dependencyTargetType">
+        <option value="">Select entity type</option>
+        @foreach (var option in Model.TargetEntityTypeOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div id="dependencyTargetSelectContainer" data-selected-summary="@Model.SelectedEntitySummary">
+    @foreach (var kvp in Model.TargetOptionsByType)
+    {
+        var type = kvp.Key;
+        var options = kvp.Value ?? System.Array.Empty<SelectListItem>();
+        var hasOptions = options.Count > 0;
+        var heading = type switch
+        {
+            "Project" => "Which project is depended on?",
+            "Milestone" => "Which milestone is depended on?",
+            "Issue" => "Which issue is depended on?",
+            _ => $"Select {type.ToLowerInvariant()}"
+        };
+        <div class="form-group dependency-target-group @(string.Equals(selectedType, type, System.StringComparison.OrdinalIgnoreCase) ? string.Empty : "d-none")" data-target-select="@type">
+            <label>@heading</label>
+            @if (hasOptions)
+            {
+                <small class="form-text text-muted">Choose from @type.ToLowerInvariant() records available to link.</small>
+                <select class="form-control dependency-target-select" data-target-type="@type">
+                    <option value="">Select @type.ToLowerInvariant()</option>
+                    @foreach (var option in options)
+                    {
+                        var isSelected = string.Equals(option.Value, selectedId, System.StringComparison.Ordinal);
+                        <option value="@option.Value" selected="@(isSelected)">@option.Text</option>
+                    }
+                </select>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0" role="note">
+                    No @type.ToLowerInvariant() records are available to link.
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<input asp-for="Input.TargetEntityId" type="hidden" id="dependencyTargetId" />
+
+<div id="dependencyTargetSummary" class="alert alert-secondary mt-3 @(string.IsNullOrWhiteSpace(Model.SelectedEntitySummary) ? "d-none" : string.Empty)" role="status">
+    <strong>Selected link:</strong>
+    <span id="dependencyTargetSummaryText">@Model.SelectedEntitySummary</span>
+</div>
+
+<div class="form-group @(hasError("DependencyType") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.DependencyType">Relationship type</label>
+    <small class="form-text text-muted">Describe how this dependency relates to the project.</small>
+    <span asp-validation-for="Input.DependencyType" class="form-error-message"></span>
+    <select asp-for="Input.DependencyType" class="form-control @(hasError("DependencyType") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.DependencyTypeOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group @(hasError("Status") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Status">Status</label>
+    <small class="form-text text-muted">Track whether the dependency is active, resolved, or cancelled.</small>
+    <span asp-validation-for="Input.Status" class="form-error-message"></span>
+    <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.StatusOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group @(hasError("Description") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Description">Notes (optional)</label>
+    <small class="form-text text-muted">Add any supporting context for this dependency.</small>
+    <span asp-validation-for="Input.Description" class="form-error-message"></span>
+    <textarea asp-for="Input.Description" class="form-control @(hasError("Description") ? "form-control--error" : string.Empty)" rows="4"></textarea>
+</div>
