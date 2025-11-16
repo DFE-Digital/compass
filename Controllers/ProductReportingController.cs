@@ -37,8 +37,17 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products
-        var userProducts = await _productsApiService.GetProductsAsync(userEmail);
+        // Fetch user's products - both from product_contacts and service_owner
+        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId)
+        var userProducts = productsByContact
+            .Concat(productsByServiceOwner)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .ToList();
         
         // Get current reporting period (previous month)
         var now = DateTime.UtcNow;
@@ -107,16 +116,41 @@ public class ProductReportingController : Controller
             }
             
             // Find the user's role for this product
+            // Check product_contacts first, then check service_owner and other role fields
             string? userRole = null;
-            if (!string.IsNullOrEmpty(userEmail) && product.ProductContacts != null)
+            List<string> roles = new List<string>();
+            
+            if (!string.IsNullOrEmpty(userEmail))
             {
-                var userContact = product.ProductContacts.FirstOrDefault(pc => 
-                    pc.UsersPermissionsUser != null && 
-                    !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
-                    pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
+                // Check product_contacts
+                if (product.ProductContacts != null)
+                {
+                    var userContact = product.ProductContacts.FirstOrDefault(pc => 
+                        pc.UsersPermissionsUser != null && 
+                        !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
+                        pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (!string.IsNullOrEmpty(userContact?.Role))
+                    {
+                        roles.Add(userContact.Role);
+                    }
+                }
                 
-                userRole = userContact?.Role;
+                // Check service_owner (relation to entra-user)
+                if (product.ServiceOwner != null && 
+                    !string.IsNullOrEmpty(product.ServiceOwner.EmailAddress) &&
+                    product.ServiceOwner.EmailAddress.Equals(userEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    roles.Add("Service Owner");
+                }
+                
+                // Note: Other roles (product_manager, delivery_manager, etc.) are relations to admin entities
+                // which we don't have email addresses for in the current DTO structure.
+                // If needed, we can add those checks later when we populate those relations.
             }
+            
+            // Combine roles if user has multiple
+            userRole = roles.Any() ? string.Join(", ", roles) : null;
             
             userProductStatuses.Add(new ProductReturnStatusViewModel
             {

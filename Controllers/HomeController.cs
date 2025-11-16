@@ -254,11 +254,18 @@ public class HomeController : Controller
     private async Task<HomeDashboardViewModel> BuildDashboardViewModel(User currentUser, string userEmail, UserPreference preference)
     {
         var myProjects = await _context.Projects
-            .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
+            .Where(p => !p.IsDeleted && (
+                p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
+                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+            ))
             .Include(p => p.ProjectContacts)
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.DeliveryPriority)
             .Include(p => p.Milestones)
             .Include(p => p.Issues)
             .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Decisions)
             .Include(p => p.ProjectProducts)
             .Include(p => p.Successes)
             .OrderBy(p => p.Title)
@@ -385,27 +392,107 @@ public class HomeController : Controller
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var highestRole = leadershipAssignments.Any()
+            ? leadershipAssignments.Max(a => a.Role)
+            : (LeadershipRoleTier?)null;
+
         var leadershipProjects = new List<Project>();
         var leadershipMetrics = new DashboardMetrics();
+        var enterpriseMetrics = new EnterpriseLeadershipMetrics();
+        var activeMissions = new List<Mission>();
+        var priorityOutcomes = new List<Objective>();
+        var enterpriseAtRiskProjects = new List<Project>();
 
-        if (leadershipBusinessAreas.Any())
+        // Gather data based on leadership role
+        if (highestRole.HasValue)
         {
-            var normalizedAreas = leadershipBusinessAreas
-                .Select(name => name!.ToLowerInvariant())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (highestRole == LeadershipRoleTier.PermanentSecretary || 
+                highestRole == LeadershipRoleTier.DirectorGeneral || 
+                highestRole == LeadershipRoleTier.CLevel)
+            {
+                // Enterprise-wide view for PS, DG, C-Level
+                var allProjects = await _context.Projects
+                    .Where(p => !p.IsDeleted)
+                    .Include(p => p.Issues.Where(i => !i.IsDeleted))
+                    .Include(p => p.Risks.Where(r => !r.IsDeleted))
+                    .Include(p => p.Actions.Where(a => !a.IsDeleted))
+                    .ToListAsync();
 
-            leadershipProjects = await _context.Projects
-                .Where(p => !p.IsDeleted
-                            && !string.IsNullOrWhiteSpace(p.BusinessArea)
-                            && normalizedAreas.Contains(p.BusinessArea!.ToLower()))
-                .Include(p => p.Milestones.Where(m => !m.IsDeleted))
-                .Include(p => p.Issues.Where(i => !i.IsDeleted))
-                .Include(p => p.Risks.Where(r => !r.IsDeleted))
-                .Include(p => p.Actions.Where(a => !a.IsDeleted))
-                .OrderBy(p => p.Title)
-                .ToListAsync();
+                bool IsOpen(string? status) =>
+                    !string.Equals(status, "closed", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase);
 
-            leadershipMetrics = BuildLeadershipMetrics(leadershipProjects);
+                var allOpenIssues = allProjects
+                    .SelectMany(p => p.Issues.Where(i => IsOpen(i.Status)))
+                    .ToList();
+
+                var allOpenRisks = allProjects
+                    .SelectMany(p => p.Risks.Where(r => !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                var allOpenActions = allProjects
+                    .SelectMany(p => p.Actions.Where(a => IsOpen(a.Status)))
+                    .ToList();
+
+                enterpriseAtRiskProjects = allProjects
+                    .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                enterpriseMetrics = new EnterpriseLeadershipMetrics
+                {
+                    TotalOpenIssues = allOpenIssues.Count,
+                    TotalOpenRisks = allOpenRisks.Count,
+                    TotalOpenActions = allOpenActions.Count,
+                    TotalAtRiskProjects = enterpriseAtRiskProjects.Count
+                };
+
+                // Get active missions
+                activeMissions = await _context.Missions
+                    .Where(m => !m.IsDeleted && 
+                                (m.Status == null || m.Status == "Active" || string.Equals(m.Status, "active", StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(m => m.Title)
+                    .ToListAsync();
+
+                enterpriseMetrics.ActiveMissionsCount = activeMissions.Count;
+
+                // Get priority outcomes (active objectives linked to missions)
+                priorityOutcomes = await _context.Objectives
+                    .Where(o => !o.IsDeleted && 
+                                (o.Status == "active" || string.Equals(o.Status, "active", StringComparison.OrdinalIgnoreCase)) &&
+                                o.MissionId.HasValue)
+                    .Include(o => o.Mission)
+                    .OrderBy(o => o.Title)
+                    .ToListAsync();
+
+                enterpriseMetrics.ActivePriorityOutcomesCount = priorityOutcomes.Count;
+            }
+            else if (highestRole == LeadershipRoleTier.DeputyDirectorOrSro || 
+                     highestRole == LeadershipRoleTier.PortfolioLead)
+            {
+                // Business area specific view for Deputy Director and G6
+                if (leadershipBusinessAreas.Any())
+                {
+                    var normalizedAreas = leadershipBusinessAreas
+                        .Select(name => name.ToLower())
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    leadershipProjects = await _context.Projects
+                        .Where(p => !p.IsDeleted
+                                    && !string.IsNullOrWhiteSpace(p.BusinessArea)
+                                    && normalizedAreas.Contains(p.BusinessArea!.ToLower()))
+                        .Include(p => p.Milestones.Where(m => !m.IsDeleted))
+                        .Include(p => p.Issues.Where(i => !i.IsDeleted))
+                        .Include(p => p.Risks.Where(r => !r.IsDeleted))
+                        .Include(p => p.Actions.Where(a => !a.IsDeleted))
+                        .OrderBy(p => p.Title)
+                        .ToListAsync();
+
+                    leadershipMetrics = BuildLeadershipMetrics(leadershipProjects);
+                }
+            }
         }
 
         var sectionConfig = new DashboardSectionConfig
@@ -446,7 +533,7 @@ public class HomeController : Controller
             FirstName = firstName,
             SectionConfig = sectionConfig,
             Metrics = metrics,
-             LeadershipMetrics = leadershipMetrics,
+            LeadershipMetrics = leadershipMetrics,
             PriorityTasks = priorityTasks,
             Reminders = reminders,
             QuickLinks = quickLinks,
@@ -467,9 +554,11 @@ public class HomeController : Controller
             ProductsNeedingReturns = productsNeedingReturns,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,
-            HighestLeadershipRole = leadershipAssignments.Any()
-                ? leadershipAssignments.Max(a => a.Role)
-                : (LeadershipRoleTier?)null
+            HighestLeadershipRole = highestRole,
+            EnterpriseMetrics = enterpriseMetrics,
+            ActiveMissions = activeMissions,
+            PriorityOutcomes = priorityOutcomes,
+            EnterpriseAtRiskProjects = enterpriseAtRiskProjects
         };
     }
 

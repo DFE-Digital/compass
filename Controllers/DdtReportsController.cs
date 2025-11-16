@@ -16,6 +16,7 @@ public class DdtReportsController : Controller
     private readonly ILogger<DdtReportsController> _logger;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
+    private readonly IUserDirectoryService _userDirectoryService;
     private static readonly string[] UserGroupCategoryTypeNames =
     {
         "User group", "User Group", "User groups", "User Groups",
@@ -28,12 +29,13 @@ public class DdtReportsController : Controller
     private static readonly string[] DeliveryManagerRoleKeywords =
         { "delivery manager", "delivery lead", "delivery owner", "dm" };
 
-    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService)
+    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService)
     {
         _context = context;
         _logger = logger;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
+        _userDirectoryService = userDirectoryService;
     }
 
     // GET: DdtReports/Index - Landing page
@@ -1129,6 +1131,271 @@ public class DdtReportsController : Controller
         {
             _logger.LogError(ex, "Error updating product state for {FipsId}", fipsId);
             TempData["ErrorMessage"] = "An error occurred while updating the product state.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProductServiceOwner
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductServiceOwner(string fipsId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+    {
+        try
+        {
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+
+            if (string.IsNullOrWhiteSpace(entraUserObjectId) || string.IsNullOrWhiteSpace(entraUserEmail))
+            {
+                const string errorMessage = "Please select a user from the search results.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Fetch full user details from Microsoft Graph to get firstName and lastName
+            string? firstName = null;
+            string? lastName = null;
+            string? displayName = entraUserName;
+            string? actualObjectId = entraUserObjectId;
+            
+            try
+            {
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    var directoryUser = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    firstName = directoryUser.FirstName;
+                    lastName = directoryUser.LastName;
+                    actualObjectId = directoryUser.AzureObjectId;
+                    // Use the directory name if display name wasn't provided
+                    if (string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(directoryUser.Name))
+                    {
+                        displayName = directoryUser.Name;
+                    }
+                    
+                    // Log the full user object for debugging
+                    _logger.LogInformation("=== FULL ENTRA USER DATA FROM GRAPH ===");
+                    _logger.LogInformation("Id (Database): {Id}", directoryUser.Id);
+                    _logger.LogInformation("AzureObjectId: {AzureObjectId}", directoryUser.AzureObjectId);
+                    _logger.LogInformation("Name: {Name}", directoryUser.Name);
+                    _logger.LogInformation("Email: {Email}", directoryUser.Email);
+                    _logger.LogInformation("FirstName: {FirstName}", directoryUser.FirstName);
+                    _logger.LogInformation("LastName: {LastName}", directoryUser.LastName);
+                    _logger.LogInformation("UserPrincipalName: {UserPrincipalName}", directoryUser.UserPrincipalName);
+                    _logger.LogInformation("JobTitle: {JobTitle}", directoryUser.JobTitle);
+                    _logger.LogInformation("Role: {Role}", directoryUser.Role);
+                    _logger.LogInformation("=======================================");
+                    
+                    _logger.LogInformation("Fetched user details from Graph: ObjectId={ObjectId}, Email={Email}, FirstName={FirstName}, LastName={LastName}, DisplayName={DisplayName}",
+                        actualObjectId, entraUserEmail, firstName, lastName, displayName);
+                }
+                else
+                {
+                    _logger.LogWarning("Invalid ObjectId format: {ObjectId}. This might be a database ID instead of Azure Object ID.", entraUserObjectId);
+                    _logger.LogWarning("Received entraUserObjectId={EntraUserObjectId}, entraUserEmail={EntraUserEmail}, entraUserName={EntraUserName}",
+                        entraUserObjectId, entraUserEmail, entraUserName);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch user details from Graph for {ObjectId}, continuing with provided data", entraUserObjectId);
+            }
+
+            // Get or create the Entra user in CMS using the email and object ID from Entra ID
+            // Use actualObjectId if we successfully fetched it from Graph, otherwise fall back to entraUserObjectId
+            var entraIdToUse = !string.IsNullOrWhiteSpace(actualObjectId) ? actualObjectId : entraUserObjectId;
+            
+            _logger.LogInformation("Calling GetOrCreateEntraUserAsync with: Email={Email}, EntraId={EntraId}, DisplayName={DisplayName}, FirstName={FirstName}, LastName={LastName}",
+                entraUserEmail, entraIdToUse, displayName, firstName, lastName);
+            
+            var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                entraUserEmail,
+                entraIdToUse, // Use the Entra Object ID as entraId
+                displayName, // Display name
+                firstName, // First name from Graph
+                lastName  // Last name from Graph
+            );
+
+            if (entraUser == null)
+            {
+                const string errorMessage = "Failed to get or create Entra User. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            var success = await _productsApiService.UpdateProductServiceOwnerAsync(fipsId, entraUser.Id);
+            
+            if (success)
+            {
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var userDisplayName = entraUser.DisplayName ?? entraUser.EmailAddress ?? "Unknown";
+                var successMessage = $"<strong>{productTitle}</strong> - Service owner set to <strong>{userDisplayName}</strong>.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
+            }
+            else
+            {
+                const string errorMessage = "Failed to update product service owner. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product service owner for {FipsId}", fipsId);
+            const string errorMessage = "An error occurred while updating the product service owner.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProductRole
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductRole(string fipsId, string roleFieldName, string roleDisplayName, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+    {
+        try
+        {
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+
+            if (string.IsNullOrWhiteSpace(entraUserObjectId) || string.IsNullOrWhiteSpace(entraUserEmail))
+            {
+                var errorMessage = $"Please select a user from the search results.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Validate roleFieldName to prevent injection
+            var validRoles = new[] { "product_manager", "delivery_manager", "Information_asset_owner", "reporting_user", "senior_responsible_officer", "service_designs", "user_researchers" };
+            if (!validRoles.Contains(roleFieldName))
+            {
+                var errorMessage = "Invalid role specified.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            // Fetch full user details from Microsoft Graph to get firstName and lastName
+            string? firstName = null;
+            string? lastName = null;
+            string? displayName = entraUserName;
+            string? actualObjectId = entraUserObjectId;
+            
+            try
+            {
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    var directoryUser = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    firstName = directoryUser.FirstName;
+                    lastName = directoryUser.LastName;
+                    actualObjectId = directoryUser.AzureObjectId;
+                    if (string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(directoryUser.Name))
+                    {
+                        displayName = directoryUser.Name;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch user details from Graph for {ObjectId}, continuing with provided data", entraUserObjectId);
+            }
+
+            // Get or create the Entra user in CMS (all roles use entra-user entities)
+            var entraIdToUse = !string.IsNullOrWhiteSpace(actualObjectId) ? actualObjectId : entraUserObjectId;
+            
+            var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                entraUserEmail,
+                entraIdToUse,
+                displayName,
+                firstName,
+                lastName
+            );
+
+            if (entraUser == null)
+            {
+                var errorMessage = $"Failed to get or create Entra User. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("FipsCompletion");
+            }
+
+            var userDisplayName = entraUser.DisplayName ?? entraUser.EmailAddress ?? "Unknown";
+
+            var success = await _productsApiService.UpdateProductRoleAsync(fipsId, roleFieldName, entraUser.Id);
+            
+            if (success)
+            {
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var successMessage = $"<strong>{productTitle}</strong> - {roleDisplayName} set to <strong>{userDisplayName}</strong>.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
+            }
+            else
+            {
+                var errorMessage = $"Failed to update {roleDisplayName}. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+            }
+            
+            return RedirectToAction("FipsCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+            var errorMessage = $"An error occurred while updating the {roleDisplayName}.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+
+            TempData["ErrorMessage"] = errorMessage;
             return RedirectToAction("FipsCompletion");
         }
     }
