@@ -77,7 +77,19 @@
                                     <td>
                                         @if (!string.IsNullOrEmpty(item.UserRole))
                                         {
-                                            @string.Join(" ", item.UserRole.Split('_').Select(word => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(word.ToLower())))
+                                            // UserRole may already be formatted (e.g., "Service Owner") or may need formatting (e.g., "delivery_manager")
+                                            var roleParts = item.UserRole.Split(',');
+                                            var formattedRoles = roleParts.Select(role => 
+                                            {
+                                                var trimmed = role.Trim();
+                                                // If it contains underscores, format it; otherwise use as-is
+                                                if (trimmed.Contains('_'))
+                                                {
+                                                    return string.Join(" ", trimmed.Split('_').Select(word => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(word.ToLower())));
+                                                }
+                                                return trimmed;
+                                            });
+                                            @string.Join(", ", formattedRoles)
                                         }
                                         else
                                         {

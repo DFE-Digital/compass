@@ -35,7 +35,31 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<string> LeadershipBusinessAreas { get; set; } = Array.Empty<string>();
     public LeadershipRoleTier? HighestLeadershipRole { get; set; }
 
+    // Leadership view data
+    public EnterpriseLeadershipMetrics EnterpriseMetrics { get; set; } = new();
+    public IReadOnlyCollection<Mission> ActiveMissions { get; set; } = Array.Empty<Mission>();
+    public IReadOnlyCollection<Objective> PriorityOutcomes { get; set; } = Array.Empty<Objective>();
+    public IReadOnlyCollection<Project> EnterpriseAtRiskProjects { get; set; } = Array.Empty<Project>();
+
     public bool HasData => MyProjects.Any() || MyProducts.Any();
+    public bool HasLeadershipRole => HighestLeadershipRole.HasValue;
+    public bool IsEnterpriseLeader => HighestLeadershipRole.HasValue && 
+        (HighestLeadershipRole == LeadershipRoleTier.PermanentSecretary || 
+         HighestLeadershipRole == LeadershipRoleTier.DirectorGeneral || 
+         HighestLeadershipRole == LeadershipRoleTier.CLevel);
+    public bool IsBusinessAreaLeader => HighestLeadershipRole.HasValue && 
+        (HighestLeadershipRole == LeadershipRoleTier.DeputyDirectorOrSro || 
+         HighestLeadershipRole == LeadershipRoleTier.PortfolioLead);
+}
+
+public class EnterpriseLeadershipMetrics
+{
+    public int TotalOpenIssues { get; set; }
+    public int TotalOpenRisks { get; set; }
+    public int TotalOpenActions { get; set; }
+    public int TotalAtRiskProjects { get; set; }
+    public int ActiveMissionsCount { get; set; }
+    public int ActivePriorityOutcomesCount { get; set; }
 }
 
 public class DashboardSectionConfig
