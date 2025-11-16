@@ -8,6 +8,7 @@
             this.root = root;
             this.input = root.querySelector('.js-user-picker-input');
             this.hidden = root.querySelector('.js-user-picker-value');
+            this.objectIdInput = root.querySelector('.js-user-picker-objectid');
             this.nameInput = root.querySelector('.js-user-picker-name');
             this.emailInput = root.querySelector('.js-user-picker-email');
             this.results = root.querySelector('.js-user-picker-results');
@@ -164,6 +165,8 @@
                 }
 
                 const user = await res.json();
+                console.log('User selection response:', user);
+                console.log('User objectId:', user.objectId, 'User id:', user.id);
                 this.applySelection(user);
             } catch (error) {
                 this.setMessage('Unable to fetch user details. Please try again.');
@@ -176,6 +179,13 @@
         applySelection(user) {
             if (this.hidden) {
                 this.hidden.value = user?.id ?? '';
+            }
+            if (this.objectIdInput) {
+                // Use objectId from response (camelCase) or ObjectId (PascalCase), or fall back to the id
+                // The UserSelectionResponse has ObjectId (PascalCase) which might serialize as ObjectId or objectId
+                const objectIdValue = user?.objectId ?? user?.ObjectId ?? user?.id ?? '';
+                this.objectIdInput.value = objectIdValue;
+                console.log('Setting objectIdInput to:', objectIdValue, 'from user:', user);
             }
             if (this.nameInput) {
                 this.nameInput.value = user?.name ?? '';
@@ -209,6 +219,9 @@
         clearSelection() {
             if (this.hidden) {
                 this.hidden.value = '';
+            }
+            if (this.objectIdInput) {
+                this.objectIdInput.value = '';
             }
             if (this.nameInput) {
                 this.nameInput.value = '';

@@ -77,8 +77,16 @@ public class ProductsApiService : IProductsApiService
                     "populate[category_values][populate][category_type][fields][0]=name",
                     "populate[product_contacts]=*",
                     "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[service_owner][fields][0]=emailAddress",
+                    "populate[service_owner][fields][1]=displayName"
                 };
+
+                // If userEmail is provided, filter products by product contact's user email at the CMS level
+                if (!string.IsNullOrEmpty(userEmail))
+                {
+                    queryParams.Add($"filters[product_contacts][users_permissions_user][email][$eq]={Uri.EscapeDataString(userEmail)}");
+                }
 
                 var queryString = string.Join("&", queryParams);
                 var url = $"products?{queryString}";
@@ -124,8 +132,9 @@ public class ProductsApiService : IProductsApiService
                 }
             }
             
-            _logger.LogInformation("Successfully fetched {Count} Active products from CMS (Total available: {Total})", 
-                allProducts.Count, totalCount ?? allProducts.Count);
+            _logger.LogInformation("Successfully fetched {Count} Active products from CMS (Total available: {Total}){UserFilter}", 
+                allProducts.Count, totalCount ?? allProducts.Count, 
+                !string.IsNullOrEmpty(userEmail) ? $" for user {userEmail}" : "");
 
             // Extract phase from category_values
             foreach (var product in allProducts)
@@ -142,20 +151,120 @@ public class ProductsApiService : IProductsApiService
                 }
             }
 
-            // Filter by user email if provided (case-insensitive)
-            if (!string.IsNullOrEmpty(userEmail))
+            // Cache for 5 minutes
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
+
+            return allProducts;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching products from CMS");
+            return new List<ProductDto>();
+        }
+    }
+
+    public async Task<List<ProductDto>> GetProductsByServiceOwnerAsync(string? userEmail)
+    {
+        if (string.IsNullOrEmpty(userEmail))
+        {
+            return new List<ProductDto>();
+        }
+
+        var cacheKey = $"products_by_service_owner_{userEmail}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<ProductDto>? cachedProducts))
+        {
+            return cachedProducts ?? new List<ProductDto>();
+        }
+
+        try
+        {
+            var allProducts = new List<ProductDto>();
+            var currentPage = 1;
+            var pageSize = 100;
+            var hasMorePages = true;
+            int? totalCount = null;
+
+            while (hasMorePages)
             {
-                var filteredProducts = allProducts.Where(p => 
-                    p.ProductContacts != null && 
-                    p.ProductContacts.Any(pc => 
-                        pc.UsersPermissionsUser != null &&
-                        !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) && 
-                        pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase)
-                    )
-                ).ToList();
+                var queryParams = new List<string>
+                {
+                    "sort=title:asc",
+                    "filters[state][$eq]=Active",
+                    $"filters[service_owner][emailAddress][$eqi]={Uri.EscapeDataString(userEmail)}",
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "fields[0]=id",
+                    "fields[1]=title",
+                    "fields[2]=fips_id",
+                    "fields[3]=product_url",
+                    "populate[category_values][fields][0]=name",
+                    "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts]=*",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[service_owner][fields][0]=emailAddress",
+                    "populate[service_owner][fields][1]=displayName"
+                };
+
+                var queryString = string.Join("&", queryParams);
+                var url = $"products?{queryString}";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch products by service owner from CMS (page {currentPage}). Status: {response.StatusCode}, Error: {errorContent}");
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
                 
-                _logger.LogInformation("Filtered to {Count} products for user {Email}", filteredProducts.Count, userEmail);
-                allProducts = filteredProducts;
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allProducts.AddRange(apiResponse.Data);
+                    
+                    if (!totalCount.HasValue && apiResponse.Meta?.Pagination != null)
+                    {
+                        totalCount = apiResponse.Meta.Pagination.Total;
+                        _logger.LogInformation("Fetching {Total} Active products by service owner from CMS across {PageCount} pages", 
+                            totalCount, apiResponse.Meta.Pagination.PageCount);
+                    }
+                    
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
+            }
+            
+            _logger.LogInformation("Successfully fetched {Count} Active products by service owner from CMS (Total available: {Total}) for user {UserEmail}", 
+                allProducts.Count, totalCount ?? allProducts.Count, userEmail);
+
+            // Extract phase from category_values
+            foreach (var product in allProducts)
+            {
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null)
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
             }
 
             // Cache for 5 minutes
@@ -165,7 +274,7 @@ public class ProductsApiService : IProductsApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching products from CMS");
+            _logger.LogError(ex, "Error fetching products by service owner from CMS for user {UserEmail}", userEmail);
             return new List<ProductDto>();
         }
     }
@@ -206,7 +315,9 @@ public class ProductsApiService : IProductsApiService
                     "populate[category_values][populate][category_type][fields][0]=name",
                     "populate[product_contacts]=*",
                     "populate[product_contacts][populate][users_permissions_user][fields][0]=email",
-                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username"
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=username",
+                    "populate[service_owner][fields][0]=emailAddress",
+                    "populate[service_owner][fields][1]=displayName"
                 };
 
                 var queryString = string.Join("&", queryParams);
@@ -1205,6 +1316,400 @@ public class ProductsApiService : IProductsApiService
         {
             _logger.LogError(ex, "Error searching products by title: {SearchTerm}", searchTerm);
             return new List<ProductDto>();
+        }
+    }
+
+    public async Task<List<EntraUserDto>> GetEntraUsersAsync()
+    {
+        const string cacheKey = "EntraUsers";
+        if (_cache.TryGetValue(cacheKey, out List<EntraUserDto>? cachedUsers))
+        {
+            if (cachedUsers != null) return cachedUsers;
+        }
+
+        try
+        {
+            var allUsers = new List<EntraUserDto>();
+            var currentPage = 1;
+            var pageSize = 100;
+            var hasMorePages = true;
+
+            while (hasMorePages)
+            {
+                var queryParams = new List<string>
+                {
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "sort=displayName:asc",
+                    "fields[0]=id",
+                    "fields[1]=documentId",
+                    "fields[2]=emailAddress",
+                    "fields[3]=entraId",
+                    "fields[4]=displayName",
+                    "fields[5]=firstName",
+                    "fields[6]=lastName"
+                };
+
+                var queryString = string.Join("&", queryParams);
+                var url = $"entra-users?{queryString}";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Failed to fetch entra-users from CMS (page {Page}). Status: {StatusCode}", currentPage, response.StatusCode);
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<EntraUserDto>>(content, _jsonOptions);
+
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allUsers.AddRange(apiResponse.Data);
+
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
+            }
+
+            _cache.Set(cacheKey, allUsers, TimeSpan.FromMinutes(10));
+            return allUsers;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching entra-users from CMS");
+            return new List<EntraUserDto>();
+        }
+    }
+
+    public async Task<EntraUserDto?> GetOrCreateEntraUserAsync(string emailAddress, string? entraId = null, string? displayName = null, string? firstName = null, string? lastName = null)
+    {
+        if (string.IsNullOrWhiteSpace(emailAddress))
+        {
+            _logger.LogError("Cannot get or create entra-user: emailAddress is required");
+            return null;
+        }
+
+        try
+        {
+            // First, try to find existing user by email (case-insensitive)
+            var queryParams = new List<string>
+            {
+                $"filters[emailAddress][$eqi]={Uri.EscapeDataString(emailAddress)}",
+                "fields[0]=id",
+                "fields[1]=documentId",
+                "fields[2]=emailAddress",
+                "fields[3]=entraId",
+                "fields[4]=displayName",
+                "fields[5]=firstName",
+                "fields[6]=lastName"
+            };
+
+            var queryString = string.Join("&", queryParams);
+            var url = $"entra-users?{queryString}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<EntraUserDto>>(content, _jsonOptions);
+                var existingUser = apiResponse?.Data?.FirstOrDefault();
+
+                if (existingUser != null)
+                {
+                    _logger.LogInformation("Found existing entra-user with email {Email}, updating with latest Entra info. Existing: EntraId={ExistingEntraId}, FirstName={ExistingFirstName}, LastName={ExistingLastName}",
+                        emailAddress, existingUser.EntraId, existingUser.FirstName, existingUser.LastName);
+                    
+                    // Update existing user with latest Entra info
+                    // Always update with provided values to keep Entra data in sync
+                    var finalEntraId = !string.IsNullOrWhiteSpace(entraId) ? entraId : existingUser.EntraId;
+                    var finalDisplayName = !string.IsNullOrWhiteSpace(displayName) ? displayName : (existingUser.DisplayName ?? emailAddress);
+                    var finalFirstName = !string.IsNullOrWhiteSpace(firstName) ? firstName : existingUser.FirstName;
+                    var finalLastName = !string.IsNullOrWhiteSpace(lastName) ? lastName : existingUser.LastName;
+                    
+                    _logger.LogInformation("Updating entra-user with: EntraId={EntraId}, DisplayName={DisplayName}, FirstName={FirstName}, LastName={LastName}",
+                        finalEntraId, finalDisplayName, finalFirstName, finalLastName);
+                    
+                    var updateData = new
+                    {
+                        data = new
+                        {
+                            emailAddress = emailAddress,
+                            entraId = finalEntraId,
+                            displayName = finalDisplayName,
+                            firstName = finalFirstName,
+                            lastName = finalLastName
+                        }
+                    };
+
+                    // Use JSON options with camelCase naming to match Strapi schema
+                    var updateJsonOptions = new JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        WriteIndented = false
+                    };
+                    var updateJson = JsonSerializer.Serialize(updateData, updateJsonOptions);
+                    _logger.LogInformation("Update JSON payload: {Json}", updateJson);
+                    var updateContent = new StringContent(updateJson, Encoding.UTF8, "application/json");
+
+                    var updateWriteApiKey = _configuration["CmsApi:WriteApiKey"];
+                    var updateBaseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+
+                    using var updateHttpClient = new HttpClient();
+                    var updateBaseUri = updateBaseUrl.TrimEnd('/');
+                    if (!updateBaseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+                    {
+                        updateBaseUri += "/api";
+                    }
+                    updateHttpClient.BaseAddress = new Uri(updateBaseUri + "/");
+
+                    if (!string.IsNullOrEmpty(updateWriteApiKey))
+                    {
+                        updateHttpClient.DefaultRequestHeaders.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", updateWriteApiKey);
+                    }
+
+                    var updateResponse = await updateHttpClient.PutAsync($"entra-users/{existingUser.DocumentId}", updateContent);
+
+                    if (updateResponse.IsSuccessStatusCode)
+                    {
+                        var updateResponseContent = await updateResponse.Content.ReadAsStringAsync();
+                        var updateApiResponse = JsonSerializer.Deserialize<ApiResponse<EntraUserDto>>(updateResponseContent, _jsonOptions);
+                        
+                        // Clear cache
+                        _cache.Remove("EntraUsers");
+                        _cache.Remove($"product_{existingUser.Id}"); // In case we need to clear product cache
+
+                        _logger.LogInformation("Successfully updated entra-user with email {Email}", emailAddress);
+                        return updateApiResponse?.Data ?? existingUser;
+                    }
+                    else
+                    {
+                        var errorContent = await updateResponse.Content.ReadAsStringAsync();
+                        _logger.LogWarning("Failed to update existing entra-user. Status: {StatusCode}, Error: {Error}. Returning existing user.",
+                            updateResponse.StatusCode, errorContent);
+                        return existingUser;
+                    }
+                }
+            }
+
+            // User doesn't exist, create it
+            _logger.LogInformation("Creating new entra-user with email {Email}, EntraId={EntraId}, DisplayName={DisplayName}, FirstName={FirstName}, LastName={LastName}",
+                emailAddress, entraId, displayName ?? emailAddress, firstName, lastName);
+
+            var createData = new
+            {
+                data = new
+                {
+                    emailAddress = emailAddress,
+                    entraId = entraId,
+                    displayName = displayName ?? emailAddress,
+                    firstName = firstName,
+                    lastName = lastName
+                    // Note: publishedAt is intentionally not set, keeping it as draft
+                }
+            };
+
+            // Use JSON options with camelCase naming to match Strapi schema
+            var createJsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+            var json = JsonSerializer.Serialize(createData, createJsonOptions);
+            _logger.LogInformation("Create JSON payload: {Json}", json);
+            var createContent = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var createResponse = await httpClient.PostAsync("entra-users", createContent);
+
+            if (createResponse.IsSuccessStatusCode)
+            {
+                var responseContent = await createResponse.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<EntraUserDto>>(responseContent, _jsonOptions);
+
+                // Clear cache
+                _cache.Remove("EntraUsers");
+
+                _logger.LogInformation("Successfully created entra-user with email {Email}", emailAddress);
+                return apiResponse?.Data;
+            }
+            else
+            {
+                var errorContent = await createResponse.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to create entra-user. Status: {StatusCode}, Error: {Error}",
+                    createResponse.StatusCode, errorContent);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting or creating entra-user with email {Email}", emailAddress);
+            return null;
+        }
+    }
+
+    public async Task<bool> UpdateProductServiceOwnerAsync(string fipsId, int entraUserId)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            // Update product with service_owner relation
+            // Since service_owner is oneToMany, we set it as an array with a single ID
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId,
+                    service_owner = new[] { entraUserId }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                _logger.LogInformation("Successfully updated product service owner for {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update product service owner for {FipsId}. Status: {StatusCode}, Error: {Error}",
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product service owner for {FipsId}", fipsId);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateProductRoleAsync(string fipsId, string roleFieldName, int entraUserId)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            // Update product with role relation
+            // Since roles are oneToMany, we set them as an array with a single ID
+            // Use reflection to create an anonymous object with the role field name
+            var updateData = new Dictionary<string, object>
+            {
+                ["fips_id"] = product.FipsId!
+            };
+            updateData[roleFieldName] = new[] { entraUserId };
+
+            // Create anonymous object with data property
+            // Note: Dictionary will serialize to JSON object with keys as-is (snake_case for Strapi)
+            var dataObject = new { data = updateData };
+            var json = JsonSerializer.Serialize(dataObject);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                _logger.LogInformation("Successfully updated product role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update product role {RoleFieldName} for {FipsId}. Status: {StatusCode}, Error: {Error}",
+                    roleFieldName, fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+            return false;
         }
     }
 }

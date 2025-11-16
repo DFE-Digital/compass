@@ -28,6 +28,13 @@ public class ProductDto
     
     [JsonPropertyName("product_contacts")]
     public List<ProductContactDto>? ProductContacts { get; set; }
+    
+    [JsonPropertyName("service_owner")]
+    public List<EntraUserDto>? ServiceOwners { get; set; }
+    
+    // Helper property to get the first service owner (for convenience)
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? ServiceOwner => ServiceOwners?.FirstOrDefault();
 }
 
 public class CategoryValueDto
@@ -78,4 +85,29 @@ public class UserPermissionsUserDto
     
     public string? Username { get; set; }
 }
+
+public class EntraUserDto
+{
+    public int Id { get; set; }
+    
+    [JsonPropertyName("documentId")]
+    public string? DocumentId { get; set; }
+    
+    [JsonPropertyName("emailAddress")]
+    public string? EmailAddress { get; set; }
+    
+    [JsonPropertyName("entraId")]
+    public string? EntraId { get; set; }
+    
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+    
+    [JsonPropertyName("firstName")]
+    public string? FirstName { get; set; }
+    
+    [JsonPropertyName("lastName")]
+    public string? LastName { get; set; }
+}
+
+
 

@@ -100,14 +100,18 @@ namespace Compass.Controllers
             // Get current user's email
             var userEmail = User.Identity?.Name;
 
-            // Get user's projects (where they are a named contact)
+            // Get user's projects (where they are a named contact or primary contact)
             var userProjects = new List<Project>();
             if (!string.IsNullOrEmpty(userEmail))
             {
                 userProjects = await _context.Projects
-                    .Where(p => !p.IsDeleted && p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()))
+                    .Where(p => !p.IsDeleted && (
+                        p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
+                        (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+                    ))
                     .AsNoTracking()
                     .Include(p => p.DeliveryPriority)
+                    .Include(p => p.PrimaryContactUser)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
                     .Include(p => p.ProjectObjectives)
