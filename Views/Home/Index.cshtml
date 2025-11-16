@@ -1,218 +1,61 @@
 @model HomeDashboardViewModel
-@using System.Text.Json
+@using Compass.Models
 
 @{
     ViewData["Title"] = "Compass control centre";
-    var layoutJson = JsonSerializer.Serialize(Model.BlockInstances ?? Array.Empty<DashboardBlockInstance>());
-    var blockDefinitionsJson = JsonSerializer.Serialize(Model.BlockDefinitions ?? Array.Empty<DashboardBlockDefinition>());
 }
 
 @section Styles {
-    <link rel="stylesheet" href="~/lib/gridstack/gridstack.min.css" asp-append-version="true" />
+    <style>
+        .dashboard-static {
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-pill {
+            border-radius: 14px;
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            background: linear-gradient(145deg, #ffffff, #f8f9ff);
+            padding: 1.25rem;
+            height: 100%;
+            box-shadow: 0 10px 18px rgba(12, 25, 64, 0.06);
+        }
+
+        .metric-pill strong {
+            display: block;
+            font-size: 2rem;
+            line-height: 1.2;
+        }
+
+        .metric-pill span {
+            color: #5c6480;
+            font-size: 0.95rem;
+        }
+
+        .static-table thead th {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #7a819b;
+            border-top: 0;
+        }
+
+        .static-table td {
+            vertical-align: middle;
+        }
+
+        .leadership-panel {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            padding: 1.5rem;
+            background: linear-gradient(160deg, rgba(39, 76, 255, 0.08), rgba(39, 76, 255, 0));
+        }
+
+        .leadership-panel .badge {
+            text-transform: none;
+            font-weight: 500;
+        }
+    </style>
 }
-
-<div class="d-none" id="dashboardAntiforgeryToken">
-    @Html.AntiForgeryToken()
-</div>
-
-<style>
-    .dashboard-grid-shell {
-        background: transparent;
-        border-radius: 16px;
-        padding: 0.5rem;
-        border: 1px solid transparent;
-        position: relative;
-        transition: background 0.2s ease, border-color 0.2s ease, padding 0.2s ease;
-    }
-
-    .dashboard-grid-shell::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        border-radius: 16px;
-        background-image: repeating-linear-gradient(90deg, rgba(99, 125, 255, 0.08) 0, rgba(99, 125, 255, 0.08) 1px, transparent 1px, transparent calc(100% / 12));
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s ease;
-        z-index: 0;
-    }
-
-    .dashboard-grid-shell.is-edit-mode {
-        background: linear-gradient(120deg, rgba(246, 248, 255, 0.95) 0%, rgba(254, 254, 254, 0.95) 70%);
-        border-color: #e4e9ff;
-        padding: 1.5rem;
-    }
-
-    .dashboard-grid-shell.is-edit-mode::after {
-        opacity: 1;
-    }
-
-    .dashboard-grid-wrapper {
-        position: relative;
-        border-radius: 12px;
-        padding: 0.5rem;
-        min-height: 360px;
-        z-index: 1;
-    }
-
-    .grid-stack {
-        min-height: 340px;
-    }
-
-    .grid-stack-item-content {
-        background: #fff;
-        border-radius: 14px;
-        border: 1px solid rgba(12, 25, 64, 0.08);
-        box-shadow: 0 18px 35px rgba(15, 30, 90, 0.05);
-        height: 100%;
-        padding: 1.25rem;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        z-index: 1;
-    }
-
-    .grid-stack.is-editing .grid-stack-item-content {
-        cursor: move;
-        box-shadow: 0 18px 40px rgba(33, 86, 255, 0.2);
-        border: 1px solid rgba(81, 99, 255, 0.45);
-    }
-
-    .grid-stack-item-content .remove-block {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        display: none;
-        background: rgba(255, 80, 80, 0.15);
-        border-radius: 20px;
-        padding: 2px 6px;
-    }
-
-    .grid-stack.is-editing .grid-stack-item-content .remove-block {
-        display: inline-flex;
-    }
-
-    .grid-stack.is-editing .grid-stack-item-content::after {
-        content: "";
-        position: absolute;
-        width: 16px;
-        height: 16px;
-        border-right: 2px solid #5163ff;
-        border-bottom: 2px solid #5163ff;
-        right: 6px;
-        bottom: 6px;
-        opacity: 0.85;
-    }
-
-    .grid-stack.is-editing .grid-stack-item-content::before {
-        content: "";
-        position: absolute;
-        width: 36px;
-        height: 6px;
-        border-radius: 999px;
-        background: rgba(81, 99, 255, 0.25);
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-    }
-
-    .dashboard-block.metric-block {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: flex-start;
-        height: 100%;
-        padding: 0.5rem 0;
-    }
-
-    .dashboard-block.metric-block .metric-value {
-        font-size: 2rem;
-        font-weight: 600;
-        color: #162447;
-        line-height: 1.1;
-    }
-
-    .dashboard-block.metric-block .metric-label {
-        margin-top: 0.35rem;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #6c779b;
-        font-weight: 500;
-    }
-
-    .dashboard-block-palette .card {
-        border: 1px solid rgba(99, 125, 255, 0.25);
-        background: linear-gradient(135deg, rgba(99, 125, 255, 0.05), rgba(255, 255, 255, 0.3));
-        height: 100%;
-        cursor: grab;
-        transition: transform 0.15s ease, border-color 0.15s ease;
-    }
-
-    .dashboard-block-palette .card:active {
-        cursor: grabbing;
-    }
-
-    .dashboard-block-palette .card.is-dragging {
-        border-color: rgba(99, 125, 255, 0.6);
-        box-shadow: 0 18px 30px rgba(33, 86, 255, 0.15);
-        transform: scale(1.02);
-    }
-
-    .dashboard-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .dashboard-toolbar .toolbar-actions {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .dashboard-toolbar .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        background: rgba(82, 110, 255, 0.12);
-        color: #3540a1;
-    }
-
-    .dashboard-toolbar .status-pill.status-pill--active {
-        background: rgba(14, 197, 224, 0.15);
-        color: #045a66;
-    }
-
-    #dashboardGrid[data-editing="true"]::before {
-        content: "Edit mode";
-        position: absolute;
-        top: -1.3rem;
-        right: 0;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #5163ff;
-    }
-
-    .grid-empty-state {
-        border: 2px dashed rgba(99, 125, 255, 0.4);
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        color: #657196;
-        background: rgba(255, 255, 255, 0.8);
-    }
-</style>
-
-<div class="d-none">
-    @Html.AntiForgeryToken()
-</div>
 
 <section class="content">
     <div class="container-fluid">
@@ -231,80 +74,142 @@
             </div>
         }
 
-        <div class="card shadow-sm mb-4">
+        @{
+            var staticMetrics = new[]
+            {
+                (Label: "Assigned actions", Count: Model.AssignedActions?.Count ?? 0),
+                (Label: "Critical issues", Count: Model.HighPriorityIssues?.Count ?? 0),
+                (Label: "Unreviewed risks", Count: Model.UnmonitoredRisks?.Count ?? 0),
+                (Label: "Milestones this fortnight", Count: Model.MilestonesDueThisWeek?.Count ?? 0)
+            };
+            var myProjectRows = (Model.MyProjects ?? Array.Empty<Project>()).Take(6).ToList();
+            var leadershipRows = (Model.OversightProjects ?? Array.Empty<Project>()).Take(6).ToList();
+            var hasLeadershipScope = Model.LeadershipAssignments?.Any() ?? false;
+            var highestRoleLabel = Model.HighestLeadershipRole switch
+            {
+                LeadershipRoleTier.PermanentSecretary => "Permanent Secretary",
+                LeadershipRoleTier.DirectorGeneral => "Director General",
+                LeadershipRoleTier.CLevel => "C-Level",
+                LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
+                LeadershipRoleTier.PortfolioLead => "Portfolio lead / G6",
+                _ => "Leadership overview"
+            };
+        }
+
+        <div class="card shadow-sm mb-4 dashboard-static">
             <div class="card-body">
-                <div class="dashboard-toolbar mb-3">
-                    <div>
-                        <h5 class="mb-1">Personal dashboard</h5>
-                        <small class="text-muted">Drag, resize and curate exactly what you need.</small>
-                    </div>
-                    <div class="toolbar-actions">
-                        <span class="status-pill" id="dashboardModeStatus"><i class="fas fa-lock mr-1"></i>View only</span>
-                        <button class="btn btn-outline-secondary btn-sm" id="toggleLayoutMode">
-                            <i class="fas fa-arrows-alt"></i> Enter edit mode
-                        </button>
-                        <button class="btn btn-primary btn-sm" id="addBlockBtn">
-                            <i class="fas fa-plus"></i> Add block
-                        </button>
-                    </div>
-                </div>
-                <div class="dashboard-grid-shell" id="dashboardGridShell">
-                    <div class="dashboard-grid-wrapper">
-                        <div id="dashboardGrid"
-                             class="grid-stack"
-                             data-layout='@Html.Raw(layoutJson)'
-                             data-block-definitions='@Html.Raw(blockDefinitionsJson)'>
-                            @foreach (var block in Model.BlockInstances ?? Array.Empty<DashboardBlockInstance>())
-                            {
-                                var definition = (Model.BlockDefinitions ?? Array.Empty<DashboardBlockDefinition>())
-                                    .FirstOrDefault(d => d.Type == block.Type);
-                                var minWidth = definition?.MinWidth ?? 1;
-                                var minHeight = definition?.MinHeight ?? 1;
-                                <div class="grid-stack-item"
-                                     data-block-id="@block.Id"
-                                     data-block-type="@block.Type"
-                                     gs-x="@block.X"
-                                     gs-y="@block.Y"
-                                     gs-width="@block.Width"
-                                     gs-height="@block.Height"
-                                     gs-min-width="@minWidth"
-                                     gs-min-height="@minHeight">
-                                    <div class="grid-stack-item-content">
-                                        <button type="button" class="btn btn-link text-danger btn-sm remove-block" data-remove-block="@block.Id" title="Remove block">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                        @await Html.PartialAsync("_DashboardBlockContent", (block, Model))
-                                    </div>
-                                </div>
-                            }
-                            <div id="dashboardEmptyState" class="grid-empty-state @((Model.BlockInstances?.Any() ?? false) ? "d-none" : string.Empty)">
-                                <p class="mb-1 font-weight-bold">No blocks yet</p>
-                                <p class="mb-2">Click “Add block” to pull in counts, charts or tables you care about.</p>
-                                <button class="btn btn-primary btn-sm" id="emptyStateAddBlock">Add block</button>
+                <div class="row">
+                    @foreach (var metric in staticMetrics)
+                    {
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@metric.Count</strong>
+                                <span>@metric.Label</span>
                             </div>
                         </div>
-                    </div>
+                    }
                 </div>
-                <div class="dashboard-block-palette collapse mt-3" id="blockPalette">
-                    <div class="row">
-                        @foreach (var definition in Model.BlockDefinitions ?? Array.Empty<DashboardBlockDefinition>())
+
+                <div class="row align-items-stretch">
+                    <div class="col-lg-7">
+                        <h3 class="h6 text-uppercase text-muted mt-2">My projects</h3>
+                        @if (!myProjectRows.Any())
                         {
-                            <div class="col-md-4 mb-3">
-                                <div class="card h-100 dashboard-block-card"
-                                     data-block-type="@definition.Type"
-                                     data-block-width="@definition.DefaultWidth"
-                                     data-block-height="@definition.DefaultHeight"
-                                     data-block-min-width="@definition.MinWidth"
-                                     data-block-min-height="@definition.MinHeight">
-                                    <div class="card-body d-flex flex-column">
-                                        <div class="badge badge-light text-uppercase mb-2">@definition.Category</div>
-                                        <h6 class="mb-2">@definition.Title</h6>
-                                        <p class="text-muted flex-grow-1">@definition.Description</p>
-                                        <button type="button" class="btn btn-primary btn-sm mt-2" data-add-block="@definition.Type" draggable="false">
-                                            Add block
-                                        </button>
+                            <p class="text-muted mb-0">You are not listed on any project teams yet.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm static-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Project</th>
+                                            <th scope="col">RAG</th>
+                                            <th scope="col">Business area</th>
+                                            <th scope="col">Next milestone</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in myProjectRows)
+                                        {
+                                            var nextMilestone = project.Milestones?
+                                                .Where(m => !m.IsDeleted && m.DueDate >= DateTime.Today)
+                                                .OrderBy(m => m.DueDate)
+                                                .FirstOrDefault();
+                                            <tr>
+                                                <td>@project.Title</td>
+                                                <td>
+                                                    <span class="badge badge-pill badge-light">@project.RagStatus</span>
+                                                </td>
+                                                <td>@project.BusinessArea</td>
+                                                <td>
+                                                    @if (nextMilestone != null)
+                                                    {
+                                                        @($"{nextMilestone.Name} – {nextMilestone.DueDate:dd MMM}")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No upcoming milestone</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                    <div class="col-lg-5 mt-4 mt-lg-0">
+                        @if (hasLeadershipScope)
+                        {
+                            <div class="leadership-panel h-100 d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h3 class="h6 text-uppercase text-muted mb-1">Business area oversight</h3>
+                                        <strong>@highestRoleLabel</strong>
+                                    </div>
+                                    <div>
+                                        @foreach (var area in Model.LeadershipBusinessAreas)
+                                        {
+                                            <span class="badge badge-primary mr-1 mb-1">@area</span>
+                                        }
                                     </div>
                                 </div>
+                                @if (!leadershipRows.Any())
+                                {
+                                    <p class="text-muted mb-0">No live projects found in your business areas.</p>
+                                }
+                                else
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-sm static-table mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Project</th>
+                                                    <th scope="col">RAG</th>
+                                                    <th scope="col">Issues</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var project in leadershipRows)
+                                                {
+                                                    var openIssues = project.Issues?.Count(i => !i.IsDeleted && !string.Equals(i.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
+                                                    <tr>
+                                                        <td>@project.Title</td>
+                                                        <td><span class="badge badge-light">@project.RagStatus</span></td>
+                                                        <td>@openIssues</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="leadership-panel h-100 d-flex align-items-center">
+                                <p class="mb-0 text-muted">When a user is given business area responsibility, their leadership overview will appear here.</p>
                             </div>
                         }
                     </div>
@@ -313,10 +218,3 @@
         </div>
     </div>
 </section>
-
-@section Scripts {
-    <script src="~/lib/gridstack/gridstack-all.js" asp-append-version="true"></script>
-    <script src="~/lib/chart.js/chart.umd.js" asp-append-version="true"></script>
-    <script src="~/js/dashboard-blocks.js" asp-append-version="true"></script>
-    <script src="~/js/dashboard-builder.js" asp-append-version="true"></script>
-}

@@ -373,6 +373,41 @@ public class HomeController : Controller
             UnreviewedRisks = unmonitoredRisks.Count
         };
 
+        var leadershipAssignments = await _context.UserBusinessAreaRoleAssignments
+            .Where(a => a.UserId == currentUser.Id)
+            .OrderByDescending(a => a.Role)
+            .ToListAsync();
+
+        var leadershipBusinessAreas = leadershipAssignments
+            .Select(a => a.BusinessAreaName?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var leadershipProjects = new List<Project>();
+        var leadershipMetrics = new DashboardMetrics();
+
+        if (leadershipBusinessAreas.Any())
+        {
+            var normalizedAreas = leadershipBusinessAreas
+                .Select(name => name!.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            leadershipProjects = await _context.Projects
+                .Where(p => !p.IsDeleted
+                            && !string.IsNullOrWhiteSpace(p.BusinessArea)
+                            && normalizedAreas.Contains(p.BusinessArea!.ToLower()))
+                .Include(p => p.Milestones.Where(m => !m.IsDeleted))
+                .Include(p => p.Issues.Where(i => !i.IsDeleted))
+                .Include(p => p.Risks.Where(r => !r.IsDeleted))
+                .Include(p => p.Actions.Where(a => !a.IsDeleted))
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
+            leadershipMetrics = BuildLeadershipMetrics(leadershipProjects);
+        }
+
         var sectionConfig = new DashboardSectionConfig
         {
             ShowTasksPanel = preference.ShowTasksPanel,
@@ -411,6 +446,7 @@ public class HomeController : Controller
             FirstName = firstName,
             SectionConfig = sectionConfig,
             Metrics = metrics,
+             LeadershipMetrics = leadershipMetrics,
             PriorityTasks = priorityTasks,
             Reminders = reminders,
             QuickLinks = quickLinks,
@@ -418,6 +454,7 @@ public class HomeController : Controller
             BlockDefinitions = blockDefinitions,
             BlockInstances = blockInstances,
             MyProjects = myProjects,
+            OversightProjects = leadershipProjects,
             MyProducts = myProducts,
             MilestonesDueThisWeek = milestonesDueThisWeek,
             OverdueMilestones = overdueMilestones,
@@ -427,7 +464,59 @@ public class HomeController : Controller
             AtRiskProjects = atRiskProjects,
             ProjectsNeedingPathToGreen = projectsNeedingPathToGreen,
             RecentSuccesses = recentSuccesses,
-            ProductsNeedingReturns = productsNeedingReturns
+            ProductsNeedingReturns = productsNeedingReturns,
+            LeadershipAssignments = leadershipAssignments,
+            LeadershipBusinessAreas = leadershipBusinessAreas,
+            HighestLeadershipRole = leadershipAssignments.Any()
+                ? leadershipAssignments.Max(a => a.Role)
+                : (LeadershipRoleTier?)null
+        };
+    }
+
+    private static DashboardMetrics BuildLeadershipMetrics(IReadOnlyCollection<Project> oversightProjects)
+    {
+        if (!oversightProjects.Any())
+        {
+            return new DashboardMetrics();
+        }
+
+        bool IsOpen(string? status) =>
+            !string.Equals(status, "closed", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase);
+
+        var oversightIssues = oversightProjects
+            .SelectMany(p => p.Issues.Where(i => !i.IsDeleted && IsOpen(i.Status)))
+            .ToList();
+
+        var oversightRisks = oversightProjects
+            .SelectMany(p => p.Risks.Where(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var oversightActions = oversightProjects
+            .SelectMany(p => p.Actions.Where(a => !a.IsDeleted && IsOpen(a.Status)))
+            .ToList();
+
+        var riskReviewOverdue = oversightRisks
+            .Where(r => !r.NextReviewDate.HasValue || r.NextReviewDate.Value < DateTime.Today.AddDays(-30))
+            .Count();
+
+        var upcomingMilestones = oversightProjects
+            .SelectMany(p => p.Milestones.Where(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)))
+            .Count();
+
+        var atRiskProjects = oversightProjects
+            .Count(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase));
+
+        return new DashboardMetrics
+        {
+            TasksDue = oversightActions.Count,
+            ProjectHealthIssues = atRiskProjects,
+            UpcomingMilestones = upcomingMilestones,
+            OpenIssues = oversightIssues.Count,
+            UnreviewedRisks = riskReviewOverdue
         };
     }
 

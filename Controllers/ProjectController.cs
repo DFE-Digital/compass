@@ -2186,7 +2186,9 @@ namespace Compass.Controllers
             }
 
             var existingPriorityId = project.DeliveryPriorityId;
+            var hadPriority = existingPriorityId.HasValue;
             var isChangingPriority = existingPriorityId != deliveryPriorityId;
+            var requiresReason = hadPriority && isChangingPriority;
 
             if (deliveryPriorityId.HasValue)
             {
@@ -2199,7 +2201,7 @@ namespace Compass.Controllers
                 }
             }
 
-            if (isChangingPriority && string.IsNullOrWhiteSpace(priorityChangeReason))
+            if (requiresReason && string.IsNullOrWhiteSpace(priorityChangeReason))
             {
                 TempData["ErrorMessage"] = "Tell us why the delivery priority is changing.";
                 return RedirectToAction(nameof(Details), new { id, tab = "overview" });
@@ -2208,7 +2210,9 @@ namespace Compass.Controllers
             project.DeliveryPriorityId = deliveryPriorityId;
             if (isChangingPriority)
             {
-                project.DeliveryPriorityChangeReason = priorityChangeReason?.Trim();
+                project.DeliveryPriorityChangeReason = requiresReason
+                    ? priorityChangeReason?.Trim()
+                    : null;
             }
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();

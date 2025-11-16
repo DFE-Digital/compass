@@ -10,6 +10,7 @@ public class HomeDashboardViewModel
     public string FirstName { get; set; } = "User";
     public DashboardSectionConfig SectionConfig { get; set; } = new();
     public DashboardMetrics Metrics { get; set; } = new();
+    public DashboardMetrics LeadershipMetrics { get; set; } = new();
 
     public IReadOnlyCollection<DashboardTaskItem> PriorityTasks { get; set; } = Array.Empty<DashboardTaskItem>();
     public IReadOnlyCollection<DashboardReminder> Reminders { get; set; } = Array.Empty<DashboardReminder>();
@@ -29,6 +30,10 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<Project> ProjectsNeedingPathToGreen { get; set; } = Array.Empty<Project>();
     public IReadOnlyCollection<ProjectSuccess> RecentSuccesses { get; set; } = Array.Empty<ProjectSuccess>();
     public IReadOnlyCollection<(ProductDto Product, ReturnStatus Status, DateTime DueDate)> ProductsNeedingReturns { get; set; } = Array.Empty<(ProductDto, ReturnStatus, DateTime)>();
+    public IReadOnlyCollection<Project> OversightProjects { get; set; } = Array.Empty<Project>();
+    public IReadOnlyCollection<UserBusinessAreaRoleAssignment> LeadershipAssignments { get; set; } = Array.Empty<UserBusinessAreaRoleAssignment>();
+    public IReadOnlyCollection<string> LeadershipBusinessAreas { get; set; } = Array.Empty<string>();
+    public LeadershipRoleTier? HighestLeadershipRole { get; set; }
 
     public bool HasData => MyProjects.Any() || MyProducts.Any();
 }
