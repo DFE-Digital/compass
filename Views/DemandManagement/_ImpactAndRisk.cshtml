@@ -1,0 +1,476 @@
+@model Compass.ViewModels.DemandManagement.DemandSectionDetailViewModel
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Compass.Models
+
+@{
+    var request = Model.Request;
+    var status = Model.Status;
+    var sectionKey = "ImpactAndRisk";
+    var availableRiskTypes = (Model.RiskTypes ?? Array.Empty<RiskType>())
+        .OrderBy(rt => rt.Name)
+        .ToList();
+    var linkedRiskTypes = request.RiskTypeLinks?
+        .Select(link => link.RiskType)
+        .Where(rt => rt != null)
+        .Select(rt => rt!)
+        .ToList() ?? new List<RiskType>();
+    var linkedRiskTypeIds = linkedRiskTypes
+        .Select(rt => rt.Id)
+        .ToHashSet();
+    var predictedRiskLevel = string.IsNullOrWhiteSpace(request.PredictedRiskLevel) ? null : request.PredictedRiskLevel;
+    var riskOverrideLevel = string.IsNullOrWhiteSpace(request.RiskLevelOverride) ? null : request.RiskLevelOverride;
+    var impactLevel = string.IsNullOrWhiteSpace(request.ImpactLevel) ? null : request.ImpactLevel;
+    var impactSummary = string.IsNullOrWhiteSpace(request.ImpactSummary) ? null : request.ImpactSummary;
+    var triLevelOptions = new[] { "High", "Medium", "Low" };
+
+    string? NormaliseTriLevelLocal(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+
+        if (trimmed.Equals("High", System.StringComparison.OrdinalIgnoreCase) || trimmed.Equals("H", System.StringComparison.OrdinalIgnoreCase) || trimmed == "3")
+        {
+            return "High";
+        }
+
+        if (trimmed.Equals("Medium", System.StringComparison.OrdinalIgnoreCase) || trimmed.Equals("Med", System.StringComparison.OrdinalIgnoreCase) || trimmed.Equals("M", System.StringComparison.OrdinalIgnoreCase) || trimmed == "2")
+        {
+            return "Medium";
+        }
+
+        if (trimmed.Equals("Low", System.StringComparison.OrdinalIgnoreCase) || trimmed.Equals("L", System.StringComparison.OrdinalIgnoreCase) || trimmed == "1")
+        {
+            return "Low";
+        }
+
+        return null;
+    }
+
+    string? DetermineHighestSeverity(IEnumerable<RiskType> riskTypes)
+    {
+        var highestScore = -1;
+        string? highestLevel = null;
+
+        foreach (var riskType in riskTypes)
+        {
+            var normalised = NormaliseTriLevelLocal(riskType.Severity);
+            if (normalised == null)
+            {
+                continue;
+            }
+
+            var score = normalised switch
+            {
+                "High" => 2,
+                "Medium" => 1,
+                _ => 0
+            };
+
+            if (score > highestScore)
+            {
+                highestScore = score;
+                highestLevel = normalised;
+            }
+        }
+
+        return highestLevel;
+    }
+
+    if (predictedRiskLevel == null)
+    {
+        var highestSeverity = DetermineHighestSeverity(linkedRiskTypes);
+        if (highestSeverity != null)
+        {
+            predictedRiskLevel = highestSeverity;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.RiskIfNotDelivered))
+        {
+            predictedRiskLevel = "Medium";
+        }
+    }
+
+    riskOverrideLevel = NormaliseTriLevelLocal(riskOverrideLevel);
+    predictedRiskLevel = NormaliseTriLevelLocal(predictedRiskLevel);
+    impactLevel = NormaliseTriLevelLocal(impactLevel);
+    var effectiveRiskLevel = riskOverrideLevel ?? predictedRiskLevel;
+}
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Impact and risk</h3>
+    </div>
+    <div class="card-body">
+        <dl class="definition-list">
+            <div class="definition-item">
+                <dt>Request description</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.OverviewAndBusinessNeed) ? "Not provided" : request.OverviewAndBusinessNeed)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-description-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Expected outcome</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.ExpectedBenefits) ? "Not provided" : request.ExpectedBenefits)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-benefits-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Risk if not delivered</dt>
+                <dd>
+                    <div class="definition-value">@(string.IsNullOrWhiteSpace(request.RiskIfNotDelivered) ? "Not provided" : request.RiskIfNotDelivered)</div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-risk-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Standard risk categories</dt>
+                <dd>
+                    <div class="definition-value">
+                        @if (linkedRiskTypes.Any())
+                        {
+                            <ul class="mb-0 pl-3">
+                                @foreach (var riskType in linkedRiskTypes.OrderBy(rt => rt.Name))
+                                {
+                                    <li>
+                                        <strong>@riskType.Name</strong>
+                                    @if (!string.IsNullOrWhiteSpace(riskType.Severity))
+                                    {
+                                        <span class="badge badge-soft ml-2">@riskType.Severity</span>
+                                    }
+                                        @if (!string.IsNullOrWhiteSpace(riskType.Summary))
+                                        {
+                                            <span class="text-muted">&ndash; @riskType.Summary</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Not linked</span>
+                        }
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-risk-types-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Risk level</dt>
+                <dd>
+                    <div class="definition-value">
+                        <div class="font-weight-semibold">@((effectiveRiskLevel ?? "Not set"))</div>
+                        <div class="text-muted small">
+                            Predicted: @(predictedRiskLevel ?? "Not available")
+                        </div>
+                        <div class="text-muted small">
+                            Override: @(riskOverrideLevel ?? "Not set")
+                        </div>
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-risk-level-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+
+            <div class="definition-item">
+                <dt>Impact level and summary</dt>
+                <dd>
+                    <div class="definition-value">
+                        <div class="font-weight-semibold">@((impactLevel ?? "Not set"))</div>
+                        <div class="text-muted small">
+                            @if (!string.IsNullOrWhiteSpace(impactSummary))
+                            {
+                                @impactSummary
+                            }
+                            else
+                            {
+                                <span>Summary not provided</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#impact-impact-details-modal">Change</button>
+                    </div>
+                </dd>
+            </div>
+        </dl>
+    </div>
+</div>
+
+<!-- Description modal -->
+<div class="modal fade" id="impact-description-modal" tabindex="-1" role="dialog" aria-labelledby="impact-description-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-description-label">Update request description</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="OverviewAndBusinessNeed" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="impact-description-input">Overview and business need</label>
+                        <textarea id="impact-description-input" name="stringValue" class="form-control" rows="6" required>@request.OverviewAndBusinessNeed</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Benefits modal -->
+<div class="modal fade" id="impact-benefits-modal" tabindex="-1" role="dialog" aria-labelledby="impact-benefits-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-benefits-label">Update expected outcome</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="ExpectedBenefits" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="impact-benefits-input">Describe the expected outcome</label>
+                        <textarea id="impact-benefits-input" name="stringValue" class="form-control" rows="5" required>@request.ExpectedBenefits</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Risk Types modal -->
+<div class="modal fade" id="impact-risk-types-modal" tabindex="-1" role="dialog" aria-labelledby="impact-risk-types-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-risk-types-label">Update standard risk categories</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="RiskTypes" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    @if (availableRiskTypes.Any())
+                    {
+                        <p class="text-muted">Select all standard risk categories that apply to this request.</p>
+                        <div class="risk-type-checkbox-list">
+                            @foreach (var riskType in availableRiskTypes)
+                            {
+                                var checkboxId = $"risk-type-{riskType.Id}";
+                                <div class="form-check mb-2">
+                                    <input type="checkbox"
+                                           class="form-check-input"
+                                           id="@checkboxId"
+                                           name="selectedRiskTypeIds"
+                                           value="@riskType.Id"
+                                           @(linkedRiskTypeIds.Contains(riskType.Id) ? "checked" : null) />
+                                    <label class="form-check-label" for="@checkboxId">
+                                        <span class="font-weight-semibold">@riskType.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(riskType.Severity))
+                                {
+                                    <span class="badge badge-soft ml-2 align-middle">@riskType.Severity</span>
+                                }
+                                        @if (!string.IsNullOrWhiteSpace(riskType.Summary))
+                                        {
+                                            <span class="text-muted d-block small">@riskType.Summary</span>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                        <small class="form-text text-muted">Unchecking all options removes the association with standard risks.</small>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0" role="alert">
+                            No standard risk types are available. Add risk types in the admin area to use this feature.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" @(availableRiskTypes.Any() ? null : "disabled")>Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Risk level modal -->
+<div class="modal fade" id="impact-risk-level-modal" tabindex="-1" role="dialog" aria-labelledby="impact-risk-level-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-risk-level-label">Set risk level override</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="RiskLevelOverride" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="impact-risk-level-select">Risk level override</label>
+                        <select id="impact-risk-level-select" name="stringValue" class="form-control">
+                            @if (string.IsNullOrEmpty(riskOverrideLevel))
+                            {
+                                <option value="" selected>Use predicted level (@(predictedRiskLevel ?? "not available"))</option>
+                            }
+                            else
+                            {
+                                <option value="">Use predicted level (@(predictedRiskLevel ?? "not available"))</option>
+                            }
+                            @foreach (var level in triLevelOptions)
+                            {
+                                if (string.Equals(riskOverrideLevel, level, System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@level" selected>@level</option>
+                                }
+                                else
+                                {
+                                    <option value="@level">@level</option>
+                                }
+                            }
+                        </select>
+                        <small class="form-text text-muted">Choose a level to override the predicted value for reporting, or keep the predicted level.</small>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        Current predicted risk: <strong>@(predictedRiskLevel ?? "Not available")</strong>.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Impact details modal -->
+<div class="modal fade" id="impact-impact-details-modal" tabindex="-1" role="dialog" aria-labelledby="impact-impact-details-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-impact-details-label">Update impact level and summary</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="ImpactDetails" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="impact-level-select">Impact level</label>
+                        <select id="impact-level-select" name="stringValue" class="form-control" required>
+                            @if (impactLevel == null)
+                            {
+                                <option value="" disabled selected>Select an impact level</option>
+                            }
+                            else
+                            {
+                                <option value="" disabled>Select an impact level</option>
+                            }
+                            @foreach (var level in triLevelOptions)
+                            {
+                                if (string.Equals(impactLevel, level, System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@level" selected>@level</option>
+                                }
+                                else
+                                {
+                                    <option value="@level">@level</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="impact-summary-input">Impact summary (optional)</label>
+                        <textarea id="impact-summary-input" name="secondaryValue" class="form-control" rows="4">@impactSummary</textarea>
+                        <small class="form-text text-muted">Summarise the impact in a sentence or two. Leave blank if it is not needed.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Risk modal -->
+<div class="modal fade" id="impact-risk-modal" tabindex="-1" role="dialog" aria-labelledby="impact-risk-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="impact-risk-label">Update risk if not delivered</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSectionField" asp-route-id="@request.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@sectionKey" />
+                <input type="hidden" name="fieldKey" value="RiskIfNotDelivered" />
+                <input type="hidden" name="returnUrl" value="@status.ReturnUrl" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="impact-risk-input">Risk if not delivered</label>
+                        <textarea id="impact-risk-input" name="stringValue" class="form-control" rows="5" required>@request.RiskIfNotDelivered</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

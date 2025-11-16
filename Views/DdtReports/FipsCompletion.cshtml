@@ -44,6 +44,8 @@
             </div>
         }
 
+        <div id="inlineAlertContainer"></div>
+
         <!-- Summary Cards -->
         <div class="row mb-3">
             <!-- Business Area Completion -->
@@ -65,7 +67,7 @@
                                         <th class="text-center" style="width: 200px;">Progress</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="businessAreaTableBody">
                                     @foreach (var area in Model.BusinessAreaCompletions)
                                     {
                                         var completionClass = area.AverageCompletionPercentage >= 80 ? "success" : 
@@ -100,65 +102,64 @@
             <!-- Right Side Cards -->
             <div class="col-lg-4 col-md-12">
                 <!-- Average Completion Summary -->
-                <div class="card @(Model.AverageCompletionPercentage >= 80 ? "card-success" : Model.AverageCompletionPercentage >= 60 ? "card-warning" : "card-danger") mb-3">
+                <div class="card @(Model.AverageCompletionPercentage >= 80 ? "card-success" : Model.AverageCompletionPercentage >= 60 ? "card-warning" : "card-danger") mb-3" id="averageCompletionCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Average completion across all products
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
-                        <p class="text-muted mb-0 mt-2">Based on @Model.Products.Count products</p>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="averageCompletionValue">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="averageCompletionSubtitle">Based on @Model.Products.Count products</p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar @(Model.AverageCompletionPercentage >= 80 ? "bg-success" : Model.AverageCompletionPercentage >= 60 ? "bg-warning" : "bg-danger")" 
-                                 style="width: @Model.AverageCompletionPercentage%"></div>
+                                 style="width: @Model.AverageCompletionPercentage%" id="averageCompletionProgress"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Zero Completion Count -->
-                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success") mb-3">
+                <div class="card @(Model.ZeroCompletionCount > 0 ? "card-danger" : "card-success") mb-3" id="zeroCompletionCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Products at 0% completion
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.ZeroCompletionCount</h2>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="zeroCompletionValue">@Model.ZeroCompletionCount</h2>
                         <p class="text-muted mb-0 mt-2">
                             @{
                                 var zeroPercentage = Model.Products.Any() ? (Model.ZeroCompletionCount / (double)Model.Products.Count) * 100 : 0;
                             }
                             @if (Model.ZeroCompletionCount == 0)
                             {
-                                <span>All products have at least some completion data</span>
+                                <span id="zeroCompletionText">All products have at least some completion data (@zeroPercentage.ToString("F1")%)</span>
                             }
                             else if (Model.ZeroCompletionCount == 1)
                             {
-                                <span>product has no completion data</span>
+                                <span id="zeroCompletionText">product has no completion data (@zeroPercentage.ToString("F1")%)</span>
                             }
                             else
                             {
-                                <span>products have no completion data</span>
+                                <span id="zeroCompletionText">products have no completion data (@zeroPercentage.ToString("F1")%)</span>
                             }
-                            (@zeroPercentage.ToString("F1")%)
                         </p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar @(Model.ZeroCompletionCount > 0 ? "bg-danger" : "bg-success")" 
-                                 style="width: @zeroPercentage%"></div>
+                                 style="width: @zeroPercentage%" id="zeroCompletionProgress"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Full Completion Count -->
-                <div class="card @(Model.FullCompletionCount == Model.Products.Count ? "card-success" : "card-info")">
+                <div class="card @(Model.FullCompletionCount == Model.Products.Count ? "card-success" : "card-info")" id="fullCompletionCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Products with 100% completion
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.FullCompletionCount</h2>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="fullCompletionValue">@Model.FullCompletionCount</h2>
                         <p class="text-muted mb-0 mt-2">
                             @{
                                 var fullPercentage = Model.Products.Any() ? (Model.FullCompletionCount / (double)Model.Products.Count) * 100 : 0;
@@ -166,21 +167,20 @@
                             }
                             @if (Model.FullCompletionCount == 0)
                             {
-                                <span>No products fully complete yet</span>
+                                <span id="fullCompletionText">No products fully complete yet (@fullPercentage.ToString("F1")%)</span>
                             }
                             else if (Model.FullCompletionCount == 1)
                             {
-                                <span>product is fully complete</span>
+                                <span id="fullCompletionText">product is fully complete (@fullPercentage.ToString("F1")%)</span>
                             }
                             else
                             {
-                                <span>products are fully complete</span>
+                                <span id="fullCompletionText">products are fully complete (@fullPercentage.ToString("F1")%)</span>
                             }
-                            (@fullPercentage.ToString("F1")%)
                         </p>
                         <div class="progress progress-lg mt-3">
                             <div class="progress-bar bg-@fullColorClass" 
-                                 style="width: @fullPercentage%"></div>
+                                 style="width: @fullPercentage%" id="fullCompletionProgress"></div>
                         </div>
                     </div>
                 </div>
@@ -194,17 +194,17 @@
                     var phasePercentage = Model.Products.Any() ? (Model.CompletedPhaseCount / (double)Model.Products.Count) * 100 : 0;
                     var phaseColorClass = phasePercentage >= 80 ? "success" : phasePercentage >= 50 ? "warning" : "danger";
                 }
-                <div class="card card-@phaseColorClass">
+                <div class="card card-@phaseColorClass" id="completedPhaseCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Completed Phase
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedPhaseCount</h2>
-                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@phasePercentage.ToString("F1")%)</p>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedPhaseValue">@Model.CompletedPhaseCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedPhaseText">of @Model.Products.Count products (@phasePercentage.ToString("F1")%)</p>
                         <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@phaseColorClass" style="width: @phasePercentage%"></div>
+                            <div class="progress-bar bg-@phaseColorClass" style="width: @phasePercentage%" id="completedPhaseProgress"></div>
                         </div>
                     </div>
                 </div>
@@ -215,17 +215,17 @@
                     var businessAreaPercentage = Model.Products.Any() ? (Model.CompletedBusinessAreaCount / (double)Model.Products.Count) * 100 : 0;
                     var businessAreaColorClass = businessAreaPercentage >= 80 ? "success" : businessAreaPercentage >= 50 ? "warning" : "danger";
                 }
-                <div class="card card-@businessAreaColorClass">
+                <div class="card card-@businessAreaColorClass" id="completedBusinessAreaCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Completed Business Area
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedBusinessAreaCount</h2>
-                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@businessAreaPercentage.ToString("F1")%)</p>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedBusinessAreaValue">@Model.CompletedBusinessAreaCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedBusinessAreaText">of @Model.Products.Count products (@businessAreaPercentage.ToString("F1")%)</p>
                         <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%"></div>
+                            <div class="progress-bar bg-@businessAreaColorClass" style="width: @businessAreaPercentage%" id="completedBusinessAreaProgress"></div>
                         </div>
                     </div>
                 </div>
@@ -236,22 +236,45 @@
                     var urlPercentage = Model.Products.Any() ? (Model.CompletedUrlCount / (double)Model.Products.Count) * 100 : 0;
                     var urlColorClass = urlPercentage >= 80 ? "success" : urlPercentage >= 50 ? "warning" : "danger";
                 }
-                <div class="card card-@urlColorClass">
+                <div class="card card-@urlColorClass" id="completedUrlCard">
                     <div class="card-header">
                         <h3 class="card-title">
                             Completed URL
                         </h3>
                     </div>
                     <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.CompletedUrlCount</h2>
-                        <p class="text-muted mb-0 mt-2">of @Model.Products.Count products (@urlPercentage.ToString("F1")%)</p>
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;" id="completedUrlValue">@Model.CompletedUrlCount</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedUrlText">of @Model.Products.Count products (@urlPercentage.ToString("F1")%)</p>
                         <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@urlColorClass" style="width: @urlPercentage%"></div>
+                            <div class="progress-bar bg-@urlColorClass" style="width: @urlPercentage%" id="completedUrlProgress"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        @{
+            var sroOptions = Model.Products
+                .SelectMany(p => p.SeniorResponsibleOfficerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var iaoOptions = Model.Products
+                .SelectMany(p => p.InformationAssetOwnerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var deliveryManagerOptions = Model.Products
+                .SelectMany(p => p.DeliveryManagerContacts ?? new List<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(option => option, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
 
         <!-- Filters -->
         <div class="row mb-3">
@@ -306,6 +329,50 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="sroFilter">Senior responsible officer</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#sroFilter" placeholder="Search users" aria-label="Search senior responsible officer">
+                                    <select class="form-control" id="sroFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in sroOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="iaoFilter">Information asset owner</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#iaoFilter" placeholder="Search users" aria-label="Search information asset owner">
+                                    <select class="form-control" id="iaoFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in iaoOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 col-12">
+                                <div class="form-group">
+                                    <label for="deliveryManagerFilter">Delivery manager</label>
+                                    <input type="text" class="form-control form-control-sm filter-search mb-2" data-target="#deliveryManagerFilter" placeholder="Search users" aria-label="Search delivery manager">
+                                    <select class="form-control" id="deliveryManagerFilter">
+                                        <option value="">All contacts</option>
+                                        @foreach (var option in deliveryManagerOptions)
+                                        {
+                                            var optionValue = option.ToLowerInvariant();
+                                            <option value="@optionValue">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -320,6 +387,9 @@
                             Product completion status
                         </h3>
                         <div class="card-tools">
+                            <a asp-action="ExportFipsCompletion" class="btn btn-outline-success btn-sm mr-2">
+                                <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                            </a>
                             <span class="badge badge-info" id="productCount">@Model.Products.Count products</span>
                         </div>
                     </div>
@@ -357,10 +427,37 @@
                             <tbody>
                                 @foreach (var product in Model.Products)
                                 {
-                                    <tr data-product-title="@product.ProductTitle.ToLower()" 
-                                        data-fips-id="@product.FipsId.ToLower()"
+                                    var sroDisplayList = product.SeniorResponsibleOfficerContacts ?? new List<string>();
+                                    var iaoDisplayList = product.InformationAssetOwnerContacts ?? new List<string>();
+                                    var deliveryDisplayList = product.DeliveryManagerContacts ?? new List<string>();
+                                    var sroDataValue = string.Join("||", sroDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var iaoDataValue = string.Join("||", iaoDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var deliveryManagerDataValue = string.Join("||", deliveryDisplayList.Select(c => c.ToLowerInvariant()));
+                                    var userGroupDataValue = string.Join("||", (product.UserGroupNames ?? new List<string>()).Select(c => c.ToLowerInvariant()));
+                                    var userGroupIdsDataValue = string.Join(",", product.UserGroupCategoryValueIds ?? new List<int>());
+                                    var userGroupTitle = product.UserGroupNames.Any()
+                                        ? string.Join(", ", product.UserGroupNames)
+                                        : "No user groups";
+                                    <tr data-product-title="@product.ProductTitle.ToLowerInvariant()" 
+                                        data-fips-id="@product.FipsId.ToLowerInvariant()"
                                         data-completion="@product.CompletionPercentage"
-                                        data-business-area="@product.BusinessArea">
+                                        data-business-area="@product.BusinessArea"
+                                        data-has-phase="@(product.HasPhase ? "true" : "false")"
+                                        data-has-business-area="@(product.HasBusinessArea ? "true" : "false")"
+                                        data-has-product-url="@(product.HasProductUrl ? "true" : "false")"
+                                        data-user-groups-count="@product.UserGroupsCount"
+                                        data-user-groups="@userGroupDataValue"
+                                        data-user-group-ids="@userGroupIdsDataValue"
+                                        data-contacts-count="@product.ContactsCount"
+                                        data-sro="@sroDataValue"
+                                        data-sro-names="@string.Join("||", sroDisplayList)"
+                                        data-sro-display="@product.SeniorResponsibleOfficer"
+                                        data-iao="@iaoDataValue"
+                                        data-iao-names="@string.Join("||", iaoDisplayList)"
+                                        data-iao-display="@product.InformationAssetOwner"
+                                        data-delivery-manager="@deliveryManagerDataValue"
+                                        data-delivery-manager-names="@string.Join("||", deliveryDisplayList)"
+                                        data-delivery-manager-display="@product.DeliveryManager">
                                         <td>
                                             <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" target="_blank" rel="noopener noreferrer" class="font-weight-bold">
                                                 @product.ProductTitle
@@ -382,7 +479,7 @@
                                         <td class="text-center">
                                             @if (product.HasBusinessArea)
                                             {
-                                                <i class="fas fa-check-square text-success completion-icon" title="Business area assigned"></i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="@($"Business area: {product.BusinessArea}")"></i>
                                             }
                                             else
                                             {
@@ -412,7 +509,7 @@
                                         <td class="text-center">
                                             @if (product.UserGroupsCount > 0)
                                             {
-                                                <i class="fas fa-check-square text-success completion-icon" title="@product.UserGroupsCount user group(s)"></i><span class="completion-count">@product.UserGroupsCount</span>
+                                                <i class="fas fa-check-square text-success completion-icon" title="@userGroupTitle"></i><span class="completion-count">@product.UserGroupsCount</span>
                                             }
                                             else
                                             {
@@ -436,6 +533,9 @@
                                                     </a>
                                                     <a class="dropdown-item" href="#" data-action="set-product-url" data-fips-id="@product.FipsId">
                                                         <i class="fas fa-link mr-2"></i> Set Product URL
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-user-groups" data-fips-id="@product.FipsId">
+                                                        <i class="fas fa-users mr-2"></i> Set User Groups
                                                     </a>
                                                     <div class="dropdown-divider"></div>
                                                     <a class="dropdown-item text-danger" href="#" data-action="update-state-rejected" data-fips-id="@product.FipsId" data-product-title="@product.ProductTitle">
@@ -465,6 +565,7 @@
 @{
     var phaseCategoryValues = ViewBag.PhaseCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
     var businessAreaCategoryValues = ViewBag.BusinessAreaCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var userGroupCategoryValues = ViewBag.UserGroupCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
 }
 
 <!-- Update Phase Modal -->
@@ -574,6 +675,43 @@
     </div>
 </div>
 
+<!-- Update User Groups Modal -->
+<div class="modal fade" id="updateUserGroupsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update User Groups</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProductUserGroups" method="post">
+                <input type="hidden" name="fipsId" id="userGroupsFipsId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select all user groups that apply to this product. Leave blank to clear user groups.</p>
+                    <div class="form-group">
+                        <label for="userGroupCategoryValueIds" class="form-label">User groups</label>
+                        <select class="form-control" id="userGroupCategoryValueIds" name="userGroupCategoryValueIds" multiple size="10">
+                            @foreach (var userGroup in userGroupCategoryValues.OrderBy(u => u.SortOrder ?? int.MaxValue).ThenBy(u => u.Name))
+                            {
+                                <option value="@userGroup.Id">@userGroup.Name</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">
+                            Hold Ctrl (Windows) or Command (Mac) to select multiple user groups. Leave all options unselected to remove user groups.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save User Groups</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Update State to Rejected Modal -->
 <div class="modal fade" id="updateStateModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
@@ -636,132 +774,446 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            var allProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products.Select(p => new {
-                ProductTitle = p.ProductTitle,
-                FipsId = p.FipsId,
-                HasPhase = p.HasPhase,
-                HasBusinessArea = p.HasBusinessArea,
-                ContactsCount = p.ContactsCount,
-                HasProductUrl = p.HasProductUrl,
-                UserGroupsCount = p.UserGroupsCount,
-                CompletionPercentage = p.CompletionPercentage
-            })));
-            
-            // Initialize sortable table
             initializeSortableTable($('#completionTable'));
-            
-            // Modal functions
-            function openUpdatePhaseModal(fipsId) {
-                $('#phaseFipsId').val(fipsId);
-                $('#phaseCategoryValueId').val('');
-                $('#updatePhaseModal').modal('show');
-            }
-            
-            function openUpdateBusinessAreaModal(fipsId) {
-                $('#businessAreaFipsId').val(fipsId);
-                $('#businessAreaCategoryValueId').val('');
-                $('#updateBusinessAreaModal').modal('show');
-            }
-            
-            function openUpdateProductUrlModal(fipsId) {
-                $('#productUrlFipsId').val(fipsId);
-                $('#productUrl').val('');
-                $('#updateProductUrlModal').modal('show');
-            }
-            
-            function openUpdateStateModal(fipsId, productTitle) {
-                $('#stateFipsId').val(fipsId);
-                $('#stateProductTitle').text(productTitle);
-                $('#updateStateModal').modal('show');
-            }
-            
-            // Handle dropdown menu clicks
+
+            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter, #sroFilter, #iaoFilter, #deliveryManagerFilter')
+                .on('input change', filterTable);
+
             $(document).on('click', '[data-action="set-phase"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var fipsId = $(this).data('fips-id');
-                openUpdatePhaseModal(fipsId);
+                $('#phaseFipsId').val(fipsId);
+                $('#phaseCategoryValueId').val('');
+                $('#updatePhaseModal').modal('show');
                 return false;
             });
-            
+
             $(document).on('click', '[data-action="set-business-area"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var fipsId = $(this).data('fips-id');
-                openUpdateBusinessAreaModal(fipsId);
+                $('#businessAreaFipsId').val(fipsId);
+                $('#businessAreaCategoryValueId').val('');
+                $('#updateBusinessAreaModal').modal('show');
                 return false;
             });
-            
+
             $(document).on('click', '[data-action="set-product-url"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var fipsId = $(this).data('fips-id');
-                openUpdateProductUrlModal(fipsId);
+                $('#productUrlFipsId').val(fipsId);
+                $('#productUrl').val('');
+                $('#updateProductUrlModal').modal('show');
                 return false;
             });
-            
+
+            $(document).on('click', '[data-action="set-user-groups"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var $row = $(this).closest('tr');
+                var fipsId = $(this).data('fips-id');
+                var selectedIds = ($row.attr('data-user-group-ids') || '')
+                    .toString()
+                    .split(',')
+                    .filter(Boolean);
+                $('#userGroupsFipsId').val(fipsId);
+                var $select = $('#userGroupCategoryValueIds');
+                $select.val(null);
+                if (selectedIds.length) {
+                    $select.val(selectedIds);
+                }
+                $('#updateUserGroupsModal').modal('show');
+                return false;
+            });
+
             $(document).on('click', '[data-action="update-state-rejected"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var fipsId = $(this).data('fips-id');
                 var productTitle = $(this).data('product-title');
-                openUpdateStateModal(fipsId, productTitle);
+                $('#stateFipsId').val(fipsId);
+                $('#stateProductTitle').text(productTitle);
+                $('#updateStateModal').modal('show');
                 return false;
             });
-            
-            // Filter functionality
-            $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter').on('input change', function() {
-                filterTable();
-            });
-            
-            // Function to filter zero completion products
+
+            setupAjaxForm('#updatePhaseModal form', handleProductUpdate);
+            setupAjaxForm('#updateBusinessAreaModal form', handleProductUpdate);
+            setupAjaxForm('#updateProductUrlModal form', handleProductUpdate);
+            setupAjaxForm('#updateUserGroupsModal form', handleProductUpdate);
+
             window.filterZeroCompletion = function() {
                 $('#completionFilter').val('');
                 $('#statusFilter').val('');
                 $('#businessAreaFilter').val('');
+                $('#sroFilter').val('');
+                $('#iaoFilter').val('');
+                $('#deliveryManagerFilter').val('');
                 $('#searchInput').val('');
-                
-                // Filter to show only 0% completion products
-                var visibleCount = 0;
-                $('#completionTable tbody tr').each(function() {
-                    var $row = $(this);
-                    var completion = parseFloat($row.data('completion')) || 0;
-                    
-                    if (completion === 0) {
-                        $row.show();
-                        visibleCount++;
-                    } else {
-                        $row.hide();
-                    }
-                });
-                
-                $('#productCount').text(visibleCount + ' products');
-                
-                // Scroll to table
+                filterTable();
                 $('html, body').animate({
                     scrollTop: $('#completionTable').offset().top - 100
                 }, 500);
             };
-            
+
+            filterTable();
+            recalculateSummary();
+
+            function setupAjaxForm(selector, onSuccess) {
+                var $form = $(selector);
+                $form.on('submit', function(e) {
+                    e.preventDefault();
+                    var formData = new FormData(this);
+                    var $submitButton = $form.find('button[type="submit"]');
+                    $submitButton.prop('disabled', true);
+                    fetch($form.attr('action'), {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData,
+                        credentials: 'same-origin'
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data && data.success) {
+                            if (typeof onSuccess === 'function') {
+                                onSuccess(data);
+                            }
+                            $form.closest('.modal').modal('hide');
+                        } else {
+                            showInlineAlert('danger', (data && data.message) || 'Unable to complete the update. Please try again.');
+                        }
+                    })
+                    .catch(function() {
+                        showInlineAlert('danger', 'An unexpected error occurred. Please try again.');
+                    })
+                    .finally(function() {
+                        $submitButton.prop('disabled', false);
+                    });
+                });
+            }
+
+            function handleProductUpdate(response) {
+                if (!response) {
+                    return;
+                }
+
+                if (response.message) {
+                    showInlineAlert(response.success ? 'success' : 'danger', response.message);
+                }
+
+                if (response.product) {
+                    updateRowWithProduct(response.product);
+                    recalculateSummary();
+                    filterTable();
+                }
+            }
+
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                if (!message) {
+                    $container.empty();
+                    return;
+                }
+
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+
+                $container.html(alertHtml);
+            }
+
+            function escapeHtml(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function toLowerJoined(values) {
+                if (!Array.isArray(values) || !values.length) {
+                    return '';
+                }
+                return values.map(function(value) { return (value || '').toLowerCase(); }).join('||');
+            }
+
+            function joinOriginalList(values) {
+                if (!Array.isArray(values) || !values.length) {
+                    return '';
+                }
+                return values.join('||');
+            }
+
+            function updateRowWithProduct(product) {
+                if (!product || !product.fipsId) {
+                    return;
+                }
+
+                var fipsId = (product.fipsId || '').toLowerCase();
+                var $row = $('#completionTable tbody tr').filter(function() {
+                    return $(this).attr('data-fips-id') === fipsId;
+                });
+
+                if (!$row.length) {
+                    return;
+                }
+
+                var businessArea = product.businessArea || 'Unassigned';
+                var completion = parseFloat(product.completionPercentage) || 0;
+                var hasPhase = !!product.hasPhase;
+                var hasBusinessArea = !!product.hasBusinessArea;
+                var hasProductUrl = !!product.hasProductUrl;
+                var contactsCount = product.contactsCount || 0;
+                var userGroupNames = product.userGroupNames || [];
+                var userGroupIds = (product.userGroupCategoryValueIds || []).map(function(id) { return id.toString(); });
+                var userGroupsCount = product.userGroupsCount != null ? product.userGroupsCount : userGroupNames.length;
+                var userGroupTitle = userGroupNames.length ? userGroupNames.join(', ') : 'No user groups';
+
+                var sroContacts = product.seniorResponsibleOfficerContacts || [];
+                var iaoContacts = product.informationAssetOwnerContacts || [];
+                var deliveryContacts = product.deliveryManagerContacts || [];
+
+                $row.attr('data-completion', completion).data('completion', completion);
+                $row.attr('data-business-area', businessArea).data('business-area', businessArea);
+                $row.attr('data-has-phase', hasPhase).data('has-phase', hasPhase);
+                $row.attr('data-has-business-area', hasBusinessArea).data('has-business-area', hasBusinessArea);
+                $row.attr('data-has-product-url', hasProductUrl).data('has-product-url', hasProductUrl);
+                $row.attr('data-user-groups-count', userGroupsCount).data('user-groups-count', userGroupsCount);
+                $row.attr('data-user-groups', toLowerJoined(userGroupNames)).data('user-groups', toLowerJoined(userGroupNames));
+                $row.attr('data-user-group-ids', userGroupIds.join(',')).data('user-group-ids', userGroupIds.join(','));
+                $row.attr('data-contacts-count', contactsCount).data('contacts-count', contactsCount);
+                $row.attr('data-sro', toLowerJoined(sroContacts)).data('sro', toLowerJoined(sroContacts));
+                $row.attr('data-sro-display', product.seniorResponsibleOfficer || '').data('sro-display', product.seniorResponsibleOfficer || '');
+                $row.attr('data-sro-names', joinOriginalList(product.seniorResponsibleOfficerContacts || [])).data('sro-names', joinOriginalList(product.seniorResponsibleOfficerContacts || []));
+                $row.attr('data-iao', toLowerJoined(iaoContacts)).data('iao', toLowerJoined(iaoContacts));
+                $row.attr('data-iao-display', product.informationAssetOwner || '').data('iao-display', product.informationAssetOwner || '');
+                $row.attr('data-iao-names', joinOriginalList(product.informationAssetOwnerContacts || [])).data('iao-names', joinOriginalList(product.informationAssetOwnerContacts || []));
+                $row.attr('data-delivery-manager', toLowerJoined(deliveryContacts)).data('delivery-manager', toLowerJoined(deliveryContacts));
+                $row.attr('data-delivery-manager-display', product.deliveryManager || '').data('delivery-manager-display', product.deliveryManager || '');
+                $row.attr('data-delivery-manager-names', joinOriginalList(product.deliveryManagerContacts || [])).data('delivery-manager-names', joinOriginalList(product.deliveryManagerContacts || []));
+
+                var phaseHtml = hasPhase
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Phase assigned"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Phase missing"></i>';
+                var businessAreaHtml = hasBusinessArea
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Business area: ' + escapeHtml(businessArea) + '"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Business area missing"></i>';
+                var contactsHtml = contactsCount > 0
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="' + contactsCount + ' contact(s)"></i><span class="completion-count">' + contactsCount + '</span>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="No contacts"></i><span class="completion-count">0</span>';
+                var productUrlHtml = hasProductUrl
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="Product URL provided"></i>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="Product URL missing"></i>';
+                var userGroupsHtml = userGroupsCount > 0
+                    ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(userGroupTitle) + '"></i><span class="completion-count">' + userGroupsCount + '</span>'
+                    : '<i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>';
+
+                $row.find('td').eq(2).html(phaseHtml);
+                $row.find('td').eq(3).html(businessAreaHtml);
+                $row.find('td').eq(4).html(contactsHtml);
+                $row.find('td').eq(5).html(productUrlHtml);
+                $row.find('td').eq(6).html(userGroupsHtml);
+                $row.find('td').eq(7).text(completion.toFixed(1) + '%');
+            }
+
+            function refreshBusinessAreaFilterOptions() {
+                var $filter = $('#businessAreaFilter');
+                var selectedValue = $filter.val();
+                var areas = {};
+
+                $('#completionTable tbody tr').each(function() {
+                    var value = ($(this).attr('data-business-area') || 'Unassigned').toString();
+                    if (!areas[value]) {
+                        areas[value] = true;
+                    }
+                });
+
+                var areaList = Object.keys(areas).sort(function(a, b) { return a.localeCompare(b); });
+                $filter.empty();
+                $filter.append('<option value="">All business areas</option>');
+                areaList.forEach(function(area) {
+                    var selected = selectedValue === area ? ' selected' : '';
+                    $filter.append('<option value="' + escapeHtml(area) + '"' + selected + '>' + escapeHtml(area) + '</option>');
+                });
+            }
+
+            function recalculateSummary() {
+                var $rows = $('#completionTable tbody tr');
+                var total = $rows.length;
+                var completionSum = 0;
+                var zeroCount = 0;
+                var fullCount = 0;
+                var phaseCount = 0;
+                var businessAreaCount = 0;
+                var urlCount = 0;
+                var businessAreaMap = {};
+
+                $rows.each(function() {
+                    var $row = $(this);
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    completionSum += completion;
+                    if (Math.abs(completion) < 0.0001) zeroCount++;
+                    if (Math.abs(completion - 100) < 0.0001) fullCount++;
+                    if (isTruthy($row.attr('data-has-phase'))) phaseCount++;
+                    if (isTruthy($row.attr('data-has-business-area'))) businessAreaCount++;
+                    if (isTruthy($row.attr('data-has-product-url'))) urlCount++;
+
+                    var areaName = ($row.attr('data-business-area') || 'Unassigned').toString();
+                    if (!businessAreaMap[areaName]) {
+                        businessAreaMap[areaName] = { count: 0, sum: 0 };
+                    }
+                    businessAreaMap[areaName].count++;
+                    businessAreaMap[areaName].sum += completion;
+                });
+
+                var average = total ? completionSum / total : 0;
+                updateAverageCard(total, average);
+                updateZeroCard(total, zeroCount);
+                updateFullCard(total, fullCount);
+                updateCompletionCard('#completedPhaseCard', '#completedPhaseValue', '#completedPhaseText', '#completedPhaseProgress', phaseCount, total);
+                updateCompletionCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', businessAreaCount, total);
+                updateCompletionCard('#completedUrlCard', '#completedUrlValue', '#completedUrlText', '#completedUrlProgress', urlCount, total);
+                rebuildBusinessAreaTable(businessAreaMap);
+                refreshBusinessAreaFilterOptions();
+                refreshContactFilterOptions();
+            }
+
+            function updateAverageCard(total, average) {
+                var cardClass = getCompletionBracket(average);
+                $('#averageCompletionCard').removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $('#averageCompletionValue').text(average.toFixed(1) + '%');
+                $('#averageCompletionSubtitle').text('Based on ' + total + ' ' + formatProductLabel(total));
+                $('#averageCompletionProgress').removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', average + '%');
+            }
+
+            function updateZeroCard(total, zeroCount) {
+                var zeroPercentage = total ? (zeroCount / total) * 100 : 0;
+                var cardClass = zeroCount > 0 ? 'card-danger' : 'card-success';
+                var barClass = zeroCount > 0 ? 'bg-danger' : 'bg-success';
+                var text;
+
+                if (zeroCount === 0) {
+                    text = 'All products have at least some completion data';
+                } else if (zeroCount === 1) {
+                    text = 'product has no completion data';
+                } else {
+                    text = 'products have no completion data';
+                }
+
+                $('#zeroCompletionCard').removeClass('card-success card-danger').addClass(cardClass);
+                $('#zeroCompletionValue').text(zeroCount);
+                $('#zeroCompletionText').text(text + ' (' + zeroPercentage.toFixed(1) + '%)');
+                $('#zeroCompletionProgress').removeClass('bg-success bg-danger').addClass(barClass).css('width', zeroPercentage + '%');
+            }
+
+            function updateFullCard(total, fullCount) {
+                var fullPercentage = total ? (fullCount / total) * 100 : 0;
+                var cardClass = (fullCount === total && total > 0) ? 'card-success' : 'card-info';
+                var fullColorClass = fullPercentage >= 80 ? 'success' : fullPercentage >= 50 ? 'warning' : 'info';
+                var text;
+
+                if (fullCount === 0) {
+                    text = 'No products fully complete yet';
+                } else if (fullCount === 1) {
+                    text = 'product is fully complete';
+                } else {
+                    text = 'products are fully complete';
+                }
+
+                $('#fullCompletionCard').removeClass('card-success card-info').addClass(cardClass);
+                $('#fullCompletionValue').text(fullCount);
+                $('#fullCompletionText').text(text + ' (' + fullPercentage.toFixed(1) + '%)');
+                $('#fullCompletionProgress').removeClass('bg-success bg-warning bg-info').addClass('bg-' + fullColorClass).css('width', fullPercentage + '%');
+            }
+
+            function updateCompletionCard(cardSelector, valueSelector, textSelector, progressSelector, completedCount, total) {
+                var percentage = total ? (completedCount / total) * 100 : 0;
+                var cardClass = getCompletionBracket(percentage);
+                $(cardSelector).removeClass('card-success card-warning card-danger').addClass('card-' + cardClass);
+                $(valueSelector).text(completedCount);
+                $(textSelector).text('of ' + total + ' ' + formatProductLabel(total) + ' (' + percentage.toFixed(1) + '%)');
+                $(progressSelector).removeClass('bg-success bg-warning bg-danger').addClass('bg-' + cardClass).css('width', percentage + '%');
+            }
+
+            function rebuildBusinessAreaTable(businessAreaMap) {
+                var $tbody = $('#businessAreaTableBody');
+                $tbody.empty();
+
+                var areas = Object.keys(businessAreaMap).map(function(name) {
+                    var entry = businessAreaMap[name];
+                    var average = entry.count ? entry.sum / entry.count : 0;
+                    return {
+                        name: name,
+                        count: entry.count,
+                        average: average
+                    };
+                }).sort(function(a, b) {
+                    return b.average - a.average;
+                });
+
+                areas.forEach(function(area) {
+                    var completionClass = getCompletionBracket(area.average);
+                    var $tr = $('<tr>');
+                    $tr.append($('<td>').html('<strong>' + escapeHtml(area.name) + '</strong>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-info">' + area.count + '</span>'));
+                    $tr.append($('<td class="text-center">').html('<span class="badge badge-' + completionClass + ' badge-lg">' + area.average.toFixed(1) + '%</span>'));
+                    var $progressCell = $('<td>');
+                    var $progress = $('<div class="progress progress-sm">');
+                    var $bar = $('<div class="progress-bar">').addClass('bg-' + completionClass).css('width', area.average + '%');
+                    $progress.append($bar);
+                    $progressCell.append($progress);
+                    $tr.append($progressCell);
+                    $tbody.append($tr);
+                });
+            }
+
+            function getCompletionBracket(value) {
+                if (value >= 80) return 'success';
+                if (value >= 60) return 'warning';
+                return 'danger';
+            }
+
+            function formatProductLabel(count) {
+                return 'product' + (count === 1 ? '' : 's');
+            }
+
+            function isTruthy(value) {
+                if (typeof value === 'boolean') {
+                    return value;
+                }
+                if (typeof value === 'string') {
+                    return value.toLowerCase() === 'true';
+                }
+                return false;
+            }
+
             function filterTable() {
-                var searchTerm = $('#searchInput').val().toLowerCase();
-                var completionFilter = $('#completionFilter').val();
-                var statusFilter = $('#statusFilter').val();
-                var businessAreaFilter = $('#businessAreaFilter').val();
-                
+                var searchTerm = ($('#searchInput').val() || '').toString().toLowerCase();
+                var completionFilter = ($('#completionFilter').val() || '').toString();
+                var statusFilter = ($('#statusFilter').val() || '').toString();
+                var businessAreaFilter = ($('#businessAreaFilter').val() || '').toString();
+                var sroFilter = ($('#sroFilter').val() || '').toString();
+                var iaoFilter = ($('#iaoFilter').val() || '').toString();
+                var deliveryFilter = ($('#deliveryManagerFilter').val() || '').toString();
+
                 var visibleCount = 0;
-                
+
                 $('#completionTable tbody tr').each(function() {
                     var $row = $(this);
-                    var productTitle = $row.data('product-title') || '';
-                    var fipsId = $row.data('fips-id') || '';
-                    var completion = parseFloat($row.data('completion')) || 0;
-                    var businessArea = $row.data('business-area') || '';
-                    
-                    var matchesSearch = productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
-                    
+                    var productTitle = ($row.attr('data-product-title') || '').toString();
+                    var fipsId = ($row.attr('data-fips-id') || '').toString();
+                    var completion = parseFloat($row.attr('data-completion')) || 0;
+                    var businessArea = ($row.attr('data-business-area') || '').toString();
+                    var rowSro = splitDataList($row.attr('data-sro'));
+                    var rowIao = splitDataList($row.attr('data-iao'));
+                    var rowDelivery = splitDataList($row.attr('data-delivery-manager'));
+
+                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
                     var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
-                    
+
                     var matchesCompletion = true;
                     if (completionFilter) {
                         if (completionFilter === '100') {
@@ -776,25 +1228,112 @@
                             matchesCompletion = completion >= 0 && completion < 40;
                         }
                     }
-                    
+
                     var matchesStatus = true;
                     if (statusFilter === 'complete') {
                         matchesStatus = completion === 100;
                     } else if (statusFilter === 'incomplete') {
                         matchesStatus = completion < 100;
                     }
-                    
-                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea) {
+
+                    var matchesSro = !sroFilter || rowSro.indexOf(sroFilter) !== -1;
+                    var matchesIao = !iaoFilter || rowIao.indexOf(iaoFilter) !== -1;
+                    var matchesDelivery = !deliveryFilter || rowDelivery.indexOf(deliveryFilter) !== -1;
+
+                    if (matchesSearch && matchesCompletion && matchesStatus && matchesBusinessArea && matchesSro && matchesIao && matchesDelivery) {
                         $row.show();
                         visibleCount++;
                     } else {
                         $row.hide();
                     }
                 });
-                
-                $('#productCount').text(visibleCount + ' products');
+
+                $('#productCount').text(visibleCount + ' ' + formatProductLabel(visibleCount));
             }
-            
+
+            function refreshContactFilterOptions() {
+                rebuildContactFilter('#sroFilter', 'data-sro-names');
+                rebuildContactFilter('#iaoFilter', 'data-iao-names');
+                rebuildContactFilter('#deliveryManagerFilter', 'data-delivery-manager-names');
+                $('.filter-search').each(function() {
+                    applyFilterSearch($(this));
+                });
+            }
+
+            function rebuildContactFilter(selector, attrName) {
+                var $select = $(selector);
+                var selectedValue = ($select.val() || '').toString();
+                var names = {};
+
+                $('#completionTable tbody tr').each(function() {
+                    var attr = ($(this).attr(attrName) || '').toString();
+                    if (!attr) {
+                        return;
+                    }
+                    attr.split('||').forEach(function(name) {
+                        var trimmed = (name || '').trim();
+                        if (trimmed) {
+                            names[trimmed] = true;
+                        }
+                    });
+                });
+
+                var sorted = Object.keys(names).sort(function(a, b) {
+                    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+                });
+
+                $select.empty();
+                $select.append('<option value="">All contacts</option>');
+
+                var hasSelected = false;
+                sorted.forEach(function(name) {
+                    var value = name.toLowerCase();
+                    var isSelected = value === selectedValue;
+                    if (isSelected) {
+                        hasSelected = true;
+                    }
+                    $select.append('<option value="' + escapeHtml(value) + '"' + (isSelected ? ' selected' : '') + '>' + escapeHtml(name) + '</option>');
+                });
+
+                if (selectedValue && !hasSelected) {
+                    $select.val('');
+                }
+            }
+
+            $('.filter-search').on('input', function() {
+                applyFilterSearch($(this));
+            });
+
+            function applyFilterSearch($input) {
+                var term = ($input.val() || '').toString().toLowerCase();
+                var targetSelector = $input.data('target');
+                if (!targetSelector) {
+                    return;
+                }
+                var $select = $(targetSelector);
+                if (!$select.length) {
+                    return;
+                }
+                $select.find('option').each(function(index) {
+                    if (index === 0) {
+                        $(this).prop('hidden', false);
+                        return;
+                    }
+                    var text = $(this).text().toLowerCase();
+                    var match = !term || text.indexOf(term) !== -1;
+                    $(this).prop('hidden', !match);
+                });
+            }
+
+            function splitDataList(value) {
+                if (!value) {
+                    return [];
+                }
+                return value.toString().split('||').map(function(item) {
+                    return item.trim();
+                }).filter(Boolean);
+            }
+
             function initializeSortableTable(table) {
                 var currentSort = { column: null, direction: 'asc' };
                 

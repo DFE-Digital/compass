@@ -1,9 +1,24 @@
 @model IEnumerable<Compass.Models.ProductAccessibility>
+@using Compass.ViewModels.Accessibility
+@using System.Globalization
 
 @{
     ViewData["Title"] = "Accessibility Management";
     var summaryStats = ViewBag.SummaryStats as dynamic;
     var activeTab = ViewBag.ActiveTab as string ?? "products";
+    var totalOpenIssues = (int)(summaryStats?.TotalOpenIssues ?? 0);
+    var openIssuesBgClass = totalOpenIssues == 0 ? "bg-success" : (totalOpenIssues < 5 ? "bg-warning" : "bg-danger");
+    var openIssuesIcon = totalOpenIssues == 0 ? "fa-check-circle" : (totalOpenIssues < 5 ? "fa-exclamation-triangle" : "fa-times-circle");
+
+    var enrolledProductsCount = (int)(summaryStats?.TotalEnrolledProducts ?? 0);
+    var totalProducts = (int)(summaryStats?.TotalProducts ?? 0);
+    var productsBgClass = totalProducts == 0 ? "bg-secondary" : (enrolledProductsCount == totalProducts ? "bg-success" : "bg-primary");
+
+    var overdueIssues = (int)(summaryStats?.OverdueIssues ?? 0);
+    var overdueBgClass = overdueIssues == 0 ? "bg-success" : "bg-danger";
+
+    var totalAuditSpend = (decimal)(summaryStats?.TotalAuditSpend ?? 0m);
+    var auditBgClass = totalAuditSpend > 0 ? "bg-primary" : "bg-secondary";
 }
 
 <div class="content-header">
@@ -50,39 +65,59 @@
         <!-- Summary Cards -->
         <div class="row mb-4">
             <div class="col-lg-3 col-12">
-                <div class="info-box">
-                    <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">Open Issues</span>
-                        <span class="info-box-number">@(summaryStats?.TotalOpenIssues ?? 0)</span>
+                <div class="small-box @openIssuesBgClass">
+                    <div class="inner">
+                        <h3 class="small-box-text-heading">@totalOpenIssues</h3>
+                        <p>Open Issues</p>
                     </div>
+                    <div class="icon">
+                        <i class="fas @openIssuesIcon"></i>
+                    </div>
+                    <a href="@Url.Action("Index", new { tab = "issues" })" class="small-box-footer">
+                        View issues <i class="fas fa-arrow-circle-right"></i>
+                    </a>
                 </div>
             </div>
             <div class="col-lg-3 col-12">
-                <div class="info-box">
-                    <span class="info-box-icon bg-info"><i class="fas fa-box"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">Products Enrolled</span>
-                        <span class="info-box-number">@(summaryStats?.TotalEnrolledProducts ?? 0) / @(summaryStats?.TotalProducts ?? 0)</span>
+                <div class="small-box @productsBgClass">
+                    <div class="inner">
+                        <h3 class="small-box-text-heading">@enrolledProductsCount <small class="text-white-50">/ @totalProducts</small></h3>
+                        <p>Products Enrolled</p>
                     </div>
+                    <div class="icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <a href="@Url.Action("Index", new { tab = "products" })" class="small-box-footer">
+                        Manage products <i class="fas fa-arrow-circle-right"></i>
+                    </a>
                 </div>
             </div>
             <div class="col-lg-3 col-12">
-                <div class="info-box">
-                    <span class="info-box-icon bg-danger"><i class="fas fa-clock"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">Overdue Issues</span>
-                        <span class="info-box-number">@(summaryStats?.OverdueIssues ?? 0)</span>
+                <div class="small-box @overdueBgClass">
+                    <div class="inner">
+                        <h3 class="small-box-text-heading">@overdueIssues</h3>
+                        <p>Overdue Issues</p>
                     </div>
+                    <div class="icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <a href="@Url.Action("Index", new { tab = "issues", issueStatus = "open" })" class="small-box-footer">
+                        Prioritise fixes <i class="fas fa-arrow-circle-right"></i>
+                    </a>
                 </div>
             </div>
             <div class="col-lg-3 col-12">
-                <div class="info-box">
-                    <span class="info-box-icon bg-primary"><i class="fas fa-pound-sign"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">Total Audit Spend</span>
-                        <span class="info-box-number">£@((summaryStats?.TotalAuditSpend ?? 0).ToString("N2"))</span>
+                <div class="small-box @auditBgClass">
+                    <div class="inner">
+                        <h3 class="small-box-text-heading">£@totalAuditSpend.ToString("N2")</h3>
+                        <p>Total Audit Spend</p>
                     </div>
+                    <div class="icon">
+                        <i class="fas fa-pound-sign"></i>
+                    </div>
+                    <a href="@Url.Action("Index", new { tab = "audits" })" class="small-box-footer">
+                        Review audits <i class="fas fa-arrow-circle-right"></i>
+                    </a>
                 </div>
             </div>
         </div>
@@ -112,6 +147,12 @@
                                 <a class="nav-link @(activeTab == "audits" ? "active" : "")" 
                                    href="@Url.Action("Index", new { tab = "audits" })">
                                     <i class="fas fa-clipboard-check mr-2"></i> Audits
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link @(activeTab == "heatmap" ? "active" : "")"
+                                   href="@Url.Action("Index", new { tab = "heatmap" })">
+                                    <i class="fas fa-th-large mr-2"></i> Heatmap report
                                 </a>
                             </li>
                         </ul>
@@ -237,6 +278,51 @@
                                 <div class="form-group">
                                     <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
                                     <a href="@Url.Action("Index", new { tab = "audits" })" class="btn btn-default btn-sm btn-block">Clear All</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "heatmap")
+                {
+                    var typeOptions = (ViewBag.HeatmapTypeOptions as IEnumerable<string> ?? Enumerable.Empty<string>()).ToList();
+                    var selectedTypes = (ViewBag.SelectedHeatmapTypes as IEnumerable<string> ?? Enumerable.Empty<string>()).ToList();
+                    var selectedTypeSet = new HashSet<string>(selectedTypes, StringComparer.OrdinalIgnoreCase);
+                    var typeDescriptions = ViewBag.HeatmapTypeDescriptions as IDictionary<string, string> ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Filters</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="get" action="@Url.Action("Index")">
+                                <input type="hidden" name="tab" value="heatmap" />
+
+                                <fieldset class="form-group mb-3">
+                                    <legend class="font-weight-semibold small text-uppercase text-muted">Issue type</legend>
+                                    <div class="heatmap-type-options">
+                                        @foreach (var option in typeOptions)
+                                        {
+                                            var optionId = $"heatmap-type-{option.Replace(" ", "-").Replace("&", "and").ToLowerInvariant()}";
+                                            var isChecked = selectedTypeSet.Contains(option);
+                                            typeDescriptions.TryGetValue(option, out var description);
+                                            <div class="custom-control custom-checkbox mb-2">
+                                                <input type="checkbox" class="custom-control-input" id="@optionId" name="heatmapTypes" value="@option" @(isChecked ? "checked" : null)>
+                                                <label class="custom-control-label" for="@optionId">
+                                                    @option
+                                                    @if (!string.IsNullOrWhiteSpace(description))
+                                                    {
+                                                        <span class="text-muted d-block">@description</span>
+                                                    }
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                </fieldset>
+
+                                <div class="form-group mb-0">
+                                    <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                    <a href="@Url.Action("Index", new { tab = "heatmap" })" class="btn btn-default btn-sm btn-block">Clear filters</a>
                                 </div>
                             </form>
                         </div>
@@ -800,6 +886,264 @@
                         </div>
                     </div>
                 }
+                else if (activeTab == "heatmap")
+                {
+                    var heatmapData = ViewBag.WcagHeatmap as List<WcagHeatmapRow> ?? new List<WcagHeatmapRow>();
+                    var maxHeatmapCount = ViewBag.HeatmapMaxCount as int? ?? 0;
+                    var totalHeatmapIssues = ViewBag.HeatmapTotalIssues as int? ?? 0;
+                    var criteriaWithIssues = ViewBag.HeatmapCriteriaWithIssues as int? ?? 0;
+                    var unmatchedCodes = ViewBag.HeatmapUnmatchedCodes as List<string> ?? new List<string>();
+                    var selectedHeatmapTypes = (ViewBag.SelectedHeatmapTypes as IEnumerable<string> ?? Enumerable.Empty<string>()).ToList();
+                    var hasHeatmapFilter = selectedHeatmapTypes.Any();
+                    var levelDistributionPairs = ViewBag.HeatmapLevelDistribution as List<KeyValuePair<string, int>> ?? new List<KeyValuePair<string, int>>();
+                    var levelTotalIssues = ViewBag.HeatmapLevelTotal as int? ?? levelDistributionPairs.Sum(pair => pair.Value);
+                    var topCriteriaTuples = ViewBag.HeatmapTopCriteria as List<Tuple<string, string, int, string>> ?? new List<Tuple<string, string, int, string>>();
+
+                    var levelColourLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        { "A", "#2E90FA" },
+                        { "AA", "#12B76A" },
+                        { "AAA", "#7F56D9" },
+                        { "Other", "#475467" }
+                    };
+
+                    var pieRadius = 56;
+                    var pieCircumference = 2 * Math.PI * pieRadius;
+                    var pieSegments = new List<(string Label, int Count, double Dash, double Offset)>();
+                    double accumulated = 0;
+                    if (levelTotalIssues > 0)
+                    {
+                        foreach (var slice in levelDistributionPairs.Where(pair => pair.Value > 0))
+                        {
+                            var proportion = (double)slice.Value / levelTotalIssues;
+                            var dash = proportion * pieCircumference;
+                            var offset = pieCircumference - accumulated;
+                            pieSegments.Add((slice.Key, slice.Value, dash, offset));
+                            accumulated += dash;
+                        }
+                    }
+
+                    var topCriteriaMax = topCriteriaTuples.Any() ? topCriteriaTuples.Max(tuple => tuple.Item3) : 0;
+ 
+                    Func<int, string> heatmapClass = count =>
+                    {
+                        if (maxHeatmapCount <= 0 || count == 0) return "heatmap-cell-zero";
+                        if (count == maxHeatmapCount) return "heatmap-cell-max";
+                        var ratio = (double)count / maxHeatmapCount;
+                        if (ratio >= 0.66) return "heatmap-cell-high";
+                        if (ratio >= 0.33) return "heatmap-cell-medium";
+                        return "heatmap-cell-low";
+                    };
+
+                    var principleTitles = new Dictionary<string, string>
+                    {
+                        { "1", "Principle 1 – Perceivable" },
+                        { "2", "Principle 2 – Operable" },
+                        { "3", "Principle 3 – Understandable" },
+                        { "4", "Principle 4 – Robust" }
+                    };
+
+                    var principleGroups = heatmapData
+                        .GroupBy(row => string.IsNullOrWhiteSpace(row.Principle) ? "Other" : row.Principle)
+                        .OrderBy(group => int.TryParse(group.Key, out var number) ? number : int.MaxValue)
+                        .ToList();
+
+                    if (!heatmapData.Any())
+                    {
+                        <div class="card heatmap-card">
+                            <div class="card-header">
+                                <h3 class="card-title mb-0">WCAG issues heatmap</h3>
+                            </div>
+                            <div class="card-body">
+                                @if (hasHeatmapFilter)
+                                {
+                                    <p class="text-muted mb-0">No WCAG criteria match the selected filters yet. Adjust or clear the filters to explore other areas.</p>
+                                }
+                                else
+                                {
+                                    <p class="text-muted mb-0">No WCAG criteria have recorded issues yet. As issues are captured against specific criteria, they will appear here.</p>
+                                }
+                            </div>
+                        </div>
+
+                        if (unmatchedCodes.Any())
+                        {
+                            <div class="alert alert-warning mt-3" role="alert">
+                                <strong>Heads up:</strong> We found criteria references that did not match the WCAG catalogue – @string.Join(", ", unmatchedCodes.OrderBy(code => code)).
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="row heatmap-summary-row">
+                            <div class="col-xl-5 col-lg-6 mb-4">
+                                <div class="card heatmap-summary-card h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h3 class="card-title mb-0">Issues by WCAG level</h3>
+                                        @if (levelTotalIssues > 0)
+                                        {
+                                            <span class="text-muted small">@levelTotalIssues total</span>
+                                        }
+                                    </div>
+                                    <div class="card-body">
+                                        @if (levelTotalIssues == 0)
+                                        {
+                                            <p class="text-muted mb-0">No WCAG issues have been recorded yet. Once issues are logged, the split by level will appear here.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="wcag-level-chart" role="img" aria-labelledby="wcag-level-chart-title" aria-describedby="wcag-level-chart-desc">
+                                                <div id="wcag-level-chart-title" class="sr-only">Distribution of WCAG issues by conformance level</div>
+                                                <div id="wcag-level-chart-desc" class="sr-only">Pie chart showing @levelTotalIssues issues split across @string.Join(", ", levelDistributionPairs.Where(p => p.Value > 0).Select(p => $"{p.Value} {p.Key}"))</div>
+                                                <svg class="wcag-pie-chart" viewBox="0 0 140 140" focusable="false" aria-hidden="true">
+                                                    <circle class="wcag-pie-base" cx="70" cy="70" r="@pieRadius"></circle>
+                                                    @if (pieSegments.Any())
+                                                    {
+                                                        foreach (var segment in pieSegments)
+                                                        {
+                                                            var color = levelColourLookup.TryGetValue(segment.Label, out var lookupColor) ? lookupColor : "#475467";
+                                                            var dashArray = $"{segment.Dash.ToString("0.##", CultureInfo.InvariantCulture)} {(pieCircumference - segment.Dash).ToString("0.##", CultureInfo.InvariantCulture)}";
+                                                            var dashOffset = segment.Offset.ToString("0.##", CultureInfo.InvariantCulture);
+                                                            <circle class="wcag-pie-segment" cx="70" cy="70" r="@pieRadius" stroke="@color" stroke-dasharray="@dashArray" stroke-dashoffset="@dashOffset" transform="rotate(-90 70 70)"></circle>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <circle class="wcag-pie-fallback" cx="70" cy="70" r="@pieRadius"></circle>
+                                                    }
+                                                </svg>
+                                            </div>
+                                            <ul class="wcag-level-legend list-unstyled mb-0" role="list">
+                                                @foreach (var slice in levelDistributionPairs)
+                                                {
+                                                    var colour = levelColourLookup.TryGetValue(slice.Key, out var lookupColor) ? lookupColor : "#475467";
+                                                    var percentage = levelTotalIssues > 0 ? Math.Round((double)slice.Value / levelTotalIssues * 100) : 0;
+                                                    <li role="listitem">
+                                                        <span class="wcag-level-dot" style="background-color: @colour"></span>
+                                                        <span class="wcag-level-label">@slice.Key</span>
+                                                        <span class="wcag-level-value">@slice.Value <span class="text-muted">(@percentage%)</span></span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-7 col-lg-6 mb-4">
+                                <div class="card heatmap-summary-card h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h3 class="card-title mb-0">Top affected criteria</h3>
+                                        @if (topCriteriaTuples.Any())
+                                        {
+                                            <span class="text-muted small">Top 5 issues</span>
+                                        }
+                                    </div>
+                                    <div class="card-body">
+                                        @if (!topCriteriaTuples.Any())
+                                        {
+                                            <p class="text-muted mb-0">As WCAG issues are logged, the criteria with the highest volume will be highlighted here.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="wcag-bar-list" role="list">
+                                                @foreach (var tuple in topCriteriaTuples)
+                                                {
+                                                    var colour = levelColourLookup.TryGetValue(tuple.Item4 ?? string.Empty, out var lookupColor) ? lookupColor : "#2E90FA";
+                                                    var width = topCriteriaMax > 0 ? Math.Round((double)tuple.Item3 / topCriteriaMax * 100) : 0;
+                                                    <div class="wcag-bar-item" role="listitem">
+                                                        <div class="wcag-bar-heading">
+                                                            <span class="wcag-bar-code">
+                                                                @tuple.Item1
+                                                                @if (!string.IsNullOrWhiteSpace(tuple.Item4))
+                                                                {
+                                                                    <span class="badge wcag-bar-badge" style="color: @colour">@tuple.Item4</span>
+                                                                }
+                                                            </span>
+                                                            <span class="wcag-bar-count">@tuple.Item3 @((tuple.Item3 == 1) ? "issue" : "issues")</span>
+                                                        </div>
+                                                        <div class="wcag-bar-track" aria-hidden="true">
+                                                            <div class="wcag-bar-fill" style="width: @width%; background-color: @colour"></div>
+                                                        </div>
+                                                        <div class="wcag-bar-title text-muted">@tuple.Item2</div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+ 
+                        <div class="card heatmap-card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0">WCAG issues heatmap</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    Total mapped issues: <strong>@totalHeatmapIssues</strong>. Criteria affected: <strong>@criteriaWithIssues</strong>.
+                                </p>
+                                @if (hasHeatmapFilter)
+                                {
+                                    <div class="heatmap-filter-summary mb-3" role="status">
+                                        <span class="mr-2 font-weight-semibold">Filters active:</span>
+                                        <span>@string.Join(", ", selectedHeatmapTypes)</span>
+                                        <a class="btn btn-link btn-sm ml-auto" href="@Url.Action("Index", new { tab = "heatmap" })">Clear filters</a>
+                                    </div>
+                                }
+                                <div class="heatmap-legend mb-4" role="list" aria-label="Heatmap scale">
+                                    <span class="text-muted mr-2">Legend:</span>
+                                    <span class="heatmap-legend-item heatmap-cell-zero" role="listitem">Zero issues</span>
+                                    <span class="heatmap-legend-item heatmap-cell-low" role="listitem">Low (≤33%)</span>
+                                    <span class="heatmap-legend-item heatmap-cell-medium" role="listitem">Medium (34–66%)</span>
+                                    <span class="heatmap-legend-item heatmap-cell-high" role="listitem">High (67–99%)</span>
+                                    <span class="heatmap-legend-item heatmap-cell-max" role="listitem">Peak (100%)</span>
+                                </div>
+                                <p class="heatmap-scale-caption text-muted small" id="heatmap-scale-description">
+                                    Percentages show how each band compares with the busiest criterion. Peak represents the highest issue count (@maxHeatmapCount) in the grid.
+                                </p>
+
+                                @foreach (var principleGroup in principleGroups)
+                                {
+                                    var principleLabel = principleTitles.TryGetValue(principleGroup.Key, out var title)
+                                        ? title
+                                        : $"Principle {principleGroup.Key}";
+
+                                    <div class="heatmap-principle">
+                                        <div class="heatmap-principle-header d-flex justify-content-between align-items-center">
+                                            <h4 class="heatmap-principle-title">@principleLabel</h4>
+                                            <span class="text-muted small">@principleGroup.Sum(r => r.IssueCount) issues</span>
+                                        </div>
+                                        <div class="heatmap-grid" role="list" aria-describedby="heatmap-scale-description">
+                                            @foreach (var row in principleGroup
+                                                .OrderBy(r => r.Criterion, StringComparer.OrdinalIgnoreCase))
+                                            {
+                                                var cellClass = heatmapClass(row.IssueCount);
+                                                var issueLabel = row.IssueCount == 1 ? "issue" : "issues";
+                                                var cellLabel = $"{row.Criterion}: {row.IssueCount} {issueLabel}, WCAG {row.Version} level {row.Level}.";
+                                                <div class="heatmap-grid-cell @cellClass" role="listitem" tabindex="0" aria-label="@cellLabel">
+                                                    <div class="heatmap-grid-code">@row.Criterion</div>
+                                                    <div class="heatmap-grid-count">@row.IssueCount</div>
+                                                    <div class="heatmap-grid-meta">
+                                                        <span class="badge badge-secondary">@row.Level</span>
+                                                        <span class="text-muted">WCAG @row.Version</span>
+                                                    </div>
+                                                    <div class="heatmap-grid-title text-muted">@row.Title</div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (unmatchedCodes.Any())
+                                {
+                                    <div class="alert alert-warning mt-3 mb-0" role="alert">
+                                        <strong>Heads up:</strong> We found criteria references that did not match the WCAG catalogue – @string.Join(", ", unmatchedCodes.OrderBy(code => code)).
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>
@@ -999,3 +1343,342 @@
     }
 })();
 </script>
+
+<style>
+    .heatmap-card {
+        border: 1px solid #e2e8f0;
+    }
+
+    .heatmap-summary-card {
+        border: 1px solid #e2e8f0;
+        height: 100%;
+    }
+
+    .heatmap-summary-card .card-body {
+        padding: 1.25rem 1.5rem;
+    }
+
+    .wcag-level-chart {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
+
+    .wcag-pie-chart {
+        width: 160px;
+        height: 160px;
+    }
+
+    .wcag-pie-base,
+    .wcag-pie-fallback {
+        fill: none;
+        stroke: #e2e8f0;
+        stroke-width: 24;
+    }
+
+    .wcag-pie-segment {
+        fill: none;
+        stroke-width: 24;
+        stroke-linecap: butt;
+    }
+
+    .wcag-level-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .wcag-level-legend li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 500;
+        color: #0c1d3e;
+    }
+
+    .wcag-level-dot {
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 50%;
+        margin-right: 0.6rem;
+        display: inline-block;
+    }
+
+    .wcag-level-label {
+        flex: 1;
+    }
+
+    .wcag-level-value {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .wcag-bar-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .wcag-bar-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .wcag-bar-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        color: #0c1d3e;
+    }
+
+    .wcag-bar-code {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .wcag-bar-badge {
+        background-color: rgba(15, 23, 42, 0.08);
+        font-size: 0.75rem;
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+    }
+
+    .wcag-bar-count {
+        font-size: 0.9rem;
+        color: #475467;
+    }
+
+    .wcag-bar-track {
+        background-color: #e2e8f0;
+        border-radius: 999px;
+        height: 0.55rem;
+        overflow: hidden;
+    }
+
+    .wcag-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+    }
+
+    .wcag-bar-title {
+        font-size: 0.85rem;
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+    }
+
+    .heatmap-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .heatmap-legend-item {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 1px solid #cbd5f5;
+        color: #0c1d3e;
+        min-width: 3rem;
+    }
+
+    .heatmap-principle {
+        margin-bottom: 2rem;
+    }
+
+    .heatmap-principle-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0;
+    }
+
+    .heatmap-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .heatmap-grid-cell {
+        padding: 1rem;
+        border-radius: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-height: 160px;
+        border: 1px solid #d8e2f3;
+        color: #0c1d3e;
+        background-color: #f8fafc;
+        transition: box-shadow 0.15s ease, transform 0.15s ease;
+    }
+
+    .heatmap-grid-cell:hover {
+        box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+        transform: translateY(-2px);
+    }
+
+    .heatmap-grid-cell:focus {
+        outline: 3px solid #123e8a;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 3px rgba(18, 62, 138, 0.25);
+    }
+
+    .heatmap-grid-code {
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .heatmap-grid-count {
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .heatmap-grid-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: #1f2937;
+    }
+
+    .heatmap-grid-title {
+        font-size: 0.9rem;
+        line-height: 1.35;
+        margin-top: auto;
+        color: #334155;
+    }
+
+    .heatmap-table thead th {
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    .heatmap-table tbody tr td {
+        vertical-align: middle;
+    }
+
+    .heatmap-version-heading {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .heatmap-cell {
+        text-align: center;
+        font-weight: 600;
+        border-radius: 0.5rem;
+    }
+
+    .heatmap-cell-zero {
+        background-color: #f8fafc;
+        color: #0c1d3e;
+        border-color: #e2e8f0;
+    }
+
+    .heatmap-cell-low {
+        background-color: #eef2ff;
+        color: #0c1d3e;
+        border-color: #d6defa;
+    }
+
+    .heatmap-cell-medium {
+        background-color: #dbe7ff;
+        color: #0c1d3e;
+        border-color: #c2d4f7;
+    }
+
+    .heatmap-cell-high {
+        background-color: #c3daff;
+        color: #0c1d3e;
+        border-color: #a5c3f2;
+    }
+
+    .heatmap-cell-max {
+        background-color: #123e8a;
+        color: #ffffff;
+        border-color: #123e8a;
+    }
+
+    .heatmap-legend-item.heatmap-cell-max {
+        border-color: #123e8a;
+        color: #ffffff;
+    }
+
+    .heatmap-grid-meta .badge {
+        background-color: rgba(18, 62, 138, 0.12);
+        color: #0c1d3e;
+        font-weight: 600;
+    }
+
+    .heatmap-grid-cell .text-muted {
+        color: #475467 !important;
+    }
+
+    .heatmap-cell-max .heatmap-grid-meta,
+    .heatmap-cell-max .heatmap-grid-title {
+        color: #ffffff;
+    }
+
+    .heatmap-cell-max .heatmap-grid-meta .badge {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+    }
+
+    .heatmap-cell-max .text-muted {
+        color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .heatmap-scale-caption {
+        max-width: 48rem;
+    }
+
+    .heatmap-type-options .custom-control {
+        padding-left: 1.75rem;
+    }
+
+    .heatmap-type-options .custom-control-label {
+        font-weight: 600;
+        color: #0c1d3e;
+    }
+
+    .heatmap-type-options .custom-control-label .text-muted {
+        font-weight: 400;
+        font-size: 0.85rem;
+    }
+
+    .heatmap-filter-summary {
+        border-color: #d8e2f3;
+        background-color: #f4f7ff;
+        color: #102a63;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .heatmap-filter-summary .btn-link {
+        color: #123e8a;
+        font-weight: 600;
+    }
+</style>

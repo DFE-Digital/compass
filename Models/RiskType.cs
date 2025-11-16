@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Collections.Generic;
 
 namespace Compass.Models;
 
@@ -25,9 +26,15 @@ public class RiskType
     public bool IsActive { get; set; } = true;
 
     [Required]
+    [MaxLength(20)]
+    public string Severity { get; set; } = "Medium";
+
+    [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<DemandRequestRiskType> DemandRequestLinks { get; set; } = new List<DemandRequestRiskType>();
 }
 

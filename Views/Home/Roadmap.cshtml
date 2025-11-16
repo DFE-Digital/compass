@@ -1,129 +1,157 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+
 @{
-    ViewData["Title"] = "COMPASS Roadmap";
+    ViewData["Title"] = "Compass roadmap";
+
+    var roadmapEntries = new List<(string Title, string Area, string Status, DateTime? Date, string Summary)>();
+
+    var recentUpdates = roadmapEntries
+        .Where(e => string.Equals(e.Status, "Delivered", StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(e => e.Date ?? DateTime.MaxValue)
+        .ThenBy(e => e.Title)
+        .ToList();
+
+    var workingOn = roadmapEntries
+        .Where(e => string.Equals(e.Status, "In progress", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(e => e.Date ?? DateTime.MaxValue)
+        .ThenBy(e => e.Title)
+        .ToList();
+
+    var planned = roadmapEntries
+        .Where(e => string.Equals(e.Status, "Planned", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(e.Status, "Discovery", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(e => e.Date ?? DateTime.MaxValue)
+        .ThenBy(e => e.Title)
+        .ToList();
 }
 
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Roadmap</li>
+            <li class="breadcrumb-item active" aria-current="page">Compass roadmap</li>
         </ol>
     </nav>
 }
 
-<h1 class="doc-page-title">COMPASS Roadmap</h1>
-<p class="doc-page-lead">Find out what's new and upcoming on the COMPASS roadmap.</p>
-
-<div class="row mt-4">
-    <!-- What's New Section -->
-    <div class="col-lg-6 mb-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-primary text-white">
-                <h2 class="h5 mb-0">What's New</h2>
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12 col-lg-9">
+                <h1 class="mb-3">Compass roadmap</h1>
+                <p class="text-muted mb-4">Track delivered improvements and see what is coming next for Compass. Dates show when changes were released or the target delivery month for upcoming work.</p>
             </div>
-            <div class="card-body">
-                <div class="mb-4">
-                    <h3 class="h6 mb-2" style="font-weight: 600;">Recent Updates</h3>
-                    <p class="text-muted mb-3">Stay up to date with the latest features and improvements to COMPASS.</p>
-                    <ul class="list-unstyled">
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Enhanced User Management</h4>
-                                    <p class="text-muted mb-0 small">Improved user, group, and permissions management with a more intuitive interface.</p>
-                                </div>
-                                <span class="badge badge-primary">New</span>
-                            </div>
-                        </li>
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Functional Standards Assessment</h4>
-                                    <p class="text-muted mb-0 small">New assessment workflow with progress tracking and export capabilities.</p>
-                                </div>
-                                <span class="badge badge-primary">New</span>
-                            </div>
-                        </li>
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Reporting Improvements</h4>
-                                    <p class="text-muted mb-0 small">Enhanced reporting features with better visualisation and data export options.</p>
-                                </div>
-                                <span class="badge badge-success">Updated</span>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
+        </div>
+
+        <div class="row">
+            <aside class="col-12 col-lg-3 mb-4 mb-lg-0">
+                <nav class="nav nav-pills flex-column roadmap-nav" aria-label="Roadmap navigation">
+                    <a class="nav-link active" aria-current="page" href="#recent-updates">Recent updates</a>
+                    <a class="nav-link" href="#working-on">Working on</a>
+                    <a class="nav-link" href="#planned">Planned</a>
+                    <a class="nav-link" href="#suggest-feature">Suggest a feature</a>
+                </nav>
+            </aside>
+            <div class="col-12 col-lg-9">
+                <section id="recent-updates" class="mb-5">
+                    <h2 class="h3 mb-3">Recent updates</h2>
+                    @if (!recentUpdates.Any())
+                    {
+                        <p class="text-muted">We will publish the latest releases here shortly.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled roadmap-list">
+                            @foreach (var entry in recentUpdates)
+                            {
+                                <li class="roadmap-list__item mb-3">
+                                    <h3 class="h4 mb-1">@entry.Title</h3>
+                                    <p class="mb-2 text-muted">@entry.Summary</p>
+                                    <dl class="roadmap-list__meta">
+                                        <div>
+                                            <dt>Area</dt>
+                                            <dd>@entry.Area</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Date</dt>
+                                            <dd>@(entry.Date.HasValue ? entry.Date.Value.ToString("MMM yyyy") : "TBC")</dd>
+                                        </div>
+                                    </dl>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <section id="working-on" class="mb-5">
+                    <h2 class="h3 mb-3">Working on</h2>
+                    @if (!workingOn.Any())
+                    {
+                        <p class="text-muted">In-flight initiatives will appear here once confirmed.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled roadmap-list">
+                            @foreach (var entry in workingOn)
+                            {
+                                <li class="roadmap-list__item mb-3">
+                                    <h3 class="h4 mb-1">@entry.Title</h3>
+                                    <p class="mb-2 text-muted">@entry.Summary</p>
+                                    <dl class="roadmap-list__meta">
+                                        <div>
+                                            <dt>Area</dt>
+                                            <dd>@entry.Area</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Target date</dt>
+                                            <dd>@(entry.Date.HasValue ? entry.Date.Value.ToString("MMM yyyy") : "TBC")</dd>
+                                        </div>
+                                    </dl>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <section id="planned" class="mb-5">
+                    <h2 class="h3 mb-3">Planned</h2>
+                    @if (!planned.Any())
+                    {
+                        <p class="text-muted">Future roadmap themes will be shared here.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled roadmap-list">
+                            @foreach (var entry in planned)
+                            {
+                                <li class="roadmap-list__item mb-3">
+                                    <h3 class="h4 mb-1">@entry.Title</h3>
+                                    <p class="mb-2 text-muted">@entry.Summary</p>
+                                    <dl class="roadmap-list__meta">
+                                        <div>
+                                            <dt>Area</dt>
+                                            <dd>@entry.Area</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Target date</dt>
+                                            <dd>@(entry.Date.HasValue ? entry.Date.Value.ToString("MMM yyyy") : "TBC")</dd>
+                                        </div>
+                                    </dl>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <section id="suggest-feature" class="mb-0">
+                    <h2 class="h3 mb-3">Suggest a feature</h2>
+                    <p class="text-muted">The roadmap is shaped by feedback from Compass teams and partners. Share your needs so we can prioritise accordingly.</p>
+                    <a class="btn btn-outline-primary" href="mailto:compass-product@education.gov.uk">Email the team</a>
+                </section>
             </div>
         </div>
     </div>
-
-    <!-- Upcoming Section -->
-    <div class="col-lg-6 mb-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-info text-white">
-                <h2 class="h5 mb-0">Upcoming</h2>
-            </div>
-            <div class="card-body">
-                <div class="mb-4">
-                    <h3 class="h6 mb-2" style="font-weight: 600;">Coming Soon</h3>
-                    <p class="text-muted mb-3">Explore planned features and enhancements that are on the horizon for COMPASS.</p>
-                    <ul class="list-unstyled">
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Advanced Analytics Dashboard</h4>
-                                    <p class="text-muted mb-0 small">Interactive dashboards with real-time data visualisation and custom reporting.</p>
-                                </div>
-                                <span class="badge badge-info">Q2 2024</span>
-                            </div>
-                        </li>
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Mobile App</h4>
-                                    <p class="text-muted mb-0 small">Native mobile application for iOS and Android to access COMPASS on the go.</p>
-                                </div>
-                                <span class="badge badge-info">Q3 2024</span>
-                            </div>
-                        </li>
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">API Enhancements</h4>
-                                    <p class="text-muted mb-0 small">Extended API capabilities with webhooks and improved integration options.</p>
-                                </div>
-                                <span class="badge badge-info">Q3 2024</span>
-                            </div>
-                        </li>
-                        <li class="mb-3 pb-3 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Automated Workflows</h4>
-                                    <p class="text-muted mb-0 small">Configure automated workflows and notifications to streamline your processes.</p>
-                                </div>
-                                <span class="badge badge-info">Q4 2024</span>
-                            </div>
-                        </li>
-                        <li class="mb-3">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="h6 mb-1" style="font-weight: 600;">Enhanced Collaboration Tools</h4>
-                                    <p class="text-muted mb-0 small">Improved team collaboration features with comments, mentions, and activity feeds.</p>
-                                </div>
-                                <span class="badge badge-info">Q4 2024</span>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="alert alert-info mt-4">
-    <h3 class="h6">Have a suggestion?</h3>
-    <p class="mb-0">If you have ideas for features or improvements you'd like to see in COMPASS, please share your feedback with the team.</p>
-</div>
+</section>
 

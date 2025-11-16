@@ -1,20 +1,41 @@
 @model Compass.Models.Project
 
 @{
-    ViewData["Title"] = "Create Product in FIPS CMS";
+    ViewData["Title"] = "Create product in FIPS CMS";
+
+    var projectSummary = Model == null
+        ? new Compass.ViewModels.ProjectSummaryViewModel()
+        : new Compass.ViewModels.ProjectSummaryViewModel
+        {
+            Id = Model.Id,
+            Title = Model.Title,
+            ProjectCode = Model.ProjectCode,
+            Status = Model.Status,
+            RagStatus = Model.RagStatus,
+            Phase = Model.Phase,
+            BusinessArea = Model.BusinessArea,
+            StartDate = Model.StartDate,
+            TargetDeliveryDate = Model.TargetDeliveryDate
+        };
 }
 
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-2">
+        <div class="row mb-2 align-items-center">
             <div class="col-sm-6">
-                <h1>Create product in FIPS CMS</h1>
+                <h1 class="mb-1">Create product in FIPS CMS</h1>
+                <p class="text-muted mb-0">This will create a draft product and link it to the project.</p>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
                     <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
                     <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Index">Projects</a></li>
-                    <li class="breadcrumb-item"><a asp-controller="Project" asp-action="Details" asp-route-id="@ViewBag.ProjectId" asp-route-tab="products">@ViewBag.ProjectTitle</a></li>
+                    <li class="breadcrumb-item">
+                        <a asp-controller="Project"
+                           asp-action="Details"
+                           asp-route-id="@ViewBag.ProjectId"
+                           asp-route-tab="products">@ViewBag.ProjectTitle</a>
+                    </li>
                     <li class="breadcrumb-item active">Create product</li>
                 </ol>
             </div>
@@ -53,208 +74,209 @@
             </div>
         }
 
-        <form asp-action="CreateProduct" method="post">
-            <input type="hidden" name="projectId" value="@ViewBag.ProjectId" />
-            
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Product details</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-info">
-                                <i class="icon fas fa-info-circle"></i>
-                                <strong>Project:</strong> @ViewBag.ProjectTitle
-                                <br />
-                                This will create a new product entry in the FIPS CMS and link it to this project.
-                            </div>
+        <div class="row">
+            <aside class="col-xl-2 col-lg-4 mb-4">
+                <partial name="_ProjectSummarySidebar" model="projectSummary" />
+            </aside>
+            <div class="col-xl-9 col-lg-8">
+                <form asp-action="CreateProduct" method="post">
+                    <input type="hidden" name="projectId" value="@ViewBag.ProjectId" />
 
-                            <!-- Product Title -->
-                            <div class="form-group">
-                                <label for="productTitle" class="control-label">
-                                    Product title <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" 
-                                       id="productTitle" 
-                                       name="productTitle" 
-                                       class="form-control" 
-                                       value="@(ViewBag.ProductTitle ?? ViewBag.ProjectTitle)" 
-                                       required />
-                                <small class="form-text text-muted">
-                                    Enter the product title (defaults to project title: "@ViewBag.ProjectTitle")
-                                </small>
-                            </div>
-
-                            <!-- Short Description -->
-                            <div class="form-group">
-                                <label for="shortDescription" class="control-label">
-                                    Short description
-                                </label>
-                                <textarea id="shortDescription" 
-                                          name="shortDescription" 
-                                          class="form-control" 
-                                          rows="3">@(ViewBag.ShortDescription ?? ViewBag.ProjectAim)</textarea>
-                                <small class="form-text text-muted">
-                                    Brief description of the product (defaults to project aim)
-                                </small>
-                            </div>
-
-                            <!-- Long Description -->
-                            <div class="form-group">
-                                <label for="longDescription" class="control-label">
-                                    Long description
-                                </label>
-                                <textarea id="longDescription" 
-                                          name="longDescription" 
-                                          class="form-control" 
-                                          rows="5">@(ViewBag.LongDescription ?? ViewBag.ProjectAim)</textarea>
-                                <small class="form-text text-muted">
-                                    Detailed description of the product (defaults to project aim)
-                                </small>
-                            </div>
-
-                            <!-- Business Area -->
-                            <div class="form-group">
-                                <label for="businessAreaCategoryValueId" class="control-label">
-                                    Business area
-                                </label>
-                                <select id="businessAreaCategoryValueId" 
-                                        name="businessAreaCategoryValueId" 
-                                        class="form-control">
-                                    <option value="">Select business area</option>
-                                    @if (ViewBag.BusinessAreas != null)
-                                    {
-                                        @foreach (var businessArea in (List<Compass.Models.CategoryValueDto>)ViewBag.BusinessAreas)
-                                        {
-                                            var isSelected = (ViewBag.BusinessAreaCategoryValueId != null && ViewBag.BusinessAreaCategoryValueId == businessArea.Id) ||
-                                                           (ViewBag.BusinessAreaCategoryValueId == null && ViewBag.ProjectBusinessArea == businessArea.Name);
-                                            <option value="@businessArea.Id" selected="@isSelected">@businessArea.Name</option>
-                                        }
-                                    }
-                                </select>
-                                <small class="form-text text-muted">
-                                    @if (!string.IsNullOrEmpty(ViewBag.ProjectBusinessArea))
-                                    {
-                                        <text>Project business area: @ViewBag.ProjectBusinessArea</text>
-                                    }
-                                    else
-                                    {
-                                        <text>Select the business area for this product</text>
-                                    }
-                                </small>
-                            </div>
-
-                            <!-- Phase -->
-                            <div class="form-group">
-                                <label for="phaseCategoryValueId" class="control-label">
-                                    Phase
-                                </label>
-                                <select id="phaseCategoryValueId" 
-                                        name="phaseCategoryValueId" 
-                                        class="form-control">
-                                    <option value="">Select phase</option>
-                                    @if (ViewBag.Phases != null)
-                                    {
-                                        @foreach (var phase in (List<Compass.Models.CategoryValueDto>)ViewBag.Phases)
-                                        {
-                                            var isSelected = (ViewBag.PhaseCategoryValueId != null && ViewBag.PhaseCategoryValueId == phase.Id) ||
-                                                           (ViewBag.PhaseCategoryValueId == null && ViewBag.ProjectPhase == phase.Name);
-                                            <option value="@phase.Id" selected="@isSelected">@phase.Name</option>
-                                        }
-                                    }
-                                </select>
-                                <small class="form-text text-muted">
-                                    @if (!string.IsNullOrEmpty(ViewBag.ProjectPhase))
-                                    {
-                                        <text>Project phase: @ViewBag.ProjectPhase</text>
-                                    }
-                                    else
-                                    {
-                                        <text>Select the phase for this product</text>
-                                    }
-                                </small>
-                            </div>
-
-                            @if (ViewBag.SimilarProducts != null && ((List<Compass.Models.ProductDto>)ViewBag.SimilarProducts).Any())
-                            {
-                                <div class="alert alert-warning">
-                                    <h5><i class="icon fas fa-exclamation-triangle"></i> Similar products found</h5>
-                                    <p>The following products with similar titles already exist in FIPS CMS. Please review them to ensure you are not creating a duplicate:</p>
-                                    <ul>
-                                        @foreach (var product in (List<Compass.Models.ProductDto>)ViewBag.SimilarProducts)
-                                        {
-                                            <li>
-                                                <strong>@product.Title</strong>
-                                                @if (!string.IsNullOrEmpty(product.FipsId))
-                                                {
-                                                    <text> - @product.FipsId</text>
-                                                }
-                                                @if (!string.IsNullOrEmpty(product.Phase))
-                                                {
-                                                    <text> - @product.Phase</text>
-                                                }
-                                                @if (!string.IsNullOrEmpty(product.State))
-                                                {
-                                                    <text> - @product.State</text>
-                                                }
-                                            </li>
-                                        }
-                                    </ul>
-                                    
-                                    <div class="form-check mt-3">
-                                        <input type="checkbox" 
-                                               id="confirmNotDuplicate" 
-                                               name="confirmNotDuplicate" 
-                                               value="true" 
-                                               class="form-check-input" 
-                                               required />
-                                        <label for="confirmNotDuplicate" class="form-check-label">
-                                            <strong>I confirm this is not a duplicate and should be created as a new product</strong>
-                                        </label>
-                                    </div>
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h3 class="card-title mb-0">Product details</h3>
                                 </div>
-                            }
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <i class="icon fas fa-info-circle"></i>
+                                        <strong>Project:</strong> @ViewBag.ProjectTitle
+                                        <br />
+                                        This will create a new product entry in the FIPS CMS and link it to this project.
+                                    </div>
+
+                                    <div class="form-group">
+                                    <label for="productTitle" class="control-label">
+                                        Product title <span class="text-danger">*</span>
+                                    </label>
+                                    <small class="form-text text-muted mb-2 d-block">
+                                        Enter the product title (defaults to project title: "@ViewBag.ProjectTitle")
+                                    </small>
+                                    <input type="text"
+                                           id="productTitle"
+                                           name="productTitle"
+                                           class="form-control"
+                                           value="@(ViewBag.ProductTitle ?? ViewBag.ProjectTitle)"
+                                           required />
+                                    </div>
+
+                                    <div class="form-group">
+                                    <label for="shortDescription" class="control-label">
+                                        Short description
+                                    </label>
+                                    <small class="form-text text-muted mb-2 d-block">
+                                        Brief description of the product (defaults to project aim)
+                                    </small>
+                                        <textarea id="shortDescription"
+                                                  name="shortDescription"
+                                                  class="form-control"
+                                                  rows="3">@(ViewBag.ShortDescription ?? ViewBag.ProjectAim)</textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                    <label for "longDescription" class="control-label">
+                                        Long description
+                                    </label>
+                                    <small class="form-text text-muted mb-2 d-block">
+                                        Detailed description of the product (defaults to project aim)
+                                    </small>
+                                        <textarea id="longDescription"
+                                                  name="longDescription"
+                                                  class="form-control"
+                                                  rows="5">@(ViewBag.LongDescription ?? ViewBag.ProjectAim)</textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="businessAreaCategoryValueId" class="control-label">
+                                            Business area
+                                        </label>
+                                    <small class="form-text text-muted mb-2 d-block">
+                                        @if (!string.IsNullOrEmpty(ViewBag.ProjectBusinessArea))
+                                        {
+                                            <text>Project business area: @ViewBag.ProjectBusinessArea</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Select the business area for this product</text>
+                                        }
+                                    </small>
+                                    <select id="businessAreaCategoryValueId"
+                                            name="businessAreaCategoryValueId"
+                                            class="form-control">
+                                            <option value="">Select business area</option>
+                                            @if (ViewBag.BusinessAreas != null)
+                                            {
+                                                @foreach (var businessArea in (List<Compass.Models.CategoryValueDto>)ViewBag.BusinessAreas)
+                                                {
+                                                    var isSelected = (ViewBag.BusinessAreaCategoryValueId != null && ViewBag.BusinessAreaCategoryValueId == businessArea.Id) ||
+                                                                    (ViewBag.BusinessAreaCategoryValueId == null && ViewBag.ProjectBusinessArea == businessArea.Name);
+                                                    <option value="@businessArea.Id" selected="@isSelected">@businessArea.Name</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="phaseCategoryValueId" class="control-label">
+                                            Phase
+                                        </label>
+                                    <small class="form-text text-muted mb-2 d-block">
+                                        @if (!string.IsNullOrEmpty(ViewBag.ProjectPhase))
+                                        {
+                                            <text>Project phase: @ViewBag.ProjectPhase</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Select the phase for this product</text>
+                                        }
+                                    </small>
+                                    <select id="phaseCategoryValueId"
+                                            name="phaseCategoryValueId"
+                                            class="form-control">
+                                            <option value="">Select phase</option>
+                                            @if (ViewBag.Phases != null)
+                                            {
+                                                @foreach (var phase in (List<Compass.Models.CategoryValueDto>)ViewBag.Phases)
+                                                {
+                                                    var isSelected = (ViewBag.PhaseCategoryValueId != null && ViewBag.PhaseCategoryValueId == phase.Id) ||
+                                                                    (ViewBag.PhaseCategoryValueId == null && ViewBag.ProjectPhase == phase.Name);
+                                                    <option value="@phase.Id" selected="@isSelected">@phase.Name</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+
+                                    @if (ViewBag.SimilarProducts != null && ((List<Compass.Models.ProductDto>)ViewBag.SimilarProducts).Any())
+                                    {
+                                        <div class="alert alert-warning">
+                                            <h5><i class="icon fas fa-exclamation-triangle"></i> Similar products found</h5>
+                                            <p>The following products with similar titles already exist in FIPS CMS. Please review them to ensure you are not creating a duplicate:</p>
+                                            <ul>
+                                                @foreach (var product in (List<Compass.Models.ProductDto>)ViewBag.SimilarProducts)
+                                                {
+                                                    <li>
+                                                        <strong>@product.Title</strong>
+                                                        @if (!string.IsNullOrEmpty(product.FipsId))
+                                                        {
+                                                            <text> - @product.FipsId</text>
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(product.Phase))
+                                                        {
+                                                            <text> - @product.Phase</text>
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(product.State))
+                                                        {
+                                                            <text> - @product.State</text>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+
+                                            <div class="form-check mt-3">
+                                                <input type="checkbox"
+                                                       id="confirmNotDuplicate"
+                                                       name="confirmNotDuplicate"
+                                                       value="true"
+                                                       class="form-check-input"
+                                                       required />
+                                                <label for="confirmNotDuplicate" class="form-check-label">
+                                                    <strong>I confirm this is not a duplicate and should be created as a new product</strong>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="card-footer d-flex align-items-center">
+                                    <button type="submit" class="btn btn-primary mr-3">
+                                        <i class="fas fa-plus mr-1"></i>Create product
+                                    </button>
+                                    <a asp-action="Details"
+                                       asp-route-id="@ViewBag.ProjectId"
+                                       asp-route-tab="products"
+                                       class="btn btn-outline-secondary">
+                                        Cancel
+                                    </a>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Create product
-                            </button>
-                            <a asp-action="Details" 
-                               asp-route-id="@ViewBag.ProjectId" 
-                               asp-route-tab="products" 
-                               class="btn btn-secondary">
-                                <i class="fas fa-times"></i> Cancel
-                            </a>
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title mb-0">Information</h3>
+                                </div>
+                                <div class="card-body">
+                                    <h5>Product creation notes</h5>
+                                    <ul class="mb-3">
+                                        <li>The product will be created with state set to <strong>Active</strong></li>
+                                        <li>The product will be saved as a <strong>draft</strong> (not published)</li>
+                                        <li>The FIPS ID will be automatically generated</li>
+                                        <li>The product will be automatically linked to this project</li>
+                                    </ul>
+
+                                    <h5>Field mapping</h5>
+                                    <p class="mb-1"><strong>Title:</strong> Product title</p>
+                                    <p class="mb-1"><strong>Short description:</strong> Project aim</p>
+                                    <p class="mb-1"><strong>Long description:</strong> Project aim</p>
+                                    <p class="mb-1"><strong>Business area:</strong> Project business area</p>
+                                    <p class="mb-1"><strong>Phase:</strong> Project phase</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Information</h3>
-                        </div>
-                        <div class="card-body">
-                            <h5>Product creation notes</h5>
-                            <ul class="mb-3">
-                                <li>The product will be created with state set to <strong>Active</strong></li>
-                                <li>The product will be saved as a <strong>draft</strong> (not published)</li>
-                                <li>The FIPS ID will be automatically generated</li>
-                                <li>The product will be automatically linked to this project</li>
-                            </ul>
-
-                            <h5>Field mapping</h5>
-                            <p class="mb-1"><strong>Title:</strong> Product title</p>
-                            <p class="mb-1"><strong>Short description:</strong> Project aim</p>
-                            <p class="mb-1"><strong>Long description:</strong> Project aim</p>
-                            <p class="mb-1"><strong>Business area:</strong> Project business area</p>
-                            <p class="mb-1"><strong>Phase:</strong> Project phase</p>
-                        </div>
-                    </div>
-                </div>
+                </form>
             </div>
-        </form>
+        </div>
     </div>
 </section>
 

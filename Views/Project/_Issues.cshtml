@@ -1,443 +1,331 @@
+@using System.Globalization
+@using Compass.Helpers
 @model Compass.Models.Project
 
+@{
+    var issuesView = (ViewBag.IssuesView as string ?? "table").ToLowerInvariant();
+    var issues = Model.Issues?
+        .Where(i => !i.IsDeleted)
+        .OrderByDescending(i => i.DetectedDate)
+        .ToList() ?? new List<Compass.Models.Issue>();
+    var severityOrder = new[] { "critical", "high", "medium", "low" };
+    var priorityOrder = new[] { "not_set", "low", "medium", "high" };
+    var textInfo = CultureInfo.InvariantCulture.TextInfo;
+
+    string FormatLabel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not set";
+        }
+
+        return textInfo.ToTitleCase(value.Replace("_", " "));
+    }
+
+    string ResolveSeverityClass(string? severity) => severity switch
+    {
+        "critical" => "badge-danger",
+        "high" => "badge-warning",
+        "medium" => "badge-info",
+        _ => "badge-secondary"
+    };
+
+    string ResolveStatusClass(string status) => status switch
+    {
+        "resolved" or "closed" => "badge-success",
+        "blocked" => "badge-danger",
+        "in_progress" => "badge-primary",
+        _ => "badge-secondary"
+    };
+
+    string ResolvePriorityBadgeClass(string? priority)
+    {
+        var key = PriorityStyleHelper.GetPriorityKey(priority);
+        return $"priority-badge priority-badge--{key}";
+    }
+
+    var severityValues = severityOrder.ToList();
+    foreach (var severity in issues.Select(i => i.Severity).Where(s => !string.IsNullOrWhiteSpace(s)))
+    {
+        if (!severityValues.Contains(severity, StringComparer.OrdinalIgnoreCase))
+        {
+            severityValues.Add(severity);
+        }
+    }
+
+    var priorityValues = priorityOrder.ToList();
+    foreach (var priority in issues.Select(i => i.Priority).Where(p => !string.IsNullOrWhiteSpace(p)))
+    {
+        if (!priorityValues.Contains(priority!, StringComparer.OrdinalIgnoreCase))
+        {
+            priorityValues.Add(priority!);
+        }
+    }
+}
+
 <div class="card" id="issues">
-    <div class="card-header">
-        <h3 class="card-title">Project Issues</h3>
-        <div class="card-tools">
-            <a href="#" data-toggle="modal" data-target="#addIssueModal">Add issue</a>
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Project issues</h3>
+        <div class="card-tools d-flex flex-wrap align-items-center">
+            <a class="card-link mr-3 mb-2"
+               asp-controller="Project"
+               asp-action="CreateIssue"
+               asp-route-projectId="@Model.Id">
+                Add issue
+            </a>
+            @if (issuesView == "priority")
+            {
+                <a class="card-link mb-2"
+                   asp-action="Details"
+                   asp-route-id="@Model.Id"
+                   asp-route-tab="issues"
+                   asp-route-issuesView="table">
+                    List view
+                </a>
+            }
+            else
+            {
+                <a class="card-link mb-2"
+                   asp-action="Details"
+                   asp-route-id="@Model.Id"
+                   asp-route-tab="issues"
+                   asp-route-issuesView="priority">
+                    Priority view
+                </a>
+            }
         </div>
     </div>
-    <div class="card-body table-responsive p-0">
-        @if (Model.Issues.Any())
-        {
-            <table class="table table-hover text-nowrap sortable-table issues-table">
+    @if (!issues.Any())
+    {
+        <div class="card-body">
+            <p class="text-muted mb-2">No issues recorded.</p>
+            <a asp-controller="Project" asp-action="CreateIssue" asp-route-projectId="@Model.Id">Add issue</a>
+        </div>
+    }
+    else if (issuesView == "priority")
+    {
+        <div class="card-body priority-view">
+            <p class="text-muted mb-3">
+                Use the grid to see how issues are distributed across severity and priority. Select a cell to drill into the related issues.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-bordered priority-matrix mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="align-middle">Severity \ Priority</th>
+                            @foreach (var priority in priorityValues)
+                            {
+                                <th scope="col" class="text-center align-middle">
+                                    <span class="@ResolvePriorityBadgeClass(priority == "not_set" ? null : priority)">
+                                        @FormatLabel(priority == "not_set" ? null : priority)
+                                    </span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var severity in severityValues)
+                        {
+                            <tr>
+                                <th scope="row" class="align-middle">
+                                    <span class="badge @ResolveSeverityClass(severity)">@FormatLabel(severity)</span>
+                                </th>
+                                @foreach (var priority in priorityValues)
+                                {
+                                    var cellIssues = issues
+                                        .Where(i =>
+                                            string.Equals(i.Severity, severity, StringComparison.OrdinalIgnoreCase) &&
+                                            (priority == "not_set"
+                                                ? string.IsNullOrWhiteSpace(i.Priority)
+                                                : string.Equals(i.Priority, priority, StringComparison.OrdinalIgnoreCase)))
+                                        .OrderByDescending(i => i.TargetResolutionDate ?? DateTime.MaxValue)
+                                        .ThenByDescending(i => i.DetectedDate)
+                                        .ToList();
+                                    <td>
+                                        <div class="priority-matrix-cell">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="text-muted small">Count</span>
+                                                <span class="badge badge-light">@cellIssues.Count</span>
+                                            </div>
+                                            @if (cellIssues.Any())
+                                            {
+                                                <ul class="list-unstyled mb-0">
+                                                    @foreach (var issue in cellIssues)
+                                                    {
+                                                        var overdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate.Value.Date < DateTime.Today;
+                                                        <li class="issue-chip">
+                                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
+                                                            <div class="small text-muted">
+                                                                Target:
+                                                                @if (issue.TargetResolutionDate.HasValue)
+                                                                {
+                                                                    <span class="@(overdue ? "text-danger" : string.Empty)">
+                                                                        @issue.TargetResolutionDate.Value.ToString("d MMM yyyy")
+                                                                    </span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>Not set</span>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <p class="text-muted small mb-0">No issues</p>
+                                            }
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card-body table-responsive p-0">
+            <table class="table table-hover text-nowrap sortable-table issues-table mb-0">
                 <thead>
                     <tr>
-                        <th class="col-id sortable" data-column="Reference" tabindex="0" role="button" aria-label="Sort by Reference">Reference</th>
-                        <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
-                        <th class="col-severity sortable" data-column="Severity" tabindex="0" role="button" aria-label="Sort by Severity">Severity</th>
-                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
-                        <th class="col-detected sortable" data-column="Detected" tabindex="0" role="button" aria-label="Sort by Detected Date">Detected</th>
-                        <th class="col-target sortable" data-column="Target" tabindex="0" role="button" aria-label="Sort by Target Resolution">Target Resolution</th>
+                        <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
+                            Title
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-severity sortable" data-column="Severity" tabindex="0" role="button" aria-label="Sort by Severity">
+                            Severity
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">
+                            Priority
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                            Status
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-detected sortable" data-column="Detected" tabindex="0" role="button" aria-label="Sort by Detected date">
+                            Detected
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
+                        <th class="col-target sortable" data-column="Target" tabindex="0" role="button" aria-label="Sort by Target resolution">
+                            Target resolution
+                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
-                    @{
-                        var issues = Model.Issues.Where(i => !i.IsDeleted).OrderBy(i => i.CreatedAt).ToList();
-                    }
-                    @foreach (var issue in issues.OrderByDescending(i => i.DetectedDate))
+                    @foreach (var issue in issues)
                     {
-                        var issueYear = issue.CreatedAt.Year;
-                        var issuesInYear = issues.Where(i => i.CreatedAt.Year == issueYear).OrderBy(i => i.CreatedAt).ToList();
-                        var issueSequence = issuesInYear.IndexOf(issue) + 1;
-                        var formattedIssueId = $"{issueYear}-ISS-{issueSequence}";
+                        var detectedSort = issue.DetectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        var targetSort = issue.TargetResolutionDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        var isTargetOverdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate.Value.Date < DateTime.Today;
                         <tr>
                             <td>
-                                <span class="text-muted small">@formattedIssueId</span>
+                                <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
                             </td>
                             <td>
-                                <a href="#" class="view-issue-link" 
-                                   data-issue-id="@issue.Id" 
-                                   data-issue-title="@issue.Title"
-                                   data-issue-description="@(issue.Description ?? "")"
-                                   data-issue-severity="@issue.Severity"
-                                   data-issue-status="@issue.Status"
-                                   data-issue-detected="@issue.DetectedDate.ToString("yyyy-MM-dd")"
-                                   data-issue-target="@(issue.TargetResolutionDate?.ToString("yyyy-MM-dd") ?? "")"
-                                   data-issue-category="@(issue.Category ?? "")"
-                                   data-issue-workaround="@(issue.Workaround ?? "")"
-                                   data-issue-resolution="@(issue.ResolutionSummary ?? "")">
-                                    @issue.Title
-                                </a>
-                            </td>
-                            <td>
-                                <span class="badge badge-@(issue.Severity == "critical" ? "danger" : issue.Severity == "high" ? "warning" : issue.Severity == "medium" ? "info" : "secondary")">
-                                    @issue.Severity
+                                <span class="badge @ResolveSeverityClass(issue.Severity)">
+                                    @FormatLabel(issue.Severity)
                                 </span>
                             </td>
                             <td>
-                                <span class="badge badge-@(issue.Status == "closed" || issue.Status == "resolved" ? "success" : issue.Status == "blocked" ? "danger" : issue.Status == "in_progress" ? "primary" : "secondary")">
+                                <span class="badge badge-light text-dark border">
+                                    <span class="@ResolvePriorityBadgeClass(issue.Priority)">
+                                        @FormatLabel(issue.Priority)
+                                    </span>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge @ResolveStatusClass(issue.Status)">
                                     @issue.Status.Replace("_", " ")
                                 </span>
                             </td>
-                            <td>@issue.DetectedDate.ToString("dd MMM yyyy")</td>
-                            <td>
-                                @if (issue.TargetResolutionDate.HasValue)
-                                {
-                                    @issue.TargetResolutionDate.Value.ToString("dd MMM yyyy")
-                                }
-                                else
-                                {
-                                    <span class="text-muted">Not set</span>
-                                }
+                            <td data-sort-value="@detectedSort">@issue.DetectedDate.ToString("d MMMM yyyy")</td>
+                            <td data-sort-value="@(targetSort ?? string.Empty)">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    @if (issue.TargetResolutionDate.HasValue)
+                                    {
+                                        <span class="@(isTargetOverdue ? "text-danger font-weight-semibold" : string.Empty)">
+                                            @issue.TargetResolutionDate.Value.ToString("d MMMM yyyy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not set</span>
+                                    }
+                                    <button type="button"
+                                            class="btn btn-link btn-sm issue-target-edit"
+                                            data-issue-id="@issue.Id"
+                                            data-issue-title="@issue.Title"
+                                            data-target-date="@targetSort">
+                                        Edit
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
-        }
-        else
-        {
-            <div class="text-center p-4">
-                <p class="text-muted">No issues recorded.</p>
-                <a href="#" data-toggle="modal" data-target="#addIssueModal">Add issue</a>
-            </div>
-        }
-    </div>
-</div>
-
-<!-- Add Issue Modal -->
-<div class="modal fade" id="addIssueModal" tabindex="-1" role="dialog" aria-labelledby="addIssueModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addIssueModalLabel">Add New Issue</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="AddIssue" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="issueTitle">Issue Title</label>
-                        <input type="text" class="form-control" id="issueTitle" name="title" required maxlength="200">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="issueDescription">Description</label>
-                        <textarea class="form-control" id="issueDescription" name="description" rows="4" placeholder="Describe the issue..."></textarea>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="issueSeverity">Severity</label>
-                                <select class="form-control" id="issueSeverity" name="severity" required>
-                                    <option value="low">Low</option>
-                                    <option value="medium" selected>Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="critical">Critical</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="issueStatus">Status</label>
-                                <select class="form-control" id="issueStatus" name="status" required>
-                                    <option value="open" selected>Open</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="blocked">Blocked</option>
-                                    <option value="resolved">Resolved</option>
-                                    <option value="closed">Closed</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="issueDetectedDate">Detected Date</label>
-                                <input type="date" class="form-control" id="issueDetectedDate" name="detectedDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="issueTargetDate">Target Resolution Date</label>
-                                <input type="date" class="form-control" id="issueTargetDate" name="targetResolutionDate">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="issueCategory">Category</label>
-                        <input type="text" class="form-control" id="issueCategory" name="category" maxlength="100" placeholder="e.g., Technical, Resource, Communication">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="issueWorkaround">Workaround</label>
-                        <textarea class="form-control" id="issueWorkaround" name="workaround" rows="2" placeholder="Temporary workaround if applicable..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Issue</button>
-                </div>
-            </form>
         </div>
-    </div>
+    }
 </div>
 
-<!-- View/Edit Issue Modal -->
-<div class="modal fade" id="viewIssueModal" tabindex="-1" role="dialog" aria-labelledby="viewIssueModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewIssueModalLabel">Issue Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form id="editIssueForm" asp-action="UpdateIssue" method="post">
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <input type="hidden" name="issueId" id="editIssueId" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="editIssueTitle">Issue Title</label>
-                        <input type="text" class="form-control" id="editIssueTitle" name="title" required maxlength="200">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="editIssueDescription">Description</label>
-                        <textarea class="form-control" id="editIssueDescription" name="description" rows="4"></textarea>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editIssueSeverity">Severity</label>
-                                <select class="form-control" id="editIssueSeverity" name="severity" required>
-                                    <option value="low">Low</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="critical">Critical</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editIssueStatus">Status</label>
-                                <select class="form-control" id="editIssueStatus" name="status" required>
-                                    <option value="open">Open</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="blocked">Blocked</option>
-                                    <option value="resolved">Resolved</option>
-                                    <option value="closed">Closed</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editIssueDetectedDate">Detected Date</label>
-                                <input type="date" class="form-control" id="editIssueDetectedDate" name="detectedDate" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="editIssueTargetDate">Target Resolution Date</label>
-                                <input type="date" class="form-control" id="editIssueTargetDate" name="targetResolutionDate">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="editIssueCategory">Category</label>
-                        <input type="text" class="form-control" id="editIssueCategory" name="category" maxlength="100">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="editIssueWorkaround">Workaround</label>
-                        <textarea class="form-control" id="editIssueWorkaround" name="workaround" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="form-group" id="resolutionGroup" style="display: none;">
-                        <label for="editIssueResolution">Resolution Summary</label>
-                        <textarea class="form-control" id="editIssueResolution" name="resolutionSummary" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <button type="button" class="btn btn-danger" id="deleteIssueFromViewBtn">Delete Issue</button>
-                    <div>
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Issue Confirmation Modal -->
-<div class="modal fade" id="deleteIssueModal" tabindex="-1" role="dialog" aria-labelledby="deleteIssueModalLabel" aria-hidden="true">
+<div class="modal fade" id="editIssueTargetModal" tabindex="-1" role="dialog" aria-labelledby="editIssueTargetModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteIssueModalLabel">Confirm Delete Issue</h5>
+                <h5 class="modal-title" id="editIssueTargetModalLabel">Update target resolution date</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete the issue <strong id="issueNameToDelete"></strong>?</p>
-                <p class="text-muted">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form asp-action="DeleteIssue" method="post" class="d-inline">
-                    <input type="hidden" name="projectId" value="@Model.Id" />
-                    <input type="hidden" name="issueId" id="deleteIssueId" />
-                    <button type="submit" class="btn btn-danger">Delete Issue</button>
-                </form>
-            </div>
+            <form asp-action="UpdateIssueTargetDate" asp-controller="Project" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <input type="hidden" name="issueId" id="editIssueTargetIssueId" />
+                <input type="hidden" name="tab" value="issues" />
+                <input type="hidden" name="issuesView" value="@issuesView" />
+                <div class="modal-body">
+                    <p class="text-muted mb-2" id="editIssueTargetIssueTitle"></p>
+                    <div class="form-group">
+                        <label for="editIssueTargetDate">Target resolution date</label>
+                        <input type="date" class="form-control" id="editIssueTargetDate" name="targetResolutionDate" />
+                        <small class="form-text text-muted">Leave blank to clear the target resolution date.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <script nonce="@Context.Items["Nonce"]">
-    (function() {
-        function initIssuesPage() {
-            // Initialize sortable tables
-            $('.issues-table').each(function() {
-                initializeIssuesTable($(this));
-            });
+    (function () {
+        var modal = $('#editIssueTargetModal');
+        var issueIdInput = $('#editIssueTargetIssueId');
+        var issueTitle = $('#editIssueTargetIssueTitle');
+        var dateInput = $('#editIssueTargetDate');
 
-            // Handle view issue link clicks
-            $(document).on('click', '.view-issue-link', function(e) {
-                e.preventDefault();
-                var issueId = $(this).attr('data-issue-id');
-                var title = $(this).attr('data-issue-title');
-                var description = $(this).attr('data-issue-description');
-                var severity = $(this).attr('data-issue-severity');
-                var status = $(this).attr('data-issue-status');
-                var detectedDate = $(this).attr('data-issue-detected');
-                var targetDate = $(this).attr('data-issue-target');
-                var category = $(this).attr('data-issue-category');
-                var workaround = $(this).attr('data-issue-workaround');
-                var resolution = $(this).attr('data-issue-resolution');
-                
-                viewIssue(issueId, title, description, severity, status, detectedDate, targetDate, category, workaround, resolution);
-            });
+        $('.issue-target-edit').on('click', function () {
+            var $btn = $(this);
+            issueIdInput.val($btn.data('issue-id'));
+            issueTitle.text($btn.data('issue-title'));
+            dateInput.val($btn.data('target-date') || '');
+            modal.modal('show');
+        });
 
-            // Handle delete issue button from view modal
-            $('#deleteIssueFromViewBtn').on('click', function() {
-                var issueId = $('#editIssueId').val();
-                var title = $('#editIssueTitle').val();
-                $('#viewIssueModal').modal('hide');
-                deleteIssue(issueId, title);
-            });
-
-            // Handle status change to show/hide resolution field
-            $('#editIssueStatus').on('change', function() {
-                toggleResolutionField();
-            });
-
-            function toggleResolutionField() {
-                var status = $('#editIssueStatus').val();
-                if (status === 'resolved' || status === 'closed') {
-                    $('#resolutionGroup').show();
-                } else {
-                    $('#resolutionGroup').hide();
-                }
-            }
-        }
-
-        function viewIssue(issueId, title, description, severity, status, detectedDate, targetDate, category, workaround, resolution) {
-            $('#editIssueId').val(issueId);
-            $('#editIssueTitle').val(title);
-            $('#editIssueDescription').val(description);
-            $('#editIssueSeverity').val(severity);
-            $('#editIssueStatus').val(status);
-            $('#editIssueDetectedDate').val(detectedDate);
-            $('#editIssueTargetDate').val(targetDate);
-            $('#editIssueCategory').val(category);
-            $('#editIssueWorkaround').val(workaround);
-            $('#editIssueResolution').val(resolution);
-            
-            // Show/hide resolution field based on status
-            if (status === 'resolved' || status === 'closed') {
-                $('#resolutionGroup').show();
-            } else {
-                $('#resolutionGroup').hide();
-            }
-            
-            $('#viewIssueModal').modal('show');
-        }
-
-        function deleteIssue(issueId, title) {
-            $('#deleteIssueId').val(issueId);
-            $('#issueNameToDelete').text(title);
-            $('#deleteIssueModal').modal('show');
-        }
-
-        function initializeIssuesTable(table) {
-            var currentSort = { column: null, direction: 'asc' };
-
-            table.find('.sortable').on('click keypress', function(e) {
-                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
-                    return;
-                }
-                
-                var column = $(this).data('column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(table, column, direction);
-                currentSort = { column: column, direction: direction };
-            });
-
-            function sortTable(table, column, direction) {
-                var tbody = table.find('tbody');
-                var rows = tbody.find('tr').toArray();
-                
-                rows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
-                    
-                    if (column === 'Detected' || column === 'Target') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else {
-                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                tbody.empty();
-                rows.forEach(function(row) {
-                    tbody.append(row);
-                });
-                
-                updateSortIcons(table, column, direction);
-            }
-
-            function updateSortIcons(table, column, direction) {
-                // Remove active class from all headers
-                table.find('.sortable').removeClass('sort-asc sort-desc');
-                
-                // Add appropriate class to active header
-                var activeHeader = table.find('.sortable[data-column="' + column + '"]');
-                if (direction === 'asc') {
-                    activeHeader.addClass('sort-asc');
-                } else {
-                    activeHeader.addClass('sort-desc');
-                }
-            }
-        }
-
-        if (typeof jQuery !== 'undefined') {
-            $(document).ready(initIssuesPage);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() {
-                if (typeof jQuery !== 'undefined') {
-                    $(document).ready(initIssuesPage);
-                }
-            });
-        }
+        modal.on('hidden.bs.modal', function () {
+            issueIdInput.val('');
+            issueTitle.text('');
+            dateInput.val('');
+        });
     })();
 </script>
-

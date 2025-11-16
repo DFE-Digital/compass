@@ -1,12 +1,32 @@
 using Compass.Models;
+using Compass.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Services;
 
 public class ReturnStatusService : IReturnStatusService
 {
+    private readonly CompassDbContext _context;
+
+    public ReturnStatusService(CompassDbContext context)
+    {
+        _context = context;
+    }
+
     public DateTime GetReturnDueDate(int year, int month)
     {
-        // Returns are due by the 3rd working day of the following month
+        // Check if there's an override for this reporting period
+        var dueDateOverride = _context.PerformanceReportingDueDateOverrides
+            .FirstOrDefault(o => o.ReportingYear == year && 
+                                 o.ReportingMonth == month && 
+                                 o.IsActive);
+        
+        if (dueDateOverride != null)
+        {
+            return dueDateOverride.DueDate;
+        }
+        
+        // Default: Returns are due by the 3rd working day of the following month
         var followingMonth = month == 12 ? 1 : month + 1;
         var followingYear = month == 12 ? year + 1 : year;
         

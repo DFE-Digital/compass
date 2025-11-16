@@ -1,0 +1,674 @@
+@model Compass.Models.DemandRequest
+
+@{
+    ViewData["Title"] = "Score request";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Prioritisation">Prioritisation</a></li>
+                    <li class="breadcrumb-item active">Score request</li>
+                </ol>
+                <h1 class="m-0">Score request: @Model.ReferenceNumber</h1>
+                <p class="text-muted">@Model.ProposedTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Left Sidebar: Navigation & Score Calculator -->
+            <div class="col-md-3">
+                <!-- Section Navigation -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Scoring sections</h3>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <a href="#strategic-alignment" class="list-group-item list-group-item-action" data-section="strategic">
+                            <i class="fas fa-star text-primary mr-2"></i> Strategic alignment
+                            <span class="badge badge-secondary float-right section-status" data-section="strategic">0/3</span>
+                        </a>
+                        <a href="#user-impact" class="list-group-item list-group-item-action" data-section="user">
+                            <i class="fas fa-users text-info mr-2"></i> User impact
+                            <span class="badge badge-secondary float-right section-status" data-section="user">0/2</span>
+                        </a>
+                        <a href="#risk-urgency" class="list-group-item list-group-item-action" data-section="risk">
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i> Risk & urgency
+                            <span class="badge badge-secondary float-right section-status" data-section="risk">0/2</span>
+                        </a>
+                        <a href="#feasibility" class="list-group-item list-group-item-action" data-section="feasibility">
+                            <i class="fas fa-check-circle text-success mr-2"></i> Feasibility
+                            <span class="badge badge-secondary float-right section-status" data-section="feasibility">0/3</span>
+                        </a>
+                        <a href="#value-outcome" class="list-group-item list-group-item-action" data-section="value">
+                            <i class="fas fa-chart-line text-secondary mr-2"></i> Value & outcome
+                            <span class="badge badge-secondary float-right section-status" data-section="value">0/1</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Live Priority Score -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Priority score</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h1 id="totalScore" class="display-3 text-bold">0</h1>
+                        <p class="text-muted">out of 100</p>
+                        <hr />
+                        <h4 id="priorityTier" class="text-muted">Not scored</h4>
+                        <div class="progress mt-3" style="height: 25px;">
+                            <div id="scoreProgress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content: Scoring Form -->
+            <div class="col-md-9">
+                <form asp-action="ScoreRequest" method="post" id="scoringForm">
+                    <input type="hidden" name="DemandRequestId" value="@Model.Id" />
+                    <input type="hidden" name="Id" value="@(Model.Prioritisation?.Id ?? 0)" />
+
+                    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+                    <!-- Request Context -->
+                    <div class="card mb-3" id="request-context">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-info-circle mr-2"></i>Request context
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <strong>Business area</strong><br />
+                                    @Model.BusinessArea
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <strong>Requestor</strong><br />
+                                    @Model.ApplicantName
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <strong>Submitted</strong><br />
+                                    @(Model.SubmittedAt.HasValue ? Model.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm") : "Not submitted")
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <div class="row">
+                                <div class="col-12">
+                                    <h5>Overview and business need</h5>
+                                    <p class="mb-0">@Model.OverviewAndBusinessNeed</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expected Benefits -->
+                    <div class="card mb-3">
+                        <div class="card-header d-flex align-items-center">
+                            <h3 class="card-title mb-0">
+                                <span class="d-inline-flex align-items-center">
+                                    <i class="fas fa-chart-line mr-2"></i>Expected benefits
+                                </span>
+                            </h3>
+                            <div class="card-tools ml-auto">
+                                <button type="button" class="btn btn-tool text-dark" data-card-widget="collapse">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@Model.ExpectedBenefits</p>
+                        </div>
+                    </div>
+
+                    <!-- Risk if Not Delivered -->
+                    <div class="card mb-3">
+                        <div class="card-header d-flex align-items-center">
+                            <h3 class="card-title mb-0">
+                                <span class="d-inline-flex align-items-center">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>Risk if not delivered
+                                </span>
+                            </h3>
+                            <div class="card-tools ml-auto">
+                                <button type="button" class="btn btn-tool text-dark" data-card-widget="collapse">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">@Model.RiskIfNotDelivered</p>
+                        </div>
+                    </div>
+
+                    <!-- Strategic Alignment -->
+                    <div class="card mb-3" id="strategic-alignment">
+                        <div class="card-header bg-primary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0 text-white">
+                                    <span class="d-inline-flex align-items-center">
+                                        <i class="fas fa-star mr-2"></i>Strategic alignment
+                                    </span>
+                                </h3>
+                                <span class="text-dark font-weight-normal">Weighted ×2</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Statutory/Manifesto -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Statutory/manifesto requirement</label>
+                                <div class="form-check">
+                                    <input type="radio" name="StatutoryManifestoScore" value="1" class="form-check-input score-input" data-section="strategic" id="statutory1" @(Model.Prioritisation?.StatutoryManifestoScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="statutory1">1 – No requirement</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="StatutoryManifestoScore" value="2" class="form-check-input score-input" data-section="strategic" id="statutory2" @(Model.Prioritisation?.StatutoryManifestoScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="statutory2">2 – Loosely related</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="StatutoryManifestoScore" value="3" class="form-check-input score-input" data-section="strategic" id="statutory3" @(Model.Prioritisation?.StatutoryManifestoScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="statutory3">3 – Moderately aligned</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="StatutoryManifestoScore" value="4" class="form-check-input score-input" data-section="strategic" id="statutory4" @(Model.Prioritisation?.StatutoryManifestoScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="statutory4">4 – Important statutory requirement</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="StatutoryManifestoScore" value="5" class="form-check-input score-input" data-section="strategic" id="statutory5" @(Model.Prioritisation?.StatutoryManifestoScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="statutory5">5 – Critical statutory/manifesto commitment</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Opportunity Mission Pillar -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Opportunity Mission Pillar support</label>
+                                <div class="form-check">
+                                    <input type="radio" name="OpportunityMissionScore" value="1" class="form-check-input score-input" data-section="strategic" id="mission1" @(Model.Prioritisation?.OpportunityMissionScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="mission1">1 – No alignment</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="OpportunityMissionScore" value="2" class="form-check-input score-input" data-section="strategic" id="mission2" @(Model.Prioritisation?.OpportunityMissionScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="mission2">2 – Indirect support</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="OpportunityMissionScore" value="3" class="form-check-input score-input" data-section="strategic" id="mission3" @(Model.Prioritisation?.OpportunityMissionScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="mission3">3 – Moderate support</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="OpportunityMissionScore" value="4" class="form-check-input score-input" data-section="strategic" id="mission4" @(Model.Prioritisation?.OpportunityMissionScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="mission4">4 – Strong alignment</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="OpportunityMissionScore" value="5" class="form-check-input score-input" data-section="strategic" id="mission5" @(Model.Prioritisation?.OpportunityMissionScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="mission5">5 – Core mission pillar</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- DDaT Strategic Theme -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">DDaT Strategic Theme alignment</label>
+                                <div class="form-check">
+                                    <input type="radio" name="DdatStrategicThemeScore" value="1" class="form-check-input score-input" data-section="strategic" id="theme1" @(Model.Prioritisation?.DdatStrategicThemeScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="theme1">1 – No alignment</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="DdatStrategicThemeScore" value="2" class="form-check-input score-input" data-section="strategic" id="theme2" @(Model.Prioritisation?.DdatStrategicThemeScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="theme2">2 – Minimal alignment</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="DdatStrategicThemeScore" value="3" class="form-check-input score-input" data-section="strategic" id="theme3" @(Model.Prioritisation?.DdatStrategicThemeScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="theme3">3 – Supports one theme</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="DdatStrategicThemeScore" value="4" class="form-check-input score-input" data-section="strategic" id="theme4" @(Model.Prioritisation?.DdatStrategicThemeScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="theme4">4 – Supports two themes</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="DdatStrategicThemeScore" value="5" class="form-check-input score-input" data-section="strategic" id="theme5" @(Model.Prioritisation?.DdatStrategicThemeScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="theme5">5 – Supports multiple themes</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Impact -->
+                    <div class="card mb-3" id="user-impact">
+                        <div class="card-header bg-info">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0 text-white">
+                                    <span class="d-inline-flex align-items-center">
+                                        <i class="fas fa-users mr-2"></i>User impact
+                                    </span>
+                                </h3>
+                                <span class="text-dark font-weight-normal">Weighted ×2</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Scale of Users -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Scale of users affected</label>
+                                <div class="form-check">
+                                    <input type="radio" name="ScaleOfUsersScore" value="1" class="form-check-input score-input" data-section="user" id="users1" @(Model.Prioritisation?.ScaleOfUsersScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="users1">1 – Small team (< 10 users)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ScaleOfUsersScore" value="2" class="form-check-input score-input" data-section="user" id="users2" @(Model.Prioritisation?.ScaleOfUsersScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="users2">2 – Single department (10-100 users)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ScaleOfUsersScore" value="3" class="form-check-input score-input" data-section="user" id="users3" @(Model.Prioritisation?.ScaleOfUsersScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="users3">3 – Multiple departments (100-1,000 users)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ScaleOfUsersScore" value="4" class="form-check-input score-input" data-section="user" id="users4" @(Model.Prioritisation?.ScaleOfUsersScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="users4">4 – Departmental wide (1,000-10,000 users)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ScaleOfUsersScore" value="5" class="form-check-input score-input" data-section="user" id="users5" @(Model.Prioritisation?.ScaleOfUsersScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="users5">5 – National scale (10,000+ users)</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Evidence of User Need -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Evidence of user need</label>
+                                <div class="form-check">
+                                    <input type="radio" name="EvidenceOfUserNeedScore" value="1" class="form-check-input score-input" data-section="user" id="evidence1" @(Model.Prioritisation?.EvidenceOfUserNeedScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="evidence1">1 – Anecdotal only</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="EvidenceOfUserNeedScore" value="2" class="form-check-input score-input" data-section="user" id="evidence2" @(Model.Prioritisation?.EvidenceOfUserNeedScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="evidence2">2 – Limited feedback</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="EvidenceOfUserNeedScore" value="3" class="form-check-input score-input" data-section="user" id="evidence3" @(Model.Prioritisation?.EvidenceOfUserNeedScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="evidence3">3 – Basic user research</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="EvidenceOfUserNeedScore" value="4" class="form-check-input score-input" data-section="user" id="evidence4" @(Model.Prioritisation?.EvidenceOfUserNeedScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="evidence4">4 – Good research and data</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="EvidenceOfUserNeedScore" value="5" class="form-check-input score-input" data-section="user" id="evidence5" @(Model.Prioritisation?.EvidenceOfUserNeedScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="evidence5">5 – Comprehensive research and validation</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk & Urgency -->
+                    <div class="card mb-3" id="risk-urgency">
+                        <div class="card-header bg-warning">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0 text-dark">
+                                    <span class="d-inline-flex align-items-center">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>Risk &amp; urgency
+                                    </span>
+                                </h3>
+                                <span class="text-dark font-weight-normal">Weighted ×2</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Risk if Not Delivered -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Risk if not delivered</label>
+                                <div class="form-check">
+                                    <input type="radio" name="RiskIfNotDeliveredScore" value="1" class="form-check-input score-input" data-section="risk" id="risk1" @(Model.Prioritisation?.RiskIfNotDeliveredScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="risk1">1 – Low risk, no immediate consequences</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="RiskIfNotDeliveredScore" value="2" class="form-check-input score-input" data-section="risk" id="risk2" @(Model.Prioritisation?.RiskIfNotDeliveredScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="risk2">2 – Minor operational impact</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="RiskIfNotDeliveredScore" value="3" class="form-check-input score-input" data-section="risk" id="risk3" @(Model.Prioritisation?.RiskIfNotDeliveredScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="risk3">3 – Moderate operational or financial risk</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="RiskIfNotDeliveredScore" value="4" class="form-check-input score-input" data-section="risk" id="risk4" @(Model.Prioritisation?.RiskIfNotDeliveredScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="risk4">4 – Significant reputational or regulatory risk</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="RiskIfNotDeliveredScore" value="5" class="form-check-input score-input" data-section="risk" id="risk5" @(Model.Prioritisation?.RiskIfNotDeliveredScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="risk5">5 – Critical risk (legal/financial/safety)</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Target Delivery Urgency -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Target delivery urgency</label>
+                                <div class="form-check">
+                                    <input type="radio" name="TargetDeliveryUrgencyScore" value="1" class="form-check-input score-input" data-section="risk" id="urgency1" @(Model.Prioritisation?.TargetDeliveryUrgencyScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="urgency1">1 – Very flexible, no deadline</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="TargetDeliveryUrgencyScore" value="2" class="form-check-input score-input" data-section="risk" id="urgency2" @(Model.Prioritisation?.TargetDeliveryUrgencyScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="urgency2">2 – Within 12+ months</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="TargetDeliveryUrgencyScore" value="3" class="form-check-input score-input" data-section="risk" id="urgency3" @(Model.Prioritisation?.TargetDeliveryUrgencyScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="urgency3">3 – Within 6-12 months</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="TargetDeliveryUrgencyScore" value="4" class="form-check-input score-input" data-section="risk" id="urgency4" @(Model.Prioritisation?.TargetDeliveryUrgencyScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="urgency4">4 – Within 3-6 months</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="TargetDeliveryUrgencyScore" value="5" class="form-check-input score-input" data-section="risk" id="urgency5" @(Model.Prioritisation?.TargetDeliveryUrgencyScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="urgency5">5 – Immediate (< 3 months)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feasibility -->
+                    <div class="card mb-3" id="feasibility">
+                        <div class="card-header bg-success">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0 text-white">
+                                    <span class="d-inline-flex align-items-center">
+                                        <i class="fas fa-check-circle mr-2"></i>Feasibility
+                                    </span>
+                                </h3>
+                                <span class="text-dark font-weight-normal">Weighted ×1</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Funding Available -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Funding available</label>
+                                <div class="form-check">
+                                    <input type="radio" name="FundingAvailableScore" value="1" class="form-check-input score-input" data-section="feasibility" id="funding1" @(Model.Prioritisation?.FundingAvailableScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="funding1">1 – No funding identified</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="FundingAvailableScore" value="2" class="form-check-input score-input" data-section="feasibility" id="funding2" @(Model.Prioritisation?.FundingAvailableScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="funding2">2 – Potential funding sources</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="FundingAvailableScore" value="3" class="form-check-input score-input" data-section="feasibility" id="funding3" @(Model.Prioritisation?.FundingAvailableScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="funding3">3 – Partially funded</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="FundingAvailableScore" value="4" class="form-check-input score-input" data-section="feasibility" id="funding4" @(Model.Prioritisation?.FundingAvailableScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="funding4">4 – Mostly funded</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="FundingAvailableScore" value="5" class="form-check-input score-input" data-section="feasibility" id="funding5" @(Model.Prioritisation?.FundingAvailableScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="funding5">5 – Fully funded and confirmed</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Headcount Available -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Headcount available</label>
+                                <div class="form-check">
+                                    <input type="radio" name="HeadcountAvailableScore" value="1" class="form-check-input score-input" data-section="feasibility" id="headcount1" @(Model.Prioritisation?.HeadcountAvailableScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="headcount1">1 – No resources identified</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="HeadcountAvailableScore" value="2" class="form-check-input score-input" data-section="feasibility" id="headcount2" @(Model.Prioritisation?.HeadcountAvailableScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="headcount2">2 – Potential resources available</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="HeadcountAvailableScore" value="3" class="form-check-input score-input" data-section="feasibility" id="headcount3" @(Model.Prioritisation?.HeadcountAvailableScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="headcount3">3 – Some resources committed</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="HeadcountAvailableScore" value="4" class="form-check-input score-input" data-section="feasibility" id="headcount4" @(Model.Prioritisation?.HeadcountAvailableScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="headcount4">4 – Most resources secured</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="HeadcountAvailableScore" value="5" class="form-check-input score-input" data-section="feasibility" id="headcount5" @(Model.Prioritisation?.HeadcountAvailableScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="headcount5">5 – Fully resourced and confirmed</label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Portfolio Fit -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Portfolio fit (reuse/duplication)</label>
+                                <div class="form-check">
+                                    <input type="radio" name="PortfolioFitScore" value="1" class="form-check-input score-input" data-section="feasibility" id="portfolio1" @(Model.Prioritisation?.PortfolioFitScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="portfolio1">1 – Significant duplication exists</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="PortfolioFitScore" value="2" class="form-check-input score-input" data-section="feasibility" id="portfolio2" @(Model.Prioritisation?.PortfolioFitScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="portfolio2">2 – Some overlap with existing work</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="PortfolioFitScore" value="3" class="form-check-input score-input" data-section="feasibility" id="portfolio3" @(Model.Prioritisation?.PortfolioFitScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="portfolio3">3 – Fits existing portfolio</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="PortfolioFitScore" value="4" class="form-check-input score-input" data-section="feasibility" id="portfolio4" @(Model.Prioritisation?.PortfolioFitScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="portfolio4">4 – Unique with reuse potential</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="PortfolioFitScore" value="5" class="form-check-input score-input" data-section="feasibility" id="portfolio5" @(Model.Prioritisation?.PortfolioFitScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="portfolio5">5 – Strategic fit with high reuse value</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Value & Outcome -->
+                    <div class="card mb-3" id="value-outcome">
+                        <div class="card-header bg-secondary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title mb-0 text-white">
+                                    <span class="d-inline-flex align-items-center">
+                                        <i class="fas fa-chart-line mr-2"></i>Value &amp; outcome
+                                    </span>
+                                </h3>
+                                <span class="text-dark font-weight-normal">Weighted ×1</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Expected Benefits -->
+                            <div class="form-group">
+                                <label class="d-block font-weight-bold">Expected benefits</label>
+                                <div class="form-check">
+                                    <input type="radio" name="ExpectedBenefitsScore" value="1" class="form-check-input score-input" data-section="value" id="benefits1" @(Model.Prioritisation?.ExpectedBenefitsScore == 1 ? "checked" : "") />
+                                    <label class="form-check-label" for="benefits1">1 – Low or unclear benefits</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ExpectedBenefitsScore" value="2" class="form-check-input score-input" data-section="value" id="benefits2" @(Model.Prioritisation?.ExpectedBenefitsScore == 2 ? "checked" : "") />
+                                    <label class="form-check-label" for="benefits2">2 – Modest efficiency gains</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ExpectedBenefitsScore" value="3" class="form-check-input score-input" data-section="value" id="benefits3" @(Model.Prioritisation?.ExpectedBenefitsScore == 3 ? "checked" : "") />
+                                    <label class="form-check-label" for="benefits3">3 – Measurable cost savings or time reduction</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ExpectedBenefitsScore" value="4" class="form-check-input score-input" data-section="value" id="benefits4" @(Model.Prioritisation?.ExpectedBenefitsScore == 4 ? "checked" : "") />
+                                    <label class="form-check-label" for="benefits4">4 – Significant quantified benefits</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="radio" name="ExpectedBenefitsScore" value="5" class="form-check-input score-input" data-section="value" id="benefits5" @(Model.Prioritisation?.ExpectedBenefitsScore == 5 ? "checked" : "") />
+                                    <label class="form-check-label" for="benefits5">5 – Transformational impact with clear ROI</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Notes -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-comment"></i> Additional notes
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Scoring notes (optional)</label>
+                                <textarea name="ScoringNotes" class="form-control" rows="4" placeholder="Add any additional context or rationale for the scoring...">@Model.Prioritisation?.ScoringNotes</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save"></i> Save scoring
+                        </button>
+                        <a asp-action="Prioritisation" class="btn btn-default btn-lg">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script nonce="@Context.Items["Nonce"]">
+        document.addEventListener('DOMContentLoaded', function() {
+            // Smooth scroll for section navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+
+            // Calculate priority score dynamically
+            function calculatePriorityScore() {
+                // Get all score values
+                const scores = {
+                    statutory: parseInt(document.querySelector('input[name="StatutoryManifestoScore"]:checked')?.value) || 0,
+                    mission: parseInt(document.querySelector('input[name="OpportunityMissionScore"]:checked')?.value) || 0,
+                    theme: parseInt(document.querySelector('input[name="DdatStrategicThemeScore"]:checked')?.value) || 0,
+                    users: parseInt(document.querySelector('input[name="ScaleOfUsersScore"]:checked')?.value) || 0,
+                    evidence: parseInt(document.querySelector('input[name="EvidenceOfUserNeedScore"]:checked')?.value) || 0,
+                    risk: parseInt(document.querySelector('input[name="RiskIfNotDeliveredScore"]:checked')?.value) || 0,
+                    urgency: parseInt(document.querySelector('input[name="TargetDeliveryUrgencyScore"]:checked')?.value) || 0,
+                    funding: parseInt(document.querySelector('input[name="FundingAvailableScore"]:checked')?.value) || 0,
+                    headcount: parseInt(document.querySelector('input[name="HeadcountAvailableScore"]:checked')?.value) || 0,
+                    portfolio: parseInt(document.querySelector('input[name="PortfolioFitScore"]:checked')?.value) || 0,
+                    benefits: parseInt(document.querySelector('input[name="ExpectedBenefitsScore"]:checked')?.value) || 0
+                };
+
+                // Calculate weighted totals
+                const strategicTotal = (scores.statutory + scores.mission + scores.theme) * 2;
+                const userImpactTotal = (scores.users + scores.evidence) * 2;
+                const riskUrgencyTotal = (scores.risk + scores.urgency) * 2;
+                const feasibilityTotal = (scores.funding + scores.headcount + scores.portfolio) * 1;
+                const valueTotal = scores.benefits * 1;
+
+                // Calculate overall score (normalize to 100)
+                const rawTotal = strategicTotal + userImpactTotal + riskUrgencyTotal + feasibilityTotal + valueTotal;
+                const totalScore = Math.round((rawTotal / 90) * 100);
+
+                // Update display
+                document.getElementById('totalScore').textContent = totalScore;
+                document.getElementById('scoreProgress').style.width = totalScore + '%';
+                document.getElementById('scoreProgress').setAttribute('aria-valuenow', totalScore);
+                document.getElementById('scoreProgress').textContent = totalScore + '%';
+
+                // Update tier and color
+                let tier, tierClass, progressClass;
+                if (totalScore >= 80) {
+                    tier = 'Tier 1 – Critical';
+                    tierClass = 'text-danger';
+                    progressClass = 'bg-danger';
+                } else if (totalScore >= 60) {
+                    tier = 'Tier 2 – High';
+                    tierClass = 'text-warning';
+                    progressClass = 'bg-warning';
+                } else if (totalScore >= 40) {
+                    tier = 'Tier 3 – Medium';
+                    tierClass = 'text-info';
+                    progressClass = 'bg-info';
+                } else {
+                    tier = 'Tier 4 – Low';
+                    tierClass = 'text-secondary';
+                    progressClass = 'bg-secondary';
+                }
+
+                document.getElementById('priorityTier').textContent = tier;
+                document.getElementById('priorityTier').className = tierClass + ' font-weight-bold';
+                
+                // Update progress bar color
+                const progressBar = document.getElementById('scoreProgress');
+                progressBar.className = 'progress-bar ' + progressClass;
+
+                // Update section completion badges
+                updateSectionCompletion('strategic', [scores.statutory, scores.mission, scores.theme]);
+                updateSectionCompletion('user', [scores.users, scores.evidence]);
+                updateSectionCompletion('risk', [scores.risk, scores.urgency]);
+                updateSectionCompletion('feasibility', [scores.funding, scores.headcount, scores.portfolio]);
+                updateSectionCompletion('value', [scores.benefits]);
+            }
+
+            function updateSectionCompletion(section, scoreValues) {
+                const completed = scoreValues.filter(s => s > 0).length;
+                const total = scoreValues.length;
+                const badge = document.querySelector(`.section-status[data-section="${section}"]`);
+                
+                if (badge) {
+                    badge.textContent = `${completed}/${total}`;
+                    
+                    if (completed === total) {
+                        badge.classList.remove('badge-secondary', 'badge-warning');
+                        badge.classList.add('badge-success');
+                    } else if (completed > 0) {
+                        badge.classList.remove('badge-secondary', 'badge-success');
+                        badge.classList.add('badge-warning');
+                    } else {
+                        badge.classList.remove('badge-warning', 'badge-success');
+                        badge.classList.add('badge-secondary');
+                    }
+                }
+            }
+
+            // Listen for changes on all score inputs
+            document.querySelectorAll('.score-input').forEach(input => {
+                input.addEventListener('change', calculatePriorityScore);
+            });
+
+            // Toggle collapse icons
+            $('.collapse').on('shown.bs.collapse', function () {
+                const icon = document.querySelector(`.collapse-icon[data-target="#${this.id}"]`);
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
+            });
+
+            $('.collapse').on('hidden.bs.collapse', function () {
+                const icon = document.querySelector(`.collapse-icon[data-target="#${this.id}"]`);
+                if (icon) {
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                }
+            });
+
+            // Calculate on page load
+            calculatePriorityScore();
+        });
+    </script>
+}

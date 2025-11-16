@@ -14,17 +14,20 @@ public class ProductReportingController : Controller
     private readonly CompassDbContext _context;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
+    private readonly IPerformanceReportingEligibilityService _eligibilityService;
     private readonly ILogger<ProductReportingController> _logger;
 
     public ProductReportingController(
         CompassDbContext context,
         IProductsApiService productsApiService,
         IReturnStatusService returnStatusService,
+        IPerformanceReportingEligibilityService eligibilityService,
         ILogger<ProductReportingController> logger)
     {
         _context = context;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
+        _eligibilityService = eligibilityService;
         _logger = logger;
     }
 
@@ -34,14 +37,16 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products and all products
+        // Fetch user's products
         var userProducts = await _productsApiService.GetProductsAsync(userEmail);
-        var allProducts = await _productsApiService.GetProductsAsync(null);
         
         // Get current reporting period (previous month)
         var now = DateTime.UtcNow;
         var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // PERFORMANCE OPTIMIZATION: Load eligibility cache once upfront
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
         
         // Get all returns for current period in one query
         var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
@@ -55,6 +60,25 @@ public class ProductReportingController : Controller
         foreach (var product in userProducts)
         {
             if (string.IsNullOrEmpty(product.FipsId)) continue;
+            
+            // Extract business area from category_values
+            var businessArea = product.CategoryValues?
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                ?.Name;
+            
+            // Check if reporting is required (using cached data - NO database query)
+            var reportingRequired = _eligibilityService.IsReportingRequired(
+                product.FipsId, 
+                businessArea, 
+                currentYear, 
+                currentMonth,
+                eligibilityCache);
+            
+            // Skip this product if reporting is not required
+            if (!reportingRequired)
+            {
+                continue;
+            }
             
             var currentReturn = userReturns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
             
@@ -106,72 +130,39 @@ public class ProductReportingController : Controller
             });
         }
         
-        // Get all returns for all products in one query
-        var allFipsIds = allProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
-        var allReturns = await _context.ProductReturns
-            .Include(pr => pr.MetricValues)
-            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
-            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
-
-        // Create view model for all products with service owner
-        var allProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in allProducts)
-        {
-            if (string.IsNullOrEmpty(product.FipsId)) continue;
-            
-            var currentReturn = allReturns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
-            
-            ReturnStatus? status = null;
-            int? completedMetrics = null;
-            int? totalMetrics = null;
-            
-            if (currentReturn != null)
-            {
-                status = _returnStatusService.CalculateReturnStatus(
-                    currentReturn.Year, 
-                    currentReturn.Month, 
-                    currentReturn.SubmittedDate);
-                    
-                totalMetrics = currentReturn.MetricValues?.Count ?? 0;
-                completedMetrics = currentReturn.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
-            }
-            else
-            {
-                // Check if this period has started yet
-                var periodStart = new DateTime(currentYear, currentMonth, 1);
-                if (periodStart >= new DateTime(2025, 10, 1))
-                {
-                    status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, null);
-                }
-            }
-            
-            // Find the service owner for this product
-            string? serviceOwner = null;
-            if (product.ProductContacts != null)
-            {
-                var serviceOwnerContact = product.ProductContacts.FirstOrDefault(pc => 
-                    !string.IsNullOrEmpty(pc.Role) &&
-                    pc.Role.Equals("service_owner", StringComparison.OrdinalIgnoreCase) &&
-                    pc.UsersPermissionsUser != null);
-                
-                serviceOwner = serviceOwnerContact?.UsersPermissionsUser?.Username 
-                    ?? serviceOwnerContact?.UsersPermissionsUser?.Email;
-            }
-            
-            allProductStatuses.Add(new ProductReturnStatusViewModel
-            {
-                Product = product,
-                CurrentPeriodYear = currentYear,
-                CurrentPeriodMonth = currentMonth,
-                Status = status,
-                CompletedMetrics = completedMetrics,
-                TotalMetrics = totalMetrics,
-                UserRole = serviceOwner  // Reusing UserRole field for service owner name
-            });
-        }
-        
-        ViewBag.AllProducts = allProductStatuses;
         return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", userProductStatuses);
+    }
+    
+    // GET: ProductReporting/ReportOtherProduct
+    public async Task<IActionResult> ReportOtherProduct()
+    {
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        
+        // Get current reporting period
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // Load eligibility cache once
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        
+        // Filter to only products requiring reporting
+        var eligibleProducts = allProducts
+            .Where(p => !string.IsNullOrEmpty(p.FipsId))
+            .Where(p => p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            .Where(p =>
+            {
+                var businessArea = p.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name;
+                return _eligibilityService.IsReportingRequired(p.FipsId!, businessArea, currentYear, currentMonth, eligibilityCache);
+            })
+            .OrderBy(p => p.Title)
+            .ToList();
+        
+        ViewBag.CurrentYear = currentYear;
+        ViewBag.CurrentMonth = currentMonth;
+        return View("~/Views/ProductReporting/PerformanceMetrics/ReportOtherProduct.cshtml", eligibleProducts);
     }
 
     // GET: ProductReporting/ProductHistory/FIPS123
@@ -606,6 +597,15 @@ public class ProductReportingController : Controller
         var returns = new List<ProductReturn>();
         var now = DateTime.UtcNow;
 
+        // Get product to check business area
+        var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+        var businessArea = product?.CategoryValues?
+            .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+            ?.Name;
+
+        // PERFORMANCE OPTIMIZATION: Load eligibility cache once
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+
         // Start from October 2025
         var startDate = new DateTime(2025, 10, 1);
         
@@ -620,6 +620,20 @@ public class ProductReportingController : Controller
              date <= endDate; 
              date = date.AddMonths(1))
         {
+            // Check if reporting is required (using cached data - NO database query)
+            var reportingRequired = _eligibilityService.IsReportingRequired(
+                fipsId, 
+                businessArea, 
+                date.Year, 
+                date.Month,
+                eligibilityCache);
+            
+            // Skip this period if reporting is not required
+            if (!reportingRequired)
+            {
+                continue;
+            }
+            
             var existingReturn = await _context.ProductReturns
                 .Include(pr => pr.MetricValues)
                     .ThenInclude(mv => mv.PerformanceMetric)

@@ -1,0 +1,190 @@
+@model Compass.ViewModels.ProjectDecisionFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+<input type="hidden" asp-for="Input.ProjectId" />
+<input type="hidden" asp-for="Input.DecisionId" />
+<input type="hidden" asp-for="Input.SourceMilestoneId" />
+
+<div class="form-group @(hasError("Title") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Title">Decision title</label>
+    <small class="form-text text-muted">Capture the headline question or outcome agreed.</small>
+    <span asp-validation-for="Input.Title" class="form-error-message"></span>
+    <input asp-for="Input.Title" class="form-control @(hasError("Title") ? "form-control--error" : string.Empty)" required maxlength="200" />
+</div>
+
+<div class="form-group @(hasError("Status") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Status">Status</label>
+    <small class="form-text text-muted">Track whether the decision is pending, approved, or superseded.</small>
+    <span asp-validation-for="Input.Status" class="form-error-message"></span>
+    <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.StatusOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.DecisionType">Decision type</label>
+    <input asp-for="Input.DecisionType" class="form-control" maxlength="50" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.DecisionDate">Decision date</label>
+    <input asp-for="Input.DecisionDate" type="date" class="form-control" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Summary">Summary</label>
+    <small class="form-text text-muted">Outline the key points that led to the decision.</small>
+    <textarea asp-for="Input.Summary" class="form-control" rows="3"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.BusinessArea">Business area</label>
+    <select asp-for="Input.BusinessArea" class="form-control">
+        @foreach (var option in Model.BusinessAreaOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
+    <label for="decisionOwnerSearch">Decision owner</label>
+    <small class="form-text text-muted">Search the Entra directory. Leave blank if unassigned.</small>
+    <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
+    <div class="user-picker"
+         data-user-picker
+         data-search-url="/api/users/search"
+         data-select-url="/api/users/select">
+        <div class="position-relative">
+            <input type="text"
+                   class="form-control js-user-picker-input @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)"
+                   id="decisionOwnerSearch"
+                   autocomplete="off"
+                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                   value="@(Model.Input.OwnerName ?? string.Empty)" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="form-text text-muted js-user-picker-message"></p>
+        <input asp-for="Input.OwnerUserId" type="hidden" class="js-user-picker-value" />
+        <input asp-for="Input.OwnerName" type="hidden" class="js-user-picker-name" />
+        <input asp-for="Input.OwnerEmail" type="hidden" class="js-user-picker-email" />
+        <div class="user-picker__selected js-user-picker-summary" data-default-text="No owner selected.">
+            @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerName))
+            {
+                <div class="user-picker__selected-card">
+                    <div class="user-picker__selected-name">@Model.Input.OwnerName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerEmail))
+                    {
+                        <div class="user-picker__selected-meta">@Model.Input.OwnerEmail</div>
+                    }
+                    <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                </div>
+            }
+            else
+            {
+                <span class="text-muted">No owner selected.</span>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Outcome">Outcome</label>
+    <small class="form-text text-muted">Note the agreed result or follow-up.</small>
+    <textarea asp-for="Input.Outcome" class="form-control" rows="2"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Notes">Notes</label>
+    <textarea asp-for="Input.Notes" class="form-control" rows="3"></textarea>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.SourceType">Source type</label>
+    <input asp-for="Input.SourceType" class="form-control" maxlength="100" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.SourceReference">Source reference</label>
+    <input asp-for="Input.SourceReference" class="form-control" maxlength="100" />
+</div>
+
+<div class="form-group @(hasError("SourceRecordUrl") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.SourceRecordUrl">Source URL</label>
+    <small class="form-text text-muted">Link to minutes or supporting evidence.</small>
+    <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
+    <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("SourceRecordUrl") ? "form-control--error" : string.Empty)" maxlength="500" />
+</div>
+
+<div class="form-group">
+    <label>Linked risks</label>
+    <small class="form-text text-muted">Start typing to find risks from this project and others.</small>
+    <select asp-for="Input.LinkedRiskIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchRisksForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search risks"
+            multiple>
+        @foreach (var option in Model.RiskOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Linked issues</label>
+    <select asp-for="Input.LinkedIssueIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchIssuesForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search issues"
+            multiple>
+        @foreach (var option in Model.IssueOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Linked actions</label>
+    <small class="form-text text-muted">Link actions that result from or depend on this decision.</small>
+    <select asp-for="Input.LinkedActionIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchActionsForDecision", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search actions"
+            multiple>
+        @foreach (var option in Model.ActionOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>

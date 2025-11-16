@@ -1,8 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.ViewModels.Accessibility;
 
 namespace Compass.Controllers
 {
@@ -66,7 +70,8 @@ namespace Compass.Controllers
             string? statement = null,
             string? issueStatus = null,
             string? issueLevel = null,
-            string? auditType = null)
+            string? auditType = null,
+            List<string>? heatmapTypes = null)
         {
             const int pageSize = 25;
             
@@ -465,6 +470,176 @@ namespace Compass.Controllers
                 return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
             }
 
+            if (tab == "heatmap")
+            {
+                var heatmapTypeConfigs = new (string Key, string[] Keywords, string Description)[]
+                {
+                    ("Color", new[] { "color", "colour", "contrast" }, "Colour contrast and use of colour"),
+                    ("Links", new[] { "link", "hyperlink", "focus", "target" }, "Link identification and focus states"),
+                    ("Forms", new[] { "form", "input", "label", "error", "name", "value" }, "Form labels, instructions and errors"),
+                    ("Navigation", new[] { "navigate", "navigation", "bypass", "sequence", "multiple ways", "heading", "focus order" }, "Navigation, multiple ways and focus order"),
+                    ("Text", new[] { "text", "read", "reading", "resize", "line", "paragraph" }, "Readable text, resizing and spacing"),
+                    ("Audio & Video", new[] { "audio", "video", "media", "caption", "transcript", "sign", "time-based" }, "Audio, video and time-based media"),
+                    ("Keyboard", new[] { "keyboard", "trap", "focus", "shortcut" }, "Keyboard access and traps")
+                };
+
+                var heatmapTypeDefinitions = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+                var heatmapTypeDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var heatmapTypeCanonicalKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var config in heatmapTypeConfigs)
+                {
+                    heatmapTypeDefinitions[config.Key] = config.Keywords;
+                    heatmapTypeDescriptions[config.Key] = config.Description;
+                    heatmapTypeCanonicalKeys[config.Key] = config.Key;
+                }
+
+                var selectedHeatmapTypeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                if (heatmapTypes != null && heatmapTypes.Count > 0)
+                {
+                    foreach (var requested in heatmapTypes)
+                    {
+                        if (string.IsNullOrWhiteSpace(requested))
+                        {
+                            continue;
+                        }
+
+                        if (heatmapTypeCanonicalKeys.TryGetValue(requested, out var canonical))
+                        {
+                            selectedHeatmapTypeSet.Add(canonical);
+                        }
+                    }
+                }
+
+                var activeCriteria = await _context.WcagCriteria
+                    .Where(c => c.IsActive)
+                    .OrderBy(c => c.Version)
+                    .ThenBy(c => c.SortOrder)
+                    .ThenBy(c => c.Criterion)
+                    .ToListAsync();
+
+                var linkCounts = await _context.IssueWcagCriteria
+                    .Where(link => !link.AccessibilityIssue.IsDeleted)
+                    .GroupBy(link => link.WcagCriterionId)
+                    .Select(group => new
+                    {
+                        CriterionId = group.Key,
+                        Count = group.Count()
+                    })
+                    .ToListAsync();
+
+                var heatmapRows = activeCriteria
+                    .Select(c => new WcagHeatmapRow
+                    {
+                        CriterionId = c.Id,
+                        Criterion = c.Criterion,
+                        Title = c.Title,
+                        Level = c.Level,
+                        Version = c.Version,
+                        IssueCount = linkCounts.FirstOrDefault(lc => lc.CriterionId == c.Id)?.Count ?? 0,
+                        Principle = c.Criterion.Split('.', 2)[0]
+                    })
+                    .ToList();
+
+                var rowLookup = new Dictionary<string, WcagHeatmapRow>(StringComparer.OrdinalIgnoreCase);
+                foreach (var row in heatmapRows)
+                {
+                    if (!rowLookup.ContainsKey(row.Criterion))
+                    {
+                        rowLookup[row.Criterion] = row;
+                    }
+                }
+
+                var issuesWithLegacyCriteria = await _context.AccessibilityIssues
+                    .Where(i => !i.IsDeleted && i.IssueType == "WCAG" && !i.WcagCriteriaLinks.Any() && !string.IsNullOrWhiteSpace(i.WcagCriteria))
+                    .Select(i => i.WcagCriteria!)
+                    .ToListAsync();
+
+                var unmatchedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var raw in issuesWithLegacyCriteria)
+                {
+                    foreach (var code in ExtractCriterionCodes(raw))
+                    {
+                        if (rowLookup.TryGetValue(code, out var row))
+                        {
+                            row.IssueCount += 1;
+                        }
+                        else
+                        {
+                            unmatchedCodes.Add(code);
+                        }
+                    }
+                }
+
+                bool MatchesType(WcagHeatmapRow row, string typeKey)
+                {
+                    if (!heatmapTypeDefinitions.TryGetValue(typeKey, out var keywords))
+                    {
+                        return false;
+                    }
+
+                    foreach (var keyword in keywords)
+                    {
+                        if (row.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                            row.Criterion.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                if (selectedHeatmapTypeSet.Any())
+                {
+                    heatmapRows = heatmapRows
+                        .Where(row => selectedHeatmapTypeSet.Any(typeKey => MatchesType(row, typeKey)))
+                        .ToList();
+                }
+
+                var maxCount = heatmapRows.Any() ? heatmapRows.Max(r => r.IssueCount) : 0;
+                var totalIssuesMapped = heatmapRows.Sum(r => r.IssueCount);
+                var criteriaWithIssues = heatmapRows.Count(r => r.IssueCount > 0);
+                var levelOrder = new[] { "A", "AA", "AAA" };
+                var levelDistribution = levelOrder
+                    .Select(level => new KeyValuePair<string, int>(
+                        level,
+                        heatmapRows
+                            .Where(r => string.Equals(r.Level, level, StringComparison.OrdinalIgnoreCase))
+                            .Sum(r => r.IssueCount)))
+                    .ToList();
+                var knownLevelTotal = levelDistribution.Sum(kvp => kvp.Value);
+                var otherLevelCount = totalIssuesMapped - knownLevelTotal;
+                if (otherLevelCount > 0)
+                {
+                    levelDistribution.Add(new KeyValuePair<string, int>("Other", otherLevelCount));
+                }
+
+                var topCriteria = heatmapRows
+                    .Where(r => r.IssueCount > 0)
+                    .OrderByDescending(r => r.IssueCount)
+                    .ThenBy(r => r.Criterion, StringComparer.OrdinalIgnoreCase)
+                    .Take(5)
+                    .Select(r => Tuple.Create(r.Criterion, r.Title, r.IssueCount, r.Level))
+                    .ToList();
+ 
+                ViewBag.WcagHeatmap = heatmapRows;
+                ViewBag.HeatmapMaxCount = maxCount;
+                ViewBag.HeatmapTotalIssues = totalIssuesMapped;
+                ViewBag.HeatmapCriteriaWithIssues = criteriaWithIssues;
+                ViewBag.HeatmapUnmatchedCodes = unmatchedCodes.ToList();
+                ViewBag.HeatmapLevelDistribution = levelDistribution;
+                ViewBag.HeatmapLevelTotal = totalIssuesMapped;
+                ViewBag.HeatmapTopCriteria = topCriteria;
+                ViewBag.HeatmapTypeOptions = heatmapTypeConfigs.Select(config => config.Key).ToList();
+                ViewBag.HeatmapTypeDescriptions = heatmapTypeDescriptions;
+                ViewBag.SelectedHeatmapTypes = selectedHeatmapTypeSet.ToList();
+
+                return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts);
+            }
+ 
             // Default to products tab
             ViewBag.ActiveTab = "products";
             return View("~/Views/Apps/Accessibility/Index.cshtml", allProducts.Take(pageSize).ToList());
@@ -1552,6 +1727,43 @@ namespace Compass.Controllers
                         message = "An error occurred while retrieving issues" 
                     } 
                 });
+            }
+        }
+
+        private static IEnumerable<string> ExtractCriterionCodes(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                yield break;
+            }
+
+            var separators = new[] { ',', ';', '\n', '|', '/' };
+            var parts = raw.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var part in parts)
+            {
+                var cleaned = part.Trim();
+                if (string.IsNullOrEmpty(cleaned))
+                {
+                    continue;
+                }
+
+                if (cleaned.StartsWith("WCAG", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleaned = cleaned.Substring(4).TrimStart(' ', ':', '-', '.');
+                }
+
+                var code = cleaned.Split(new[] { ':', ' ' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    continue;
+                }
+
+                if (char.IsDigit(code[0]))
+                {
+                    yield return code;
+                }
             }
         }
     }

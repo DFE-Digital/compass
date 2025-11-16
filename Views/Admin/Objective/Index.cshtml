@@ -1,6 +1,6 @@
 @model IEnumerable<Compass.Models.Objective>
 @{
-    ViewData["Title"] = "Strategic objectives";
+    ViewData["Title"] = "Priority outcomes";
     var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
     var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
 }
@@ -12,9 +12,9 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item">Administration</li>
-                    <li class="breadcrumb-item active">Strategic objectives</li>
+                    <li class="breadcrumb-item active">Priority outcomes</li>
                 </ol>
-                <h1 class="m-0">Strategic objectives</h1>
+                <h1 class="m-0">Priority outcomes</h1>
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
@@ -24,7 +24,7 @@
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
                             <a class="dropdown-item" href="#" data-toggle="modal" data-target="#objectiveModal" onclick="openCreateObjectiveModal()">
-                                Add new strategic objective
+                                Add new priority outcome
                             </a>
                         </div>
                     </div>
@@ -69,7 +69,7 @@
                                 Functional standards
                             </a>
                             <a href="@Url.Action("Objectives", "Admin")" class="nav-link @(currentAction.StartsWith("Objective") ? "active" : "")">
-                                Strategic objectives
+                                Priority outcomes
                             </a>
                             <a href="@Url.Action("Missions", "Admin")" class="nav-link @(currentAction.StartsWith("Mission") ? "active" : "")">
                                 Missions
@@ -112,17 +112,19 @@
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">All strategic objectives</h3>
+                        <h3 class="card-title">All priority outcomes</h3>
                     </div>
                     <div class="card-body table-responsive p-0">
                         <table class="table table-hover text-nowrap">
                             <thead>
                                 <tr>
-                                    <th style="width: 10%;">ID</th>
-                                    <th style="width: 30%;">Title</th>
-                                    <th style="width: 20%;">Theme</th>
-                                    <th style="width: 20%;">Owner</th>
-                                    <th style="width: 20%;">Status</th>
+                                    <th style="width: 8%;">ID</th>
+                                    <th style="width: 24%;">Title</th>
+                                    <th style="width: 16%;">Theme</th>
+                                    <th style="width: 16%;">Theme SRO</th>
+                                    <th style="width: 16%;">Outcome SRO</th>
+                                    <th style="width: 12%;">Owner</th>
+                                    <th style="width: 8%;">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -138,12 +140,16 @@
                                                    data-title="@objective.Title" 
                                                    data-theme="@(objective.Theme ?? "")" 
                                                    data-description="@(objective.Description ?? "")" 
-                                                   data-owneruserid="@(objective.OwnerUserId?.ToString() ?? "")" 
+                                                   data-owneruserid="@(objective.OwnerUserId?.ToString() ?? "")"
+                                                   data-themesrouserid="@(objective.ThemeSroUserId?.ToString() ?? "")"
+                                                   data-outcomesrouserid="@(objective.OutcomeSroUserId?.ToString() ?? "")"
                                                    data-status="@(objective.Status ?? "")">
                                                     @objective.Title
                                                 </a>
                                             </td>
                                             <td>@(objective.Theme ?? "—")</td>
+                                            <td>@(objective.ThemeSroUser?.Name ?? "—")</td>
+                                            <td>@(objective.OutcomeSroUser?.Name ?? "—")</td>
                                             <td>@(objective.OwnerUser?.Name ?? "—")</td>
                                             <td>
                                                 @switch (objective.Status)
@@ -174,7 +180,7 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="5" class="text-center">No strategic objectives found</td>
+                                        <td colspan="7" class="text-center">No priority outcomes found</td>
                                     </tr>
                                 }
                             </tbody>
@@ -191,7 +197,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="objectiveModalLabel">Create strategic objective</h5>
+                <h5 class="modal-title" id="objectiveModalLabel">Create priority outcome</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -244,6 +250,27 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="objectiveThemeSroUserId" class="control-label">Theme SRO</label>
+                                <select id="objectiveThemeSroUserId" name="ThemeSroUserId" class="form-control" asp-items="ViewBag.Users">
+                                    <option value="">-- Select theme SRO --</option>
+                                </select>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="ThemeSroUserId" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="objectiveOutcomeSroUserId" class="control-label">Outcome SRO</label>
+                                <select id="objectiveOutcomeSroUserId" name="OutcomeSroUserId" class="form-control" asp-items="ViewBag.Users">
+                                    <option value="">-- Select outcome SRO --</option>
+                                </select>
+                                <span class="text-danger field-validation-valid" data-valmsg-for="OutcomeSroUserId" data-valmsg-replace="true"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -258,25 +285,29 @@
     <partial name="_ValidationScriptsPartial" />
     <script nonce="@Context.Items["Nonce"]">
         function openCreateObjectiveModal() {
-            $('#objectiveModalLabel').text('Create strategic objective');
+            $('#objectiveModalLabel').text('Create priority outcome');
             $('#objectiveForm').attr('action', '@Url.Action("CreateObjective", "Admin")');
             $('#objectiveId').val('');
             $('#objectiveTitle').val('');
             $('#objectiveTheme').val('');
             $('#objectiveDescription').val('');
             $('#objectiveOwnerUserId').val('');
+            $('#objectiveThemeSroUserId').val('');
+            $('#objectiveOutcomeSroUserId').val('');
             $('#objectiveStatus').val('');
             $('#objectiveModal').modal('show');
         }
 
-        function openEditObjectiveModal(id, title, theme, description, ownerUserId, status) {
-            $('#objectiveModalLabel').text('Edit strategic objective');
+        function openEditObjectiveModal(id, title, theme, description, ownerUserId, themeSroUserId, outcomeSroUserId, status) {
+            $('#objectiveModalLabel').text('Edit priority outcome');
             $('#objectiveForm').attr('action', '@Url.Action("EditObjective", "Admin")');
             $('#objectiveId').val(id);
             $('#objectiveTitle').val(title);
             $('#objectiveTheme').val(theme || '');
             $('#objectiveDescription').val(description || '');
             $('#objectiveOwnerUserId').val(ownerUserId || '');
+            $('#objectiveThemeSroUserId').val(themeSroUserId || '');
+            $('#objectiveOutcomeSroUserId').val(outcomeSroUserId || '');
             $('#objectiveStatus').val(status || '');
             $('#objectiveModal').modal('show');
         }
@@ -290,6 +321,8 @@
                 $item.data('theme'),
                 $item.data('description'),
                 $item.data('owneruserid'),
+                $item.data('themesrouserid'),
+                $item.data('outcomesrouserid'),
                 $item.data('status')
             );
         });

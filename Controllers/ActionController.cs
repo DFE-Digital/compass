@@ -5,6 +5,10 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
+using Compass.ViewModels;
+using System;
+using System.Globalization;
+using System.Linq;
 
 namespace Compass.Controllers;
 
@@ -14,6 +18,32 @@ public class ActionController : Controller
     private readonly CompassDbContext _context;
     private readonly IProductsApiService _productsApiService;
     private readonly ILogger<ActionController> _logger;
+
+    private static readonly (string Value, string Label)[] ActionStatusOptions = new[]
+    {
+        ("not_started", "Not started"),
+        ("in_progress", "In progress"),
+        ("blocked", "Blocked"),
+        ("done", "Done"),
+        ("cancelled", "Cancelled")
+    };
+
+    private static readonly (string Value, string Label)[] ActionPriorityOptions = new[]
+    {
+        ("high", "High"),
+        ("medium", "Medium"),
+        ("low", "Low")
+    };
+
+    private static readonly string[] ActionSourceTypes =
+    {
+        "Risk",
+        "Issue",
+        "Milestone",
+        "Decision",
+        "Product",
+        "Other"
+    };
 
     public ActionController(CompassDbContext context, IProductsApiService productsApiService, ILogger<ActionController> logger)
     {
@@ -243,38 +273,23 @@ public class ActionController : Controller
     // GET: Action/Details/5
     public async Task<IActionResult> Details(int? id)
     {
-        if (id == null)
+        if (!id.HasValue)
         {
             return NotFound();
         }
 
-        var action = await _context.Actions
-            .Include(a => a.Objective)
-            .Include(a => a.ParentAction)
-            .Include(a => a.ActionSource)
-            .Include(a => a.SubActions.Where(sa => !sa.IsDeleted))
-            .Include(a => a.RiskActions)
-                .ThenInclude(ra => ra.Risk)
-            .Include(a => a.IssueActions)
-                .ThenInclude(ia => ia.Issue)
-            .Include(a => a.MilestoneActions)
-                .ThenInclude(ma => ma.Milestone)
-            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
-
+        var action = await LoadActionForDetailsAsync(id.Value);
         if (action == null)
         {
             return NotFound();
         }
 
-        // Fetch products for lookup
-        var products = await _productsApiService.GetProductsAsync();
-        ViewBag.Products = products.OrderBy(p => p.Title).ToList();
-
-        return View(action);
+        var viewModel = await BuildActionDetailsViewModelAsync(action);
+        return View(viewModel);
     }
 
     // GET: Action/Create
-    public async Task<IActionResult> Create(int? objectiveId, int? parentActionId, int? riskId, int? issueId, int? milestoneId)
+    public async Task<IActionResult> Create(int? objectiveId, int? parentActionId, int? riskId, int? issueId, int? milestoneId, string? returnTo)
     {
         ViewBag.Objectives = new SelectList(await _context.Objectives.Where(o => !o.IsDeleted).OrderBy(o => o.Title).ToListAsync(), "Id", "Title", objectiveId);
         ViewBag.ParentActions = new SelectList(await _context.Actions.Where(a => !a.IsDeleted).OrderBy(a => a.Title).ToListAsync(), "Id", "Title", parentActionId);
@@ -290,6 +305,7 @@ public class ActionController : Controller
         ViewBag.RiskId = riskId;
         ViewBag.IssueId = issueId;
         ViewBag.MilestoneId = milestoneId;
+        ViewBag.ReturnTo = returnTo;
         
         // Pre-populate action fields from source risk or issue
         var action = new Models.Action();
@@ -372,7 +388,7 @@ public class ActionController : Controller
     // POST: Action/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(int? riskId, int? issueId, int? milestoneId)
+    public async Task<IActionResult> Create(int? riskId, int? issueId, int? milestoneId, string? returnTo)
     {
         // Manually create and populate the action from form data due to model binding conflict with "Action" class name
         var action = new Models.Action
@@ -477,6 +493,11 @@ public class ActionController : Controller
                 }
                 if (milestoneId.HasValue)
                 {
+                    if (!string.IsNullOrWhiteSpace(returnTo) && returnTo.Equals("project-milestone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return RedirectToAction("MilestoneDetails", "Project", new { id = milestoneId.Value });
+                    }
+
                     return RedirectToAction("Details", "Milestone", new { id = milestoneId.Value });
                 }
                 if (action.ObjectiveId.HasValue)
@@ -735,6 +756,469 @@ public class ActionController : Controller
         }
         
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateDetails([Bind(Prefix = "Input")] ActionDetailsUpdateInputModel input)
+    {
+        input.SelectedRiskIds ??= new List<int>();
+        input.SelectedIssueIds ??= new List<int>();
+        input.SelectedMilestoneIds ??= new List<int>();
+
+        var action = await _context.Actions
+            .Include(a => a.RiskActions)
+            .Include(a => a.IssueActions)
+            .Include(a => a.MilestoneActions)
+            .FirstOrDefaultAsync(a => a.Id == input.Id && !a.IsDeleted);
+
+        if (action == null)
+        {
+            return NotFound();
+        }
+
+        // Normalise selections
+        input.SelectedRiskIds = input.SelectedRiskIds.Distinct().ToList();
+        input.SelectedIssueIds = input.SelectedIssueIds.Distinct().ToList();
+        input.SelectedMilestoneIds = input.SelectedMilestoneIds.Distinct().ToList();
+
+        // Validate status
+        if (string.IsNullOrWhiteSpace(input.Status) || !ActionStatusOptions.Any(option => string.Equals(option.Value, input.Status, StringComparison.OrdinalIgnoreCase)))
+        {
+            ModelState.AddModelError("Input.Status", "Select a status.");
+        }
+
+        // Validate priority
+        if (!string.IsNullOrWhiteSpace(input.Priority) && !ActionPriorityOptions.Any(option => string.Equals(option.Value, input.Priority, StringComparison.OrdinalIgnoreCase)))
+        {
+            ModelState.AddModelError("Input.Priority", "Select a valid priority.");
+        }
+
+        // Validate source type
+        if (!string.IsNullOrWhiteSpace(input.SourceType) && !ActionSourceTypes.Any(type => string.Equals(type, input.SourceType, StringComparison.OrdinalIgnoreCase)))
+        {
+            ModelState.AddModelError("Input.SourceType", "Select a valid source type.");
+        }
+
+        var sanitisedTitle = SanitiseText(input.Title);
+        if (string.IsNullOrWhiteSpace(sanitisedTitle))
+        {
+            ModelState.AddModelError("Input.Title", "Enter an action title.");
+        }
+        else
+        {
+            input.Title = sanitisedTitle;
+        }
+
+        // Validate objective and source references
+        if (input.ObjectiveId.HasValue && !await _context.Objectives.AnyAsync(o => !o.IsDeleted && o.Id == input.ObjectiveId.Value))
+        {
+            ModelState.AddModelError("Input.ObjectiveId", "Select a valid objective.");
+        }
+
+        if (input.ActionSourceId.HasValue && !await _context.ActionSources.AnyAsync(s => s.IsActive && s.Id == input.ActionSourceId.Value))
+        {
+            ModelState.AddModelError("Input.ActionSourceId", "Select a valid action source.");
+        }
+
+        if (input.ParentActionId.HasValue)
+        {
+            if (input.ParentActionId.Value == action.Id)
+            {
+                ModelState.AddModelError("Input.ParentActionId", "An action cannot be its own parent.");
+            }
+            else if (!await _context.Actions.AnyAsync(a => !a.IsDeleted && a.Id == input.ParentActionId.Value))
+            {
+                ModelState.AddModelError("Input.ParentActionId", "Select a valid parent action.");
+            }
+        }
+
+        // Validate business area
+        var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+        if (!string.IsNullOrWhiteSpace(input.BusinessArea))
+        {
+        var businessAreaSet = new HashSet<string>(businessAreas ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            if (!businessAreaSet.Contains(input.BusinessArea))
+            {
+                ModelState.AddModelError("Input.BusinessArea", "Select a valid business area.");
+            }
+        }
+
+        // Validate product selection
+        if (!string.IsNullOrWhiteSpace(input.FipsId))
+        {
+            var products = await _productsApiService.GetProductsAsync(null);
+            if (!products.Any(p => string.Equals(p.FipsId, input.FipsId, StringComparison.OrdinalIgnoreCase)))
+            {
+                ModelState.AddModelError("Input.FipsId", "Select a valid product.");
+            }
+        }
+
+        // Validate decision selection
+        int? decisionId = null;
+        if (input.DecisionId.HasValue)
+        {
+            var decisionExists = await _context.Decisions.AnyAsync(d => !d.IsDeleted && d.Id == input.DecisionId.Value && (!action.ProjectId.HasValue || d.ProjectId == action.ProjectId));
+            if (!decisionExists)
+            {
+                ModelState.AddModelError("Input.DecisionId", "Select a decision from this project.");
+            }
+            else
+            {
+                decisionId = input.DecisionId.Value;
+            }
+        }
+
+        // Validate linked risks/issues/milestones belong to the same project (if applicable)
+        var riskIds = await _context.Risks
+            .Where(r => !r.IsDeleted && (!action.ProjectId.HasValue || r.ProjectId == action.ProjectId))
+            .Select(r => r.Id)
+            .ToListAsync();
+        if (input.SelectedRiskIds.Except(riskIds).Any())
+        {
+            ModelState.AddModelError("Input.SelectedRiskIds", "Select risks from the same project.");
+        }
+
+        var issueIds = await _context.Issues
+            .Where(i => !i.IsDeleted && (!action.ProjectId.HasValue || i.ProjectId == action.ProjectId))
+            .Select(i => i.Id)
+            .ToListAsync();
+        if (input.SelectedIssueIds.Except(issueIds).Any())
+        {
+            ModelState.AddModelError("Input.SelectedIssueIds", "Select issues from the same project.");
+        }
+
+        var milestoneIds = await _context.Milestones
+            .Where(m => !m.IsDeleted && (!action.ProjectId.HasValue || m.ProjectId == action.ProjectId))
+            .Select(m => m.Id)
+            .ToListAsync();
+        if (input.SelectedMilestoneIds.Except(milestoneIds).Any())
+        {
+            ModelState.AddModelError("Input.SelectedMilestoneIds", "Select milestones from the same project.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            var actionForView = await LoadActionForDetailsAsync(action.Id);
+            if (actionForView == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = await BuildActionDetailsViewModelAsync(actionForView, input);
+            return View("Details", viewModel);
+        }
+
+        // Apply updates
+        action.Title = input.Title!;
+        action.Description = SanitiseMultiline(input.Description);
+        action.Notes = SanitiseMultiline(input.Notes);
+        action.EvidenceUrl = SanitiseText(input.EvidenceUrl);
+        action.Status = input.Status!.Trim().ToLowerInvariant();
+        action.Priority = string.IsNullOrWhiteSpace(input.Priority) ? null : input.Priority.Trim().ToLowerInvariant();
+        action.AssignedToEmail = SanitiseEmail(input.AssignedToEmail);
+        action.BusinessArea = SanitiseText(input.BusinessArea);
+        action.ObjectiveId = input.ObjectiveId;
+        action.ActionSourceId = input.ActionSourceId;
+        action.ParentActionId = input.ParentActionId;
+        action.FipsId = SanitiseText(input.FipsId);
+        action.StartDate = input.StartDate;
+        action.DueDate = input.DueDate;
+        action.CompletedDate = input.CompletedDate;
+        action.SourceType = SanitiseText(input.SourceType);
+        action.SourceReference = SanitiseText(input.SourceReference);
+        action.SourceRecordUrl = SanitiseText(input.SourceRecordUrl);
+        action.DecisionId = decisionId;
+
+        UpdateActionLinks(action, input);
+
+        action.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Action updated successfully.";
+            return RedirectToAction(nameof(Details), new { id = action.Id });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating action {ActionId}", action.Id);
+            ModelState.AddModelError(string.Empty, "An error occurred while updating the action. Please try again.");
+
+            var actionForView = await LoadActionForDetailsAsync(action.Id);
+            if (actionForView == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = await BuildActionDetailsViewModelAsync(actionForView, input);
+            return View("Details", viewModel);
+        }
+    }
+
+    private async Task<Models.Action?> LoadActionForDetailsAsync(int id)
+    {
+        return await _context.Actions
+            .Include(a => a.Objective)
+            .Include(a => a.ParentAction)
+            .Include(a => a.ActionSource)
+            .Include(a => a.Decision)
+            .Include(a => a.SubActions.Where(sa => !sa.IsDeleted))
+            .Include(a => a.RiskActions)
+                .ThenInclude(ra => ra.Risk)
+            .Include(a => a.IssueActions)
+                .ThenInclude(ia => ia.Issue)
+            .Include(a => a.MilestoneActions)
+                .ThenInclude(ma => ma.Milestone)
+            .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    }
+
+    private async Task<ActionDetailsViewModel> BuildActionDetailsViewModelAsync(Models.Action action, ActionDetailsUpdateInputModel? overrideInput = null)
+    {
+        var input = overrideInput ?? new ActionDetailsUpdateInputModel
+        {
+            Id = action.Id,
+            Title = action.Title,
+            Status = action.Status,
+            Priority = action.Priority,
+            AssignedToEmail = action.AssignedToEmail,
+            BusinessArea = action.BusinessArea,
+            ObjectiveId = action.ObjectiveId,
+            ActionSourceId = action.ActionSourceId,
+            ParentActionId = action.ParentActionId,
+            FipsId = action.FipsId,
+            StartDate = action.StartDate,
+            DueDate = action.DueDate,
+            CompletedDate = action.CompletedDate,
+            Description = action.Description,
+            Notes = action.Notes,
+            EvidenceUrl = action.EvidenceUrl,
+            SourceType = action.SourceType,
+            SourceReference = action.SourceReference,
+            SourceRecordUrl = action.SourceRecordUrl,
+            DecisionId = action.DecisionId,
+            SelectedRiskIds = action.RiskActions.Select(ra => ra.RiskId).ToList(),
+            SelectedIssueIds = action.IssueActions.Select(ia => ia.IssueId).ToList(),
+            SelectedMilestoneIds = action.MilestoneActions.Select(ma => ma.MilestoneId).ToList()
+        };
+
+        input.Id = action.Id;
+        input.Title = string.IsNullOrWhiteSpace(input.Title) ? action.Title : input.Title;
+        input.SelectedRiskIds ??= new List<int>();
+        input.SelectedIssueIds ??= new List<int>();
+        input.SelectedMilestoneIds ??= new List<int>();
+
+        var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+        var products = await _productsApiService.GetProductsAsync(null);
+
+        var productLookup = products
+            .Where(p => !string.IsNullOrWhiteSpace(p.FipsId))
+            .GroupBy(p => p.FipsId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var statusOptions = ActionStatusOptions
+            .Select(option => new SelectListItem(option.Label, option.Value, string.Equals(option.Value, input.Status, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var priorityOptions = ActionPriorityOptions
+            .Select(option => new SelectListItem(option.Label, option.Value, string.Equals(option.Value, input.Priority, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var businessAreaOptions = businessAreas
+            .Select(area => new SelectListItem(area, area, string.Equals(area, input.BusinessArea, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var objectivesQuery = _context.Objectives
+            .Where(o => !o.IsDeleted);
+        if (action.ProjectId.HasValue)
+        {
+            objectivesQuery = objectivesQuery.Where(o =>
+                _context.ProjectObjectives.Any(po => po.ProjectId == action.ProjectId.Value && po.ObjectiveId == o.Id));
+        }
+
+        var objectiveOptions = await objectivesQuery
+            .OrderBy(o => o.Title)
+            .Select(o => new SelectListItem(o.Title, o.Id.ToString(CultureInfo.InvariantCulture), input.ObjectiveId == o.Id))
+            .ToListAsync();
+
+        var actionSourceOptions = await _context.ActionSources
+            .Where(source => source.IsActive)
+            .OrderBy(source => source.SortOrder)
+            .Select(source => new SelectListItem(source.Name, source.Id.ToString(CultureInfo.InvariantCulture), input.ActionSourceId == source.Id))
+            .ToListAsync();
+
+        var parentActionOptions = await _context.Actions
+            .Where(a => !a.IsDeleted && a.Id != action.Id)
+            .OrderBy(a => a.Title)
+            .Select(a => new SelectListItem(a.Title, a.Id.ToString(CultureInfo.InvariantCulture), input.ParentActionId == a.Id))
+            .ToListAsync();
+
+        var productOptions = products
+            .Where(p => !string.IsNullOrWhiteSpace(p.FipsId))
+            .OrderBy(p => p.Title)
+            .Select(p => new SelectListItem($"{p.Title} ({p.FipsId})", p.FipsId, string.Equals(p.FipsId, input.FipsId, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var riskQuery = _context.Risks.Where(r => !r.IsDeleted);
+        if (action.ProjectId.HasValue)
+        {
+            riskQuery = riskQuery.Where(r => r.ProjectId == action.ProjectId);
+        }
+
+        var riskSet = new HashSet<int>(input.SelectedRiskIds);
+        var riskOptions = await riskQuery
+            .OrderBy(r => r.Title)
+            .Select(r => new SelectListItem(r.Title, r.Id.ToString(CultureInfo.InvariantCulture), riskSet.Contains(r.Id)))
+            .ToListAsync();
+
+        var issueQuery = _context.Issues.Where(i => !i.IsDeleted);
+        if (action.ProjectId.HasValue)
+        {
+            issueQuery = issueQuery.Where(i => i.ProjectId == action.ProjectId);
+        }
+
+        var issueSet = new HashSet<int>(input.SelectedIssueIds);
+        var issueOptions = await issueQuery
+            .OrderBy(i => i.Title)
+            .Select(i => new SelectListItem(i.Title, i.Id.ToString(CultureInfo.InvariantCulture), issueSet.Contains(i.Id)))
+            .ToListAsync();
+
+        var milestoneQuery = _context.Milestones.Where(m => !m.IsDeleted);
+        if (action.ProjectId.HasValue)
+        {
+            milestoneQuery = milestoneQuery.Where(m => m.ProjectId == action.ProjectId);
+        }
+
+        var milestoneSet = new HashSet<int>(input.SelectedMilestoneIds);
+        var milestoneOptions = await milestoneQuery
+            .OrderBy(m => m.Name)
+            .Select(m => new SelectListItem(m.Name, m.Id.ToString(CultureInfo.InvariantCulture), milestoneSet.Contains(m.Id)))
+            .ToListAsync();
+
+        var decisionQuery = _context.Decisions.Where(d => !d.IsDeleted);
+        if (action.ProjectId.HasValue)
+        {
+            decisionQuery = decisionQuery.Where(d => d.ProjectId == action.ProjectId);
+        }
+
+        var decisionOptions = await decisionQuery
+            .OrderBy(d => d.Title)
+            .Select(d => new SelectListItem(d.Title, d.Id.ToString(CultureInfo.InvariantCulture), input.DecisionId == d.Id))
+            .ToListAsync();
+
+        var sourceTypeOptions = ActionSourceTypes
+            .Select(type => new SelectListItem(type, type, string.Equals(type, input.SourceType, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var decisionAssociations = await _context.Decisions
+            .Where(d => d.Actions.Any(a => a.Id == action.Id))
+            .OrderByDescending(d => d.DecisionDate ?? d.CreatedAt)
+            .ToListAsync();
+
+        if (action.Decision != null && decisionAssociations.All(d => d.Id != action.Decision.Id))
+        {
+            decisionAssociations.Insert(0, action.Decision);
+        }
+
+        return new ActionDetailsViewModel
+        {
+            Action = action,
+            Input = input,
+            StatusOptions = statusOptions,
+            PriorityOptions = priorityOptions,
+            BusinessAreaOptions = businessAreaOptions,
+            ObjectiveOptions = objectiveOptions,
+            ActionSourceOptions = actionSourceOptions,
+            ParentActionOptions = parentActionOptions,
+            ProductOptions = productOptions,
+            RiskOptions = riskOptions,
+            IssueOptions = issueOptions,
+            MilestoneOptions = milestoneOptions,
+            DecisionOptions = decisionOptions,
+            SourceTypeOptions = sourceTypeOptions,
+            ProductLookup = productLookup,
+            DecisionAssociations = decisionAssociations
+        };
+    }
+
+    private void UpdateActionLinks(Models.Action action, ActionDetailsUpdateInputModel input)
+    {
+        SynchroniseRiskLinks(action, input.SelectedRiskIds);
+        SynchroniseIssueLinks(action, input.SelectedIssueIds);
+        SynchroniseMilestoneLinks(action, input.SelectedMilestoneIds);
+    }
+
+    private void SynchroniseRiskLinks(Models.Action action, IEnumerable<int> desiredIds)
+    {
+        var desired = new HashSet<int>(desiredIds);
+
+        foreach (var link in action.RiskActions.Where(l => !desired.Contains(l.RiskId)).ToList())
+        {
+            _context.RiskActions.Remove(link);
+        }
+
+        foreach (var riskId in desired.Where(id => action.RiskActions.All(l => l.RiskId != id)))
+        {
+            _context.RiskActions.Add(new RiskAction
+            {
+                ActionId = action.Id,
+                RiskId = riskId
+            });
+        }
+    }
+
+    private void SynchroniseIssueLinks(Models.Action action, IEnumerable<int> desiredIds)
+    {
+        var desired = new HashSet<int>(desiredIds);
+
+        foreach (var link in action.IssueActions.Where(l => !desired.Contains(l.IssueId)).ToList())
+        {
+            _context.IssueActions.Remove(link);
+        }
+
+        foreach (var issueId in desired.Where(id => action.IssueActions.All(l => l.IssueId != id)))
+        {
+            _context.IssueActions.Add(new IssueAction
+            {
+                ActionId = action.Id,
+                IssueId = issueId
+            });
+        }
+    }
+
+    private void SynchroniseMilestoneLinks(Models.Action action, IEnumerable<int> desiredIds)
+    {
+        var desired = new HashSet<int>(desiredIds);
+
+        foreach (var link in action.MilestoneActions.Where(l => !desired.Contains(l.MilestoneId)).ToList())
+        {
+            _context.MilestoneActions.Remove(link);
+        }
+
+        foreach (var milestoneId in desired.Where(id => action.MilestoneActions.All(l => l.MilestoneId != id)))
+        {
+            _context.MilestoneActions.Add(new MilestoneAction
+            {
+                ActionId = action.Id,
+                MilestoneId = milestoneId
+            });
+        }
+    }
+
+    private static string? SanitiseText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? SanitiseMultiline(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? SanitiseEmail(string? value)
+    {
+        var sanitised = SanitiseText(value);
+        return sanitised?.ToLowerInvariant();
     }
 }
 
