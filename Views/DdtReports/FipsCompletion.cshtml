@@ -387,8 +387,11 @@
                             Product completion status
                         </h3>
                         <div class="card-tools">
+                            <button type="button" id="exportFilteredBtn" class="btn btn-outline-primary btn-sm mr-2">
+                                <i class="fas fa-file-excel mr-1"></i> Export filtered view
+                            </button>
                             <a asp-action="ExportFipsCompletion" class="btn btn-outline-success btn-sm mr-2">
-                                <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                                <i class="fas fa-file-excel mr-1"></i> Export full data to Excel
                             </a>
                             <span class="badge badge-info" id="productCount">@Model.Products.Count products</span>
                         </div>
@@ -417,6 +420,15 @@
                                     </th>
                                     <th class="text-center sortable" data-column="UserGroups" style="cursor: pointer;">
                                         User groups <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="SeniorResponsibleOfficer" style="cursor: pointer;">
+                                        Senior Responsible Officer <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="DeliveryManager" style="cursor: pointer;">
+                                        Delivery Manager <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="InformationAssetOwner" style="cursor: pointer;">
+                                        Information Asset Owner <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="text-center sortable" data-column="CompletionPercentage" style="cursor: pointer;">
                                         Completion % <i class="fas fa-sort"></i>
@@ -514,6 +526,36 @@
                                             else
                                             {
                                                 <i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.SeniorResponsibleOfficer))
+                                            {
+                                                @product.SeniorResponsibleOfficer
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.DeliveryManager))
+                                            {
+                                                @product.DeliveryManager
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(product.InformationAssetOwner))
+                                            {
+                                                @product.InformationAssetOwner
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
                                             }
                                         </td>
                                         <td class="text-center">
@@ -1195,6 +1237,29 @@
             $('#searchInput, #completionFilter, #statusFilter, #businessAreaFilter, #sroFilter, #iaoFilter, #deliveryManagerFilter')
                 .on('input change', filterTable);
 
+            // Handle filtered export
+            $('#exportFilteredBtn').on('click', function() {
+                var searchTerm = $('#searchInput').val() || '';
+                var completionFilter = $('#completionFilter').val() || '';
+                var statusFilter = $('#statusFilter').val() || '';
+                var businessAreaFilter = $('#businessAreaFilter').val() || '';
+                var sroFilter = $('#sroFilter').val() || '';
+                var iaoFilter = $('#iaoFilter').val() || '';
+                var deliveryManagerFilter = $('#deliveryManagerFilter').val() || '';
+
+                var params = new URLSearchParams();
+                if (searchTerm) params.append('searchTerm', searchTerm);
+                if (completionFilter) params.append('completionFilter', completionFilter);
+                if (statusFilter) params.append('statusFilter', statusFilter);
+                if (businessAreaFilter) params.append('businessAreaFilter', businessAreaFilter);
+                if (sroFilter) params.append('sroFilter', sroFilter);
+                if (iaoFilter) params.append('iaoFilter', iaoFilter);
+                if (deliveryManagerFilter) params.append('deliveryManagerFilter', deliveryManagerFilter);
+
+                var url = '@Url.Action("ExportFipsCompletionFiltered", "DdtReports")' + '?' + params.toString();
+                window.location.href = url;
+            });
+
             // Handle service owner form validation
             $('#updateServiceOwnerModal form').on('submit', function(e) {
                 var objectId = $('#serviceOwnerObjectId').val();
@@ -1555,12 +1620,27 @@
                     ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(userGroupTitle) + '"></i><span class="completion-count">' + userGroupsCount + '</span>'
                     : '<i class="fas fa-times-square text-danger completion-icon" title="No user groups"></i><span class="completion-count">0</span>';
 
+                var sroHtml = (product.seniorResponsibleOfficer || '').trim()
+                    ? escapeHtml(product.seniorResponsibleOfficer)
+                    : '<span class="text-muted">-</span>';
+
+                var deliveryManagerHtml = (product.deliveryManager || '').trim()
+                    ? escapeHtml(product.deliveryManager)
+                    : '<span class="text-muted">-</span>';
+
+                var iaoHtml = (product.informationAssetOwner || '').trim()
+                    ? escapeHtml(product.informationAssetOwner)
+                    : '<span class="text-muted">-</span>';
+
                 $row.find('td').eq(2).html(phaseHtml);
                 $row.find('td').eq(3).html(businessAreaHtml);
                 $row.find('td').eq(4).html(contactsHtml);
                 $row.find('td').eq(5).html(productUrlHtml);
                 $row.find('td').eq(6).html(userGroupsHtml);
-                $row.find('td').eq(7).text(completion.toFixed(1) + '%');
+                $row.find('td').eq(7).html(sroHtml);
+                $row.find('td').eq(8).html(deliveryManagerHtml);
+                $row.find('td').eq(9).html(iaoHtml);
+                $row.find('td').eq(10).text(completion.toFixed(1) + '%');
             }
 
             function refreshBusinessAreaFilterOptions() {
@@ -1929,6 +2009,15 @@
                             var bText = $(b).find('td').eq(6).text().trim();
                             aVal = parseInt(aText.match(/\d+/)?.[0]) || 0;
                             bVal = parseInt(bText.match(/\d+/)?.[0]) || 0;
+                        } else if (column === 'SeniorResponsibleOfficer') {
+                            aVal = $(a).find('td').eq(7).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(7).text().trim().toLowerCase();
+                        } else if (column === 'DeliveryManager') {
+                            aVal = $(a).find('td').eq(8).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(8).text().trim().toLowerCase();
+                        } else if (column === 'InformationAssetOwner') {
+                            aVal = $(a).find('td').eq(9).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(9).text().trim().toLowerCase();
                         } else if (column === 'CompletionPercentage') {
                             aVal = parseFloat($(a).data('completion')) || 0;
                             bVal = parseFloat($(b).data('completion')) || 0;

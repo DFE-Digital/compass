@@ -23,11 +23,11 @@ public class DdtReportsController : Controller
         "User Type", "User Types", "Audience", "Target Audience"
     };
     private static readonly string[] SeniorResponsibleOfficerRoleKeywords =
-        { "senior responsible", "sro" };
+        { "senior responsible", "senior_responsible", "senior_responsible_officer", "senior-responsible-officer", "sro", "senior responsible officer" };
     private static readonly string[] InformationAssetOwnerRoleKeywords =
-        { "information asset owner", "information asset", "iao" };
+        { "information asset owner", "information_asset_owner", "information-asset-owner", "information asset", "iao", "informationassetowner" };
     private static readonly string[] DeliveryManagerRoleKeywords =
-        { "delivery manager", "delivery lead", "delivery owner", "dm" };
+        { "delivery manager", "delivery_manager", "delivery-manager", "delivery lead", "delivery_lead", "delivery owner", "delivery_owner", "dm" };
 
     public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService)
     {
@@ -705,6 +705,198 @@ public class DdtReportsController : Controller
         {
             _logger.LogError(ex, "Error exporting FIPS completion report");
             TempData["ErrorMessage"] = "An error occurred while exporting the report. Please try again.";
+            return RedirectToAction("FipsCompletion");
+        }
+    }
+
+    public async Task<IActionResult> ExportFipsCompletionFiltered(
+        string? searchTerm = null,
+        string? completionFilter = null,
+        string? statusFilter = null,
+        string? businessAreaFilter = null,
+        string? sroFilter = null,
+        string? iaoFilter = null,
+        string? deliveryManagerFilter = null)
+    {
+        try
+        {
+            var products = await _productsApiService.GetProductsAsync(null);
+
+            var completionItems = products
+                .OrderBy(p => p.Title)
+                .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            // Apply filters (same logic as JavaScript)
+            var filteredItems = completionItems.Where(item =>
+            {
+                // Search filter
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var searchLower = searchTerm.ToLowerInvariant();
+                    if (!item.ProductTitle.ToLowerInvariant().Contains(searchLower) &&
+                        !item.FipsId.ToLowerInvariant().Contains(searchLower))
+                    {
+                        return false;
+                    }
+                }
+
+                // Completion filter
+                if (!string.IsNullOrWhiteSpace(completionFilter))
+                {
+                    var completion = item.CompletionPercentage;
+                    if (completionFilter == "100")
+                    {
+                        if (Math.Abs(completion - 100) > 0.0001) return false;
+                    }
+                    else if (completionFilter == "80-99")
+                    {
+                        if (completion < 80 || completion >= 100) return false;
+                    }
+                    else if (completionFilter == "60-79")
+                    {
+                        if (completion < 60 || completion >= 80) return false;
+                    }
+                    else if (completionFilter == "40-59")
+                    {
+                        if (completion < 40 || completion >= 60) return false;
+                    }
+                    else if (completionFilter == "0-39")
+                    {
+                        if (completion < 0 || completion >= 40) return false;
+                    }
+                }
+
+                // Status filter
+                if (!string.IsNullOrWhiteSpace(statusFilter))
+                {
+                    var completion = item.CompletionPercentage;
+                    if (statusFilter == "complete")
+                    {
+                        if (Math.Abs(completion - 100) > 0.0001) return false;
+                    }
+                    else if (statusFilter == "incomplete")
+                    {
+                        if (completion >= 100) return false;
+                    }
+                }
+
+                // Business area filter
+                if (!string.IsNullOrWhiteSpace(businessAreaFilter))
+                {
+                    if (!item.BusinessArea.Equals(businessAreaFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+
+                // SRO filter (exact case-insensitive match, matching JavaScript indexOf behavior)
+                if (!string.IsNullOrWhiteSpace(sroFilter))
+                {
+                    var sroLower = sroFilter.ToLowerInvariant();
+                    var matchesSro = item.SeniorResponsibleOfficerContacts?.Any(contact =>
+                        contact.ToLowerInvariant() == sroLower) ?? false;
+                    if (!matchesSro) return false;
+                }
+
+                // IAO filter (exact case-insensitive match, matching JavaScript indexOf behavior)
+                if (!string.IsNullOrWhiteSpace(iaoFilter))
+                {
+                    var iaoLower = iaoFilter.ToLowerInvariant();
+                    var matchesIao = item.InformationAssetOwnerContacts?.Any(contact =>
+                        contact.ToLowerInvariant() == iaoLower) ?? false;
+                    if (!matchesIao) return false;
+                }
+
+                // Delivery manager filter (exact case-insensitive match, matching JavaScript indexOf behavior)
+                if (!string.IsNullOrWhiteSpace(deliveryManagerFilter))
+                {
+                    var deliveryLower = deliveryManagerFilter.ToLowerInvariant();
+                    var matchesDelivery = item.DeliveryManagerContacts?.Any(contact =>
+                        contact.ToLowerInvariant() == deliveryLower) ?? false;
+                    if (!matchesDelivery) return false;
+                }
+
+                return true;
+            }).ToList();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("FIPS completion");
+
+            var headers = new[]
+            {
+                "Product title",
+                "FIPS ID",
+                "State",
+                "Phase",
+                "Has phase",
+                "Business area",
+                "Has business area",
+                "Contacts count",
+                "Contacts",
+                "Senior responsible officer",
+                "Information asset owner",
+                "Delivery manager",
+                "Product URL",
+                "Has product URL",
+                "User groups",
+                "User groups count",
+                "Completion %"
+            };
+
+            for (var column = 0; column < headers.Length; column++)
+            {
+                var cell = worksheet.Cell(1, column + 1);
+                cell.Value = headers[column];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            var currentRow = 2;
+
+            foreach (var item in filteredItems)
+            {
+                worksheet.Cell(currentRow, 1).Value = item.ProductTitle;
+                worksheet.Cell(currentRow, 2).Value = item.FipsId;
+                worksheet.Cell(currentRow, 3).Value = item.State;
+                worksheet.Cell(currentRow, 4).Value = item.PhaseName ?? string.Empty;
+                worksheet.Cell(currentRow, 5).Value = item.HasPhase ? "Yes" : "No";
+                worksheet.Cell(currentRow, 6).Value = item.BusinessArea;
+                worksheet.Cell(currentRow, 7).Value = item.HasBusinessArea ? "Yes" : "No";
+                worksheet.Cell(currentRow, 8).Value = item.ContactsCount;
+                worksheet.Cell(currentRow, 9).Value = item.ContactDetails.Any()
+                    ? string.Join(Environment.NewLine, item.ContactDetails)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
+                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                    ? string.Join(", ", item.UserGroupNames)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+
+                currentRow++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+            worksheet.Column(9).Style.Alignment.WrapText = true;
+            worksheet.SheetView.FreezeRows(1);
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"fips-completion-filtered-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting filtered FIPS completion report");
+            TempData["ErrorMessage"] = "An error occurred while exporting the filtered report. Please try again.";
             return RedirectToAction("FipsCompletion");
         }
     }
@@ -1696,14 +1888,30 @@ public class DdtReportsController : Controller
 
         if (product.ProductContacts != null)
         {
+            _logger.LogInformation("Product {FipsId} has {Count} product contacts", product.FipsId, product.ProductContacts.Count);
+            
             foreach (var contact in product.ProductContacts)
             {
                 if (contact == null) continue;
                 var role = contact.Role?.Trim();
-                if (string.IsNullOrEmpty(role)) continue;
+                
+                // Log all contact details for debugging
+                _logger.LogInformation("Product {FipsId} contact - Role: '{Role}', ContactName: '{ContactName}', LegacyName: '{LegacyName}', UserDisplayName: '{UserDisplayName}', UserUsername: '{UserUsername}'",
+                    product.FipsId, role ?? "null", contact.ContactName ?? "null", contact.LegacyName ?? "null",
+                    contact.UsersPermissionsUser?.DisplayName ?? "null", contact.UsersPermissionsUser?.Username ?? "null");
+
+                if (string.IsNullOrEmpty(role))
+                {
+                    _logger.LogWarning("Product {FipsId} contact has empty or null role", product.FipsId);
+                    continue;
+                }
 
                 var display = BuildContactDisplay(contact);
-                if (string.IsNullOrEmpty(display)) continue;
+                if (string.IsNullOrEmpty(display))
+                {
+                    _logger.LogWarning("Product {FipsId} contact with role '{Role}' has no display name", product.FipsId, role);
+                    continue;
+                }
 
                 var detail = string.IsNullOrWhiteSpace(role)
                     ? display
@@ -1712,17 +1920,34 @@ public class DdtReportsController : Controller
 
                 if (RoleContainsAny(role, SeniorResponsibleOfficerRoleKeywords))
                 {
+                    _logger.LogInformation("Matched SRO role: '{Role}' for {Display} in product {FipsId}", role, display, product.FipsId);
                     AddContactIfMissing(sroContacts, display);
                 }
                 else if (RoleContainsAny(role, InformationAssetOwnerRoleKeywords))
                 {
-                    AddContactIfMissing(iaoContacts, display);
+                    var nameOnly = BuildContactNameOnly(contact);
+                    if (!string.IsNullOrWhiteSpace(nameOnly))
+                    {
+                        AddContactIfMissing(iaoContacts, nameOnly);
+                    }
                 }
                 else if (RoleContainsAny(role, DeliveryManagerRoleKeywords))
                 {
-                    AddContactIfMissing(deliveryManagerContacts, display);
+                    var nameOnly = BuildContactNameOnly(contact);
+                    if (!string.IsNullOrWhiteSpace(nameOnly))
+                    {
+                        AddContactIfMissing(deliveryManagerContacts, nameOnly);
                 }
             }
+                else
+                {
+                    _logger.LogDebug("Product {FipsId} contact role '{Role}' did not match any known role keywords", product.FipsId, role);
+                }
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Product {FipsId} has no product contacts", product.FipsId);
         }
 
         var userGroupsCount = userGroupNames.Count;
@@ -1764,38 +1989,31 @@ public class DdtReportsController : Controller
 
     private static string? BuildContactDisplay(ProductContactDto contact)
     {
+        // Prioritize display_name from users_permissions_user, then fall back to other name fields
+        // No email addresses in display
         var nameCandidates = new[]
         {
+            contact.UsersPermissionsUser?.DisplayName,
             contact.ContactName,
             contact.LegacyName,
             contact.UsersPermissionsUser?.Username
         };
 
-        var emailCandidates = new[]
+        return nameCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? BuildContactNameOnly(ProductContactDto contact)
+    {
+        // Prioritize display_name from users_permissions_user, then fall back to other name fields
+        var nameCandidates = new[]
         {
-            contact.ContactEmail,
-            contact.UsersPermissionsUser?.Email
+            contact.UsersPermissionsUser?.DisplayName,
+            contact.ContactName,
+            contact.LegacyName,
+            contact.UsersPermissionsUser?.Username
         };
 
-        var displayName = nameCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-        var email = emailCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-
-        if (!string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(email))
-        {
-            return $"{displayName} ({email})";
-        }
-
-        if (!string.IsNullOrWhiteSpace(displayName))
-        {
-            return displayName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(email))
-        {
-            return email;
-        }
-
-        return null;
+        return nameCandidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static void AddContactIfMissing(List<string> contacts, string value)
