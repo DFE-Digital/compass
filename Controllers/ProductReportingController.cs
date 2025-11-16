@@ -124,12 +124,12 @@ public class ProductReportingController : Controller
             {
                 // Check product_contacts
                 if (product.ProductContacts != null)
-                {
-                    var userContact = product.ProductContacts.FirstOrDefault(pc => 
-                        pc.UsersPermissionsUser != null && 
-                        !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
-                        pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
-                    
+            {
+                var userContact = product.ProductContacts.FirstOrDefault(pc => 
+                    pc.UsersPermissionsUser != null && 
+                    !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
+                    pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
+                
                     if (!string.IsNullOrEmpty(userContact?.Role))
                     {
                         roles.Add(userContact.Role);

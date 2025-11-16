@@ -84,6 +84,9 @@ public class UserPermissionsUserDto
     public string? Email { get; set; }
     
     public string? Username { get; set; }
+    
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
 }
 
 public class EntraUserDto
