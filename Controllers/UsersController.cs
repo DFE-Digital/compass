@@ -418,5 +418,27 @@ public class UsersController : ControllerBase
 
 public record UserSelectionRequest(string ObjectId);
 
-public record UserSelectionResponse(int Id, string Name, string Email, string? JobTitle, DateTime? PhotoUpdatedAt, string? ObjectId);
+public class UserSelectionResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? JobTitle { get; set; }
+    public DateTime? PhotoUpdatedAt { get; set; }
+    
+    [System.Text.Json.Serialization.JsonPropertyName("objectId")]
+    public string? ObjectId { get; set; }
+    
+    public UserSelectionResponse() { }
+    
+    public UserSelectionResponse(int id, string name, string email, string? jobTitle, DateTime? photoUpdatedAt, string? objectId)
+    {
+        Id = id;
+        Name = name;
+        Email = email;
+        JobTitle = jobTitle;
+        PhotoUpdatedAt = photoUpdatedAt;
+        ObjectId = objectId;
+    }
+}
 
