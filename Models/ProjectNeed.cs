@@ -29,6 +29,11 @@ public class ProjectNeed
     [MaxLength(20)]
     public string Validated { get; set; } = "No"; // Yes, No, Partially
 
+    [MaxLength(2000)]
+    public string? ValidationNotes { get; set; }
+
+    public DateTime? ValidatedAt { get; set; }
+
     public int SortOrder { get; set; } = 0;
 
     [MaxLength(320)]

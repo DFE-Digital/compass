@@ -5649,6 +5649,8 @@ namespace Compass.Controllers
                     Need = input.Need,
                     Source = input.Source,
                     Validated = input.Validated,
+                    ValidationNotes = input.Validated == "Yes" ? input.ValidationNotes : null,
+                    ValidatedAt = input.Validated == "Yes" ? DateTime.UtcNow : null,
                     SortOrder = maxSortOrder + 1,
                     CreatedByEmail = userEmail,
                     CreatedByName = currentUser?.Name,
@@ -5690,6 +5692,7 @@ namespace Compass.Controllers
                 Need = need.Need,
                 Source = need.Source,
                 Validated = need.Validated,
+                ValidationNotes = need.ValidationNotes,
                 SortOrder = need.SortOrder
             };
 
@@ -5723,12 +5726,37 @@ namespace Compass.Controllers
 
             try
             {
+                var previousValidated = projectNeed.Validated;
+                
                 projectNeed.Title = input.Title;
                 projectNeed.Need = input.Need;
                 projectNeed.Source = input.Source;
                 projectNeed.Validated = input.Validated;
                 projectNeed.SortOrder = input.SortOrder;
                 projectNeed.UpdatedAt = DateTime.UtcNow;
+
+                // If Validated changed from "No" to "Yes", capture validation notes and timestamp
+                if (previousValidated == "No" && input.Validated == "Yes")
+                {
+                    projectNeed.ValidationNotes = input.ValidationNotes;
+                    projectNeed.ValidatedAt = DateTime.UtcNow;
+                }
+                // If Validated is "Yes" and notes are provided, update them
+                else if (input.Validated == "Yes")
+                {
+                    projectNeed.ValidationNotes = input.ValidationNotes;
+                    // Only update ValidatedAt if it wasn't already set
+                    if (!projectNeed.ValidatedAt.HasValue)
+                    {
+                        projectNeed.ValidatedAt = DateTime.UtcNow;
+                    }
+                }
+                // If Validated is changed away from "Yes", clear the validation timestamp
+                else if (previousValidated == "Yes" && input.Validated != "Yes")
+                {
+                    projectNeed.ValidatedAt = null;
+                    projectNeed.ValidationNotes = null;
+                }
 
                 await _context.SaveChangesAsync();
 
@@ -5792,6 +5820,8 @@ namespace Compass.Controllers
                 Need = need.Need,
                 Source = need.Source,
                 Validated = need.Validated,
+                ValidationNotes = need.ValidationNotes,
+                ValidatedAt = need.ValidatedAt,
                 SortOrder = need.SortOrder,
                 CreatedByEmail = need.CreatedByEmail,
                 CreatedByName = need.CreatedByName,

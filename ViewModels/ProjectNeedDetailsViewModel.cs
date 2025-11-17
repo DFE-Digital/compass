@@ -16,6 +16,10 @@ public class ProjectNeedDetailsViewModel
 
     public string Validated { get; set; } = string.Empty;
 
+    public string? ValidationNotes { get; set; }
+
+    public DateTime? ValidatedAt { get; set; }
+
     public int SortOrder { get; set; }
 
     public string? CreatedByEmail { get; set; }

@@ -45,16 +45,71 @@
 </div>
 
 <div class="form-group @(hasError("Validated") ? "form-group--error" : string.Empty)">
-    <label asp-for="Input.Validated">Validated</label>
-    <small class="form-text text-muted">Whether this need has been validated.</small>
-    <span asp-validation-for="Input.Validated" class="form-error-message"></span>
-    <select asp-for="Input.Validated" class="form-control @(hasError("Validated") ? "form-control--error" : string.Empty)">
+    <fieldset>
+        <legend>Validated</legend>
+        <small class="form-text text-muted">Whether this need has been validated.</small>
+        <span asp-validation-for="Input.Validated" class="form-error-message"></span>
         @foreach (var option in Model.ValidatedOptions)
         {
-            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+            <div class="form-check">
+                <input class="form-check-input" 
+                       type="radio" 
+                       name="Input.Validated" 
+                       id="validated-@option.Value" 
+                       value="@option.Value" 
+                       @(option.Selected ? "checked" : "") />
+                <label class="form-check-label" for="validated-@option.Value">
+                    @option.Text
+                </label>
+            </div>
         }
-    </select>
+    </fieldset>
+</div>
+
+<div class="form-group @(hasError("ValidationNotes") ? "form-group--error" : string.Empty) @(Model.Input.Validated != "Yes" ? "d-none" : "")" id="validation-notes-group">
+    <label asp-for="Input.ValidationNotes" class="font-weight-bold">Validation notes</label>
+    <small class="form-text text-muted">How and when this need was validated (e.g., user research conducted on 15 Jan 2025, stakeholder workshop on 20 Jan 2025).</small>
+    <span asp-validation-for="Input.ValidationNotes" class="form-error-message"></span>
+    <textarea asp-for="Input.ValidationNotes" class="form-control @(hasError("ValidationNotes") ? "form-control--error" : string.Empty)" rows="4" maxlength="2000"></textarea>
 </div>
 
 <input asp-for="Input.SortOrder" type="hidden" />
+
+<script nonce="@Context.Items["Nonce"]">
+    document.addEventListener('DOMContentLoaded', function() {
+        const validatedRadios = document.querySelectorAll('input[name="Input.Validated"]');
+        const validationNotesGroup = document.getElementById('validation-notes-group');
+        let previousValidatedValue = '@Model.Input.Validated';
+        
+        if (validatedRadios.length > 0 && validationNotesGroup) {
+            function toggleValidationNotes() {
+                const selectedValue = document.querySelector('input[name="Input.Validated"]:checked')?.value;
+                if (selectedValue === 'Yes') {
+                    validationNotesGroup.classList.remove('d-none');
+                    // If changing from "No" to "Yes", focus on the notes field
+                    if (previousValidatedValue === 'No' && selectedValue === 'Yes') {
+                        const notesTextarea = validationNotesGroup.querySelector('textarea');
+                        if (notesTextarea) {
+                            setTimeout(function() {
+                                notesTextarea.focus();
+                            }, 100);
+                        }
+                    }
+                    // Update previous value
+                    previousValidatedValue = selectedValue;
+                } else {
+                    validationNotesGroup.classList.add('d-none');
+                    // Update previous value
+                    previousValidatedValue = selectedValue || previousValidatedValue;
+                }
+            }
+            
+            validatedRadios.forEach(function(radio) {
+                radio.addEventListener('change', toggleValidationNotes);
+            });
+            
+            toggleValidationNotes(); // Initial state
+        }
+    });
+</script>
 
