@@ -6092,12 +6092,23 @@ namespace Compass.Controllers
 
         private async Task<Project?> GetProjectForDependencyAsync(int projectId)
         {
-            return await _context.Projects
+            var project = await _context.Projects
                 .Where(p => p.Id == projectId && !p.IsDeleted)
-                .Include(p => p.DependenciesAsSource)
-                .Include(p => p.DependenciesAsTarget)
-                .AsSplitQuery()
                 .FirstOrDefaultAsync();
+
+            if (project != null)
+            {
+                // Manually load dependencies since the relationship is polymorphic
+                project.DependenciesAsSource = await _context.Dependencies
+                    .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                    .ToListAsync();
+
+                project.DependenciesAsTarget = await _context.Dependencies
+                    .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                    .ToListAsync();
+            }
+
+            return project;
         }
 
         private async Task<ProjectDependencyFormViewModel> BuildDependencyFormViewModelAsync(Project project, ProjectDependencyInputModel input, bool showDeleteButton)
