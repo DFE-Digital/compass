@@ -24,6 +24,9 @@ public class ProjectNeedInputModel
     [MaxLength(20)]
     public string Validated { get; set; } = "No";
 
+    [MaxLength(2000)]
+    public string? ValidationNotes { get; set; }
+
     public int SortOrder { get; set; }
 }
 
