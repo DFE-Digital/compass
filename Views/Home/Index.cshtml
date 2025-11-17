@@ -2,7 +2,7 @@
 @using Compass.Models
 
 @{
-    ViewData["Title"] = "Compass control centre";
+    ViewData["Title"] = "COMPASS Dashboard";
 }
 
 @section Styles {
@@ -110,9 +110,17 @@
             _ => "badge badge-secondary"
         };
     }
+
+    bool IsOpenStatus(string? status)
+    {
+        return !string.Equals(status, "closed", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
-<section class="content">
+<section class="content mt-4">
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
@@ -263,6 +271,177 @@
                                     </table>
                                 </div>
                             </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.IsBusinessAreaLeader)
+        {
+            <!-- Business area leadership view for Deputy Director/SRO and Portfolio Lead/G6 -->
+            <div class="card shadow-sm mb-4 dashboard-static">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 class="h4 mb-0">@highestRoleLabel overview</h2>
+                        @if (Model.LeadershipBusinessAreas.Any())
+                        {
+                            <div class="leadership-panel">
+                                <small class="text-muted d-block mb-1">Business areas</small>
+                                @foreach (var area in Model.LeadershipBusinessAreas)
+                                {
+                                    <span class="badge badge-primary mr-1">@area</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.LeadershipMetrics.OpenIssues</strong>
+                                <span>Open issues</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.LeadershipMetrics.UnreviewedRisks</strong>
+                                <span>Unreviewed risks</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.LeadershipMetrics.TasksDue</strong>
+                                <span>Open actions</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.LeadershipMetrics.ProjectHealthIssues</strong>
+                                <span>At risk projects</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @{
+                        var atRiskProjects = Model.OversightProjects
+                            .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                    }
+
+                    @if (Model.OversightProjects.Any())
+                    {
+                        <div class="row">
+                            <div class="col-12">
+                                <h3 class="h6 text-uppercase text-muted mb-3">Projects in your business areas</h3>
+                                <div class="table-responsive">
+                                    <table class="table table-sm static-table">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Project</th>
+                                                <th scope="col">Priority</th>
+                                                <th scope="col">RAG</th>
+                                                <th scope="col">Business area</th>
+                                                <th scope="col">Open issues</th>
+                                                <th scope="col">Open risks</th>
+                                                <th scope="col">Open actions</th>
+                                                <th scope="col">Upcoming milestones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var project in Model.OversightProjects.Take(15))
+                                            {
+                                                var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
+                                                var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
+                                                var openActions = project.Actions?.Count(a => !a.IsDeleted && IsOpenStatus(a.Status)) ?? 0;
+                                                var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                                
+                                                <tr>
+                                                    <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
+                                                    <td>
+                                                        @if (project.DeliveryPriority != null)
+                                                        {
+                                                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not set</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                        {
+                                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-secondary">Not set</span>
+                                                        }
+                                                    </td>
+                                                    <td>@project.BusinessArea</td>
+                                                    <td>@openIssues</td>
+                                                    <td>@openRisks</td>
+                                                    <td>@openActions</td>
+                                                    <td>@upcomingMilestones</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if (Model.OversightProjects.Count > 15)
+                                {
+                                    <p class="text-muted mt-2">
+                                        <small>Showing 15 of @Model.OversightProjects.Count projects. 
+                                        <a href="@Url.Action("Index", "Project")">View all projects</a></small>
+                                    </p>
+                                }
+                            </div>
+                        </div>
+
+                        @if (atRiskProjects.Any())
+                        {
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <h3 class="h6 text-uppercase text-muted mb-3">At risk projects</h3>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm static-table">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Project</th>
+                                                    <th scope="col">RAG</th>
+                                                    <th scope="col">Business area</th>
+                                                    <th scope="col">Open issues</th>
+                                                    <th scope="col">Open risks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var project in atRiskProjects.Take(10))
+                                                {
+                                                    var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
+                                                    var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
+                                                    
+                                                    <tr>
+                                                        <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
+                                                        <td>
+                                                            <span class="badge badge-@(project.RagStatus == "Red" ? "danger" : "warning")">@project.RagStatus</span>
+                                                        </td>
+                                                        <td>@project.BusinessArea</td>
+                                                        <td>@openIssues</td>
+                                                        <td>@openRisks</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <p class="mb-0">No projects found in your assigned business areas.</p>
                         </div>
                     }
                 </div>
