@@ -30,6 +30,12 @@ public class ProjectOutcome
 
     public int SortOrder { get; set; } = 0;
 
+    [MaxLength(320)]
+    public string? CreatedByEmail { get; set; }
+
+    [MaxLength(200)]
+    public string? CreatedByName { get; set; }
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
