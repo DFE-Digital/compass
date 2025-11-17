@@ -83,6 +83,52 @@ public class EnsureCompassUserMiddleware
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
+        // Add database role to claims if user exists
+        if (user != null && context.User.Identity is ClaimsIdentity identity)
+        {
+            try
+            {
+                // Map UserRole enum to role claim strings
+                var roleClaimValue = user.Role switch
+                {
+                    UserRole.Admin => "Admin",
+                    UserRole.SuperAdmin => "SuperAdmin",
+                    UserRole.Reporter => "Reporter",
+                    UserRole.Visitor => "Visitor",
+                    _ => "Visitor"
+                };
+
+                // Check if the role claim already exists
+                var existingRoleClaim = identity.FindFirst(c => 
+                    c.Type == ClaimTypes.Role && 
+                    c.Value.Equals(roleClaimValue, StringComparison.OrdinalIgnoreCase));
+
+                // Only add if it doesn't exist or is different
+                if (existingRoleClaim == null)
+                {
+                    // Remove any existing Compass role claims to avoid duplicates
+                    var compassRoleClaims = identity.FindAll(c => 
+                        c.Type == ClaimTypes.Role && 
+                        (c.Value == "Admin" || c.Value == "SuperAdmin" || c.Value == "Reporter" || c.Value == "Visitor"))
+                        .ToList();
+                    
+                    foreach (var claim in compassRoleClaims)
+                    {
+                        identity.RemoveClaim(claim);
+                    }
+
+                    // Add the role claim from database
+                    identity.AddClaim(new Claim(ClaimTypes.Role, roleClaimValue));
+                }
+            }
+            catch (Exception ex)
+            {
+                // Identity might be read-only in some authentication schemes
+                // Log the error but continue - role checks will fall back to database lookups
+                _logger.LogWarning(ex, "Unable to add role claim to identity for user {Email}. Role checks may need to query database directly.", user.Email);
+            }
+        }
+
         await _next(context);
     }
 }

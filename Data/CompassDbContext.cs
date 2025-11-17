@@ -142,6 +142,9 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectRagHistory> ProjectRagHistories { get; set; }
     public DbSet<ProjectSuccess> ProjectSuccesses { get; set; }
     public DbSet<ProjectOutcome> ProjectOutcomes { get; set; }
+    public DbSet<ProjectNeed> ProjectNeeds { get; set; }
+    public DbSet<ProjectProblemStatement> ProjectProblemStatements { get; set; }
+    public DbSet<ProjectProblemStatementHistory> ProjectProblemStatementHistories { get; set; }
     public DbSet<ProjectMission> ProjectMissions { get; set; }
     public DbSet<ProjectFundingAllocation> ProjectFundingAllocations { get; set; }
     public DbSet<ProjectResourceFunding> ProjectResourceFundings { get; set; }

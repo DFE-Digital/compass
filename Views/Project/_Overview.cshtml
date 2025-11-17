@@ -122,7 +122,6 @@
                                         <th>Phase</th>
                                         <th>Business Area</th>
                                         <th>Milestones</th>
-                                        <th>FTE</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -130,7 +129,7 @@
                                     {
                                         var projectMilestoneCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0;
                                         var projectCompletedMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.Status == "complete") ?? 0;
-                                        var projectFte = (project.TotalPermFte ?? 0) + (project.TotalMspFte ?? 0);
+                                
                                         
                                         <tr>
                                             <td>
@@ -138,10 +137,6 @@
                                                     <strong>@project.Title</strong>
                                                 </a><br>
                                                 <small class="text-muted">DEL-DDT-@project.Id</small>
-                                                @if (!string.IsNullOrWhiteSpace(project.ProjectCode))
-                                                {
-                                                    <div class="text-muted small">Legacy code: @project.ProjectCode</div>
-                                                }
                                             </td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(project.RagStatus))
@@ -164,7 +159,8 @@
                                                              style="width: @((projectCompletedMilestones * 100.0 / projectMilestoneCount).ToString("F0"))%" 
                                                              aria-valuenow="@projectCompletedMilestones" 
                                                              aria-valuemin="0" 
-                                                             aria-valuemax="@projectMilestoneCount"></div>
+                                                             aria-valuemax="@projectMilestoneCount"
+                                                             aria-label="Milestone completion for @project.Title: @projectCompletedMilestones of @projectMilestoneCount completed"></div>
                                                     </div>
                                                 }
                                                 else
@@ -172,7 +168,6 @@
                                                     <span class="text-muted">0</span>
                                                 }
                                             </td>
-                                            <td>@projectFte.ToString("F1")</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -218,15 +213,7 @@
                             {
                                 <tr>
                                     <td>
-                                        <a href="#" 
-                                           class="view-milestone-link"
-                                           data-milestone-id="@milestone.Id"
-                                           data-milestone-name="@milestone.Name"
-                                           data-milestone-status="@milestone.Status"
-                                           data-milestone-progress="@(milestone.ProgressPercent ?? 0)"
-                                           data-milestone-due="@milestone.DueDate.ToString("yyyy-MM-dd")"
-                                           data-milestone-actual="@(milestone.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
-                                           data-milestone-description="@milestone.Description">
+                                        <a asp-controller="Project" asp-action="MilestoneDetails" asp-route-id="@milestone.Id">
                                             @milestone.Name
                                         </a>
                                     </td>
@@ -277,65 +264,7 @@
             }
         </div>
 
-        <!-- Strategic Alignment -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="card-title">Strategic Alignment</h3>
-                <div class="card-tools">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="strategicalignment">Manage alignment</a>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                <table class="table table-borderless mb-0 project-overview-summary">
-                    <tbody>
-                        <tr>
-                            <td class="summary-label"><strong>Priority Outcomes</strong></td>
-                            <td class="summary-value">
-                                @if (Model.ProjectObjectives != null && Model.ProjectObjectives.Any())
-                                {
-                                    <ul class="mb-0 pl-3">
-                                        @foreach (var projectObjective in Model.ProjectObjectives.OrderBy(po => po.Objective?.Title))
-                                        {
-                                            <li>@projectObjective.Objective?.Title</li>
-                                        }
-                                    </ul>
-                                }
-                                else if (!string.IsNullOrEmpty(Model.StrategicObjectives))
-                                {
-                                    @Model.StrategicObjectives
-                                }
-                                else
-                                {
-                                    <span class="text-muted">No priority outcomes defined</span>
-                                }
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="summary-label"><strong>Mission Pillars</strong></td>
-                            <td class="summary-value">
-                                @if (Model.ProjectMissions != null && Model.ProjectMissions.Any())
-                                {
-                                    <ul class="mb-0 pl-3">
-                                        @foreach (var projectMission in Model.ProjectMissions.OrderBy(pm => pm.Mission?.Title))
-                                        {
-                                            <li>@projectMission.Mission?.Title</li>
-                                        }
-                                    </ul>
-                                }
-                                else if (!string.IsNullOrEmpty(Model.MissionPillars))
-                                {
-                                    @Model.MissionPillars
-                                }
-                                else
-                                {
-                                    <span class="text-muted">No mission pillars defined</span>
-                                }
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+
 
     </div>
     
@@ -465,7 +394,6 @@
             <div class="card-body p-0">
                 @if (Model.ProjectContacts.Any())
                 {
-                    <div class="table-responsive">
                         <table class="table table-sm mb-0">
                             <thead>
                                 <tr>
@@ -492,10 +420,10 @@
                                 }
                             </tbody>
                         </table>
-                    </div>
+                 
                     @if (Model.ProjectContacts.Count > 5)
                     {
-                        <div class="text-center mt-3 p-3 border-top">
+                        <div class=" mt-3 p-3 border-top">
                             <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team" class="btn btn-sm btn-outline-secondary">
                                 View entire team
                             </a>
@@ -1041,31 +969,6 @@
 <script nonce="@Context.Items["Nonce"]">
     (function() {
         function initOverviewPage() {
-            // Handle view milestone link clicks
-            $(document).on('click', '.view-milestone-link', function(e) {
-                e.preventDefault();
-                
-                var milestoneId = $(this).attr('data-milestone-id');
-                var milestoneName = $(this).attr('data-milestone-name');
-                var milestoneStatus = $(this).attr('data-milestone-status');
-                var milestoneProgress = $(this).attr('data-milestone-progress');
-                var milestoneDue = $(this).attr('data-milestone-due');
-                var milestoneActual = $(this).attr('data-milestone-actual');
-                var milestoneDescription = $(this).attr('data-milestone-description');
-                
-                // Populate modal fields
-                $('#editMilestoneId').val(milestoneId);
-                $('#editMilestoneName').val(milestoneName);
-                $('#editMilestoneStatus').val(milestoneStatus);
-                $('#editMilestoneProgress').val(milestoneProgress);
-                $('#editMilestoneDueDate').val(milestoneDue);
-                $('#editMilestoneActualDate').val(milestoneActual);
-                $('#editMilestoneDescription').val(milestoneDescription);
-                
-                // Show the modal
-                $('#viewMilestoneModal').modal('show');
-            });
-
             // Handle delete milestone button from view modal
             $('#deleteMilestoneFromViewBtn').on('click', function() {
                 var milestoneId = $('#editMilestoneId').val();
