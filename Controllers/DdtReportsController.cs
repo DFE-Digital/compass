@@ -1937,8 +1937,8 @@ public class DdtReportsController : Controller
                     if (!string.IsNullOrWhiteSpace(nameOnly))
                     {
                         AddContactIfMissing(deliveryManagerContacts, nameOnly);
+                    }
                 }
-            }
                 else
                 {
                     _logger.LogDebug("Product {FipsId} contact role '{Role}' did not match any known role keywords", product.FipsId, role);

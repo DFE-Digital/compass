@@ -1,0 +1,60 @@
+@model Compass.ViewModels.ProjectNeedFormViewModel
+
+@{
+    Func<string, bool> hasError = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        if (ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        var inputKey = $"Input.{key}";
+        if (ViewData.ModelState.TryGetValue(inputKey, out var inputEntry) && inputEntry.Errors.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
+    };
+}
+
+<div class="form-group @(hasError("Title") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Title" class="font-weight-bold">Title</label>
+    <small class="form-text text-muted">A short title for this need.</small>
+    <span asp-validation-for="Input.Title" class="form-error-message"></span>
+    <input asp-for="Input.Title" class="form-control @(hasError("Title") ? "form-control--error" : string.Empty)" maxlength="200" />
+</div>
+
+<div class="form-group @(hasError("Need") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Need" class="font-weight-bold">Need</label>
+    <small class="form-text text-muted">Describe the high level need.</small>
+    <span asp-validation-for="Input.Need" class="form-error-message"></span>
+    <textarea asp-for="Input.Need" class="form-control @(hasError("Need") ? "form-control--error" : string.Empty)" rows="4" maxlength="1000"></textarea>
+</div>
+
+<div class="form-group @(hasError("Source") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Source">Source (optional)</label>
+    <small class="form-text text-muted">Where this need came from (e.g., user research, stakeholder feedback).</small>
+    <span asp-validation-for="Input.Source" class="form-error-message"></span>
+    <input asp-for="Input.Source" class="form-control @(hasError("Source") ? "form-control--error" : string.Empty)" maxlength="500" />
+</div>
+
+<div class="form-group @(hasError("Validated") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Validated">Validated</label>
+    <small class="form-text text-muted">Whether this need has been validated.</small>
+    <span asp-validation-for="Input.Validated" class="form-error-message"></span>
+    <select asp-for="Input.Validated" class="form-control @(hasError("Validated") ? "form-control--error" : string.Empty)">
+        @foreach (var option in Model.ValidatedOptions)
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+</div>
+
+<input asp-for="Input.SortOrder" type="hidden" />
+

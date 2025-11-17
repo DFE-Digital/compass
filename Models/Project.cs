@@ -92,6 +92,8 @@ public class Project
     public ICollection<ProjectSuccess> Successes { get; set; } = new List<ProjectSuccess>();
     public ICollection<ProjectRagHistory> RagHistory { get; set; } = new List<ProjectRagHistory>();
     public ICollection<ProjectOutcome> Outcomes { get; set; } = new List<ProjectOutcome>();
+    public ICollection<ProjectNeed> Needs { get; set; } = new List<ProjectNeed>();
+    public ICollection<ProjectProblemStatement> ProblemStatements { get; set; } = new List<ProjectProblemStatement>();
     public ICollection<ProjectMission> ProjectMissions { get; set; } = new List<ProjectMission>();
     public ICollection<ProjectFundingAllocation> FundingAllocations { get; set; } = new List<ProjectFundingAllocation>();
     public ICollection<ProjectResourceFunding> ResourceFunding { get; set; } = new List<ProjectResourceFunding>();
