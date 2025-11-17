@@ -1,14 +1,107 @@
 @model Compass.Models.Project
 
 @{
+    var problemStatement = Model.ProblemStatements.FirstOrDefault();
+    var needs = Model.Needs
+        .OrderBy(n => n.SortOrder)
+        .ToList();
     var outcomes = Model.Outcomes
         .OrderBy(o => o.SortOrder)
         .ToList();
 }
 
+<!-- Problem Statement Card -->
+<div class="card mb-4" id="problem-statement">
+    <div class="card-header">
+        <h3 class="card-title">Problem statement</h3>
+        <div class="card-tools">
+            @if (problemStatement != null)
+            {
+                <a asp-controller="Project" asp-action="EditProblemStatement" asp-route-projectId="@Model.Id">Edit</a>
+                <span class="mx-2">|</span>
+                <a asp-controller="Project" asp-action="ProblemStatementDetails" asp-route-projectId="@Model.Id">View</a>
+            }
+            else
+            {
+                <a asp-controller="Project" asp-action="CreateProblemStatement" asp-route-projectId="@Model.Id">Add problem statement</a>
+            }
+        </div>
+    </div>
+    <div class="card-body">
+        @if (problemStatement != null)
+        {
+            <div class="preserve-formatting">@problemStatement.ProblemStatement</div>
+            <small class="text-muted mt-2 d-block">
+                Created by @(string.IsNullOrWhiteSpace(problemStatement.CreatedByName) ? problemStatement.CreatedByEmail ?? "Unknown" : problemStatement.CreatedByName)
+                on @problemStatement.CreatedAt.ToString("dd MMM yyyy")
+            </small>
+        }
+        else
+        {
+            <p class="text-muted mb-2">No problem statement recorded yet.</p>
+            <a asp-controller="Project" asp-action="CreateProblemStatement" asp-route-projectId="@Model.Id" class="text-block-link">Add problem statement</a>
+        }
+    </div>
+</div>
+
+<!-- Needs Card -->
+<div class="card mb-4" id="needs">
+    <div class="card-header">
+        <h3 class="card-title">High level needs</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateNeed" asp-route-projectId="@Model.Id">Add need</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (needs.Any())
+        {
+            <table class="table table-hover sortable-table needs-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;" class="sortable" data-column="Need" tabindex="0" role="button" aria-label="Sort by Need">Need</th>
+                        <th style="width: 30%;" class="sortable" data-column="Source" tabindex="0" role="button" aria-label="Sort by Source">Source</th>
+                        <th style="width: 15%;" class="sortable text-right" data-column="Validated" tabindex="0" role="button" aria-label="Sort by Validated">Validated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var need in needs)
+                    {
+                        <tr>
+                            <td>
+                                <a asp-controller="Project" asp-action="NeedDetails" asp-route-projectId="@Model.Id" asp-route-needId="@need.Id">
+                                    @need.Title
+                                </a>
+                                @if (!string.IsNullOrWhiteSpace(need.Need))
+                                {
+                                    <br />
+                                    <small class="text-muted">@need.Need</small>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrWhiteSpace(need.Source) ? "-" : need.Source)</td>
+                            <td class="text-right">
+                                <span class="badge badge-@(need.Validated switch { "Yes" => "success", "Partially" => "warning", _ => "secondary" })">
+                                    @need.Validated
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-4">
+                <p class="text-muted mb-2">No high level needs recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateNeed" asp-route-projectId="@Model.Id" class="text-block-link">Add the first need</a>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Outcomes Card -->
 <div class="card mb-4" id="outcomes">
     <div class="card-header">
-        <h3 class="card-title">Priority outcomes</h3>
+        <h3 class="card-title">Delivery outcomes</h3>
         <div class="card-tools">
             <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id">Add outcome</a>
         </div>
@@ -52,8 +145,8 @@
         else
         {
             <div class="p-4">
-                <p class="text-muted mb-2">No priority outcomes recorded yet.</p>
-                <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id">Add the first priority outcome</a>
+                <p class="text-muted mb-2">No delivery outcomes recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateOutcome" asp-route-projectId="@Model.Id" class="text-block-link">Add the first delivery outcome</a>
             </div>
         }
     </div>

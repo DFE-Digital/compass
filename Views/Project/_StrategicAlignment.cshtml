@@ -10,36 +10,49 @@
                     <a href="#" data-toggle="modal" data-target="#manageObjectivesModal">Manage</a>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body table-responsive p-0">
                 @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
                 {
-                    <div class="mb-3">
+                    <div class="mb-3 p-3">
                         <strong>Narrative:</strong>
                         <div class="preserve-formatting mt-2">@Model.StrategicObjectives</div>
                     </div>
                 }
-                else
-                {
-                    <p class="text-muted">No priority outcomes description provided.</p>
-                }
 
                 @if (Model.ProjectObjectives != null && Model.ProjectObjectives.Any())
                 {
-                    <hr>
-                    <strong>Linked outcomes:</strong>
-                    <ul class="mt-2">
-                        @foreach (var projectObjective in Model.ProjectObjectives.OrderBy(po => po.Objective?.Title))
-                        {
-                            <li class="mb-2">
-                                <strong>@projectObjective.Objective?.Title</strong>
-                                @if (!string.IsNullOrEmpty(projectObjective.Objective?.Description))
+                    @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
+                    {
+                        <hr class="my-0">
+                    }
+                 
+                        <table class="table table-hover text-nowrap milestones-table">
+                            <thead>
+                                <tr>
+                                    <th>Theme</th>
+                                    <th>Outcome</th>
+                                    <th>Owner</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var projectObjective in Model.ProjectObjectives.OrderBy(po => po.Objective?.Theme ?? "Other").ThenBy(po => po.Objective?.Title))
                                 {
-                                    <br>
-                                    <small class="text-muted">@projectObjective.Objective.Description</small>
+                                    <tr>
+                                        <td>@(projectObjective.Objective?.Theme ?? "Other")</td>
+                                        <td>
+                                            <strong>@projectObjective.Objective?.Title</strong>
+                                            @if (!string.IsNullOrEmpty(projectObjective.Objective?.Description))
+                                            {
+                                                <br>
+                                                <small class="text-muted">@projectObjective.Objective.Description</small>
+                                            }
+                                        </td>
+                                        <td>@(projectObjective.Objective?.OwnerUser?.Name ?? "Not assigned")</td>
+                                    </tr>
                                 }
-                            </li>
-                        }
-                    </ul>
+                            </tbody>
+                        </table>
+                
                 }
             </div>
         </div>
