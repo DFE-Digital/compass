@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
+using Compass.Helpers;
 using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -99,6 +100,9 @@ namespace Compass.Controllers
 
             // Get current user's email
             var userEmail = User.Identity?.Name;
+
+            // Check if user has admin role (now available globally via claims from middleware)
+            ViewBag.HasAdminRole = User.IsCompassAdmin();
 
             // Get user's projects (where they are a named contact or primary contact)
             var userProjects = new List<Project>();
@@ -232,9 +236,13 @@ namespace Compass.Controllers
                     .ThenInclude(pm => pm.Mission)
                 .Include(p => p.ProjectObjectives)
                     .ThenInclude(po => po.Objective)
+                        .ThenInclude(o => o.OwnerUser)
                 .Include(p => p.FundingAllocations)
                     .ThenInclude(fa => fa.FundingSource)
                 .Include(p => p.Outcomes)
+                .Include(p => p.Needs)
+                .Include(p => p.ProblemStatements)
+                    .ThenInclude(ps => ps.History)
                 .Include(p => p.ProjectContacts)
                 .Include(p => p.Successes)
                 .Include(p => p.ProjectProducts)
@@ -1627,6 +1635,9 @@ namespace Compass.Controllers
 
                 var maxSortOrder = project.Outcomes.Any() ? project.Outcomes.Max(o => o.SortOrder) : 0;
 
+                var userEmail = User.Identity?.Name;
+                var currentUser = !string.IsNullOrWhiteSpace(userEmail) ? await FindUserByEmailAsync(userEmail) : null;
+
                 var projectOutcome = new ProjectOutcome
                 {
                     ProjectId = input.ProjectId,
@@ -1635,6 +1646,8 @@ namespace Compass.Controllers
                     ConfidenceLevel = input.ConfidenceLevel,
                     ConfidenceExplanation = input.ConfidenceExplanation,
                     SortOrder = maxSortOrder + 1,
+                    CreatedByEmail = userEmail,
+                    CreatedByName = currentUser?.Name,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -5532,7 +5545,519 @@ namespace Compass.Controllers
                 RaidSummary = new RaidLinkSummaryViewModel()
             };
 
+            // Update view model with CreatedBy fields
+            viewModel.CreatedByEmail = outcome.CreatedByEmail;
+            viewModel.CreatedByName = outcome.CreatedByName;
+            
+            // If name is missing but email exists, try to look up the user
+            if (string.IsNullOrWhiteSpace(viewModel.CreatedByName) && !string.IsNullOrWhiteSpace(viewModel.CreatedByEmail))
+            {
+                var user = await FindUserByEmailAsync(viewModel.CreatedByEmail);
+                if (user != null)
+                {
+                    viewModel.CreatedByName = user.Name;
+                }
+            }
+
             return View("OutcomeDetails", viewModel);
+        }
+
+        // Needs actions
+        private static readonly string[] NeedValidatedValues =
+        {
+            "Yes",
+            "No",
+            "Partially"
+        };
+
+        private static List<SelectListItem> BuildNeedValidatedOptions(string? selectedValue)
+        {
+            return NeedValidatedValues
+                .Select(value => new SelectListItem(value, value, string.Equals(value, selectedValue, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+        }
+
+        private static ProjectNeedFormViewModel BuildNeedFormViewModel(ProjectSummaryViewModel summary, ProjectNeedInputModel input, bool showDeleteButton)
+        {
+            return new ProjectNeedFormViewModel
+            {
+                Input = input,
+                ProjectTitle = summary.Title,
+                ProjectSummary = summary,
+                ValidatedOptions = BuildNeedValidatedOptions(input.Validated),
+                ShowDeleteButton = showDeleteButton
+            };
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> CreateNeed(int projectId)
+        {
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var input = new ProjectNeedInputModel
+            {
+                ProjectId = projectSummary.Id,
+                Validated = "No"
+            };
+
+            var viewModel = BuildNeedFormViewModel(projectSummary, input, showDeleteButton: false);
+            return View("CreateNeed", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddNeed([Bind(Prefix = "Input")] ProjectNeedInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                var projectSummary = await GetProjectSummaryAsync(input.ProjectId);
+
+                if (projectSummary == null)
+                {
+                    return NotFound();
+                }
+
+                var invalidViewModel = BuildNeedFormViewModel(projectSummary, input, showDeleteButton: false);
+                return View("CreateNeed", invalidViewModel);
+            }
+
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.Needs)
+                    .FirstOrDefaultAsync(p => p.Id == input.ProjectId && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    return NotFound();
+                }
+
+                var maxSortOrder = project.Needs.Any() ? project.Needs.Max(n => n.SortOrder) : 0;
+
+                var userEmail = User.Identity?.Name;
+                var currentUser = !string.IsNullOrWhiteSpace(userEmail) ? await FindUserByEmailAsync(userEmail) : null;
+
+                var projectNeed = new ProjectNeed
+                {
+                    ProjectId = input.ProjectId,
+                    Title = input.Title,
+                    Need = input.Need,
+                    Source = input.Source,
+                    Validated = input.Validated,
+                    SortOrder = maxSortOrder + 1,
+                    CreatedByEmail = userEmail,
+                    CreatedByName = currentUser?.Name,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.ProjectNeeds.Add(projectNeed);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Need added successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding need to project {ProjectId}", input.ProjectId);
+                TempData["ErrorMessage"] = "Error adding need. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EditNeed(int projectId, int needId)
+        {
+            var need = await _context.ProjectNeeds
+                .Include(n => n.Project)
+                .FirstOrDefaultAsync(n => n.Id == needId && n.ProjectId == projectId);
+
+            if (need == null || need.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var input = new ProjectNeedInputModel
+            {
+                ProjectId = projectId,
+                NeedId = needId,
+                Title = need.Title,
+                Need = need.Need,
+                Source = need.Source,
+                Validated = need.Validated,
+                SortOrder = need.SortOrder
+            };
+
+            var viewModel = BuildNeedFormViewModel(CreateProjectSummary(need.Project), input, showDeleteButton: true);
+            return View("EditNeed", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateNeed([Bind(Prefix = "Input")] ProjectNeedInputModel input)
+        {
+            if (!input.NeedId.HasValue)
+            {
+                return NotFound();
+            }
+
+            var projectNeed = await _context.ProjectNeeds
+                .Include(n => n.Project)
+                .FirstOrDefaultAsync(n => n.Id == input.NeedId.Value && n.ProjectId == input.ProjectId);
+
+            if (projectNeed == null || projectNeed.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var invalidViewModel = BuildNeedFormViewModel(CreateProjectSummary(projectNeed.Project), input, showDeleteButton: true);
+                return View("EditNeed", invalidViewModel);
+            }
+
+            try
+            {
+                projectNeed.Title = input.Title;
+                projectNeed.Need = input.Need;
+                projectNeed.Source = input.Source;
+                projectNeed.Validated = input.Validated;
+                projectNeed.SortOrder = input.SortOrder;
+                projectNeed.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Need updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating need {NeedId}", input.NeedId);
+                TempData["ErrorMessage"] = "Error updating need. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteNeed(int projectId, int needId)
+        {
+            try
+            {
+                var projectNeed = await _context.ProjectNeeds
+                    .FirstOrDefaultAsync(n => n.Id == needId && n.ProjectId == projectId);
+
+                if (projectNeed == null)
+                {
+                    return NotFound();
+                }
+
+                _context.ProjectNeeds.Remove(projectNeed);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Need deleted successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting need {NeedId}", needId);
+                TempData["ErrorMessage"] = "Error deleting need. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "outcomes" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> NeedDetails(int projectId, int needId)
+        {
+            var need = await _context.ProjectNeeds
+                .Include(n => n.Project)
+                .FirstOrDefaultAsync(n => n.Id == needId && n.ProjectId == projectId);
+
+            if (need == null || need.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectNeedDetailsViewModel
+            {
+                ProjectId = need.ProjectId,
+                NeedId = need.Id,
+                ProjectTitle = need.Project.Title,
+                Title = need.Title,
+                Need = need.Need,
+                Source = need.Source,
+                Validated = need.Validated,
+                SortOrder = need.SortOrder,
+                CreatedByEmail = need.CreatedByEmail,
+                CreatedByName = need.CreatedByName,
+                CreatedAt = need.CreatedAt,
+                UpdatedAt = need.UpdatedAt,
+                ProjectSummary = CreateProjectSummary(need.Project)
+            };
+
+            return View("NeedDetails", viewModel);
+        }
+
+        // Problem Statement actions
+        private static ProjectProblemStatementFormViewModel BuildProblemStatementFormViewModel(ProjectSummaryViewModel summary, ProjectProblemStatementInputModel input, bool showDeleteButton)
+        {
+            return new ProjectProblemStatementFormViewModel
+            {
+                Input = input,
+                ProjectTitle = summary.Title,
+                ProjectSummary = summary,
+                ShowDeleteButton = showDeleteButton
+            };
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> CreateProblemStatement(int projectId)
+        {
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var input = new ProjectProblemStatementInputModel
+            {
+                ProjectId = projectSummary.Id
+            };
+
+            var viewModel = BuildProblemStatementFormViewModel(projectSummary, input, showDeleteButton: false);
+            return View("CreateProblemStatement", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddProblemStatement([Bind(Prefix = "Input")] ProjectProblemStatementInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                var projectSummary = await GetProjectSummaryAsync(input.ProjectId);
+
+                if (projectSummary == null)
+                {
+                    return NotFound();
+                }
+
+                var invalidViewModel = BuildProblemStatementFormViewModel(projectSummary, input, showDeleteButton: false);
+                return View("CreateProblemStatement", invalidViewModel);
+            }
+
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.ProblemStatements)
+                    .FirstOrDefaultAsync(p => p.Id == input.ProjectId && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    return NotFound();
+                }
+
+                var userEmail = User.Identity?.Name;
+                var currentUser = !string.IsNullOrWhiteSpace(userEmail) ? await FindUserByEmailAsync(userEmail) : null;
+
+                // Check if there's an existing problem statement
+                var existingProblemStatement = await _context.ProjectProblemStatements
+                    .FirstOrDefaultAsync(ps => ps.ProjectId == input.ProjectId);
+
+                if (existingProblemStatement != null)
+                {
+                    // Save current version to history before updating
+                    var historyEntry = new ProjectProblemStatementHistory
+                    {
+                        ProjectProblemStatementId = existingProblemStatement.Id,
+                        ProblemStatement = existingProblemStatement.ProblemStatement,
+                        ChangedByEmail = existingProblemStatement.CreatedByEmail,
+                        ChangedByName = existingProblemStatement.CreatedByName,
+                        ChangedAt = existingProblemStatement.UpdatedAt
+                    };
+                    _context.ProjectProblemStatementHistories.Add(historyEntry);
+
+                    // Update existing
+                    existingProblemStatement.ProblemStatement = input.ProblemStatement;
+                    existingProblemStatement.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    // Create new
+                    var projectProblemStatement = new ProjectProblemStatement
+                    {
+                        ProjectId = input.ProjectId,
+                        ProblemStatement = input.ProblemStatement,
+                        CreatedByEmail = userEmail,
+                        CreatedByName = currentUser?.Name,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.ProjectProblemStatements.Add(projectProblemStatement);
+                }
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Problem statement saved successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving problem statement for project {ProjectId}", input.ProjectId);
+                TempData["ErrorMessage"] = "Error saving problem statement. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EditProblemStatement(int projectId)
+        {
+            var problemStatement = await _context.ProjectProblemStatements
+                .Include(ps => ps.Project)
+                .FirstOrDefaultAsync(ps => ps.ProjectId == projectId);
+
+            if (problemStatement == null || problemStatement.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var input = new ProjectProblemStatementInputModel
+            {
+                ProjectId = projectId,
+                ProblemStatementId = problemStatement.Id,
+                ProblemStatement = problemStatement.ProblemStatement
+            };
+
+            var viewModel = BuildProblemStatementFormViewModel(CreateProjectSummary(problemStatement.Project), input, showDeleteButton: true);
+            return View("EditProblemStatement", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateProblemStatement([Bind(Prefix = "Input")] ProjectProblemStatementInputModel input)
+        {
+            if (!input.ProblemStatementId.HasValue)
+            {
+                return NotFound();
+            }
+
+            var problemStatement = await _context.ProjectProblemStatements
+                .Include(ps => ps.Project)
+                .FirstOrDefaultAsync(ps => ps.Id == input.ProblemStatementId.Value && ps.ProjectId == input.ProjectId);
+
+            if (problemStatement == null || problemStatement.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var invalidViewModel = BuildProblemStatementFormViewModel(CreateProjectSummary(problemStatement.Project), input, showDeleteButton: true);
+                return View("EditProblemStatement", invalidViewModel);
+            }
+
+            try
+            {
+                // Save current version to history before updating
+                var historyEntry = new ProjectProblemStatementHistory
+                {
+                    ProjectProblemStatementId = problemStatement.Id,
+                    ProblemStatement = problemStatement.ProblemStatement,
+                    ChangedByEmail = User.Identity?.Name,
+                    ChangedByName = (await FindUserByEmailAsync(User.Identity?.Name))?.Name,
+                    ChangedAt = DateTime.UtcNow
+                };
+                _context.ProjectProblemStatementHistories.Add(historyEntry);
+
+                problemStatement.ProblemStatement = input.ProblemStatement;
+                problemStatement.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Problem statement updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating problem statement {ProblemStatementId}", input.ProblemStatementId);
+                TempData["ErrorMessage"] = "Error updating problem statement. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteProblemStatement(int projectId, int problemStatementId)
+        {
+            try
+            {
+                var problemStatement = await _context.ProjectProblemStatements
+                    .FirstOrDefaultAsync(ps => ps.Id == problemStatementId && ps.ProjectId == projectId);
+
+                if (problemStatement == null)
+                {
+                    return NotFound();
+                }
+
+                _context.ProjectProblemStatements.Remove(problemStatement);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Problem statement deleted successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting problem statement {ProblemStatementId}", problemStatementId);
+                TempData["ErrorMessage"] = "Error deleting problem statement. Please try again.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "outcomes" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ProblemStatementDetails(int projectId)
+        {
+            var problemStatement = await _context.ProjectProblemStatements
+                .Include(ps => ps.Project)
+                .Include(ps => ps.History)
+                .FirstOrDefaultAsync(ps => ps.ProjectId == projectId);
+
+            if (problemStatement == null || problemStatement.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var history = problemStatement.History
+                .OrderByDescending(h => h.ChangedAt)
+                .Select(h => new ProjectProblemStatementHistoryItemViewModel
+                {
+                    ProblemStatement = h.ProblemStatement,
+                    ChangedByEmail = h.ChangedByEmail,
+                    ChangedByName = h.ChangedByName,
+                    ChangedAt = h.ChangedAt
+                })
+                .ToList();
+
+            var viewModel = new ProjectProblemStatementDetailsViewModel
+            {
+                ProjectId = problemStatement.ProjectId,
+                ProblemStatementId = problemStatement.Id,
+                ProjectTitle = problemStatement.Project.Title,
+                ProblemStatement = problemStatement.ProblemStatement,
+                CreatedByEmail = problemStatement.CreatedByEmail,
+                CreatedByName = problemStatement.CreatedByName,
+                CreatedAt = problemStatement.CreatedAt,
+                UpdatedAt = problemStatement.UpdatedAt,
+                History = history,
+                ProjectSummary = CreateProjectSummary(problemStatement.Project)
+            };
+
+            return View("ProblemStatementDetails", viewModel);
         }
 
         private async Task<Project?> GetProjectForDependencyAsync(int projectId)
