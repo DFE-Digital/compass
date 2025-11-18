@@ -180,6 +180,8 @@ public class Issue
     public ICollection<Dependency> DependenciesAsTarget { get; set; } = new List<Dependency>();
 
     public ICollection<IssueDecision> IssueDecisions { get; set; } = new List<IssueDecision>();
+
+    public ICollection<IssueRisk> IssueRisks { get; set; } = new List<IssueRisk>();
     public ICollection<IssueComment> Comments { get; set; } = new List<IssueComment>();
     public ICollection<IssueHistory> HistoryEntries { get; set; } = new List<IssueHistory>();
     public ICollection<IssueWcagCriterion> WcagCriteria { get; set; } = new List<IssueWcagCriterion>();

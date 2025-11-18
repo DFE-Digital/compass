@@ -3,7 +3,32 @@
 @{
     ViewData["Title"] = string.IsNullOrWhiteSpace(Model.Input.Title) ? "Edit action" : $"Edit action – {Model.Input.Title}";
     var projectDetailsUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "actions" });
+}
 
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Delivery reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Input.ProjectId" asp-route-tab="actions" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.ProjectTitle</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit action</li>
+        </ol>
+    </nav>
+}
+
+@{
     Func<string, string> normaliseKey = key =>
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -122,3 +147,45 @@
         </div>
     </div>
 </section>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script src="~/js/linked-entity-picker.js" asp-append-version="true"></script>
+    <script>
+        (function() {
+            const statusSelect = document.getElementById('action-status-select');
+            const blockedCheckbox = document.getElementById('action-blocked-checkbox');
+            const blockedReasonField = document.querySelector('.js-blocked-reason-field');
+            const closureFields = document.querySelectorAll('.js-closure-fields');
+
+            function updateFieldVisibility() {
+                // Handle blocked reason field
+                if (blockedCheckbox && blockedReasonField) {
+                    blockedReasonField.style.display = blockedCheckbox.checked ? 'block' : 'none';
+                }
+
+                // Handle closure fields (completed date and closure notes)
+                if (statusSelect && closureFields.length > 0) {
+                    const selectedOption = statusSelect.options[statusSelect.selectedIndex];
+                    const statusText = selectedOption ? selectedOption.text.trim().toLowerCase() : '';
+                    const isCompletedOrCancelled = statusText === 'done' || statusText === 'completed' || statusText === 'cancelled';
+                    
+                    closureFields.forEach(function(field) {
+                        field.style.display = isCompletedOrCancelled ? 'block' : 'none';
+                    });
+                }
+            }
+
+            if (statusSelect) {
+                statusSelect.addEventListener('change', updateFieldVisibility);
+            }
+
+            if (blockedCheckbox) {
+                blockedCheckbox.addEventListener('change', updateFieldVisibility);
+            }
+
+            // Initial update on page load
+            updateFieldVisibility();
+        })();
+    </script>
+}

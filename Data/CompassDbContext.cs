@@ -172,6 +172,8 @@ public partial class CompassDbContext : DbContext
     public DbSet<IssueAction> IssueActions { get; set; }
     public DbSet<RiskDecision> RiskDecisions { get; set; }
     public DbSet<IssueDecision> IssueDecisions { get; set; }
+    public DbSet<IssueRisk> IssueRisks { get; set; }
+    public DbSet<ActionDecision> ActionDecisions { get; set; }
     public DbSet<MilestoneAction> MilestoneActions { get; set; }
     public DbSet<MilestoneRisk> MilestoneRisks { get; set; }
     public DbSet<MilestoneIssue> MilestoneIssues { get; set; }
@@ -1099,6 +1101,44 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<IssueDecision>()
             .HasIndex(id => id.DecisionId);
+
+        // ActionDecision
+        modelBuilder.Entity<ActionDecision>()
+            .HasKey(ad => new { ad.ActionId, ad.DecisionId });
+
+        modelBuilder.Entity<ActionDecision>()
+            .HasOne(ad => ad.Action)
+            .WithMany(a => a.ActionDecisions)
+            .HasForeignKey(ad => ad.ActionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ActionDecision>()
+            .HasOne(ad => ad.Decision)
+            .WithMany(d => d.ActionDecisions)
+            .HasForeignKey(ad => ad.DecisionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ActionDecision>()
+            .HasIndex(ad => ad.DecisionId);
+
+        // IssueRisk
+        modelBuilder.Entity<IssueRisk>()
+            .HasKey(ir => new { ir.IssueId, ir.RiskId });
+
+        modelBuilder.Entity<IssueRisk>()
+            .HasOne(ir => ir.Issue)
+            .WithMany(i => i.IssueRisks)
+            .HasForeignKey(ir => ir.IssueId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<IssueRisk>()
+            .HasOne(ir => ir.Risk)
+            .WithMany(r => r.IssueRisks)
+            .HasForeignKey(ir => ir.RiskId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<IssueRisk>()
+            .HasIndex(ir => ir.RiskId);
 
         // MilestoneAction
         modelBuilder.Entity<MilestoneAction>()
