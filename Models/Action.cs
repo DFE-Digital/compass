@@ -118,6 +118,9 @@ public class Action
     [MaxLength(1000)]
     public string? BlockedReason { get; set; }
 
+    [MaxLength(1000)]
+    public string? ClosureNotes { get; set; }
+
     [MaxLength(20)]
     public string? Rag { get; set; }
 
@@ -234,6 +237,7 @@ public class Action
     public ICollection<RiskAction> RiskActions { get; set; } = new List<RiskAction>();
     public ICollection<IssueAction> IssueActions { get; set; } = new List<IssueAction>();
     public ICollection<MilestoneAction> MilestoneActions { get; set; } = new List<MilestoneAction>();
+    public ICollection<ActionDecision> ActionDecisions { get; set; } = new List<ActionDecision>();
 
     [NotMapped]
     public ICollection<Dependency> DependenciesAsSource { get; set; } = new List<Dependency>();

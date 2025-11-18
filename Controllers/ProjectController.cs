@@ -2623,8 +2623,8 @@ namespace Compass.Controllers
             input.Category = SanitiseText(input.Category);
             input.Workaround = SanitiseText(input.Workaround);
             input.ResolutionSummary = SanitiseText(input.ResolutionSummary);
-            input.FipsId = SanitiseText(input.FipsId);
             input.BusinessArea = SanitiseText(input.BusinessArea);
+            input.OwnerName = SanitiseText(input.OwnerName);
             input.SourceType = SanitiseText(input.SourceType);
             input.SourceReference = SanitiseText(input.SourceReference);
             input.SourceRecordUrl = SanitiseText(input.SourceRecordUrl);
@@ -2692,22 +2692,16 @@ namespace Compass.Controllers
                 Category = input.Category,
                 Workaround = input.Workaround,
                 ResolutionSummary = input.ResolutionSummary,
-                FipsId = input.FipsId,
                 BusinessArea = input.BusinessArea,
                 SourceType = input.SourceType,
                 SourceReference = input.SourceReference,
                 SourceRecordUrl = input.SourceRecordUrl,
                 SourceRiskId = input.SourceRiskId,
+                OwnerUserId = input.OwnerUserId > 0 ? input.OwnerUserId : null,
                 BlockedFlag = string.Equals(input.Status, "blocked", StringComparison.OrdinalIgnoreCase),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
-            if (!string.IsNullOrWhiteSpace(input.OwnerEmail))
-            {
-                var owner = await FindUserByEmailAsync(input.OwnerEmail);
-                issue.OwnerUserId = owner?.Id;
-            }
 
             if (string.Equals(issue.Status, "resolved", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(issue.Status, "closed", StringComparison.OrdinalIgnoreCase))
@@ -2718,6 +2712,19 @@ namespace Compass.Controllers
             _context.Issues.Add(issue);
             await _context.SaveChangesAsync();
 
+            if (input.LinkedRiskIds.Any())
+            {
+                foreach (var riskId in input.LinkedRiskIds)
+                {
+                    _context.IssueRisks.Add(new IssueRisk
+                    {
+                        IssueId = issue.Id,
+                        RiskId = riskId
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
             if (input.LinkedActionIds.Any())
             {
                 foreach (var actionId in input.LinkedActionIds)
@@ -2726,6 +2733,19 @@ namespace Compass.Controllers
                     {
                         IssueId = issue.Id,
                         ActionId = actionId
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            if (input.LinkedDecisionIds.Any())
+            {
+                foreach (var decisionId in input.LinkedDecisionIds)
+                {
+                    _context.IssueDecisions.Add(new IssueDecision
+                    {
+                        IssueId = issue.Id,
+                        DecisionId = decisionId
                     });
                 }
                 await _context.SaveChangesAsync();
@@ -2754,8 +2774,8 @@ namespace Compass.Controllers
             input.Category = SanitiseText(input.Category);
             input.Workaround = SanitiseText(input.Workaround);
             input.ResolutionSummary = SanitiseText(input.ResolutionSummary);
-            input.FipsId = SanitiseText(input.FipsId);
             input.BusinessArea = SanitiseText(input.BusinessArea);
+            input.OwnerName = SanitiseText(input.OwnerName);
             input.SourceType = SanitiseText(input.SourceType);
             input.SourceReference = SanitiseText(input.SourceReference);
             input.SourceRecordUrl = SanitiseText(input.SourceRecordUrl);
@@ -2783,6 +2803,8 @@ namespace Compass.Controllers
 
             var issue = await _context.Issues
                 .Include(i => i.IssueActions)
+                .Include(i => i.IssueRisks)
+                .Include(i => i.IssueDecisions)
                 .FirstOrDefaultAsync(i => i.Id == input.IssueId.Value && i.ProjectId == input.ProjectId && !i.IsDeleted);
 
             if (issue == null)
@@ -2822,24 +2844,14 @@ namespace Compass.Controllers
             issue.Category = input.Category;
             issue.Workaround = input.Workaround;
             issue.ResolutionSummary = input.ResolutionSummary;
-            issue.FipsId = input.FipsId;
             issue.BusinessArea = input.BusinessArea;
             issue.SourceType = input.SourceType;
             issue.SourceReference = input.SourceReference;
             issue.SourceRecordUrl = input.SourceRecordUrl;
             issue.SourceRiskId = input.SourceRiskId;
+            issue.OwnerUserId = input.OwnerUserId > 0 ? input.OwnerUserId : null;
             issue.BlockedFlag = string.Equals(input.Status, "blocked", StringComparison.OrdinalIgnoreCase);
             issue.UpdatedAt = DateTime.UtcNow;
-
-            if (!string.IsNullOrWhiteSpace(input.OwnerEmail))
-            {
-                var owner = await FindUserByEmailAsync(input.OwnerEmail);
-                issue.OwnerUserId = owner?.Id;
-            }
-            else
-            {
-                issue.OwnerUserId = null;
-            }
 
             if (string.Equals(issue.Status, "resolved", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(issue.Status, "closed", StringComparison.OrdinalIgnoreCase))
@@ -2849,6 +2861,21 @@ namespace Compass.Controllers
             else
             {
                 issue.ClosedDate = null;
+            }
+
+            var existingRiskIds = issue.IssueRisks.Select(ir => ir.RiskId).ToList();
+            foreach (var link in issue.IssueRisks.Where(ir => !input.LinkedRiskIds.Contains(ir.RiskId)).ToList())
+            {
+                _context.IssueRisks.Remove(link);
+            }
+
+            foreach (var riskId in input.LinkedRiskIds.Except(existingRiskIds))
+            {
+                _context.IssueRisks.Add(new IssueRisk
+                {
+                    IssueId = issue.Id,
+                    RiskId = riskId
+                });
             }
 
             var existingActionIds = issue.IssueActions.Select(ia => ia.ActionId).ToList();
@@ -2863,6 +2890,21 @@ namespace Compass.Controllers
                 {
                     IssueId = issue.Id,
                     ActionId = actionId
+                });
+            }
+
+            var existingDecisionIds = issue.IssueDecisions.Select(id => id.DecisionId).ToList();
+            foreach (var link in issue.IssueDecisions.Where(id => !input.LinkedDecisionIds.Contains(id.DecisionId)).ToList())
+            {
+                _context.IssueDecisions.Remove(link);
+            }
+
+            foreach (var decisionId in input.LinkedDecisionIds.Except(existingDecisionIds))
+            {
+                _context.IssueDecisions.Add(new IssueDecision
+                {
+                    IssueId = issue.Id,
+                    DecisionId = decisionId
                 });
             }
 
@@ -3316,7 +3358,9 @@ namespace Compass.Controllers
             var action = await _context.Actions
                 .Include(a => a.RiskActions)
                 .Include(a => a.IssueActions)
+                .Include(a => a.ActionDecisions)
                 .Include(a => a.Tags)
+                .Include(a => a.AssignedToUser)
                 .FirstOrDefaultAsync(a => a.Id == actionId && a.ProjectId == projectId && !a.IsDeleted);
 
             if (action == null)
@@ -3333,6 +3377,8 @@ namespace Compass.Controllers
                 Status = action.Status,
                 StatusId = action.StatusId,
                 AssignedToEmail = action.AssignedToEmail,
+                AssignedToUserId = action.AssignedToUserId,
+                AssignedToName = action.AssignedToUser != null ? action.AssignedToUser.Name : null,
                 Priority = action.Priority,
                 PriorityId = action.PriorityId,
                 ActionTypeId = action.ActionTypeId,
@@ -3359,12 +3405,14 @@ namespace Compass.Controllers
                 ProgressPercent = action.ProgressPercent,
                 Blocked = action.Blocked,
                 BlockedReason = action.BlockedReason,
+                ClosureNotes = action.ClosureNotes,
                 RagRating = action.Rag,
                 TeamName = action.TeamName,
                 DecisionId = action.DecisionId,
                 ParentActionId = action.ParentActionId,
                 LinkedRiskIds = action.RiskActions.Select(ra => ra.RiskId).ToList(),
                 LinkedIssueIds = action.IssueActions.Select(ia => ia.IssueId).ToList(),
+                LinkedDecisionIds = action.ActionDecisions.Select(ad => ad.DecisionId).ToList(),
                 Tags = string.Join(", ", action.Tags.Select(t => t.Value))
             };
 
@@ -3383,8 +3431,8 @@ namespace Compass.Controllers
             input.Title = SanitiseText(input.Title) ?? string.Empty;
             input.Description = SanitiseText(input.Description);
             input.AssignedToEmail = SanitiseText(input.AssignedToEmail);
+            input.AssignedToName = SanitiseText(input.AssignedToName);
             input.Priority = SanitiseText(input.Priority);
-            input.FipsId = SanitiseText(input.FipsId);
             input.BusinessArea = SanitiseText(input.BusinessArea);
             input.SourceType = SanitiseText(input.SourceType);
             input.SourceReference = SanitiseText(input.SourceReference);
@@ -3394,6 +3442,7 @@ namespace Compass.Controllers
             input.EvidenceSummary = SanitiseText(input.EvidenceSummary);
             input.VerificationNotes = SanitiseText(input.VerificationNotes);
             input.BlockedReason = SanitiseText(input.BlockedReason);
+            input.ClosureNotes = SanitiseText(input.ClosureNotes);
             input.TeamName = SanitiseText(input.TeamName);
             input.RagRating = SanitiseText(input.RagRating);
             input.Tags = SanitiseText(input.Tags);
@@ -3511,6 +3560,7 @@ namespace Compass.Controllers
                 Status = statusLookup?.Label ?? input.Status,
                 StatusId = statusLookup?.Id,
                 AssignedToEmail = input.AssignedToEmail,
+                AssignedToUserId = input.AssignedToUserId > 0 ? input.AssignedToUserId : null,
                 Priority = priorityLookup?.Label ?? input.Priority,
                 PriorityId = priorityLookup?.Id,
                 StartDate = input.StartDate,
@@ -3533,6 +3583,7 @@ namespace Compass.Controllers
                 LastProgressUpdate = input.ProgressPercent > 0 ? DateTime.UtcNow : null,
                 Blocked = input.Blocked,
                 BlockedReason = input.Blocked ? input.BlockedReason : null,
+                ClosureNotes = input.ClosureNotes,
                 Rag = input.RagRating,
                 TeamName = input.TeamName,
                 ReminderFrequencyId = input.ReminderFrequencyId,
@@ -3574,6 +3625,18 @@ namespace Compass.Controllers
                 }
             }
 
+            if (input.LinkedDecisionIds.Any())
+            {
+                foreach (var linkedDecisionId in input.LinkedDecisionIds.Distinct())
+                {
+                    _context.ActionDecisions.Add(new ActionDecision
+                    {
+                        ActionId = action.Id,
+                        DecisionId = linkedDecisionId
+                    });
+                }
+            }
+
             var tagValues = ParseTags(input.Tags);
             if (tagValues.Count > 0)
             {
@@ -3609,8 +3672,8 @@ namespace Compass.Controllers
             input.Title = SanitiseText(input.Title) ?? string.Empty;
             input.Description = SanitiseText(input.Description);
             input.AssignedToEmail = SanitiseText(input.AssignedToEmail);
+            input.AssignedToName = SanitiseText(input.AssignedToName);
             input.Priority = SanitiseText(input.Priority);
-            input.FipsId = SanitiseText(input.FipsId);
             input.BusinessArea = SanitiseText(input.BusinessArea);
             input.SourceType = SanitiseText(input.SourceType);
             input.SourceReference = SanitiseText(input.SourceReference);
@@ -3620,6 +3683,7 @@ namespace Compass.Controllers
             input.EvidenceSummary = SanitiseText(input.EvidenceSummary);
             input.VerificationNotes = SanitiseText(input.VerificationNotes);
             input.BlockedReason = SanitiseText(input.BlockedReason);
+            input.ClosureNotes = SanitiseText(input.ClosureNotes);
             input.TeamName = SanitiseText(input.TeamName);
             input.RagRating = SanitiseText(input.RagRating);
             input.Tags = SanitiseText(input.Tags);
@@ -3633,6 +3697,7 @@ namespace Compass.Controllers
             var action = await _context.Actions
                 .Include(a => a.RiskActions)
                 .Include(a => a.IssueActions)
+                .Include(a => a.ActionDecisions)
                 .Include(a => a.Tags)
                 .FirstOrDefaultAsync(a => a.Id == input.ActionId.Value && a.ProjectId == input.ProjectId && !a.IsDeleted);
 
@@ -3752,6 +3817,7 @@ namespace Compass.Controllers
             }
 
             action.AssignedToEmail = input.AssignedToEmail;
+            action.AssignedToUserId = input.AssignedToUserId > 0 ? input.AssignedToUserId : null;
             action.StartDate = input.StartDate;
             action.DueDate = input.DueDate;
             action.CompletedDate = input.CompletedDate;
@@ -3775,6 +3841,7 @@ namespace Compass.Controllers
             action.VerificationNotes = input.VerificationNotes;
             action.Blocked = input.Blocked;
             action.BlockedReason = input.Blocked ? input.BlockedReason : null;
+            action.ClosureNotes = input.ClosureNotes;
             action.Rag = input.RagRating;
             action.TeamName = input.TeamName;
             action.ReminderFrequencyId = input.ReminderFrequencyId;
@@ -3814,6 +3881,21 @@ namespace Compass.Controllers
                 {
                     ActionId = action.Id,
                     IssueId = issueId
+                });
+            }
+
+            var existingDecisionIds = action.ActionDecisions.Select(ad => ad.DecisionId).ToList();
+            foreach (var link in action.ActionDecisions.Where(ad => !input.LinkedDecisionIds.Contains(ad.DecisionId)).ToList())
+            {
+                _context.ActionDecisions.Remove(link);
+            }
+
+            foreach (var linkedDecisionId in input.LinkedDecisionIds.Except(existingDecisionIds))
+            {
+                _context.ActionDecisions.Add(new ActionDecision
+                {
+                    ActionId = action.Id,
+                    DecisionId = linkedDecisionId
                 });
             }
 
@@ -5165,7 +5247,7 @@ namespace Compass.Controllers
                 .ToList();
 
             var decisionOptions = project.Decisions
-                .Select(decision => new SelectListItem(decision.Title, decision.Id.ToString(CultureInfo.InvariantCulture), input.DecisionId == decision.Id))
+                .Select(decision => new SelectListItem(decision.Title, decision.Id.ToString(CultureInfo.InvariantCulture), input.LinkedDecisionIds.Contains(decision.Id) || input.DecisionId == decision.Id))
                 .ToList();
 
             var parentActionOptions = project.Actions
@@ -5234,6 +5316,7 @@ namespace Compass.Controllers
                 .Include(p => p.Actions.Where(a => !a.IsDeleted))
                 .Include(p => p.Issues.Where(i => !i.IsDeleted))
                     .ThenInclude(i => i.IssueActions)
+                .Include(p => p.Decisions.Where(d => !d.IsDeleted))
                 .AsSplitQuery()
                 .FirstOrDefaultAsync();
 
@@ -5245,6 +5328,7 @@ namespace Compass.Controllers
             project.Risks = project.Risks.Where(r => !r.IsDeleted).OrderBy(r => r.Title).ToList();
             project.Actions = project.Actions.Where(a => !a.IsDeleted).OrderBy(a => a.Title).ToList();
             project.Issues = project.Issues.Where(i => !i.IsDeleted).OrderByDescending(i => i.DetectedDate).ToList();
+            project.Decisions = project.Decisions.Where(d => !d.IsDeleted).OrderBy(d => d.Title).ToList();
 
             return project;
         }
@@ -5260,16 +5344,16 @@ namespace Compass.Controllers
                 .Select(value => new SelectListItem(textInfo.ToTitleCase(value.Replace("_", " ")), value, string.Equals(input.Status, value, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            var riskOptions = new List<SelectListItem>
-            {
-                new SelectListItem("Not linked", string.Empty, !input.SourceRiskId.HasValue)
-            };
-            riskOptions.AddRange(project.Risks
-                .Select(risk => new SelectListItem(risk.Title, risk.Id.ToString(CultureInfo.InvariantCulture), input.SourceRiskId == risk.Id))
-                .ToList());
+            var riskOptions = project.Risks
+                .Select(risk => new SelectListItem(risk.Title, risk.Id.ToString(CultureInfo.InvariantCulture), input.LinkedRiskIds.Contains(risk.Id)))
+                .ToList();
 
             var actionOptions = project.Actions
                 .Select(action => new SelectListItem(action.Title, action.Id.ToString(CultureInfo.InvariantCulture), input.LinkedActionIds.Contains(action.Id)))
+                .ToList();
+
+            var decisionOptions = project.Decisions
+                .Select(decision => new SelectListItem(decision.Title, decision.Id.ToString(CultureInfo.InvariantCulture), input.LinkedDecisionIds.Contains(decision.Id)))
                 .ToList();
 
             var businessAreas = await _productsApiService.GetBusinessAreasAsync();
@@ -5297,7 +5381,136 @@ namespace Compass.Controllers
                 StatusOptions = statusOptions,
                 RiskOptions = riskOptions,
                 ActionOptions = actionOptions,
+                DecisionOptions = decisionOptions,
                 BusinessAreaOptions = businessAreaOptions,
+                ShowDeleteButton = showDeleteButton
+            };
+        }
+
+        private async Task<Project?> GetProjectForRiskAsync(int projectId)
+        {
+            var project = await _context.Projects
+                .Where(p => p.Id == projectId && !p.IsDeleted)
+                .Include(p => p.Risks.Where(r => !r.IsDeleted))
+                .Include(p => p.Issues.Where(i => !i.IsDeleted))
+                .Include(p => p.Actions.Where(a => !a.IsDeleted))
+                .Include(p => p.Decisions.Where(d => !d.IsDeleted))
+                .AsSplitQuery()
+                .FirstOrDefaultAsync();
+
+            if (project == null)
+            {
+                return null;
+            }
+
+            project.Risks = project.Risks.Where(r => !r.IsDeleted).OrderBy(r => r.Title).ToList();
+            project.Issues = project.Issues.Where(i => !i.IsDeleted).OrderBy(i => i.Title).ToList();
+            project.Actions = project.Actions.Where(a => !a.IsDeleted).OrderBy(a => a.Title).ToList();
+            project.Decisions = project.Decisions.Where(d => !d.IsDeleted).OrderBy(d => d.Title).ToList();
+
+            return project;
+        }
+
+        private async Task<ProjectRiskFormViewModel> BuildRiskFormViewModelAsync(Project project, ProjectRiskInputModel input, bool showDeleteButton)
+        {
+            var riskStatusOptions = (await _context.RiskStatuses
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ToListAsync())
+                .Select(s => new SelectListItem(s.Label, s.Id.ToString(), input.RiskStatusId == s.Id))
+                .ToList();
+
+            var riskPriorityOptions = (await _context.RiskPriorities
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ToListAsync())
+                .Select(p => new SelectListItem(p.Label, p.Id.ToString(), input.RiskPriorityId == p.Id))
+                .ToList();
+
+            var riskCategoryOptions = (await _context.RiskCategories
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.SortOrder)
+                .ToListAsync())
+                .Select(c => new SelectListItem(c.Label, c.Id.ToString(), input.RiskCategoryId == c.Id))
+                .ToList();
+
+            var riskImpactLevelOptions = (await _context.RiskImpactLevels
+                .Where(i => i.IsActive)
+                .OrderBy(i => i.SortOrder)
+                .ToListAsync())
+                .Select(i => new SelectListItem(i.Label, i.Id.ToString(), input.RiskImpactLevelId == i.Id))
+                .ToList();
+
+            var riskLikelihoodOptions = (await _context.RiskLikelihoods
+                .Where(l => l.IsActive)
+                .OrderBy(l => l.SortOrder)
+                .ToListAsync())
+                .Select(l => new SelectListItem(l.Label, l.Id.ToString(), input.RiskLikelihoodId == l.Id))
+                .ToList();
+
+            var riskProximityOptions = (await _context.RiskProximities
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ToListAsync())
+                .Select(p => new SelectListItem(p.Label, p.Id.ToString(), input.RiskProximityId == p.Id))
+                .ToList();
+
+            var riskTierOptions = (await _context.RiskTiers
+                .Where(rt => rt.IsActive)
+                .OrderBy(rt => rt.SortOrder)
+                .ToListAsync())
+                .Select(rt => new SelectListItem(rt.Name, rt.Id.ToString(), input.RiskTierId == rt.Id))
+                .ToList();
+
+            var governanceBoardOptions = (await _context.GovernanceBoards
+                .Where(g => g.IsActive)
+                .OrderBy(g => g.SortOrder)
+                .ToListAsync())
+                .Select(g => new SelectListItem(g.Label, g.Id.ToString(), input.GovernanceBoardId == g.Id))
+                .ToList();
+
+            var riskTypeOptions = (await _context.RiskTypes
+                .Where(rt => rt.IsActive)
+                .OrderBy(rt => rt.Name)
+                .ToListAsync())
+                .Select(rt => new SelectListItem(rt.Name, rt.Id.ToString(), input.SelectedRiskTypeIds.Contains(rt.Id)))
+                .ToList();
+
+            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            var businessAreaOptions = businessAreas
+                .Select(area => new SelectListItem(area, area, string.Equals(input.BusinessArea, area, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var issueOptions = project.Issues
+                .Select(issue => new SelectListItem(issue.Title, issue.Id.ToString(CultureInfo.InvariantCulture), input.LinkedIssueIds.Contains(issue.Id)))
+                .ToList();
+
+            var actionOptions = project.Actions
+                .Select(action => new SelectListItem(action.Title, action.Id.ToString(CultureInfo.InvariantCulture), input.LinkedActionIds.Contains(action.Id)))
+                .ToList();
+
+            var decisionOptions = project.Decisions
+                .Select(decision => new SelectListItem(decision.Title, decision.Id.ToString(CultureInfo.InvariantCulture), input.LinkedDecisionIds.Contains(decision.Id)))
+                .ToList();
+
+            return new ProjectRiskFormViewModel
+            {
+                Input = input,
+                ProjectTitle = project.Title,
+                ProjectSummary = CreateProjectSummary(project),
+                RiskStatusOptions = riskStatusOptions,
+                RiskPriorityOptions = riskPriorityOptions,
+                RiskCategoryOptions = riskCategoryOptions,
+                RiskImpactLevelOptions = riskImpactLevelOptions,
+                RiskLikelihoodOptions = riskLikelihoodOptions,
+                RiskProximityOptions = riskProximityOptions,
+                RiskTierOptions = riskTierOptions,
+                GovernanceBoardOptions = governanceBoardOptions,
+                RiskTypeOptions = riskTypeOptions,
+                BusinessAreaOptions = businessAreaOptions,
+                IssueOptions = issueOptions,
+                ActionOptions = actionOptions,
+                DecisionOptions = decisionOptions,
                 ShowDeleteButton = showDeleteButton
             };
         }
@@ -5337,6 +5550,9 @@ namespace Compass.Controllers
 
             var issue = await _context.Issues
                 .Include(i => i.IssueActions)
+                .Include(i => i.IssueRisks)
+                .Include(i => i.IssueDecisions)
+                .Include(i => i.OwnerUser)
                 .FirstOrDefaultAsync(i => i.Id == issueId && i.ProjectId == projectId && !i.IsDeleted);
 
             if (issue == null)
@@ -5357,17 +5573,216 @@ namespace Compass.Controllers
                 Category = issue.Category,
                 Workaround = issue.Workaround,
                 ResolutionSummary = issue.ResolutionSummary,
-                FipsId = issue.FipsId,
                 BusinessArea = issue.BusinessArea,
                 SourceType = issue.SourceType,
                 SourceReference = issue.SourceReference,
                 SourceRecordUrl = issue.SourceRecordUrl,
                 SourceRiskId = issue.SourceRiskId,
-                LinkedActionIds = issue.IssueActions.Select(ia => ia.ActionId).ToList()
+                OwnerUserId = issue.OwnerUserId,
+                OwnerName = issue.OwnerUser != null ? issue.OwnerUser.Name : null,
+                OwnerEmail = issue.OwnerUser != null ? issue.OwnerUser.Email : null,
+                LinkedRiskIds = issue.IssueRisks.Select(ir => ir.RiskId).ToList(),
+                LinkedActionIds = issue.IssueActions.Select(ia => ia.ActionId).ToList(),
+                LinkedDecisionIds = issue.IssueDecisions.Select(id => id.DecisionId).ToList()
             };
 
             var viewModel = await BuildIssueFormViewModelAsync(project, input, showDeleteButton: true);
             return View("EditIssue", viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> CreateRisk(int projectId)
+        {
+            var project = await GetProjectForRiskAsync(projectId);
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            var input = new ProjectRiskInputModel
+            {
+                ProjectId = projectId,
+                IdentifiedDate = DateTime.Today
+            };
+
+            var viewModel = await BuildRiskFormViewModelAsync(project, input, showDeleteButton: false);
+            return View("CreateRisk", viewModel);
+        }
+
+        // POST: Project/AddRisk
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddRisk([Bind(Prefix = "Input")] ProjectRiskInputModel input)
+        {
+            input.SelectedRiskTypeIds = input.SelectedRiskTypeIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
+            input.LinkedIssueIds = input.LinkedIssueIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
+            input.LinkedActionIds = input.LinkedActionIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
+            input.LinkedDecisionIds = input.LinkedDecisionIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
+
+            input.Title = SanitiseText(input.Title) ?? string.Empty;
+            input.Description = SanitiseText(input.Description);
+            input.BusinessArea = SanitiseText(input.BusinessArea);
+            input.HowIdentified = SanitiseText(input.HowIdentified);
+            input.OwnerEmail = SanitiseText(input.OwnerEmail);
+            input.OwnerName = SanitiseText(input.OwnerName);
+            input.Response = SanitiseText(input.Response);
+            input.ResponseStrategy = SanitiseText(input.ResponseStrategy);
+            input.Notes = SanitiseText(input.Notes);
+
+            if (string.IsNullOrWhiteSpace(input.Title))
+            {
+                ModelState.AddModelError(nameof(ProjectRiskInputModel.Title), "Enter a risk title.");
+            }
+
+            var project = await GetProjectForRiskAsync(input.ProjectId);
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            var duplicate = await _context.Risks
+                .AnyAsync(r => r.ProjectId == input.ProjectId && !r.IsDeleted && r.Title.ToLower() == input.Title.ToLower());
+            if (duplicate)
+            {
+                ModelState.AddModelError(nameof(ProjectRiskInputModel.Title), "A risk with this title already exists for this project.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var viewModel = await BuildRiskFormViewModelAsync(project, input, showDeleteButton: false);
+                return View("CreateRisk", viewModel);
+            }
+
+            var risk = new Risk
+            {
+                ProjectId = input.ProjectId,
+                Title = input.Title,
+                Description = input.Description,
+                BusinessArea = input.BusinessArea,
+                HowIdentified = input.HowIdentified,
+                OwnerEmail = input.OwnerEmail,
+                OwnerUserId = input.OwnerUserId > 0 ? input.OwnerUserId : null,
+                RiskStatusId = input.RiskStatusId > 0 ? input.RiskStatusId : null,
+                RiskPriorityId = input.RiskPriorityId > 0 ? input.RiskPriorityId : null,
+                RiskCategoryId = input.RiskCategoryId > 0 ? input.RiskCategoryId : null,
+                RiskImpactLevelId = input.RiskImpactLevelId > 0 ? input.RiskImpactLevelId : null,
+                RiskLikelihoodId = input.RiskLikelihoodId > 0 ? input.RiskLikelihoodId : null,
+                RiskProximityId = input.RiskProximityId > 0 ? input.RiskProximityId : null,
+                RiskTierId = input.RiskTierId > 0 ? input.RiskTierId : null,
+                GovernanceBoardId = input.GovernanceBoardId > 0 ? input.GovernanceBoardId : null,
+                IdentifiedDate = input.IdentifiedDate,
+                NextReviewDate = input.NextReviewDate,
+                ProximityDate = input.ProximityDate,
+                Response = input.Response,
+                ResponseStrategy = input.ResponseStrategy,
+                Notes = input.Notes,
+                Status = "new",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Risks.Add(risk);
+            await _context.SaveChangesAsync();
+
+            if (input.SelectedRiskTypeIds.Any())
+            {
+                foreach (var riskTypeId in input.SelectedRiskTypeIds)
+                {
+                    _context.RiskRiskTypes.Add(new RiskRiskType
+                    {
+                        RiskId = risk.Id,
+                        RiskTypeId = riskTypeId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            if (input.LinkedIssueIds.Any())
+            {
+                foreach (var issueId in input.LinkedIssueIds)
+                {
+                    _context.IssueRisks.Add(new IssueRisk
+                    {
+                        RiskId = risk.Id,
+                        IssueId = issueId
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            if (input.LinkedActionIds.Any())
+            {
+                foreach (var actionId in input.LinkedActionIds)
+                {
+                    _context.RiskActions.Add(new RiskAction
+                    {
+                        RiskId = risk.Id,
+                        ActionId = actionId
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            if (input.LinkedDecisionIds.Any())
+            {
+                foreach (var decisionId in input.LinkedDecisionIds)
+                {
+                    _context.RiskDecisions.Add(new RiskDecision
+                    {
+                        RiskId = risk.Id,
+                        DecisionId = decisionId
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            // If response strategy is "Mitigate", create an action linked to this risk
+            if (string.Equals(input.Response, "mitigate", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(input.ResponseStrategy))
+            {
+                var statusEntries = await _context.ActionStatuses
+                    .Where(s => s.IsActive)
+                    .OrderBy(s => s.SortOrder)
+                    .ThenBy(s => s.Label)
+                    .ToListAsync();
+
+                var defaultStatusId = statusEntries.Any() ? statusEntries.First().Id : (int?)null;
+
+                var priorityEntries = await _context.ActionPriorities
+                    .Where(p => p.IsActive)
+                    .OrderBy(p => p.SortOrder)
+                    .ThenBy(p => p.Label)
+                    .ToListAsync();
+
+                var defaultPriorityId = priorityEntries.Any() ? priorityEntries.First().Id : (int?)null;
+
+                var action = new Models.Action
+                {
+                    ProjectId = input.ProjectId,
+                    Title = $"Mitigation for risk {input.Title}",
+                    Description = input.ResponseStrategy,
+                    StatusId = defaultStatusId,
+                    PriorityId = defaultPriorityId,
+                    Status = statusEntries.Any() ? statusEntries.First().Label : "not_started",
+                    Priority = priorityEntries.Any() ? priorityEntries.First().Label : null,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Actions.Add(action);
+                await _context.SaveChangesAsync();
+
+                // Link the action to the risk
+                _context.RiskActions.Add(new RiskAction
+                {
+                    RiskId = risk.Id,
+                    ActionId = action.Id
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            TempData["SuccessMessage"] = "Risk added successfully.";
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "risks" });
         }
 
         [HttpGet]
@@ -6846,6 +7261,155 @@ namespace Compass.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> SearchRisksForAction(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Risks
+                .AsNoTracking()
+                .Include(r => r.Project)
+                .Include(r => r.RiskTier)
+                .Where(r => !r.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(r =>
+                    EF.Functions.Like(r.Title, likeTerm) ||
+                    (r.Description != null && EF.Functions.Like(r.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(r => r.ProjectId == projectId)
+                .OrderBy(r => r.Title)
+                .Take(normalizedLimit)
+                .Select(r => new LinkedEntityResult(
+                    r.Id,
+                    r.ProjectId,
+                    r.Title,
+                    CombineMeta(
+                        r.Project != null ? r.Project.Title : null,
+                        r.RiskTier != null ? r.RiskTier.Name : null,
+                        FormatStatusLabel(r.Status),
+                        r.RiskScore > 0 ? $"Score {r.RiskScore}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(r => r.ProjectId != projectId || r.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(r => !seenIds.Contains(r.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(r => r.Title)
+                    .Take(remaining)
+                    .Select(r => new LinkedEntityResult(
+                        r.Id,
+                        r.ProjectId,
+                        r.Title,
+                        CombineMeta(
+                            r.Project != null ? r.Project.Title : null,
+                            r.RiskTier != null ? r.RiskTier.Name : null,
+                            FormatStatusLabel(r.Status),
+                            r.RiskScore > 0 ? $"Score {r.RiskScore}" : null)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchIssuesForAction(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Issues
+                .AsNoTracking()
+                .Include(i => i.Project)
+                .Where(i => !i.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(i =>
+                    EF.Functions.Like(i.Title, likeTerm) ||
+                    (i.Description != null && EF.Functions.Like(i.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(i => i.ProjectId == projectId)
+                .OrderBy(i => i.Title)
+                .Take(normalizedLimit)
+                .Select(i => new LinkedEntityResult(
+                    i.Id,
+                    i.ProjectId,
+                    i.Title,
+                    CombineMeta(
+                        i.Project != null ? i.Project.Title : null,
+                        !string.IsNullOrWhiteSpace(i.Severity) ? $"Severity {FormatStatusLabel(i.Severity)}" : null,
+                        !string.IsNullOrWhiteSpace(i.Priority) ? $"Priority {FormatStatusLabel(i.Priority)}" : null,
+                        FormatStatusLabel(i.Status),
+                        i.TargetResolutionDate.HasValue ? $"Target {i.TargetResolutionDate:dd MMM yyyy}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(i => i.ProjectId != projectId || i.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(i => !seenIds.Contains(i.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(i => i.Title)
+                    .Take(remaining)
+                    .Select(i => new LinkedEntityResult(
+                        i.Id,
+                        i.ProjectId,
+                        i.Title,
+                        CombineMeta(
+                            i.Project != null ? i.Project.Title : null,
+                            !string.IsNullOrWhiteSpace(i.Severity) ? $"Severity {FormatStatusLabel(i.Severity)}" : null,
+                            !string.IsNullOrWhiteSpace(i.Priority) ? $"Priority {FormatStatusLabel(i.Priority)}" : null,
+                            FormatStatusLabel(i.Status),
+                            i.TargetResolutionDate.HasValue ? $"Target {i.TargetResolutionDate:dd MMM yyyy}" : null)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
         public async Task<IActionResult> SearchActionsForDecision(int projectId, string? term, int limit = 15)
         {
             var normalizedLimit = Math.Clamp(limit, 5, 50);
@@ -6906,6 +7470,507 @@ namespace Compass.Controllers
                             (a.AssignedToUser != null && a.AssignedToUser.Name != null && a.AssignedToUser.Name != "")
                                 ? $"Owner {a.AssignedToUser.Name}"
                                 : a.AssignedToEmail)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchIssuesForRisk(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Issues
+                .AsNoTracking()
+                .Include(i => i.Project)
+                .Where(i => !i.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(i =>
+                    EF.Functions.Like(i.Title, likeTerm) ||
+                    (i.Description != null && EF.Functions.Like(i.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(i => i.ProjectId == projectId)
+                .OrderBy(i => i.Title)
+                .Take(normalizedLimit)
+                .Select(i => new LinkedEntityResult(
+                    i.Id,
+                    i.ProjectId,
+                    i.Title,
+                    CombineMeta(
+                        i.Project != null ? i.Project.Title : null,
+                        !string.IsNullOrWhiteSpace(i.Status) ? $"Status {FormatStatusLabel(i.Status)}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(i => i.ProjectId != projectId || i.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(i => !seenIds.Contains(i.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(i => i.Title)
+                    .Take(remaining)
+                    .Select(i => new LinkedEntityResult(
+                        i.Id,
+                        i.ProjectId,
+                        i.Title,
+                        CombineMeta(
+                            i.Project != null ? i.Project.Title : null,
+                            !string.IsNullOrWhiteSpace(i.Status) ? $"Status {FormatStatusLabel(i.Status)}" : null)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchActionsForRisk(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Actions
+                .AsNoTracking()
+                .Include(a => a.Project)
+                .Include(a => a.AssignedToUser)
+                .Where(a => !a.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(a =>
+                    EF.Functions.Like(a.Title, likeTerm) ||
+                    (a.Description != null && EF.Functions.Like(a.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(a => a.ProjectId == projectId)
+                .OrderBy(a => a.Title)
+                .Take(normalizedLimit)
+                .Select(a => new LinkedEntityResult(
+                    a.Id,
+                    a.ProjectId,
+                    a.Title,
+                    CombineMeta(
+                        a.Project != null ? a.Project.Title : null,
+                        FormatStatusLabel(a.Status),
+                        a.DueDate.HasValue ? $"Due {a.DueDate:dd MMM yyyy}" : null,
+                        (a.AssignedToUser != null && a.AssignedToUser.Name != null && a.AssignedToUser.Name != "")
+                            ? $"Owner {a.AssignedToUser.Name}"
+                            : a.AssignedToEmail)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(a => a.ProjectId != projectId || a.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(a => !seenIds.Contains(a.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(a => a.Title)
+                    .Take(remaining)
+                    .Select(a => new LinkedEntityResult(
+                        a.Id,
+                        a.ProjectId,
+                        a.Title,
+                        CombineMeta(
+                            a.Project != null ? a.Project.Title : null,
+                            FormatStatusLabel(a.Status),
+                            a.DueDate.HasValue ? $"Due {a.DueDate:dd MMM yyyy}" : null,
+                            (a.AssignedToUser != null && a.AssignedToUser.Name != null && a.AssignedToUser.Name != "")
+                                ? $"Owner {a.AssignedToUser.Name}"
+                                : a.AssignedToEmail)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchDecisionsForRisk(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Decisions
+                .AsNoTracking()
+                .Include(d => d.Project)
+                .Where(d => !d.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(d =>
+                    EF.Functions.Like(d.Title, likeTerm) ||
+                    (d.Summary != null && EF.Functions.Like(d.Summary, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(d => d.ProjectId == projectId)
+                .OrderBy(d => d.Title)
+                .Take(normalizedLimit)
+                .Select(d => new LinkedEntityResult(
+                    d.Id,
+                    d.ProjectId,
+                    d.Title,
+                    CombineMeta(
+                        d.Project != null ? d.Project.Title : null,
+                        !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(d => d.ProjectId != projectId || d.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(d => !seenIds.Contains(d.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(d => d.Title)
+                    .Take(remaining)
+                    .Select(d => new LinkedEntityResult(
+                        d.Id,
+                        d.ProjectId,
+                        d.Title,
+                        CombineMeta(
+                            d.Project != null ? d.Project.Title : null,
+                            !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchRisksForIssue(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Risks
+                .AsNoTracking()
+                .Include(r => r.Project)
+                .Where(r => !r.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(r =>
+                    EF.Functions.Like(r.Title, likeTerm) ||
+                    (r.Description != null && EF.Functions.Like(r.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(r => r.ProjectId == projectId)
+                .OrderBy(r => r.Title)
+                .Take(normalizedLimit)
+                .Select(r => new LinkedEntityResult(
+                    r.Id,
+                    r.ProjectId,
+                    r.Title,
+                    CombineMeta(
+                        r.Project != null ? r.Project.Title : null,
+                        r.ResponseStrategy)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(r => r.ProjectId != projectId || r.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(r => !seenIds.Contains(r.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(r => r.Title)
+                    .Take(remaining)
+                    .Select(r => new LinkedEntityResult(
+                        r.Id,
+                        r.ProjectId,
+                        r.Title,
+                        CombineMeta(
+                            r.Project != null ? r.Project.Title : null,
+                            r.ResponseStrategy)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchActionsForIssue(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Actions
+                .AsNoTracking()
+                .Include(a => a.Project)
+                .Include(a => a.AssignedToUser)
+                .Where(a => !a.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(a =>
+                    EF.Functions.Like(a.Title, likeTerm) ||
+                    (a.Description != null && EF.Functions.Like(a.Description, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(a => a.ProjectId == projectId)
+                .OrderBy(a => a.Title)
+                .Take(normalizedLimit)
+                .Select(a => new LinkedEntityResult(
+                    a.Id,
+                    a.ProjectId,
+                    a.Title,
+                    CombineMeta(
+                        a.Project != null ? a.Project.Title : null,
+                        FormatStatusLabel(a.Status),
+                        a.DueDate.HasValue ? $"Due {a.DueDate:dd MMM yyyy}" : null,
+                        (a.AssignedToUser != null && a.AssignedToUser.Name != null && a.AssignedToUser.Name != "")
+                            ? $"Owner {a.AssignedToUser.Name}"
+                            : a.AssignedToEmail)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(a => a.ProjectId != projectId || a.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(a => !seenIds.Contains(a.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(a => a.Title)
+                    .Take(remaining)
+                    .Select(a => new LinkedEntityResult(
+                        a.Id,
+                        a.ProjectId,
+                        a.Title,
+                        CombineMeta(
+                            a.Project != null ? a.Project.Title : null,
+                            FormatStatusLabel(a.Status),
+                            a.DueDate.HasValue ? $"Due {a.DueDate:dd MMM yyyy}" : null,
+                            (a.AssignedToUser != null && a.AssignedToUser.Name != null && a.AssignedToUser.Name != "")
+                                ? $"Owner {a.AssignedToUser.Name}"
+                                : a.AssignedToEmail)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchDecisionsForIssue(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Decisions
+                .AsNoTracking()
+                .Include(d => d.Project)
+                .Where(d => !d.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(d =>
+                    EF.Functions.Like(d.Title, likeTerm) ||
+                    (d.Summary != null && EF.Functions.Like(d.Summary, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(d => d.ProjectId == projectId)
+                .OrderBy(d => d.Title)
+                .Take(normalizedLimit)
+                .Select(d => new LinkedEntityResult(
+                    d.Id,
+                    d.ProjectId,
+                    d.Title,
+                    CombineMeta(
+                        d.Project != null ? d.Project.Title : null,
+                        !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(d => d.ProjectId != projectId || d.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(d => !seenIds.Contains(d.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(d => d.Title)
+                    .Take(remaining)
+                    .Select(d => new LinkedEntityResult(
+                        d.Id,
+                        d.ProjectId,
+                        d.Title,
+                        CombineMeta(
+                            d.Project != null ? d.Project.Title : null,
+                            !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
+                    .ToListAsync();
+
+                finalResults.AddRange(globalMatches);
+            }
+
+            var results = finalResults
+                .Select(r => new
+                {
+                    id = r.Id,
+                    text = r.Title,
+                    description = r.Description,
+                    isCurrentProject = r.ProjectId == projectId
+                });
+
+            return Ok(new { results });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchDecisionsForAction(int projectId, string? term, int limit = 15)
+        {
+            var normalizedLimit = Math.Clamp(limit, 5, 50);
+            var sanitizedTerm = term?.Trim();
+            var baseQuery = _context.Decisions
+                .AsNoTracking()
+                .Include(d => d.Project)
+                .Where(d => !d.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(sanitizedTerm))
+            {
+                var likeTerm = $"%{sanitizedTerm}%";
+                baseQuery = baseQuery.Where(d =>
+                    EF.Functions.Like(d.Title, likeTerm) ||
+                    (d.Summary != null && EF.Functions.Like(d.Summary, likeTerm)));
+            }
+
+            var projectMatches = await baseQuery
+                .Where(d => d.ProjectId == projectId)
+                .OrderBy(d => d.Title)
+                .Take(normalizedLimit)
+                .Select(d => new LinkedEntityResult(
+                    d.Id,
+                    d.ProjectId,
+                    d.Title,
+                    CombineMeta(
+                        d.Project != null ? d.Project.Title : null,
+                        !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
+                .ToListAsync();
+
+            var finalResults = new List<LinkedEntityResult>(projectMatches);
+            var remaining = normalizedLimit - projectMatches.Count;
+            if (remaining > 0)
+            {
+                var seenIds = projectMatches.Select(r => r.Id).ToList();
+                var globalQuery = baseQuery.Where(d => d.ProjectId != projectId || d.ProjectId == null);
+                if (seenIds.Any())
+                {
+                    globalQuery = globalQuery.Where(d => !seenIds.Contains(d.Id));
+                }
+
+                var globalMatches = await globalQuery
+                    .OrderBy(d => d.Title)
+                    .Take(remaining)
+                    .Select(d => new LinkedEntityResult(
+                        d.Id,
+                        d.ProjectId,
+                        d.Title,
+                        CombineMeta(
+                            d.Project != null ? d.Project.Title : null,
+                            !string.IsNullOrWhiteSpace(d.Status) ? $"Status {FormatStatusLabel(d.Status)}" : null)))
                     .ToListAsync();
 
                 finalResults.AddRange(globalMatches);

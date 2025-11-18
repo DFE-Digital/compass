@@ -149,6 +149,9 @@ public class Risk
 
     public string? ResponseStrategy { get; set; }
 
+    [MaxLength(1000)]
+    public string? HowIdentified { get; set; }
+
     public int? CreatedByUserId { get; set; }
 
     [ForeignKey(nameof(CreatedByUserId))]
@@ -186,5 +189,7 @@ public class Risk
 
     public ICollection<RiskRiskType> RiskRiskTypes { get; set; } = new List<RiskRiskType>();
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
+
+    public ICollection<IssueRisk> IssueRisks { get; set; } = new List<IssueRisk>();
 }
 

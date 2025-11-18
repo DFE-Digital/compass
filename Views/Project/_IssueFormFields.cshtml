@@ -44,45 +44,43 @@
     <textarea asp-for="Input.Description" class="form-control @(hasError("Description") ? "form-control--error" : string.Empty)" rows="4"></textarea>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-6 @(hasError("Severity") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.Severity">Severity</label>
-        <small class="form-text text-muted">How serious is the impact on delivery?</small>
-        <span asp-validation-for="Input.Severity" class="form-error-message"></span>
-        <select asp-for="Input.Severity" class="form-control @(hasError("Severity") ? "form-control--error" : string.Empty)" asp-items="Model.SeverityOptions"></select>
-    </div>
-    <div class="form-group col-md-6 @(hasError("Status") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.Status">Status</label>
-        <small class="form-text text-muted">Track whether the issue is open, resolved, or closed.</small>
-        <span asp-validation-for="Input.Status" class="form-error-message"></span>
-        <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)" asp-items="Model.StatusOptions"></select>
-    </div>
+<div class="form-group @(hasError("Severity") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Severity">Severity</label>
+    <small class="form-text text-muted">How serious is the impact on delivery?</small>
+    <span asp-validation-for="Input.Severity" class="form-error-message"></span>
+    <select asp-for="Input.Severity" class="form-control @(hasError("Severity") ? "form-control--error" : string.Empty)" asp-items="Model.SeverityOptions"></select>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-6 @(hasError("DetectedDate") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.DetectedDate">Detected date</label>
-        <small class="form-text text-muted">When the issue was first raised.</small>
-        <span asp-validation-for="Input.DetectedDate" class="form-error-message"></span>
-        <input asp-for="Input.DetectedDate" class="form-control @(hasError("DetectedDate") ? "form-control--error" : string.Empty)" type="date" />
-    </div>
-    <div class="form-group col-md-6 @(hasError("TargetResolutionDate") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.TargetResolutionDate">Target resolution date</label>
-        <small class="form-text text-muted">Set when the issue should be resolved.</small>
-        <span asp-validation-for="Input.TargetResolutionDate" class="form-error-message"></span>
-        <input asp-for="Input.TargetResolutionDate" class="form-control @(hasError("TargetResolutionDate") ? "form-control--error" : string.Empty)" type="date" />
-    </div>
+<div class="form-group @(hasError("Status") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.Status">Status</label>
+    <small class="form-text text-muted">Track whether the issue is open, resolved, or closed.</small>
+    <span asp-validation-for="Input.Status" class="form-error-message"></span>
+    <select asp-for="Input.Status" class="form-control @(hasError("Status") ? "form-control--error" : string.Empty)" asp-items="Model.StatusOptions"></select>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-6">
-        <label asp-for="Input.Category">Category</label>
-        <input asp-for="Input.Category" class="form-control" maxlength="100" placeholder="e.g. Technical, Resource, Communication" />
-    </div>
-    <div class="form-group col-md-6">
-        <label asp-for="Input.Workaround">Workaround</label>
-        <textarea asp-for="Input.Workaround" class="form-control" rows="2" placeholder="Document any temporary workaround."></textarea>
-    </div>
+<div class="form-group @(hasError("DetectedDate") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.DetectedDate">Detected date</label>
+    <small class="form-text text-muted">When the issue was first raised.</small>
+    <span asp-validation-for="Input.DetectedDate" class="form-error-message"></span>
+    <input asp-for="Input.DetectedDate" class="form-control @(hasError("DetectedDate") ? "form-control--error" : string.Empty)" type="date" />
+</div>
+
+<div class="form-group @(hasError("TargetResolutionDate") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.TargetResolutionDate">Target resolution date</label>
+    <small class="form-text text-muted">Set when the issue should be resolved.</small>
+    <span asp-validation-for="Input.TargetResolutionDate" class="form-error-message"></span>
+    <input asp-for="Input.TargetResolutionDate" class="form-control @(hasError("TargetResolutionDate") ? "form-control--error" : string.Empty)" type="date" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Category">Category</label>
+    <input asp-for="Input.Category" class="form-control" maxlength="100" placeholder="e.g. Technical, Resource, Communication" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.Workaround">Workaround</label>
+    <small class="form-text text-muted">Document any temporary workaround.</small>
+    <textarea asp-for="Input.Workaround" class="form-control" rows="2" placeholder="Document any temporary workaround."></textarea>
 </div>
 
 @if (Model.ShowDeleteButton)
@@ -94,48 +92,123 @@
 }
 
 <div class="form-group">
-    <label asp-for="Input.SourceRiskId">Linked risk</label>
-    <select asp-for="Input.SourceRiskId" class="form-control" asp-items="Model.RiskOptions"></select>
+    <label>Linked risks</label>
+    <small class="form-text text-muted">Start typing to find risks from this project and others.</small>
+    <select asp-for="Input.LinkedRiskIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchRisksForIssue", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search risks"
+            multiple>
+        @foreach (var option in Model.RiskOptions ?? new List<SelectListItem>())
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedRiskIds" class="form-error-message"></span>
 </div>
 
 <div class="form-group">
-    <label asp-for="Input.LinkedActionIds">Linked actions</label>
-    <small class="form-text text-muted">Select actions created to manage this issue.</small>
-    <select asp-for="Input.LinkedActionIds" class="form-control select2" asp-items="Model.ActionOptions" multiple size="8"></select>
+    <label>Linked actions</label>
+    <small class="form-text text-muted">Start typing to find actions from this project and others.</small>
+    <select asp-for="Input.LinkedActionIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchActionsForIssue", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search actions"
+            multiple>
+        @foreach (var option in Model.ActionOptions ?? new List<SelectListItem>())
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedActionIds" class="form-error-message"></span>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label asp-for="Input.FipsId">FIPS ID</label>
-        <input asp-for="Input.FipsId" class="form-control" maxlength="50" />
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.BusinessArea">Business area</label>
-        <select asp-for="Input.BusinessArea" class="form-control" asp-items="Model.BusinessAreaOptions">
-            <option value="">Not set</option>
-        </select>
-    </div>
-    <div class="form-group col-md-4 @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.OwnerEmail">Owner (email)</label>
-        <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
-        <input asp-for="Input.OwnerEmail" class="form-control @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)" placeholder="name@example.com" />
+<div class="form-group">
+    <label>Linked decisions</label>
+    <small class="form-text text-muted">Start typing to find decisions from this project and others.</small>
+    <select asp-for="Input.LinkedDecisionIds"
+            class="form-control js-linked-entity-select"
+            data-search-url="@Url.Action("SearchDecisionsForIssue", "Project", new { projectId = Model.Input.ProjectId })"
+            data-project-id="@Model.Input.ProjectId"
+            data-placeholder="Search decisions"
+            multiple>
+        @foreach (var option in Model.DecisionOptions ?? new List<SelectListItem>())
+        {
+            <option value="@option.Value" selected="@option.Selected">@option.Text</option>
+        }
+    </select>
+    <span asp-validation-for="Input.LinkedDecisionIds" class="form-error-message"></span>
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.BusinessArea">Business area</label>
+    <small class="form-text text-muted">Select the business area this issue relates to (optional).</small>
+    <select asp-for="Input.BusinessArea" class="form-control" asp-items="Model.BusinessAreaOptions">
+        <option value="">Not set</option>
+    </select>
+</div>
+
+<div class="form-group @(hasError("OwnerEmail") ? "form-group--error" : string.Empty)">
+    <label for="issueOwnerSearch">Owner</label>
+    <small class="form-text text-muted">Search the Entra directory. Leave blank if unassigned.</small>
+    <span asp-validation-for="Input.OwnerEmail" class="form-error-message"></span>
+    <div class="user-picker"
+         data-user-picker
+         data-search-url="/api/users/search"
+         data-select-url="/api/users/select">
+        <div class="position-relative">
+            <input type="text"
+                   class="form-control js-user-picker-input @(hasError("OwnerEmail") ? "form-control--error" : string.Empty)"
+                   id="issueOwnerSearch"
+                   autocomplete="off"
+                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                   value="@(Model.Input.OwnerName ?? string.Empty)" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+        </div>
+        <p class="form-text text-muted js-user-picker-message"></p>
+        <input asp-for="Input.OwnerUserId" type="hidden" class="js-user-picker-value" />
+        <input asp-for="Input.OwnerName" type="hidden" class="js-user-picker-name" />
+        <input asp-for="Input.OwnerEmail" type="hidden" class="js-user-picker-email" />
+        <div class="user-picker__selected js-user-picker-summary" data-default-text="No owner selected.">
+            @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerName))
+            {
+                <div class="user-picker__selected-card">
+                    <div class="user-picker__selected-name">@Model.Input.OwnerName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Input.OwnerEmail))
+                    {
+                        <div class="user-picker__selected-meta">@Model.Input.OwnerEmail</div>
+                    }
+                    <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                </div>
+            }
+            else
+            {
+                <span class="text-muted">No owner selected.</span>
+            }
+        </div>
     </div>
 </div>
 
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label asp-for="Input.SourceType">Source type</label>
-        <input asp-for="Input.SourceType" class="form-control" maxlength="100" placeholder="e.g. Service assessment" />
-    </div>
-    <div class="form-group col-md-4">
-        <label asp-for="Input.SourceReference">Source reference</label>
-        <input asp-for="Input.SourceReference" class="form-control" maxlength="100" placeholder="Reference or identifier" />
-    </div>
-    <div class="form-group col-md-4 @(hasError("SourceRecordUrl") ? "form-group--error" : string.Empty)">
-        <label asp-for="Input.SourceRecordUrl">Source record URL</label>
-        <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
-        <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("SourceRecordUrl") ? "form-control--error" : string.Empty)" placeholder="https://" />
-    </div>
+<div class="form-group">
+    <label asp-for="Input.SourceType">Source type</label>
+    <small class="form-text text-muted">Type of source document (e.g. Service assessment) (optional)</small>
+    <input asp-for="Input.SourceType" class="form-control" maxlength="100" placeholder="e.g. Service assessment" />
+</div>
+
+<div class="form-group">
+    <label asp-for="Input.SourceReference">Source reference</label>
+    <small class="form-text text-muted">Reference identifier for the source (optional)</small>
+    <input asp-for="Input.SourceReference" class="form-control" maxlength="100" placeholder="Reference or identifier" />
+</div>
+
+<div class="form-group @(hasError("SourceRecordUrl") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.SourceRecordUrl">Source record URL</label>
+    <small class="form-text text-muted">Link to minutes or supporting evidence.</small>
+    <span asp-validation-for="Input.SourceRecordUrl" class="form-error-message"></span>
+    <input asp-for="Input.SourceRecordUrl" class="form-control @(hasError("SourceRecordUrl") ? "form-control--error" : string.Empty)" placeholder="https://" />
 </div>
 
 <input asp-for="Input.ProjectId" type="hidden" />

@@ -44,6 +44,51 @@
         return $"priority-badge priority-badge--{key}";
     }
 
+    string ResolveCellBackgroundClass(string? severity, string? priority)
+    {
+        var severityKey = severity?.ToLowerInvariant() ?? "low";
+        var priorityKey = priority?.ToLowerInvariant() ?? "not_set";
+        
+        // Critical severity - combination determines risk level
+        if (severityKey == "critical")
+        {
+            return priorityKey switch
+            {
+                "high" => "bg-danger",        // Critical risk (red)
+                "medium" => "bg-danger",      // Critical risk (red)
+                "low" => "bg-warning",        // High risk (yellow/orange)
+                _ => "bg-warning"             // High risk (yellow/orange)
+            };
+        }
+        
+        // High severity
+        if (severityKey == "high")
+        {
+            return priorityKey switch
+            {
+                "high" => "bg-danger",        // Critical risk (red)
+                "medium" => "bg-warning",     // High risk (yellow/orange)
+                "low" => "bg-warning",        // High risk (yellow/orange)
+                _ => "bg-warning"             // High risk (yellow/orange)
+            };
+        }
+        
+        // Medium severity
+        if (severityKey == "medium")
+        {
+            return priorityKey switch
+            {
+                "high" => "bg-warning",       // High risk (yellow/orange)
+                "medium" => "bg-info",        // Moderate risk (blue)
+                "low" => "bg-info",           // Moderate risk (blue)
+                _ => "bg-info"                // Moderate risk (blue)
+            };
+        }
+        
+        // Low severity - always low risk (light green)
+        return "bg-light";
+    }
+
     var severityValues = severityOrder.ToList();
     foreach (var severity in issues.Select(i => i.Severity).Where(s => !string.IsNullOrWhiteSpace(s)))
     {
@@ -116,7 +161,7 @@
                             @foreach (var priority in priorityValues)
                             {
                                 <th scope="col" class="text-center align-middle">
-                                    <span class="@ResolvePriorityBadgeClass(priority == "not_set" ? null : priority)">
+                                    <span class="badge @ResolvePriorityBadgeClass(priority == "not_set" ? null : priority)">
                                         @FormatLabel(priority == "not_set" ? null : priority)
                                     </span>
                                 </th>
@@ -141,41 +186,12 @@
                                         .OrderByDescending(i => i.TargetResolutionDate ?? DateTime.MaxValue)
                                         .ThenByDescending(i => i.DetectedDate)
                                         .ToList();
-                                    <td>
+                                    var cellBgClass = ResolveCellBackgroundClass(severity, priority == "not_set" ? null : priority);
+                                    <td class="@cellBgClass">
                                         <div class="priority-matrix-cell">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <span class="text-muted small">Count</span>
-                                                <span class="badge badge-light">@cellIssues.Count</span>
+                                            <div class="text-center">
+                                                <span class="badge badge-light font-weight-bold" style="font-size: 1.25rem;">@cellIssues.Count</span>
                                             </div>
-                                            @if (cellIssues.Any())
-                                            {
-                                                <ul class="list-unstyled mb-0">
-                                                    @foreach (var issue in cellIssues)
-                                                    {
-                                                        var overdue = issue.TargetResolutionDate.HasValue && issue.TargetResolutionDate.Value.Date < DateTime.Today;
-                                                        <li class="issue-chip">
-                                                            <a asp-controller="Issue" asp-action="Details" asp-route-id="@issue.Id">@issue.Title</a>
-                                                            <div class="small text-muted">
-                                                                Target:
-                                                                @if (issue.TargetResolutionDate.HasValue)
-                                                                {
-                                                                    <span class="@(overdue ? "text-danger" : string.Empty)">
-                                                                        @issue.TargetResolutionDate.Value.ToString("d MMM yyyy")
-                                                                    </span>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span>Not set</span>
-                                                                }
-                                                            </div>
-                                                        </li>
-                                                    }
-                                                </ul>
-                                            }
-                                            else
-                                            {
-                                                <p class="text-muted small mb-0">No issues</p>
-                                            }
                                         </div>
                                     </td>
                                 }
@@ -234,10 +250,8 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="badge badge-light text-dark border">
-                                    <span class="@ResolvePriorityBadgeClass(issue.Priority)">
-                                        @FormatLabel(issue.Priority)
-                                    </span>
+                                <span class="badge @ResolvePriorityBadgeClass(issue.Priority)">
+                                    @FormatLabel(issue.Priority)
                                 </span>
                             </td>
                             <td>
@@ -247,25 +261,16 @@
                             </td>
                             <td data-sort-value="@detectedSort">@issue.DetectedDate.ToString("d MMMM yyyy")</td>
                             <td data-sort-value="@(targetSort ?? string.Empty)">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    @if (issue.TargetResolutionDate.HasValue)
-                                    {
-                                        <span class="@(isTargetOverdue ? "text-danger font-weight-semibold" : string.Empty)">
-                                            @issue.TargetResolutionDate.Value.ToString("d MMMM yyyy")
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Not set</span>
-                                    }
-                                    <button type="button"
-                                            class="btn btn-link btn-sm issue-target-edit"
-                                            data-issue-id="@issue.Id"
-                                            data-issue-title="@issue.Title"
-                                            data-target-date="@targetSort">
-                                        Edit
-                                    </button>
-                                </div>
+                                @if (issue.TargetResolutionDate.HasValue)
+                                {
+                                    <span class="@(isTargetOverdue ? "text-danger font-weight-semibold" : string.Empty)">
+                                        @issue.TargetResolutionDate.Value.ToString("d MMMM yyyy")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
                             </td>
                         </tr>
                     }
@@ -274,58 +279,3 @@
         </div>
     }
 </div>
-
-<div class="modal fade" id="editIssueTargetModal" tabindex="-1" role="dialog" aria-labelledby="editIssueTargetModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editIssueTargetModalLabel">Update target resolution date</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateIssueTargetDate" asp-controller="Project" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="projectId" value="@Model.Id" />
-                <input type="hidden" name="issueId" id="editIssueTargetIssueId" />
-                <input type="hidden" name="tab" value="issues" />
-                <input type="hidden" name="issuesView" value="@issuesView" />
-                <div class="modal-body">
-                    <p class="text-muted mb-2" id="editIssueTargetIssueTitle"></p>
-                    <div class="form-group">
-                        <label for="editIssueTargetDate">Target resolution date</label>
-                        <input type="date" class="form-control" id="editIssueTargetDate" name="targetResolutionDate" />
-                        <small class="form-text text-muted">Leave blank to clear the target resolution date.</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script nonce="@Context.Items["Nonce"]">
-    (function () {
-        var modal = $('#editIssueTargetModal');
-        var issueIdInput = $('#editIssueTargetIssueId');
-        var issueTitle = $('#editIssueTargetIssueTitle');
-        var dateInput = $('#editIssueTargetDate');
-
-        $('.issue-target-edit').on('click', function () {
-            var $btn = $(this);
-            issueIdInput.val($btn.data('issue-id'));
-            issueTitle.text($btn.data('issue-title'));
-            dateInput.val($btn.data('target-date') || '');
-            modal.modal('show');
-        });
-
-        modal.on('hidden.bs.modal', function () {
-            issueIdInput.val('');
-            issueTitle.text('');
-            dateInput.val('');
-        });
-    })();
-</script>
