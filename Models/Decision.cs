@@ -187,5 +187,6 @@ public class Decision
     public ICollection<Action> Actions { get; set; } = new List<Action>();
     public ICollection<RiskDecision> RiskDecisions { get; set; } = new List<RiskDecision>();
     public ICollection<IssueDecision> IssueDecisions { get; set; } = new List<IssueDecision>();
+    public ICollection<ActionDecision> ActionDecisions { get; set; } = new List<ActionDecision>();
 }
 

@@ -49,6 +49,7 @@ public class HomeDashboardViewModel
          HighestLeadershipRole == LeadershipRoleTier.CLevel);
     public bool IsBusinessAreaLeader => HighestLeadershipRole.HasValue && 
         (HighestLeadershipRole == LeadershipRoleTier.DeputyDirectorOrSro || 
+         HighestLeadershipRole == LeadershipRoleTier.HeadOfProfession ||
          HighestLeadershipRole == LeadershipRoleTier.PortfolioLead);
 }
 

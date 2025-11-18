@@ -21,6 +21,27 @@
                 column-count: 3;
             }
         }
+
+        .user-email {
+            font-size: 0.875rem;
+        }
+
+        .business-area-more {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .business-area-hidden {
+            display: none;
+        }
+
+        .business-area-hidden.expanded {
+            display: inline;
+        }
+
+        .business-area-more:hover {
+            opacity: 0.8;
+        }
     </style>
 }
 
@@ -144,23 +165,50 @@
                                     <th scope="col">Business areas</th>
                                     <th scope="col">Roles</th>
                                     <th scope="col" class="text-right">Assignments</th>
-                                    <th scope="col"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var assignee in Model.Assignees)
                                 {
+                                    var roleLabelMap = Model.RoleOptions.ToDictionary(r => r.Value, r => r.Label);
+                                    var businessAreas = assignee.BusinessAreas.ToList();
+                                    var visibleAreas = businessAreas.Take(3).ToList();
+                                    var hiddenAreas = businessAreas.Skip(3).ToList();
+                                    var hasMoreAreas = hiddenAreas.Any();
+                                    var uniqueId = $"business-areas-{assignee.UserId}";
+                                    
                                     <tr>
                                         <td>
-                                            <strong>@assignee.Name</strong><br />
-                                            <span class="text-muted">@assignee.Email</span>
+                                            <form asp-action="SelectUser" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="selectedUserId" value="@assignee.UserId" />
+                                                <button type="submit" class="btn btn-link p-0 text-left font-weight-bold border-0" style="color: #005ea5; text-decoration: underline; background: none; cursor: pointer; padding: 0;">
+                                                    @assignee.Name
+                                                </button>
+                                            </form>
+                                            <br />
+                                            <span class="text-muted user-email">@assignee.Email</span>
                                         </td>
                                         <td>
-                                            @if (assignee.BusinessAreas.Any())
+                                            @if (businessAreas.Any())
                                             {
-                                                foreach (var area in assignee.BusinessAreas)
+                                                @foreach (var area in visibleAreas)
                                                 {
                                                     <span class="badge badge-light mr-1 mb-1">@area</span>
+                                                }
+                                                @if (hasMoreAreas)
+                                                {
+                                                    <span class="badge badge-secondary business-area-more mr-1 mb-1" 
+                                                          data-target="@uniqueId" 
+                                                          onclick="toggleBusinessAreas('@uniqueId', this)">
+                                                        + @hiddenAreas.Count more
+                                                    </span>
+                                                    <span id="@uniqueId" class="business-area-hidden">
+                                                        @foreach (var area in hiddenAreas)
+                                                        {
+                                                            <span class="badge badge-light mr-1 mb-1">@area</span>
+                                                        }
+                                                    </span>
                                                 }
                                             }
                                             else
@@ -173,7 +221,8 @@
                                             {
                                                 foreach (var role in assignee.Roles)
                                                 {
-                                                    <span class="badge badge-primary mr-1 mb-1">@role</span>
+                                                    var roleLabel = roleLabelMap.ContainsKey(role) ? roleLabelMap[role] : role.ToString();
+                                                    <span class="badge badge-primary mr-1 mb-1">@roleLabel</span>
                                                 }
                                             }
                                             else
@@ -182,13 +231,6 @@
                                             }
                                         </td>
                                         <td class="text-right">@assignee.AssignmentCount</td>
-                                        <td class="text-right">
-                                            <form asp-action="SelectUser" method="post" class="d-inline">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="selectedUserId" value="@assignee.UserId" />
-                                                <button type="submit" class="btn btn-link btn-sm">Manage</button>
-                                            </form>
-                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -205,7 +247,7 @@
                     <div class="d-flex justify-content-between flex-wrap align-items-start">
                         <div>
                             <h2 class="h5 mb-1">Leadership remit for @Model.SelectedUser!.Name</h2>
-                            <p class="text-muted mb-3">@Model.SelectedUser.Email</p>
+                            <p class="text-muted mb-3 user-email">@Model.SelectedUser.Email</p>
                         </div>
                         <div class="text-right">
                             <span class="badge badge-info">
@@ -319,5 +361,17 @@
 @section Scripts {
     <script src="~/js/user-picker.js" asp-append-version="true"></script>
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        function toggleBusinessAreas(targetId, element) {
+            const target = document.getElementById(targetId);
+            if (target) {
+                const isCurrentlyExpanded = target.classList.contains('expanded');
+                target.classList.toggle('expanded');
+                const isExpanded = target.classList.contains('expanded');
+                const count = target.querySelectorAll('.badge').length;
+                element.textContent = isExpanded ? '- show less' : '+ ' + count + ' more';
+            }
+        }
+    </script>
 }
 

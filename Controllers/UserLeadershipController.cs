@@ -247,6 +247,12 @@ public class UserLeadershipController : Controller
         },
         new LeadershipRoleOption
         {
+            Value = LeadershipRoleTier.HeadOfProfession,
+            Label = "Head of Profession",
+            Description = "Leads professional capability and standards across the organisation."
+        },
+        new LeadershipRoleOption
+        {
             Value = LeadershipRoleTier.PortfolioLead,
             Label = "Portfolio lead / G6",
             Description = "Heads up a delivery portfolio or product cluster."
