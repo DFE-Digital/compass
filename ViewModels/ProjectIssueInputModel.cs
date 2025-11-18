@@ -56,9 +56,18 @@ public class ProjectIssueInputModel
     [MaxLength(255)]
     public string? OwnerEmail { get; set; }
 
+    public int? OwnerUserId { get; set; }
+
+    [MaxLength(255)]
+    public string? OwnerName { get; set; }
+
     public int? SourceRiskId { get; set; }
 
+    public List<int> LinkedRiskIds { get; set; } = new();
+
     public List<int> LinkedActionIds { get; set; } = new();
+
+    public List<int> LinkedDecisionIds { get; set; } = new();
 
     public string? InitiatingRiskContext { get; set; }
 }

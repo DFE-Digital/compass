@@ -470,6 +470,7 @@ public class HomeController : Controller
                 enterpriseMetrics.ActivePriorityOutcomesCount = priorityOutcomes.Count;
             }
             else if (highestRole == LeadershipRoleTier.DeputyDirectorOrSro || 
+                     highestRole == LeadershipRoleTier.HeadOfProfession ||
                      highestRole == LeadershipRoleTier.PortfolioLead)
             {
                 // Business area specific view for Deputy Director and G6

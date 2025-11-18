@@ -1,0 +1,151 @@
+@*
+ * Reusable page header partial for admin pages
+ * Usage:
+ * @await Html.PartialAsync("_AdminPageHeader", new { 
+ *     Title = "Risk Types",
+ *     Description = "Manage risk type configurations",
+ *     Actions = new[] {
+ *         new { Text = "Create", Action = "CreateRiskType", Controller = "Admin", Class = "btn-primary" }
+ *     }
+ * })
+ * Or with modal trigger:
+ * @await Html.PartialAsync("_AdminPageHeader", new { 
+ *     Title = "Risk Types",
+ *     Actions = new[] {
+ *         new { Text = "Create", ModalTarget = "#riskTypeModal", Class = "btn-primary" }
+ *     }
+ * })
+ *@
+
+@model dynamic
+
+@{
+    var title = Model?.Title as string ?? ViewData["Title"]?.ToString() ?? "Page";
+    var description = Model?.Description as string;
+    var actions = Model?.Actions as IEnumerable<dynamic> ?? new List<dynamic>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@title</h1>
+                @if (!string.IsNullOrEmpty(description))
+                {
+                    <p class="text-muted mb-0">@description</p>
+                }
+            </div>
+            @if (actions.Any())
+            {
+                <div class="col-sm-6">
+                    <div class="float-right">
+                        @if (actions.Count() == 1)
+                        {
+                            var action = actions.First();
+                            if (action.ModalTarget != null)
+                            {
+                                <button type="button" class="btn @(action.Class ?? "btn-primary")" data-toggle="modal" data-target="@action.ModalTarget" onclick="@(action.OnClick ?? "")">
+                                    @if (action.Icon != null)
+                                    {
+                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                    }
+                                    @action.Text
+                                </button>
+                            }
+                            else if (action.Action != null)
+                            {
+                                string actionName = action.Action?.ToString() ?? "";
+                                string controllerName = (action.Controller?.ToString()) ?? "Admin";
+                                string url;
+                                if (action.RouteValues != null)
+                                {
+                                    url = Url.Action(actionName, controllerName, (object)action.RouteValues);
+                                }
+                                else
+                                {
+                                    url = Url.Action(actionName, controllerName);
+                                }
+                                <a href="@url" class="btn @(action.Class ?? "btn-primary")">
+                                    @if (action.Icon != null)
+                                    {
+                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                    }
+                                    @action.Text
+                                </a>
+                            }
+                            else if (action.Url != null)
+                            {
+                                <a href="@action.Url" class="btn @(action.Class ?? "btn-primary")">
+                                    @if (action.Icon != null)
+                                    {
+                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                    }
+                                    @action.Text
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    Actions
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right">
+                                    @foreach (var action in actions)
+                                    {
+                                        if (action.ModalTarget != null)
+                                        {
+                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="@action.ModalTarget" onclick="@(action.OnClick ?? "")">
+                                                @if (action.Icon != null)
+                                                {
+                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @action.Text
+                                            </a>
+                                        }
+                                        else if (action.Action != null)
+                                        {
+                                            string actionName = action.Action?.ToString() ?? "";
+                                            string controllerName = (action.Controller?.ToString()) ?? "Admin";
+                                            string url;
+                                            if (action.RouteValues != null)
+                                            {
+                                                url = Url.Action(actionName, controllerName, (object)action.RouteValues);
+                                            }
+                                            else
+                                            {
+                                                url = Url.Action(actionName, controllerName);
+                                            }
+                                            <a class="dropdown-item" href="@url">
+                                                @if (action.Icon != null)
+                                                {
+                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @action.Text
+                                            </a>
+                                        }
+                                        else if (action.Url != null)
+                                        {
+                                            <a class="dropdown-item" href="@action.Url">
+                                                @if (action.Icon != null)
+                                                {
+                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                }
+                                                @action.Text
+                                            </a>
+                                        }
+                                        @if (action != actions.Last())
+                                        {
+                                            <div class="dropdown-divider"></div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
