@@ -35,19 +35,32 @@ public class ProductsController : ControllerBase
             // Get all products from CMS
             var allProducts = await _productsApiService.GetProductsAsync(null);
             
-            // Filter products based on search term (search in title, FIPS ID, and phase)
+            // Filter products based on search term (search in title, FIPS ID, phase, and business area)
             var filteredProducts = allProducts
                 .Where(p => !string.IsNullOrEmpty(p.FipsId) &&
                            (p.Title?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true ||
                             p.FipsId.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                            p.Phase?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true))
+                            p.Phase?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true ||
+                            p.CategoryValues?.Any(cv => 
+                                cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true &&
+                                cv.Name?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true) == true))
                 .Take(20)
-                .Select(p => new
+                .Select(p => 
                 {
-                    fipsId = p.FipsId,
-                    title = p.Title,
-                    phase = p.Phase ?? "Not specified",
-                    text = $"{p.Title} ({p.FipsId})"
+                    var businessArea = p.CategoryValues?
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)?.Name ?? "";
+                    var phase = p.Phase ?? "Not specified";
+                    
+                    return new
+                    {
+                        fipsId = p.FipsId,
+                        title = p.Title,
+                        phase = phase,
+                        businessArea = businessArea,
+                        text = $"{p.Title} ({p.FipsId})" + 
+                               (!string.IsNullOrEmpty(phase) && phase != "Not specified" ? $" - {phase}" : "") +
+                               (!string.IsNullOrEmpty(businessArea) ? $" - {businessArea}" : "")
+                    };
                 })
                 .ToList();
 

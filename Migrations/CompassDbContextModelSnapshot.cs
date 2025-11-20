@@ -547,6 +547,21 @@ namespace Compass.Migrations
                     b.ToTable("ActionCategories");
                 });
 
+            modelBuilder.Entity("Compass.Models.ActionDecision", b =>
+                {
+                    b.Property<int>("ActionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DecisionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ActionId", "DecisionId");
+
+                    b.HasIndex("DecisionId");
+
+                    b.ToTable("ActionDecisions");
+                });
+
             modelBuilder.Entity("Compass.Models.ActionEscalationThreshold", b =>
                 {
                     b.Property<int>("Id")
@@ -852,6 +867,45 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ActionTypes");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTypeLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ActivityTypeLookups");
                 });
 
             modelBuilder.Entity("Compass.Models.ApiRequestLog", b =>
@@ -2392,6 +2446,45 @@ namespace Compass.Migrations
                     b.ToTable("Dependencies");
                 });
 
+            modelBuilder.Entity("Compass.Models.DirectorateLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("DirectorateLookups");
+                });
+
             modelBuilder.Entity("Compass.Models.EnterpriseMetric", b =>
                 {
                     b.Property<int>("Id")
@@ -3387,6 +3480,21 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("IssuePriorities");
+                });
+
+            modelBuilder.Entity("Compass.Models.IssueRisk", b =>
+                {
+                    b.Property<int>("IssueId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RiskId")
+                        .HasColumnType("int");
+
+                    b.HasKey("IssueId", "RiskId");
+
+                    b.HasIndex("RiskId");
+
+                    b.ToTable("IssueRisks");
                 });
 
             modelBuilder.Entity("Compass.Models.IssueSeverity", b =>
@@ -4724,12 +4832,27 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ActivityTypeLookupId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ActualDeliveryDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Aim")
                         .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("AlphaEndDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("AlphaEndDatePlanned")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("AlphaStartDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("AlphaStartDatePlanned")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
@@ -4745,6 +4868,18 @@ namespace Compass.Migrations
                     b.Property<int?>("DeliveryPriorityId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("DiscoveryEndDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DiscoveryEndDatePlanned")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DiscoveryStartDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DiscoveryStartDatePlanned")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("FundingSourceId")
                         .HasColumnType("int");
 
@@ -4758,10 +4893,19 @@ namespace Compass.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsExternal")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsFlagship")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsInternal")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsMultiDepartmentProject")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsSubjectToSpendControl")
                         .HasColumnType("bit");
 
                     b.Property<int?>("MissionId")
@@ -4789,10 +4933,34 @@ namespace Compass.Migrations
                     b.Property<int?>("PrimaryOrganizationalGroupId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("PrivateBetaEndDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PrivateBetaEndDatePlanned")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PrivateBetaStartDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PrivateBetaStartDatePlanned")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ProjectCode")
                         .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("PublicBetaEndDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PublicBetaEndDatePlanned")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PublicBetaStartDateActual")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PublicBetaStartDatePlanned")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("RagJustification")
                         .HasMaxLength(450)
@@ -4801,6 +4969,13 @@ namespace Compass.Migrations
                     b.Property<string>("RagStatus")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("RiskAppetiteLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ServiceUsers")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
@@ -4838,6 +5013,8 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ActivityTypeLookupId");
+
                     b.HasIndex("DeliveryPriorityId");
 
                     b.HasIndex("FundingSourceId");
@@ -4852,6 +5029,8 @@ namespace Compass.Migrations
 
                     b.HasIndex("RagStatus");
 
+                    b.HasIndex("RiskAppetiteLookupId");
+
                     b.HasIndex("StartDate");
 
                     b.HasIndex("Status");
@@ -4859,6 +5038,35 @@ namespace Compass.Migrations
                     b.HasIndex("TargetDeliveryDate");
 
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectBudgetOwner", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId", "BusinessAreaLookupId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectBudgetOwners");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectContact", b =>
@@ -4938,6 +5146,35 @@ namespace Compass.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ProjectContacts");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectDirectorate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId", "BusinessAreaLookupId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectDirectorates");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectDraft", b =>
@@ -5261,6 +5498,35 @@ namespace Compass.Migrations
                     b.ToTable("ProjectOutcomes");
                 });
 
+            modelBuilder.Entity("Compass.Models.ProjectPmoContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectPmoContacts");
+                });
+
             modelBuilder.Entity("Compass.Models.ProjectProblemStatement", b =>
                 {
                     b.Property<int>("Id")
@@ -5506,6 +5772,91 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("ProjectResourceFundingHistories");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectSeniorResponsibleOfficer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectSeniorResponsibleOfficers");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectStatusUpdate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByEntraId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsBulkImport")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Narrative")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("ProjectStatusUpdates");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectSuccess", b =>
@@ -5895,6 +6246,45 @@ namespace Compass.Migrations
                     b.HasIndex("ActionId");
 
                     b.ToTable("RiskActions");
+                });
+
+            modelBuilder.Entity("Compass.Models.RiskAppetiteLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("RiskAppetiteLookups");
                 });
 
             modelBuilder.Entity("Compass.Models.RiskCategory", b =>
@@ -7153,6 +7543,25 @@ namespace Compass.Migrations
                     b.Navigation("VerifiedByUser");
                 });
 
+            modelBuilder.Entity("Compass.Models.ActionDecision", b =>
+                {
+                    b.HasOne("Compass.Models.Action", "Action")
+                        .WithMany("ActionDecisions")
+                        .HasForeignKey("ActionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Decision", "Decision")
+                        .WithMany("ActionDecisions")
+                        .HasForeignKey("DecisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Action");
+
+                    b.Navigation("Decision");
+                });
+
             modelBuilder.Entity("Compass.Models.ActionTag", b =>
                 {
                     b.HasOne("Compass.Models.Action", "Action")
@@ -7699,6 +8108,25 @@ namespace Compass.Migrations
                     b.Navigation("AccessibilityIssue");
                 });
 
+            modelBuilder.Entity("Compass.Models.IssueRisk", b =>
+                {
+                    b.HasOne("Compass.Models.Issue", "Issue")
+                        .WithMany("IssueRisks")
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Risk", "Risk")
+                        .WithMany("IssueRisks")
+                        .HasForeignKey("RiskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Issue");
+
+                    b.Navigation("Risk");
+                });
+
             modelBuilder.Entity("Compass.Models.IssueTag", b =>
                 {
                     b.HasOne("Compass.Models.Issue", "Issue")
@@ -7974,6 +8402,10 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Project", b =>
                 {
+                    b.HasOne("Compass.Models.ActivityTypeLookup", "ActivityTypeLookup")
+                        .WithMany()
+                        .HasForeignKey("ActivityTypeLookupId");
+
                     b.HasOne("Compass.Models.DeliveryPriority", "DeliveryPriority")
                         .WithMany()
                         .HasForeignKey("DeliveryPriorityId");
@@ -7994,11 +8426,38 @@ namespace Compass.Migrations
                         .WithMany("Projects")
                         .HasForeignKey("PrimaryOrganizationalGroupId");
 
+                    b.HasOne("Compass.Models.RiskAppetiteLookup", "RiskAppetiteLookup")
+                        .WithMany()
+                        .HasForeignKey("RiskAppetiteLookupId");
+
+                    b.Navigation("ActivityTypeLookup");
+
                     b.Navigation("DeliveryPriority");
 
                     b.Navigation("PrimaryContactUser");
 
                     b.Navigation("PrimaryOrganizationalGroup");
+
+                    b.Navigation("RiskAppetiteLookup");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectBudgetOwner", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("BudgetOwners")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectContact", b =>
@@ -8017,6 +8476,25 @@ namespace Compass.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("Directorates")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectFundingAllocation", b =>
@@ -8098,6 +8576,25 @@ namespace Compass.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Compass.Models.ProjectPmoContact", b =>
+                {
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("PmoContacts")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Compass.Models.ProjectProblemStatement", b =>
                 {
                     b.HasOne("Compass.Models.Project", "Project")
@@ -8162,6 +8659,50 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectSeniorResponsibleOfficer", b =>
+                {
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("SeniorResponsibleOfficers")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectStatusUpdate", b =>
+                {
+                    b.HasOne("Compass.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("StatusUpdates")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectSuccess", b =>
@@ -8530,6 +9071,8 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Action", b =>
                 {
+                    b.Navigation("ActionDecisions");
+
                     b.Navigation("IssueActions");
 
                     b.Navigation("MilestoneActions");
@@ -8550,6 +9093,8 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Decision", b =>
                 {
+                    b.Navigation("ActionDecisions");
+
                     b.Navigation("Actions");
 
                     b.Navigation("IssueDecisions");
@@ -8636,6 +9181,8 @@ namespace Compass.Migrations
 
                     b.Navigation("IssueDecisions");
 
+                    b.Navigation("IssueRisks");
+
                     b.Navigation("MilestoneIssues");
 
                     b.Navigation("Tags");
@@ -8715,7 +9262,11 @@ namespace Compass.Migrations
                 {
                     b.Navigation("Actions");
 
+                    b.Navigation("BudgetOwners");
+
                     b.Navigation("Decisions");
+
+                    b.Navigation("Directorates");
 
                     b.Navigation("FundingAllocations");
 
@@ -8730,6 +9281,8 @@ namespace Compass.Migrations
                     b.Navigation("Needs");
 
                     b.Navigation("Outcomes");
+
+                    b.Navigation("PmoContacts");
 
                     b.Navigation("ProblemStatements");
 
@@ -8747,6 +9300,10 @@ namespace Compass.Migrations
 
                     b.Navigation("Risks");
 
+                    b.Navigation("SeniorResponsibleOfficers");
+
+                    b.Navigation("StatusUpdates");
+
                     b.Navigation("Successes");
                 });
 
@@ -8762,6 +9319,8 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Risk", b =>
                 {
+                    b.Navigation("IssueRisks");
+
                     b.Navigation("MilestoneRisks");
 
                     b.Navigation("RiskActions");

@@ -1,0 +1,736 @@
+@model List<Compass.Models.Project>
+@{
+    ViewData["Title"] = "Manage Projects Data";
+    var businessAreas = ViewBag.BusinessAreas as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var phases = ViewBag.Phases as List<string> ?? new List<string>();
+    var activityTypes = ViewBag.ActivityTypes as List<Compass.Models.ActivityTypeLookup> ?? new List<Compass.Models.ActivityTypeLookup>();
+    var riskAppetites = ViewBag.RiskAppetites as List<Compass.Models.RiskAppetiteLookup> ?? new List<Compass.Models.RiskAppetiteLookup>();
+    var deliveryPriorities = ViewBag.DeliveryPriorities as List<Compass.Models.DeliveryPriority> ?? new List<Compass.Models.DeliveryPriority>();
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage Projects Data</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Manage Projects Data</h1>
+                <p class="text-muted mb-0">
+                    <small>Bulk editor for quickly updating project information including people, business area, phase, and other data points</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DataQualityNavigation")
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div id="inlineAlertContainer"></div>
+
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="searchInput">Search projects</label>
+                                    <input type="text" class="form-control" id="searchInput" placeholder="Search by title or project code..." />
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="businessAreaFilter">Business area</label>
+                                    <select class="form-control" id="businessAreaFilter">
+                                        <option value="">All business areas</option>
+                                        @foreach (var area in businessAreas.OrderBy(a => a.Name))
+                                        {
+                                            <option value="@area.Name">@area.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="phaseFilter">Phase</label>
+                                    <select class="form-control" id="phaseFilter">
+                                        <option value="">All phases</option>
+                                        @foreach (var phase in phases.OrderBy(p => p))
+                                        {
+                                            <option value="@phase">@phase</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="button" class="btn btn-secondary btn-block" id="clearFilters">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects Table -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Projects</h3>
+                        <div class="card-tools">
+                            <span class="badge badge-info" id="projectCount">@Model.Count projects</span>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover mb-0 sortable-table" id="projectsTable">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-column="Title" style="cursor: pointer;">
+                                        Project <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="ProjectCode" style="cursor: pointer;">
+                                        Code <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="PrimaryContact" style="cursor: pointer;">
+                                        Primary Contact <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="BusinessArea" style="cursor: pointer;">
+                                        Business Area <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Phase" style="cursor: pointer;">
+                                        Phase <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="ActivityType" style="cursor: pointer;">
+                                        Activity Type <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="RiskAppetite" style="cursor: pointer;">
+                                        Risk Appetite <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Status" style="cursor: pointer;">
+                                        Status <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center" style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in Model)
+                                {
+                                    var primaryContactName = project.PrimaryContactUser?.Name ?? "";
+                                    var primaryContactEmail = project.PrimaryContactUser?.Email ?? "";
+                                    var primaryContactDisplay = !string.IsNullOrEmpty(primaryContactName) 
+                                        ? $"{primaryContactName} ({primaryContactEmail})" 
+                                        : "-";
+                                    <tr data-project-id="@project.Id"
+                                        data-project-title="@project.Title.ToLowerInvariant()"
+                                        data-project-code="@(project.ProjectCode?.ToLowerInvariant() ?? "")"
+                                        data-primary-contact="@primaryContactDisplay.ToLowerInvariant()"
+                                        data-business-area="@(project.BusinessArea ?? "")"
+                                        data-phase="@(project.Phase ?? "")"
+                                        data-activity-type="@(project.ActivityTypeLookup?.Name ?? "")"
+                                        data-risk-appetite="@(project.RiskAppetiteLookup?.Name ?? "")"
+                                        data-status="@(project.Status ?? "")">
+                                        <td>
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" class="font-weight-bold">
+                                                @project.Title
+                                            </a>
+                                        </td>
+                                        <td>@(project.ProjectCode ?? "-")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(primaryContactName))
+                                            {
+                                                <span>@primaryContactName</span>
+                                                <br />
+                                                <small class="text-muted">@primaryContactEmail</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>@(project.BusinessArea ?? "-")</td>
+                                        <td>@(project.Phase ?? "-")</td>
+                                        <td>@(project.ActivityTypeLookup?.Name ?? "-")</td>
+                                        <td>@(project.RiskAppetiteLookup?.Name ?? "-")</td>
+                                        <td>
+                                            <span class="badge badge-@(project.Status == "Active" ? "success" : project.Status == "Paused" ? "warning" : project.Status == "Completed" ? "info" : "secondary")">
+                                                @(project.Status ?? "Active")
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    <i class="fas fa-cog"></i>
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-right">
+                                                    <a class="dropdown-item" href="#" data-action="set-primary-contact" data-project-id="@project.Id">
+                                                        <i class="fas fa-user mr-2"></i> Set Primary Contact
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-project-id="@project.Id">
+                                                        <i class="fas fa-building mr-2"></i> Set Business Area
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-phase" data-project-id="@project.Id">
+                                                        <i class="fas fa-layer-group mr-2"></i> Set Phase
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-activity-type" data-project-id="@project.Id">
+                                                        <i class="fas fa-tasks mr-2"></i> Set Activity Type
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-risk-appetite" data-project-id="@project.Id">
+                                                        <i class="fas fa-shield-alt mr-2"></i> Set Risk Appetite
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (!Model.Any())
+                        {
+                            <div class="text-center text-muted p-5">
+                                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                                <p class="mb-0">No projects found</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Update Primary Contact Modal -->
+<div class="modal fade" id="updatePrimaryContactModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Primary Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPrimaryContact" method="post">
+                <input type="hidden" name="projectId" id="primaryContactProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="primaryContactSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="primaryContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="primaryContactObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="primaryContactEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="primaryContactName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected.">
+                                <span class="text-muted">No primary contact selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group mt-3">
+                        <input type="hidden" name="clearContact" id="clearContactFlag" value="false" />
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="clearPrimaryContact">
+                            <i class="fas fa-times mr-1"></i> Clear Primary Contact
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Primary Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Business Area Modal -->
+<div class="modal fade" id="updateBusinessAreaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectBusinessArea" method="post">
+                <input type="hidden" name="projectId" id="businessAreaProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Business Area for this project.</p>
+                    <div class="form-group">
+                        <label for="businessAreaLookupId" class="form-label">Business Area</label>
+                        <select class="form-control" id="businessAreaLookupId" name="businessAreaLookupId">
+                            <option value="">-- Clear Business Area --</option>
+                            @foreach (var area in businessAreas.OrderBy(a => a.SortOrder).ThenBy(a => a.Name))
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Phase Modal -->
+<div class="modal fade" id="updatePhaseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPhase" method="post">
+                <input type="hidden" name="projectId" id="phaseProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Phase for this project.</p>
+                    <div class="form-group">
+                        <label for="phase" class="form-label">Phase</label>
+                        <select class="form-control" id="phase" name="phase">
+                            <option value="">-- Clear Phase --</option>
+                            @foreach (var phase in phases.OrderBy(p => p))
+                            {
+                                <option value="@phase">@phase</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Phase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Activity Type Modal -->
+<div class="modal fade" id="updateActivityTypeModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Activity Type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectActivityType" method="post">
+                <input type="hidden" name="projectId" id="activityTypeProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Activity Type for this project.</p>
+                    <div class="form-group">
+                        <label for="activityTypeLookupId" class="form-label">Activity Type</label>
+                        <select class="form-control" id="activityTypeLookupId" name="activityTypeLookupId">
+                            <option value="">-- Clear Activity Type --</option>
+                            @foreach (var activityType in activityTypes.OrderBy(at => at.SortOrder).ThenBy(at => at.Name))
+                            {
+                                <option value="@activityType.Id">@activityType.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Activity Type</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Risk Appetite Modal -->
+<div class="modal fade" id="updateRiskAppetiteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Risk Appetite</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectRiskAppetite" method="post">
+                <input type="hidden" name="projectId" id="riskAppetiteProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Risk Appetite for this project.</p>
+                    <div class="form-group">
+                        <label for="riskAppetiteLookupId" class="form-label">Risk Appetite</label>
+                        <select class="form-control" id="riskAppetiteLookupId" name="riskAppetiteLookupId">
+                            <option value="">-- Clear Risk Appetite --</option>
+                            @foreach (var riskAppetite in riskAppetites.OrderBy(ra => ra.SortOrder).ThenBy(ra => ra.Name))
+                            {
+                                <option value="@riskAppetite.Id">@riskAppetite.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Risk Appetite</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable table
+            function initializeSortableTable($table) {
+                $table.find('th.sortable').on('click', function() {
+                    var $th = $(this);
+                    var column = $th.data('column');
+                    var $tbody = $table.find('tbody');
+                    var $rows = $tbody.find('tr').toArray();
+                    var isAsc = $th.hasClass('sort-asc');
+                    
+                    $table.find('th.sortable').removeClass('sort-asc sort-desc');
+                    
+                    $rows.sort(function(a, b) {
+                        var aVal = $(a).attr('data-' + column.toLowerCase().replace(/([A-Z])/g, '-$1').toLowerCase()) || '';
+                        var bVal = $(b).attr('data-' + column.toLowerCase().replace(/([A-Z])/g, '-$1').toLowerCase()) || '';
+                        if (isAsc) {
+                            return bVal.localeCompare(aVal);
+                        } else {
+                            return aVal.localeCompare(bVal);
+                        }
+                    });
+                    
+                    $tbody.empty().append($rows);
+                    $th.addClass(isAsc ? 'sort-desc' : 'sort-asc');
+                });
+            }
+            
+            initializeSortableTable($('#projectsTable'));
+
+            // Filter table
+            function filterTable() {
+                var searchTerm = $('#searchInput').val().toLowerCase();
+                var businessAreaFilter = $('#businessAreaFilter').val();
+                var phaseFilter = $('#phaseFilter').val();
+                var visibleCount = 0;
+
+                $('#projectsTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var projectTitle = ($row.attr('data-project-title') || '').toString();
+                    var projectCode = ($row.attr('data-project-code') || '').toString();
+                    var businessArea = ($row.attr('data-business-area') || '').toString();
+                    var phase = ($row.attr('data-phase') || '').toString();
+
+                    var matchesSearch = !searchTerm || projectTitle.includes(searchTerm) || projectCode.includes(searchTerm);
+                    var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter;
+                    var matchesPhase = !phaseFilter || phase === phaseFilter;
+
+                    if (matchesSearch && matchesBusinessArea && matchesPhase) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+
+                $('#projectCount').text(visibleCount + ' projects');
+            }
+
+            $('#searchInput, #businessAreaFilter, #phaseFilter').on('input change', filterTable);
+            $('#clearFilters').on('click', function() {
+                $('#searchInput').val('');
+                $('#businessAreaFilter').val('');
+                $('#phaseFilter').val('');
+                filterTable();
+            });
+
+            // Modal handlers
+            $('#projectsTable').on('click', '[data-action]', function(e) {
+                e.preventDefault();
+                var action = $(this).data('action');
+                var projectId = $(this).data('project-id');
+                var $row = $(this).closest('tr');
+
+                switch(action) {
+                    case 'set-primary-contact':
+                        $('#primaryContactProjectId').val(projectId);
+                        var currentContactName = $row.find('td').eq(2).find('span').first().text().trim();
+                        var currentContactEmail = $row.find('td').eq(2).find('small').text().trim();
+                        if (currentContactName && currentContactName !== '-') {
+                            $('#primaryContactSearch').val(currentContactName);
+                            $('#primaryContactName').val(currentContactName);
+                            $('#primaryContactEmail').val(currentContactEmail);
+                            $('.js-user-picker-summary').html('<span>' + escapeHtml(currentContactName) + '</span>');
+                        } else {
+                            $('#primaryContactSearch').val('');
+                            $('#primaryContactObjectId').val('');
+                            $('#primaryContactEmail').val('');
+                            $('#primaryContactName').val('');
+                            $('.js-user-picker-summary').html('<span class="text-muted">No primary contact selected.</span>');
+                        }
+                        $('#clearContactFlag').val('false');
+                        $('#updatePrimaryContactModal').modal('show');
+                        break;
+                    case 'set-business-area':
+                        $('#businessAreaProjectId').val(projectId);
+                        var currentBusinessArea = $row.attr('data-business-area');
+                        $('#businessAreaLookupId').val('');
+                        if (currentBusinessArea) {
+                            var matchingOption = $('#businessAreaLookupId option').filter(function() {
+                                return $(this).text().trim() === currentBusinessArea;
+                            });
+                            if (matchingOption.length) {
+                                $('#businessAreaLookupId').val(matchingOption.val());
+                            }
+                        }
+                        $('#updateBusinessAreaModal').modal('show');
+                        break;
+                    case 'set-phase':
+                        $('#phaseProjectId').val(projectId);
+                        var currentPhase = $row.attr('data-phase');
+                        $('#phase').val(currentPhase || '');
+                        $('#updatePhaseModal').modal('show');
+                        break;
+                    case 'set-activity-type':
+                        $('#activityTypeProjectId').val(projectId);
+                        var currentActivityType = $row.attr('data-activity-type');
+                        $('#activityTypeLookupId').val('');
+                        if (currentActivityType) {
+                            var matchingOption = $('#activityTypeLookupId option').filter(function() {
+                                return $(this).text().trim() === currentActivityType;
+                            });
+                            if (matchingOption.length) {
+                                $('#activityTypeLookupId').val(matchingOption.val());
+                            }
+                        }
+                        $('#updateActivityTypeModal').modal('show');
+                        break;
+                    case 'set-risk-appetite':
+                        $('#riskAppetiteProjectId').val(projectId);
+                        var currentRiskAppetite = $row.attr('data-risk-appetite');
+                        $('#riskAppetiteLookupId').val('');
+                        if (currentRiskAppetite) {
+                            var matchingOption = $('#riskAppetiteLookupId option').filter(function() {
+                                return $(this).text().trim() === currentRiskAppetite;
+                            });
+                            if (matchingOption.length) {
+                                $('#riskAppetiteLookupId').val(matchingOption.val());
+                            }
+                        }
+                        $('#updateRiskAppetiteModal').modal('show');
+                        break;
+                }
+            });
+
+            // Clear primary contact
+            $('#clearPrimaryContact').on('click', function() {
+                $('#primaryContactSearch').val('');
+                $('#primaryContactObjectId').val('');
+                $('#primaryContactEmail').val('');
+                $('#primaryContactName').val('');
+                $('#clearContactFlag').val('true');
+                $('.js-user-picker-summary').html('<span class="text-muted">No primary contact selected.</span>');
+                // Submit the form to clear the contact
+                $('#updatePrimaryContactModal form').submit();
+            });
+
+            // Setup AJAX form submissions
+            function setupAjaxForm(selector, onSuccess) {
+                var $form = $(selector);
+                $form.on('submit', function(e) {
+                    e.preventDefault();
+                    var $submitBtn = $form.find('button[type="submit"]');
+                    var originalText = $submitBtn.html();
+                    $submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+                    var formData = new FormData(this);
+                    var token = $('input[name="__RequestVerificationToken"]', $form).val();
+                    if (token) {
+                        formData.append('__RequestVerificationToken', token);
+                    }
+
+                    fetch($form.attr('action'), {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData,
+                        credentials: 'same-origin'
+                    })
+                    .then(function(response) {
+                        if (!response.ok) {
+                            return response.text().then(function(text) {
+                                throw new Error('HTTP error! status: ' + response.status);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data && data.success) {
+                            showInlineAlert('success', data.message || 'Update successful.');
+                            if (onSuccess && data.project) {
+                                onSuccess(data.project);
+                            }
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 1500);
+                        } else {
+                            showInlineAlert('danger', (data && data.message) || 'Update failed. Please try again.');
+                            $submitBtn.prop('disabled', false).html(originalText);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error:', error);
+                        showInlineAlert('danger', 'An unexpected error occurred. Please try again.');
+                        $submitBtn.prop('disabled', false).html(originalText);
+                    });
+                });
+            }
+
+            setupAjaxForm('#updatePrimaryContactModal form', function(project) {
+                updateRowWithProject(project);
+            });
+            setupAjaxForm('#updateBusinessAreaModal form', function(project) {
+                updateRowWithProject(project);
+            });
+            setupAjaxForm('#updatePhaseModal form', function(project) {
+                updateRowWithProject(project);
+            });
+            setupAjaxForm('#updateActivityTypeModal form', function(project) {
+                updateRowWithProject(project);
+            });
+            setupAjaxForm('#updateRiskAppetiteModal form', function(project) {
+                updateRowWithProject(project);
+            });
+
+            function updateRowWithProject(project) {
+                if (!project || !project.id) {
+                    return;
+                }
+
+                var $row = $('#projectsTable tbody tr').filter(function() {
+                    return $(this).attr('data-project-id') === project.id.toString();
+                });
+
+                if (!$row.length) {
+                    return;
+                }
+
+                if (project.primaryContactName !== undefined) {
+                    var display = project.primaryContactName 
+                        ? project.primaryContactName + (project.primaryContactEmail ? ' (' + project.primaryContactEmail + ')' : '')
+                        : '-';
+                    $row.find('td').eq(2).html(
+                        project.primaryContactName 
+                            ? '<span>' + escapeHtml(project.primaryContactName) + '</span><br /><small class="text-muted">' + escapeHtml(project.primaryContactEmail || '') + '</small>'
+                            : '<span class="text-muted">-</span>'
+                    );
+                    $row.attr('data-primary-contact', display.toLowerCase());
+                }
+
+                if (project.businessArea !== undefined) {
+                    $row.find('td').eq(3).text(project.businessArea || '-');
+                    $row.attr('data-business-area', project.businessArea || '');
+                }
+
+                if (project.phase !== undefined) {
+                    $row.find('td').eq(4).text(project.phase || '-');
+                    $row.attr('data-phase', project.phase || '');
+                }
+
+                if (project.activityTypeName !== undefined) {
+                    $row.find('td').eq(5).text(project.activityTypeName || '-');
+                    $row.attr('data-activity-type', project.activityTypeName || '');
+                }
+
+                if (project.riskAppetiteName !== undefined) {
+                    $row.find('td').eq(6).text(project.riskAppetiteName || '-');
+                    $row.attr('data-risk-appetite', project.riskAppetiteName || '');
+                }
+            }
+
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+                $container.html(alertHtml);
+                $container[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                var map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+            }
+
+            filterTable();
+        });
+    </script>
+}
+

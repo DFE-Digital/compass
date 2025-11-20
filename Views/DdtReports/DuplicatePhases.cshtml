@@ -1,0 +1,534 @@
+@model Compass.Models.DuplicatePhasesViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Products with Duplicate Phases";
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Products with Duplicate Phases</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Products with Duplicate Phases</h1>
+                <p class="text-muted mb-0">
+                    <small>Data quality report showing products that have been assigned to more than one phase</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DataQualityNavigation")
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div id="inlineAlertContainer"></div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-lg-6 col-md-6 col-12">
+                <div class="card @(Model.TotalProductsWithDuplicatePhases > 0 ? "card-warning" : "card-success")">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Products with Duplicate Phases
+                        </h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.TotalProductsWithDuplicatePhases</h2>
+                        <p class="text-muted mb-0 mt-2">
+                            @{
+                                var percentage = Model.TotalProducts > 0 
+                                    ? (Model.TotalProductsWithDuplicatePhases / (double)Model.TotalProducts) * 100 
+                                    : 0;
+                            }
+                            Out of @Model.TotalProducts total products (@percentage.ToString("F1")%)
+                        </p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar @(Model.TotalProductsWithDuplicatePhases > 0 ? "bg-warning" : "bg-success")" 
+                                 style="width: @percentage%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 col-md-6 col-12">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle"></i>
+                            Why This Matters
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">Each product should only belong to <strong>one</strong> phase for accurate reporting and tracking.</p>
+                        <p class="mb-0">Products with multiple phases may:</p>
+                        <ul class="mb-0">
+                            <li>Cause duplicate counting in reports</li>
+                            <li>Create confusion about product status</li>
+                            <li>Lead to inaccurate metrics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.TotalProductsWithDuplicatePhases == 0)
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card card-success">
+                        <div class="card-body text-center p-5">
+                            <i class="fas fa-check-circle fa-5x text-success mb-3"></i>
+                            <h3>No Issues Found</h3>
+                            <p class="text-muted mb-0">All products have been correctly assigned to a single phase.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Filters -->
+            <div class="row mb-3">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                Filter products
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-lg-4 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="searchInput">Search by product name or FIPS ID</label>
+                                        <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
+                                    </div>
+                                </div>
+                                <div class="col-lg-3 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="stateFilter">State</label>
+                                        <select class="form-control" id="stateFilter">
+                                            <option value="">All states</option>
+                                            <option value="Active">Active</option>
+                                            <option value="New">New</option>
+                                            <option value="Rejected">Rejected</option>
+                                            <option value="Deleted">Deleted</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-3 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label for="phaseCountFilter">Number of phases</label>
+                                        <select class="form-control" id="phaseCountFilter">
+                                            <option value="">All</option>
+                                            <option value="2">2 phases</option>
+                                            <option value="3">3 phases</option>
+                                            <option value="4+">4+ phases</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-6 col-12">
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="button" class="btn btn-secondary btn-block" id="clearFilters">
+                                            <i class="fas fa-times"></i> Clear Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Table -->
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                Products with duplicate phases
+                            </h3>
+                            <div class="card-tools">
+                                <span class="badge badge-warning" id="productCount">@Model.Products.Count products</span>
+                            </div>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover mb-0" id="duplicatePhasesTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%;">Product</th>
+                                        <th style="width: 10%;" class="text-center">FIPS ID</th>
+                                        <th style="width: 10%;" class="text-center">State</th>
+                                        <th style="width: 10%;" class="text-center">Count</th>
+                                        <th style="width: 30%;">Phases</th>
+                                        <th style="width: 10%;" class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        <tr data-product-title="@product.ProductTitle.ToLower()" 
+                                            data-fips-id="@(string.IsNullOrEmpty(product.FipsId) ? "" : product.FipsId.ToLower())"
+                                            data-state="@product.State"
+                                            data-phase-count="@product.PhaseCount">
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                       target="_blank" 
+                                                       rel="noopener noreferrer" 
+                                                       class="font-weight-bold">
+                                                        @product.ProductTitle
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="font-weight-bold">@product.ProductTitle</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                                else
+                                                {
+                                                    @product.FipsId
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @{
+                                                    var stateBadgeClass = product.State switch
+                                                    {
+                                                        "Active" => "badge-success",
+                                                        "New" => "badge-info",
+                                                        "Rejected" => "badge-danger",
+                                                        "Deleted" => "badge-secondary",
+                                                        _ => "badge-warning"
+                                                    };
+                                                }
+                                                <span class="badge @stateBadgeClass">@product.State</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-warning badge-lg">
+                                                    @product.PhaseCount
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @foreach (var phase in product.Phases.OrderBy(p => p.SortOrder ?? int.MaxValue).ThenBy(p => p.Name))
+                                                {
+                                                    <span class="badge badge-secondary mr-1 mb-1">@phase.Name</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    <div class="btn-group">
+                                                        <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                           target="_blank" 
+                                                           rel="noopener noreferrer"
+                                                           class="btn btn-sm btn-primary"
+                                                           title="View in FIPS">
+                                                            <i class="fas fa-external-link-alt"></i>
+                                                        </a>
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-warning" 
+                                                                data-action="remove-duplicate-phases" 
+                                                                data-fips-id="@product.FipsId"
+                                                                data-phases="@string.Join(",", product.Phases.Select(p => p.Id))"
+                                                                title="Remove Duplicate Phases">
+                                                            <i class="fas fa-wrench"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@{
+    var phaseCategoryValues = ViewBag.PhaseCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+}
+
+<!-- Remove Duplicate Phases Modal -->
+<div class="modal fade" id="removeDuplicatePhasesModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Duplicate Phases</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form action="@Url.Action("RemoveDuplicatePhases", "DdtReports")" method="post">
+                <input type="hidden" name="fipsId" id="duplicatePhasesFipsId" />
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Note:</strong> This will remove all duplicate phases and keep only the selected one.
+                    </div>
+                    <p class="mb-3">Select the phase to keep for this product. All other phases will be removed.</p>
+                    <div class="form-group">
+                        <label for="phaseCategoryValueIdToKeep" class="form-label">Phase to Keep *</label>
+                        <select class="form-control" id="phaseCategoryValueIdToKeep" name="phaseCategoryValueIdToKeep" required>
+                            <option value="">-- Select Phase to Keep --</option>
+                        </select>
+                        <small class="form-text text-muted">Only phases currently assigned to this product are shown.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Remove Duplicates</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.badge-lg {
+    font-size: 1.1rem;
+    padding: 0.5rem 0.75rem;
+}
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var allPhases = @Html.Raw(Json.Serialize(phaseCategoryValues.Select(p => new { Id = p.Id, Name = p.Name, SortOrder = p.SortOrder })));
+            var removeDuplicatePhasesUrl = '@Url.Action("RemoveDuplicatePhases", "DdtReports")';
+
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                if (!message) {
+                    $container.empty();
+                    return;
+                }
+
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+
+                $container.html(alertHtml);
+            }
+
+            // Modal function
+            function openRemoveDuplicatePhasesModal(fipsId, phaseIds) {
+                $('#duplicatePhasesFipsId').val(fipsId);
+                var $select = $('#phaseCategoryValueIdToKeep');
+                $select.empty();
+                $select.append('<option value="">-- Select Phase to Keep --</option>');
+                
+                // Parse phase IDs
+                var phaseIdArray = phaseIds.split(',').map(function(id) { return parseInt(id.trim()); }).filter(function(id) { return !isNaN(id); });
+                
+                // Add only the phases that are assigned to this product
+                var productPhases = allPhases.filter(function(p) {
+                    return phaseIdArray.indexOf(p.id) !== -1;
+                });
+                
+                // Sort by sort order, then name
+                productPhases.sort(function(a, b) {
+                    var aOrder = a.sortOrder != null ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+                    var bOrder = b.sortOrder != null ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+                    if (aOrder !== bOrder) {
+                        return aOrder - bOrder;
+                    }
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+                
+                productPhases.forEach(function(phase) {
+                    $select.append('<option value="' + phase.id + '">' + (phase.name || 'Phase ' + phase.id) + '</option>');
+                });
+                
+                $('#removeDuplicatePhasesModal').modal('show');
+            }
+            
+            // Handle remove duplicate phases button clicks
+            $(document).on('click', '[data-action="remove-duplicate-phases"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fipsId = $(this).data('fips-id');
+                var phaseIds = $(this).data('phases') || '';
+                openRemoveDuplicatePhasesModal(fipsId, phaseIds);
+                return false;
+            });
+            
+            // Setup AJAX form submission
+            $('#removeDuplicatePhasesModal form').on('submit', function(e) {
+                e.preventDefault();
+                var $form = $(this);
+                var formData = new FormData(this);
+                var $submitButton = $form.find('button[type="submit"]');
+                var originalText = $submitButton.html();
+                $submitButton.prop('disabled', true);
+                $submitButton.html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+                
+                var actionUrl = $form.attr('action');
+                if (!actionUrl) {
+                    actionUrl = removeDuplicatePhasesUrl;
+                }
+                
+                fetch(actionUrl, {
+                    method: 'POST',
+                    headers: { 
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                })
+                .then(function(response) {
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
+                    
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            console.error('Error response:', text);
+                            throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+                        });
+                    }
+                    
+                    var contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return response.json();
+                    } else {
+                        return response.text().then(function(text) {
+                            console.warn('Non-JSON response:', text);
+                            return { success: false, message: 'Unexpected response format' };
+                        });
+                    }
+                })
+                .then(function(data) {
+                    console.log('Response data:', data);
+                    
+                    if (data && data.success) {
+                        showInlineAlert('success', data.message || 'Duplicate phases removed successfully.');
+                        $('#removeDuplicatePhasesModal').modal('hide');
+                        // Reload the page after a short delay to show updated data
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        var errorMsg = (data && data.message) || 'Unable to remove duplicate phases. Please try again.';
+                        console.error('Operation failed:', errorMsg);
+                        showInlineAlert('danger', errorMsg);
+                        $submitButton.prop('disabled', false);
+                        $submitButton.html(originalText);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error removing duplicate phases:', error);
+                    showInlineAlert('danger', 'An unexpected error occurred. Please check the browser console for details.');
+                    $submitButton.prop('disabled', false);
+                    $submitButton.html(originalText);
+                });
+            });
+            
+            // Filter functionality
+            $('#searchInput, #stateFilter, #phaseCountFilter').on('input change', function() {
+                filterTable();
+            });
+            
+            $('#clearFilters').on('click', function() {
+                $('#searchInput').val('');
+                $('#stateFilter').val('');
+                $('#phaseCountFilter').val('');
+                filterTable();
+            });
+            
+            function filterTable() {
+                var searchTerm = $('#searchInput').val().toLowerCase();
+                var stateFilter = $('#stateFilter').val();
+                var phaseCountFilter = $('#phaseCountFilter').val();
+                
+                var visibleCount = 0;
+                
+                $('#duplicatePhasesTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var productTitle = $row.data('product-title') || '';
+                    var fipsId = $row.data('fips-id') || '';
+                    var state = $row.data('state') || '';
+                    var phaseCount = parseInt($row.data('phase-count')) || 0;
+                    
+                    var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || fipsId.includes(searchTerm);
+                    var matchesState = !stateFilter || state === stateFilter;
+                    
+                    var matchesPhaseCount = true;
+                    if (phaseCountFilter) {
+                        if (phaseCountFilter === '2') {
+                            matchesPhaseCount = phaseCount === 2;
+                        } else if (phaseCountFilter === '3') {
+                            matchesPhaseCount = phaseCount === 3;
+                        } else if (phaseCountFilter === '4+') {
+                            matchesPhaseCount = phaseCount >= 4;
+                        }
+                    }
+                    
+                    if (matchesSearch && matchesState && matchesPhaseCount) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+                
+                $('#productCount').text(visibleCount + ' products');
+            }
+        });
+    </script>
+}
+
