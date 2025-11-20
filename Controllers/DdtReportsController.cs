@@ -957,6 +957,174 @@ public class DdtReportsController : Controller
         }
     }
 
+    // GET: DdtReports/DuplicatePhases
+    public async Task<IActionResult> DuplicatePhases()
+    {
+        try
+        {
+            var products = await _productsApiService.GetAllProductsAsync(null);
+            var productsWithDuplicatePhases = new List<ProductWithDuplicatePhases>();
+            
+            foreach (var product in products.OrderBy(p => p.Title))
+            {
+                // Get all phase category values for this product
+                var phases = product.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => new PhaseInfo
+                    {
+                        Id = cv.Id,
+                        Name = cv.Name ?? string.Empty,
+                        SortOrder = cv.SortOrder
+                    })
+                    .ToList() ?? new List<PhaseInfo>();
+                
+                // Only include products with multiple phases
+                if (phases.Count > 1)
+                {
+                    productsWithDuplicatePhases.Add(new ProductWithDuplicatePhases
+                    {
+                        FipsId = product.FipsId ?? string.Empty,
+                        ProductTitle = product.Title,
+                        State = product.State,
+                        Phases = phases,
+                        PhaseCount = phases.Count,
+                        ContactsCount = product.ProductContacts?.Count ?? 0,
+                        ProductUrl = product.ProductUrl
+                    });
+                }
+            }
+            
+            var viewModel = new DuplicatePhasesViewModel
+            {
+                Products = productsWithDuplicatePhases,
+                TotalProductsWithDuplicatePhases = productsWithDuplicatePhases.Count,
+                TotalProducts = products.Count
+            };
+            
+            // Get phase category values for the modal dropdown
+            var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
+            ViewBag.PhaseCategoryValues = phaseCategoryValues;
+            
+            _logger.LogInformation("Found {Count} products with duplicate phases out of {Total} total products", 
+                productsWithDuplicatePhases.Count, products.Count);
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Duplicate Phases report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new DuplicatePhasesViewModel());
+        }
+    }
+
+    // POST: DdtReports/RemoveDuplicatePhases
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveDuplicatePhases(string fipsId, int phaseCategoryValueIdToKeep)
+    {
+        try
+        {
+            // Get product title before update
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            var productTitle = product?.Title ?? fipsId;
+            
+            // Get phase name
+            var phases = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var phaseName = phases.FirstOrDefault(p => p.Id == phaseCategoryValueIdToKeep)?.Name ?? "Phase";
+            
+            var success = await _productsApiService.RemoveDuplicatePhasesAsync(fipsId, phaseCategoryValueIdToKeep);
+            
+            if (success)
+            {
+                var updatedProduct = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+                var completionItem = updatedProduct != null ? CreateProductCompletionItem(updatedProduct) : null;
+                var successMessage = $"<strong>{productTitle}</strong> - Duplicate phases removed, keeping <strong>{phaseName}</strong>.";
+
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = true, message = successMessage, product = completionItem });
+                }
+
+                TempData["SuccessMessage"] = successMessage;
+            }
+            else
+            {
+                const string errorMessage = "Failed to remove duplicate phases. Please try again.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+            }
+            
+            return RedirectToAction("DuplicatePhases");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing duplicate phases for {FipsId}", fipsId);
+            const string errorMessage = "An error occurred while removing duplicate phases.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("DuplicatePhases");
+        }
+    }
+
+    // GET: DdtReports/ManageFipsData
+    public async Task<IActionResult> ManageFipsData(string? searchTerm = null, string? selectedFipsId = null)
+    {
+        try
+        {
+            ProductDto? selectedProduct = null;
+            
+            if (!string.IsNullOrWhiteSpace(searchTerm) || !string.IsNullOrWhiteSpace(selectedFipsId))
+            {
+                // Check if we have a selected FIPS ID from autocomplete (preferred)
+                if (!string.IsNullOrWhiteSpace(selectedFipsId))
+                {
+                    selectedProduct = await _productsApiService.GetProductByFipsIdAsync(selectedFipsId);
+                }
+                // Try to find by FIPS ID first (exact match)
+                else if (searchTerm != null && searchTerm.Length >= 3 && searchTerm.Length <= 6 && searchTerm.All(char.IsLetterOrDigit))
+                {
+                    selectedProduct = await _productsApiService.GetProductByFipsIdAsync(searchTerm);
+                }
+                
+                // If not found by FIPS ID, search by name
+                if (selectedProduct == null && !string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var allProducts = await _productsApiService.GetAllProductsAsync(null);
+                    selectedProduct = allProducts
+                        .FirstOrDefault(p => p.Title?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true ||
+                                           p.FipsId?.Equals(searchTerm, StringComparison.OrdinalIgnoreCase) == true);
+                }
+            }
+            
+            // Get category values for dropdowns
+            var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            var userGroupCategoryValues = await _productsApiService.GetUserGroupCategoryValuesAsync();
+            
+            ViewBag.PhaseCategoryValues = phaseCategoryValues;
+            ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            ViewBag.UserGroupCategoryValues = userGroupCategoryValues;
+            ViewBag.SearchTerm = searchTerm;
+            ViewBag.SelectedProduct = selectedProduct;
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in ManageFipsData");
+            TempData["ErrorMessage"] = "An error occurred while loading the page. Please try again.";
+            return View();
+        }
+    }
+
     // GET: DdtReports/AllCmsData
     public async Task<IActionResult> AllCmsData()
     {
@@ -1023,7 +1191,7 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProductPhase
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProductPhase(string fipsId, int phaseCategoryValueId)
+    public async Task<IActionResult> UpdateProductPhase(string fipsId, int phaseCategoryValueId, string? returnUrl = null)
     {
         try
         {
@@ -1059,6 +1227,12 @@ public class DdtReportsController : Controller
                 }
 
                 TempData["ErrorMessage"] = errorMessage;
+            }
+            
+            // Redirect back to the referring page or default to FipsCompletion
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
             }
             
             return RedirectToAction("FipsCompletion");
@@ -1163,7 +1337,7 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProductUrl
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProductUrl(string fipsId, string productUrl)
+    public async Task<IActionResult> UpdateProductUrl(string fipsId, string productUrl, string? returnUrl = null)
     {
         try
         {
@@ -1223,6 +1397,12 @@ public class DdtReportsController : Controller
                 TempData["ErrorMessage"] = errorMessage;
             }
             
+            // Redirect back to the referring page or default to FipsCompletion
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            
             return RedirectToAction("FipsCompletion");
         }
         catch (Exception ex)
@@ -1242,7 +1422,7 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProductUserGroups
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProductUserGroups(string fipsId, List<int> userGroupCategoryValueIds)
+    public async Task<IActionResult> UpdateProductUserGroups(string fipsId, List<int> userGroupCategoryValueIds, string? returnUrl = null)
     {
         try
         {
@@ -1277,7 +1457,13 @@ public class DdtReportsController : Controller
 
                 TempData["ErrorMessage"] = errorMessage;
             }
-
+            
+            // Redirect back to the referring page or default to FipsCompletion
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            
             return RedirectToAction("FipsCompletion");
         }
         catch (Exception ex)
@@ -1798,7 +1984,7 @@ public class DdtReportsController : Controller
             // Calculate business area summaries
             var businessAreaSummaries = designAndRunBoardItems
                 .GroupBy(item => item.BusinessArea)
-                .Select(g => new BusinessAreaSummary
+                .Select(g => new Models.BusinessAreaSummary
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -2039,5 +2225,677 @@ public class DdtReportsController : Controller
     private static bool RoleContainsAny(string role, IEnumerable<string> keywords) =>
         !string.IsNullOrWhiteSpace(role) &&
         keywords.Any(keyword => RoleContains(role, keyword));
+
+    // POST: DdtReports/UpdateProductComprehensive
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProductComprehensive(
+        string fipsId,
+        string? title = null,
+        string? shortDescription = null,
+        string? longDescription = null,
+        string? cmdbSysId = null,
+        string? productUrl = null,
+        string? state = null,
+        int? phaseCategoryValueId = null,
+        int? businessAreaCategoryValueId = null,
+        List<int>? userGroupCategoryValueIds = null,
+        string? serviceOwnerObjectId = null,
+        string? serviceOwnerEmail = null,
+        string? serviceOwnerName = null,
+        string? productManagerObjectId = null,
+        string? productManagerEmail = null,
+        string? productManagerName = null,
+        string? deliveryManagerObjectId = null,
+        string? deliveryManagerEmail = null,
+        string? deliveryManagerName = null,
+        string? informationAssetOwnerObjectId = null,
+        string? informationAssetOwnerEmail = null,
+        string? informationAssetOwnerName = null,
+        string? seniorResponsibleOfficerObjectId = null,
+        string? seniorResponsibleOfficerEmail = null,
+        string? seniorResponsibleOfficerName = null,
+        string? serviceDesignsObjectId = null,
+        string? serviceDesignsEmail = null,
+        string? serviceDesignsName = null,
+        string? userResearchersObjectId = null,
+        string? userResearchersEmail = null,
+        string? userResearchersName = null,
+        string? returnUrl = null)
+    {
+        try
+        {
+            var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+            if (product == null)
+            {
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = "Product not found." });
+                }
+                TempData["ErrorMessage"] = "Product not found.";
+                return RedirectToAction("ManageFipsData", new { searchTerm = fipsId });
+            }
+
+            var updateMessages = new List<string>();
+            var hasErrors = false;
+
+            // Update basic information
+            if (title != null || shortDescription != null || longDescription != null || cmdbSysId != null)
+            {
+                var success = await _productsApiService.UpdateProductBasicInfoAsync(
+                    fipsId, 
+                    title, 
+                    shortDescription, 
+                    longDescription, 
+                    cmdbSysId);
+                if (success)
+                {
+                    if (title != null) updateMessages.Add($"Title updated to '{title}'");
+                    if (shortDescription != null) updateMessages.Add("Short description updated");
+                    if (longDescription != null) updateMessages.Add("Long description updated");
+                    if (cmdbSysId != null) updateMessages.Add($"CMDB Sys ID updated to '{cmdbSysId}'");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update basic information");
+                }
+            }
+
+            // Update product URL
+            if (productUrl != null)
+            {
+                var success = await _productsApiService.UpdateProductUrlAsync(fipsId, productUrl);
+                if (success)
+                {
+                    updateMessages.Add($"Product URL updated to '{productUrl}'");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update product URL");
+                }
+            }
+
+            // Update state
+            if (state != null)
+            {
+                var success = await _productsApiService.UpdateProductStateAsync(fipsId, state);
+                if (success)
+                {
+                    updateMessages.Add($"State updated to '{state}'");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update state");
+                }
+            }
+
+            // Update phase
+            if (phaseCategoryValueId.HasValue)
+            {
+                var success = await _productsApiService.UpdateProductPhaseAsync(fipsId, phaseCategoryValueId.Value);
+                if (success)
+                {
+                    var phases = await _productsApiService.GetPhaseCategoryValuesAsync();
+                    var phaseName = phases.FirstOrDefault(p => p.Id == phaseCategoryValueId.Value)?.Name ?? "Phase";
+                    updateMessages.Add($"Phase updated to '{phaseName}'");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update phase");
+                }
+            }
+
+            // Update business area
+            if (businessAreaCategoryValueId.HasValue)
+            {
+                var success = await _productsApiService.UpdateProductBusinessAreaAsync(fipsId, businessAreaCategoryValueId.Value);
+                if (success)
+                {
+                    var areas = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+                    var areaName = areas.FirstOrDefault(a => a.Id == businessAreaCategoryValueId.Value)?.Name ?? "Business Area";
+                    updateMessages.Add($"Business area updated to '{areaName}'");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update business area");
+                }
+            }
+
+            // Update user groups
+            if (userGroupCategoryValueIds != null)
+            {
+                var success = await _productsApiService.UpdateProductUserGroupsAsync(fipsId, userGroupCategoryValueIds);
+                if (success)
+                {
+                    updateMessages.Add($"User groups updated ({userGroupCategoryValueIds.Count} selected)");
+                }
+                else
+                {
+                    hasErrors = true;
+                    updateMessages.Add("Failed to update user groups");
+                }
+            }
+
+            // Helper function to update a role
+            async Task<bool> UpdateRoleAsync(string roleFieldName, string roleDisplayName, string? objectId, string? email, string? name)
+            {
+                if (string.IsNullOrWhiteSpace(objectId))
+                {
+                    return true; // No change requested
+                }
+
+                try
+                {
+                    // If objectId is empty string, we want to clear the role
+                    // For now, we'll skip clearing (would need a separate method)
+                    if (objectId.Trim() == "")
+                    {
+                        return true; // Skip clearing for now
+                    }
+
+                    // Fetch user details from Graph if we have an object ID
+                    string? firstName = null;
+                    string? lastName = null;
+                    string? displayName = name;
+                    string? actualObjectId = objectId;
+                    
+                    if (Guid.TryParse(objectId, out var objectIdGuid))
+                    {
+                        try
+                        {
+                            var directoryUser = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                            firstName = directoryUser.FirstName;
+                            lastName = directoryUser.LastName;
+                            actualObjectId = directoryUser.AzureObjectId;
+                            if (string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(directoryUser.Name))
+                            {
+                                displayName = directoryUser.Name;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to fetch user details from Graph for {ObjectId}", objectId);
+                        }
+                    }
+
+                    // Get or create the Entra user in CMS
+                    var entraIdToUse = !string.IsNullOrWhiteSpace(actualObjectId) ? actualObjectId : objectId;
+                    var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                        email ?? "",
+                        entraIdToUse,
+                        displayName,
+                        firstName,
+                        lastName
+                    );
+
+                    if (entraUser == null)
+                    {
+                        _logger.LogError("Failed to get or create Entra user for role {Role}", roleDisplayName);
+                        return false;
+                    }
+
+                    // Update the product role
+                    var success = await _productsApiService.UpdateProductRoleAsync(fipsId, roleFieldName, entraUser.Id);
+                    if (success)
+                    {
+                        updateMessages.Add($"{roleDisplayName} updated to '{displayName ?? email}'");
+                    }
+                    return success;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error updating role {Role} for {FipsId}", roleDisplayName, fipsId);
+                    return false;
+                }
+            }
+
+            // Update role assignments
+            var roleUpdates = new[]
+            {
+                (Field: "service_owner", DisplayName: "Service Owner", ObjectId: serviceOwnerObjectId, Email: serviceOwnerEmail, Name: serviceOwnerName),
+                (Field: "product_manager", DisplayName: "Product Manager", ObjectId: productManagerObjectId, Email: productManagerEmail, Name: productManagerName),
+                (Field: "delivery_manager", DisplayName: "Delivery Manager", ObjectId: deliveryManagerObjectId, Email: deliveryManagerEmail, Name: deliveryManagerName),
+                (Field: "Information_asset_owner", DisplayName: "Information Asset Owner", ObjectId: informationAssetOwnerObjectId, Email: informationAssetOwnerEmail, Name: informationAssetOwnerName),
+                (Field: "senior_responsible_officer", DisplayName: "Senior Responsible Officer", ObjectId: seniorResponsibleOfficerObjectId, Email: seniorResponsibleOfficerEmail, Name: seniorResponsibleOfficerName),
+                (Field: "service_designs", DisplayName: "Service Designs", ObjectId: serviceDesignsObjectId, Email: serviceDesignsEmail, Name: serviceDesignsName),
+                (Field: "user_researchers", DisplayName: "User Researchers", ObjectId: userResearchersObjectId, Email: userResearchersEmail, Name: userResearchersName)
+            };
+
+            foreach (var roleUpdate in roleUpdates)
+            {
+                if (roleUpdate.ObjectId != null)
+                {
+                    var success = await UpdateRoleAsync(roleUpdate.Field, roleUpdate.DisplayName, roleUpdate.ObjectId, roleUpdate.Email, roleUpdate.Name);
+                    if (!success)
+                    {
+                        hasErrors = true;
+                        updateMessages.Add($"Failed to update {roleUpdate.DisplayName}");
+                    }
+                }
+            }
+
+            var message = updateMessages.Any()
+                ? (hasErrors 
+                    ? $"<strong>Some updates failed:</strong><ul><li>{string.Join("</li><li>", updateMessages)}</li></ul>"
+                    : $"<strong>Product updated successfully:</strong><ul><li>{string.Join("</li><li>", updateMessages)}</li></ul>")
+                : "<strong>No changes were made.</strong>";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = !hasErrors, message = message });
+            }
+
+            if (hasErrors)
+            {
+                TempData["ErrorMessage"] = message;
+            }
+            else
+            {
+                TempData["SuccessMessage"] = message;
+            }
+
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction("ManageFipsData", new { searchTerm = fipsId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateProductComprehensive for {FipsId}", fipsId);
+            var errorMessage = "An error occurred while updating the product.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageFipsData", new { searchTerm = fipsId });
+        }
+    }
+
+    // GET: DdtReports/ManageProjectsData
+    public async Task<IActionResult> ManageProjectsData()
+    {
+        try
+        {
+            var projects = await _context.Projects
+                .Where(p => !p.IsDeleted)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.RiskAppetiteLookup)
+                .Include(p => p.DeliveryPriority)
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
+            // Get lookup tables
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+
+            ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+                .Where(at => at.IsActive)
+                .OrderBy(at => at.SortOrder)
+                .ThenBy(at => at.Name)
+                .ToListAsync();
+
+            ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
+                .Where(ra => ra.IsActive)
+                .OrderBy(ra => ra.SortOrder)
+                .ThenBy(ra => ra.Name)
+                .ToListAsync();
+
+            ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
+                .Where(dp => dp.IsActive)
+                .OrderBy(dp => dp.SortOrder)
+                .ThenBy(dp => dp.Name)
+                .ToListAsync();
+
+            return View(projects);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in ManageProjectsData");
+            TempData["ErrorMessage"] = "An error occurred while loading the page. Please try again.";
+            return View(new List<Project>());
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectPrimaryContact
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectPrimaryContact(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearContact = false)
+    {
+        try
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            User? user = null;
+            if (!clearContact && !string.IsNullOrWhiteSpace(entraUserObjectId))
+            {
+                // Try to parse as Guid and use EnsureUserAsync
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    try
+                    {
+                        user = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}, trying email lookup", entraUserObjectId);
+                    }
+                }
+                
+                // Fallback to email lookup if EnsureUserAsync failed or objectId wasn't a valid Guid
+                if (user == null && !string.IsNullOrWhiteSpace(entraUserEmail))
+                {
+                    user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == entraUserEmail.ToLower());
+                }
+            }
+
+            project.PrimaryContactUserId = clearContact ? null : user?.Id;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var contactName = user != null ? $"{user.Name} ({user.Email})" : "None";
+            var successMessage = clearContact || user == null
+                ? $"<strong>{projectTitle}</strong> - Primary contact cleared."
+                : $"<strong>{projectTitle}</strong> - Primary contact updated to <strong>{contactName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = new { id = project.Id, primaryContactName = user?.Name ?? "", primaryContactEmail = user?.Email ?? "" }
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project primary contact for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project primary contact.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectBusinessArea
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectBusinessArea(int projectId, int? businessAreaLookupId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            string? businessAreaName = null;
+            if (businessAreaLookupId.HasValue)
+            {
+                var businessArea = await _context.BusinessAreaLookups.FindAsync(businessAreaLookupId.Value);
+                if (businessArea != null && businessArea.IsActive)
+                {
+                    project.BusinessArea = businessArea.Name;
+                    businessAreaName = businessArea.Name;
+                }
+                else
+                {
+                    project.BusinessArea = null;
+                }
+            }
+            else
+            {
+                project.BusinessArea = null;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = businessAreaName != null
+                ? $"<strong>{projectTitle}</strong> - Business area updated to <strong>{businessAreaName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Business area cleared.";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = new { id = project.Id, businessArea = businessAreaName ?? "" }
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("ManageProjectsData");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project business area for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project business area.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectPhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectPhase(int projectId, string? phase, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            project.Phase = phase;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var phaseName = phase ?? "None";
+            var successMessage = $"<strong>{projectTitle}</strong> - Phase updated to <strong>{phaseName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = new { id = project.Id, phase = phase ?? "" }
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("ManageProjectsData");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project phase for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project phase.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectActivityType(int projectId, int? activityTypeLookupId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            string? activityTypeName = null;
+            if (activityTypeLookupId.HasValue)
+            {
+                var activityType = await _context.ActivityTypeLookups.FindAsync(activityTypeLookupId.Value);
+                if (activityType != null && activityType.IsActive)
+                {
+                    project.ActivityTypeLookupId = activityTypeLookupId.Value;
+                    activityTypeName = activityType.Name;
+                }
+                else
+                {
+                    project.ActivityTypeLookupId = null;
+                }
+            }
+            else
+            {
+                project.ActivityTypeLookupId = null;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = activityTypeName != null
+                ? $"<strong>{projectTitle}</strong> - Activity type updated to <strong>{activityTypeName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Activity type cleared.";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = new { id = project.Id, activityTypeName = activityTypeName ?? "" }
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("ManageProjectsData");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project activity type for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project activity type.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectRiskAppetite(int projectId, int? riskAppetiteLookupId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            string? riskAppetiteName = null;
+            if (riskAppetiteLookupId.HasValue)
+            {
+                var riskAppetite = await _context.RiskAppetiteLookups.FindAsync(riskAppetiteLookupId.Value);
+                if (riskAppetite != null && riskAppetite.IsActive)
+                {
+                    project.RiskAppetiteLookupId = riskAppetiteLookupId.Value;
+                    riskAppetiteName = riskAppetite.Name;
+                }
+                else
+                {
+                    project.RiskAppetiteLookupId = null;
+                }
+            }
+            else
+            {
+                project.RiskAppetiteLookupId = null;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = riskAppetiteName != null
+                ? $"<strong>{projectTitle}</strong> - Risk appetite updated to <strong>{riskAppetiteName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Risk appetite cleared.";
+
+            if (IsAjaxRequest())
+            {
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = new { id = project.Id, riskAppetiteName = riskAppetiteName ?? "" }
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("ManageProjectsData");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project risk appetite for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project risk appetite.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("ManageProjectsData");
+        }
+    }
 }
 

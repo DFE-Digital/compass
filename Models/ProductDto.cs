@@ -21,6 +21,15 @@ public class ProductDto
     [JsonPropertyName("product_url")]
     public string? ProductUrl { get; set; }
     
+    [JsonPropertyName("short_description")]
+    public string? ShortDescription { get; set; }
+    
+    [JsonPropertyName("long_description")]
+    public string? LongDescription { get; set; }
+    
+    [JsonPropertyName("cmdb_sys_id")]
+    public string? CmdbSysId { get; set; }
+    
     public string State { get; set; } = "New";
     
     [JsonPropertyName("category_values")]
@@ -32,9 +41,45 @@ public class ProductDto
     [JsonPropertyName("service_owner")]
     public List<EntraUserDto>? ServiceOwners { get; set; }
     
-    // Helper property to get the first service owner (for convenience)
+    [JsonPropertyName("product_manager")]
+    public List<EntraUserDto>? ProductManagers { get; set; }
+    
+    [JsonPropertyName("delivery_manager")]
+    public List<EntraUserDto>? DeliveryManagers { get; set; }
+    
+    [JsonPropertyName("Information_asset_owner")]
+    public List<EntraUserDto>? InformationAssetOwners { get; set; }
+    
+    [JsonPropertyName("senior_responsible_officer")]
+    public List<EntraUserDto>? SeniorResponsibleOfficers { get; set; }
+    
+    [JsonPropertyName("service_designs")]
+    public List<EntraUserDto>? ServiceDesigns { get; set; }
+    
+    [JsonPropertyName("user_researchers")]
+    public List<EntraUserDto>? UserResearchers { get; set; }
+    
+    // Helper properties to get the first user (for convenience)
     [System.Text.Json.Serialization.JsonIgnore]
     public EntraUserDto? ServiceOwner => ServiceOwners?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? ProductManager => ProductManagers?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? DeliveryManager => DeliveryManagers?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? InformationAssetOwner => InformationAssetOwners?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? SeniorResponsibleOfficer => SeniorResponsibleOfficers?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? ServiceDesign => ServiceDesigns?.FirstOrDefault();
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? UserResearcher => UserResearchers?.FirstOrDefault();
 }
 
 public class CategoryValueDto

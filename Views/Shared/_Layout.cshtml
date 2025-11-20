@@ -103,6 +103,9 @@
                         var isStandardsHome = isStandardController && string.Equals(actionName, "Index", StringComparison.OrdinalIgnoreCase);
                         var isStandardsDropdownActive = isStandardsHome || isStandardController || isFunctionalStandardsContext || isServiceStandardsContext;
                         var isDdtReportsController = controllerName == "DdtReports";
+                        // Only mark Reports as active for actual report actions, not data management actions
+                        var reportActions = new[] { "Index", "MyReports", "ViewReport", "FlagshipProjects", "AccessibilityReport", "BusinessArea", "AllCmsData" };
+                        var isReportAction = controllerName == "DdtReports" && reportActions.Contains(actionName ?? string.Empty);
 
                         try
                         {
@@ -171,7 +174,7 @@
                         </li>
                     }
                     <li class="nav-item dropdown d-none d-sm-inline-block">
-                        <a class="nav-link dropdown-toggle @(isDdtReportsController ? "active" : "")" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle @(isReportAction ? "active" : "")" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                             Reports
                         </a>
                         <div class="dropdown-menu" aria-labelledby="reportsDropdown">
@@ -368,6 +371,19 @@
                                         </a>
                                     </li>
                                 </ul>
+                            </li>
+                        }
+
+                        <!-- RAID Management Section -->
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false))
+                        {
+                            var isRaidSectionActive = controllerName == "Raid";
+                            <li class="nav-header">RAID Management</li>
+                            <li class="nav-item">
+                                <a href="@Url.Action("Index", "Raid")" class="nav-link @(isRaidSectionActive ? "active" : "")">
+                                    <i class="nav-icon fas fa-shield-alt" aria-hidden="true"></i>
+                                    <p>RAID Management</p>
+                                </a>
                             </li>
                         }
 
