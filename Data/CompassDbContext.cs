@@ -165,6 +165,16 @@ public partial class CompassDbContext : DbContext
     public DbSet<PhaseLookup> PhaseLookups { get; set; }
     public DbSet<DeliveryPriority> DeliveryPriorities { get; set; }
     public DbSet<KpiCategory> KpiCategories { get; set; }
+    public DbSet<ActivityTypeLookup> ActivityTypeLookups { get; set; }
+    public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
+    public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
+    
+    // Project relationships
+    public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
+    public DbSet<ProjectSeniorResponsibleOfficer> ProjectSeniorResponsibleOfficers { get; set; }
+    public DbSet<ProjectDirectorate> ProjectDirectorates { get; set; }
+    public DbSet<ProjectBudgetOwner> ProjectBudgetOwners { get; set; }
+    public DbSet<ProjectPmoContact> ProjectPmoContacts { get; set; }
     
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
@@ -1413,6 +1423,14 @@ public partial class CompassDbContext : DbContext
             .Property(p => p.TotalMspFte)
             .HasPrecision(10, 2);
 
+        modelBuilder.Entity<Project>()
+            .Property(p => p.ServiceUsers)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<Project>()
+            .Property(p => p.Aim)
+            .HasColumnType("nvarchar(max)");
+
         // ProjectRagHistory configuration
         modelBuilder.Entity<ProjectRagHistory>()
             .HasOne(prh => prh.Project)
@@ -1517,6 +1535,140 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectContact>()
             .HasIndex(pc => pc.TeamStatus);
+
+        // ProjectStatusUpdate configuration
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .HasOne(psu => psu.Project)
+            .WithMany(p => p.StatusUpdates)
+            .HasForeignKey(psu => psu.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .HasOne(psu => psu.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(psu => psu.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .HasOne(psu => psu.UpdatedByUser)
+            .WithMany()
+            .HasForeignKey(psu => psu.UpdatedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .HasIndex(psu => psu.ProjectId);
+
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .HasIndex(psu => psu.CreatedAt);
+
+        modelBuilder.Entity<ProjectStatusUpdate>()
+            .Property(psu => psu.Narrative)
+            .HasColumnType("nvarchar(max)");
+
+        // ProjectSeniorResponsibleOfficer configuration
+        modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
+            .HasOne(psro => psro.Project)
+            .WithMany(p => p.SeniorResponsibleOfficers)
+            .HasForeignKey(psro => psro.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
+            .HasOne(psro => psro.User)
+            .WithMany()
+            .HasForeignKey(psro => psro.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
+            .HasIndex(psro => psro.ProjectId);
+
+        modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
+            .HasIndex(psro => new { psro.ProjectId, psro.UserId })
+            .IsUnique();
+
+        // ProjectDirectorate configuration
+        modelBuilder.Entity<ProjectDirectorate>()
+            .HasOne(pd => pd.Project)
+            .WithMany(p => p.Directorates)
+            .HasForeignKey(pd => pd.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectDirectorate>()
+            .HasOne(pd => pd.BusinessAreaLookup)
+            .WithMany()
+            .HasForeignKey(pd => pd.BusinessAreaLookupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectDirectorate>()
+            .HasIndex(pd => pd.ProjectId);
+
+        modelBuilder.Entity<ProjectDirectorate>()
+            .HasIndex(pd => new { pd.ProjectId, pd.BusinessAreaLookupId })
+            .IsUnique();
+
+        // ProjectBudgetOwner configuration
+        modelBuilder.Entity<ProjectBudgetOwner>()
+            .HasOne(pbo => pbo.Project)
+            .WithMany(p => p.BudgetOwners)
+            .HasForeignKey(pbo => pbo.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectBudgetOwner>()
+            .HasOne(pbo => pbo.BusinessAreaLookup)
+            .WithMany()
+            .HasForeignKey(pbo => pbo.BusinessAreaLookupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectBudgetOwner>()
+            .HasIndex(pbo => pbo.ProjectId);
+
+        modelBuilder.Entity<ProjectBudgetOwner>()
+            .HasIndex(pbo => new { pbo.ProjectId, pbo.BusinessAreaLookupId })
+            .IsUnique();
+
+        // ProjectPmoContact configuration
+        modelBuilder.Entity<ProjectPmoContact>()
+            .HasOne(ppc => ppc.Project)
+            .WithMany(p => p.PmoContacts)
+            .HasForeignKey(ppc => ppc.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectPmoContact>()
+            .HasOne(ppc => ppc.User)
+            .WithMany()
+            .HasForeignKey(ppc => ppc.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectPmoContact>()
+            .HasIndex(ppc => ppc.ProjectId);
+
+        modelBuilder.Entity<ProjectPmoContact>()
+            .HasIndex(ppc => new { ppc.ProjectId, ppc.UserId })
+            .IsUnique();
+
+        // ActivityTypeLookup configuration
+        modelBuilder.Entity<ActivityTypeLookup>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ActivityTypeLookup>()
+            .HasIndex(at => at.IsActive);
+
+        // DirectorateLookup configuration
+        modelBuilder.Entity<DirectorateLookup>()
+            .HasIndex(dl => dl.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<DirectorateLookup>()
+            .HasIndex(dl => dl.IsActive);
+
+        // RiskAppetiteLookup configuration
+        modelBuilder.Entity<RiskAppetiteLookup>()
+            .HasIndex(ral => ral.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<RiskAppetiteLookup>()
+            .HasIndex(ral => ral.IsActive);
 
         // ProjectObjective configuration
         modelBuilder.Entity<ProjectObjective>()
