@@ -16,6 +16,7 @@ public interface IProductsApiService
     Task<List<CategoryValueDto>> GetBusinessAreaCategoryValuesAsync();
     Task<List<CategoryValueDto>> GetUserGroupCategoryValuesAsync();
     Task<bool> UpdateProductPhaseAsync(string fipsId, int phaseCategoryValueId);
+    Task<bool> RemoveDuplicatePhasesAsync(string fipsId, int phaseCategoryValueIdToKeep);
     Task<bool> UpdateProductBusinessAreaAsync(string fipsId, int businessAreaCategoryValueId);
     Task<bool> UpdateProductUserGroupsAsync(string fipsId, IEnumerable<int> userGroupCategoryValueIds);
     Task<bool> UpdateProductStateAsync(string fipsId, string state);
@@ -25,5 +26,6 @@ public interface IProductsApiService
     Task<EntraUserDto?> GetOrCreateEntraUserAsync(string emailAddress, string? entraId = null, string? displayName = null, string? firstName = null, string? lastName = null);
     Task<bool> UpdateProductServiceOwnerAsync(string fipsId, int entraUserId);
     Task<bool> UpdateProductRoleAsync(string fipsId, string roleFieldName, int entraUserId);
+    Task<bool> UpdateProductBasicInfoAsync(string fipsId, string? title, string? shortDescription, string? longDescription, string? cmdbSysId);
 }
 

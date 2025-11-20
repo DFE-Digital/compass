@@ -100,17 +100,84 @@
             </div>
         </div>
 
+        <!-- Status Updates -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Status updates</h3>
+                <div class="card-tools">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates">View all</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.StatusUpdates?.Any() == true)
+                {
+                    var recentUpdates = Model.StatusUpdates.OrderByDescending(su => su.CreatedAt).Take(2).ToList();
+                    @foreach (var update in recentUpdates)
+                    {
+                        <div class="p-3 @(update != recentUpdates.Last() ? "border-bottom" : "")">
+                            <div class="mb-2">
+                                <small class="text-muted">@update.CreatedAt.ToString("d MMMM yyyy 'at' HH:mm")</small>
+                                @if (update.CreatedByUser != null)
+                                {
+                                    <small class="text-muted"> by @update.CreatedByUser.Name</small>
+                                }
+                            </div>
+                            <p class="mb-0">
+                                @if (update.Narrative.Length > 200)
+                                {
+                                    @update.Narrative.Substring(0, 200)<text>…</text>
+                                }
+                                else
+                                {
+                                    @update.Narrative
+                                }
+                            </p>
+                        </div>
+                    }
+                    @if (Model.StatusUpdates.Count > 2)
+                    {
+                        <div class="p-3 border-top">
+                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates" class="btn btn-sm btn-outline-secondary">
+                                View all @Model.StatusUpdates.Count status updates
+                            </a>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No status updates recorded yet.</p>
+                        <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates" class="btn btn-sm btn-primary mt-2">
+                            Add status update
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+
         @if (Model.IsFlagship)
         {
             <!-- Flagship Project Deliverables -->
             <div class="card mb-4">
                 <div class="card-header">
-                    <h3 class="card-title">Flagship Project Deliverables</h3>
+                    <h3 class="card-title">
+                        @{
+                            var deliverableCount = deliverableProjects.Count;
+                            if (deliverableCount > 0)
+                            {
+                                <text>1 to @deliverableCount of @deliverableCount @(deliverableCount == 1 ? "deliverable" : "deliverables")</text>
+                            }
+                            else
+                            {
+                                <text>Flagship Project Deliverables</text>
+                            }
+                        }
+                    </h3>
                     <div class="card-tools">
                         <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })">Manage deliverables</a>
                     </div>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body">
                     @if (deliverableProjects.Any())
                     {
                         <div class="table-responsive">
@@ -195,10 +262,10 @@
                     <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
                 </div>
             </div>
-            <div class="card-body table-responsive p-0">
+            <div class="card-body ">
                 @if (activeMilestones.Any())
                 {
-                    <table class="table table-hover text-nowrap milestones-table">
+                    <table class="table table-hover text-nowrap milestones-table table-responsive p-0">
                         <thead>
                             <tr>
                                 <th class="col-name">Name</th>
@@ -250,10 +317,10 @@
                 }
                 else
                 {
-                    <div class="p-4">
+               
                         <p class="text-muted mb-2">No active milestones.</p>
                         <a class="btn btn-success btn-sm" asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
-                    </div>
+            
                 }
             </div>
             @if (activeMilestones.Count > 5)
@@ -278,6 +345,15 @@
             <div class="card-body p-0">
                 <table class="table table-borderless mb-0 project-overview-summary">
                     <tbody>
+                        <tr>
+                            <td class="summary-label"><strong>Title</strong></td>
+                            <td class="summary-value">
+                                @Model.Title
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editTitleModal">Change</a>
+                            </td>
+                        </tr>
                         <tr>
                             <td class="summary-label"><strong>Status</strong></td>
                             <td class="summary-value">
@@ -347,6 +423,41 @@
                             </td>
                         </tr>
                         <tr>
+                            <td class="summary-label"><strong>SROs</strong></td>
+                            <td class="summary-value">
+                                @if (Model.SeniorResponsibleOfficers?.Any() == true)
+                                {
+                                    @foreach (var sro in Model.SeniorResponsibleOfficers.Take(2))
+                                    {
+                                        @if (sro.User != null)
+                                        {
+                                            <div>
+                                                @if (!string.IsNullOrEmpty(sro.User.Email))
+                                                {
+                                                    <a href="mailto:@sro.User.Email">@sro.User.Name</a>
+                                                }
+                                                else
+                                                {
+                                                    @sro.User.Name
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                    @if (Model.SeniorResponsibleOfficers.Count > 2)
+                                    {
+                                        <small class="text-muted">+ @(Model.SeniorResponsibleOfficers.Count - 2) more</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contactsandgovernance">View all</a>
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="summary-label"><strong>Start date</strong></td>
                             <td class="summary-value">
                                 @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
@@ -378,6 +489,74 @@
                                 <a href="#" data-toggle="modal" data-target="#editTargetDateModal">Change</a>
                             </td>
                         </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Activity type</strong></td>
+                            <td class="summary-value">
+                                @if (Model.ActivityTypeLookup != null)
+                                {
+                                    @Model.ActivityTypeLookup.Name
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editActivityTypeModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Risk appetite</strong></td>
+                            <td class="summary-value">
+                                @if (Model.RiskAppetiteLookup != null)
+                                {
+                                    <span class="badge @GetRiskAppetiteBadgeClass(Model.RiskAppetiteLookup.Name)">
+                                        @Model.RiskAppetiteLookup.Name
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editRiskAppetiteModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Service type</strong></td>
+                            <td class="summary-value">
+                                @{
+                                    var serviceTypes = new List<string>();
+                                    if (Model.IsInternal) serviceTypes.Add("Internal");
+                                    if (Model.IsExternal) serviceTypes.Add("External");
+                                    if (!serviceTypes.Any())
+                                    {
+                                        serviceTypes.Add("Not set");
+                                    }
+                                }
+                                @string.Join(", ", serviceTypes)
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editServiceTypeModal">Change</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Subject to spend control</strong></td>
+                            <td class="summary-value">
+                                @if (Model.IsSubjectToSpendControl.HasValue)
+                                {
+                                    @(Model.IsSubjectToSpendControl.Value ? "Yes" : "No")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editSpendControlModal">Change</a>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -388,7 +567,9 @@
             <div class="card-header">
                 <h3 class="card-title">Team</h3>
                 <div class="card-tools">
-                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team">View team</a>
+                    <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse Team section">
+                        <i class="fas fa-minus" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -421,14 +602,7 @@
                             </tbody>
                         </table>
                  
-                    @if (Model.ProjectContacts.Count > 5)
-                    {
-                        <div class=" mt-3 p-3 border-top">
-                            <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team" class="btn btn-sm btn-outline-secondary">
-                                View entire team
-                            </a>
-                        </div>
-                    }
+                  
                 }
                 else
                 {
@@ -436,6 +610,11 @@
                         <p class="text-muted mb-0">No contacts recorded.</p>
                     </div>
                 }
+            </div>
+            <div class="card-footer">
+                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team" class="btn btn-sm btn-outline-secondary">
+                    View full team
+                </a>
             </div>
         </div>
     </div>
@@ -640,6 +819,34 @@
                                 }
                             }
                         </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Title Modal -->
+<div class="modal fade" id="editTitleModal" tabindex="-1" role="dialog" aria-labelledby="editTitleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editTitleModalLabel">Edit Project Title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateTitle" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="titleInput">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="titleInput" name="title" value="@Model.Title" required maxlength="450" />
+                        <small class="form-text text-muted">Enter the project title</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -938,6 +1145,167 @@
     </div>
 </div>
 
+<!-- Edit Activity Type Modal -->
+<div class="modal fade" id="editActivityTypeModal" tabindex="-1" role="dialog" aria-labelledby="editActivityTypeModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editActivityTypeModalLabel">Edit activity type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateActivityType" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="activityTypeLookupId">Activity type</label>
+                        <select class="form-control" id="activityTypeLookupId" name="activityTypeLookupId">
+                            <option value="">Not set</option>
+                            @if (ViewBag.ActivityTypes != null)
+                            {
+                                @foreach (var activityType in ViewBag.ActivityTypes)
+                                {
+                                    @if (Model.ActivityTypeLookupId == activityType.Id)
+                                    {
+                                        <option value="@activityType.Id" selected>@activityType.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@activityType.Id">@activityType.Name</option>
+                                    }
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Risk Appetite Modal -->
+<div class="modal fade" id="editRiskAppetiteModal" tabindex="-1" role="dialog" aria-labelledby="editRiskAppetiteModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editRiskAppetiteModalLabel">Edit risk appetite</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateRiskAppetite" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="riskAppetiteLookupId">Risk appetite</label>
+                        <select class="form-control" id="riskAppetiteLookupId" name="riskAppetiteLookupId">
+                            <option value="">Not set</option>
+                            @if (ViewBag.RiskAppetites != null)
+                            {
+                                @foreach (var riskAppetite in ViewBag.RiskAppetites)
+                                {
+                                    @if (Model.RiskAppetiteLookupId == riskAppetite.Id)
+                                    {
+                                        <option value="@riskAppetite.Id" selected>@riskAppetite.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@riskAppetite.Id">@riskAppetite.Name</option>
+                                    }
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Service Type Modal -->
+<div class="modal fade" id="editServiceTypeModal" tabindex="-1" role="dialog" aria-labelledby="editServiceTypeModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editServiceTypeModalLabel">Edit service type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateServiceType" method="post" id="serviceTypeForm">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isInternalOverview" name="isInternal" value="true" @(Model.IsInternal ? "checked" : "") />
+                            <label class="form-check-label" for="isInternalOverview">Internal</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isExternalOverview" name="isExternal" value="true" @(Model.IsExternal ? "checked" : "") />
+                            <label class="form-check-label" for="isExternalOverview">External</label>
+                        </div>
+                        <small class="form-text text-muted">Select whether the service is internal, external, or both</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Subject to Spend Control Modal -->
+<div class="modal fade" id="editSpendControlModal" tabindex="-1" role="dialog" aria-labelledby="editSpendControlModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSpendControlModalLabel">Edit subject to spend control</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSubjectToSpendControl" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Subject to spend control</label>
+                        <div>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="spendControlYes" name="isSubjectToSpendControl" value="true" @(Model.IsSubjectToSpendControl == true ? "checked" : "") />
+                                <label class="form-check-label" for="spendControlYes">Yes</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="spendControlNo" name="isSubjectToSpendControl" value="false" @(Model.IsSubjectToSpendControl == false ? "checked" : "") />
+                                <label class="form-check-label" for="spendControlNo">No</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" class="form-check-input" id="spendControlNotSet" name="isSubjectToSpendControl" value="" @(!Model.IsSubjectToSpendControl.HasValue ? "checked" : "") />
+                                <label class="form-check-label" for="spendControlNotSet">Not set</label>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Indicate whether this project is subject to spend control</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @functions {
     string GetRagBadgeClass(string ragStatus)
     {
@@ -962,6 +1330,24 @@
             "Amber-Red" => "rag-card-amber-red",
             "Red" => "rag-card-red",
             _ => "rag-card-default"
+        };
+    }
+
+    string GetRiskAppetiteBadgeClass(string riskAppetite)
+    {
+        if (string.IsNullOrEmpty(riskAppetite))
+            return "badge-secondary";
+            
+        var normalized = riskAppetite.Trim().ToLowerInvariant();
+        
+        return normalized switch
+        {
+            "averse" => "badge-danger",
+            "minimal" => "badge-danger",
+            "cautious" => "badge-warning",
+            "open" => "badge-success",
+            "eager" => "badge-success",
+            _ => "badge-secondary"
         };
     }
 }
@@ -1042,6 +1428,17 @@
                     e.preventDefault();
                     alert('Please provide a reason for changing the status.');
                     return false;
+                }
+            });
+
+            // Service type form - ensure unchecked checkboxes send empty value
+            $('#serviceTypeForm').on('submit', function(e) {
+                // For unchecked checkboxes, add a hidden input with empty value so the controller knows it was unchecked
+                if (!$('#isInternalOverview').is(':checked')) {
+                    $(this).append('<input type="hidden" name="isInternal" value="" />');
+                }
+                if (!$('#isExternalOverview').is(':checked')) {
+                    $(this).append('<input type="hidden" name="isExternal" value="" />');
                 }
             });
         }

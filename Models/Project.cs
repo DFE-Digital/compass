@@ -114,4 +114,54 @@ public class Project
     public ICollection<Models.Action> Actions { get; set; } = new List<Models.Action>();
     public ICollection<Decision> Decisions { get; set; } = new List<Decision>();
     public ICollection<Kpi> Kpis { get; set; } = new List<Kpi>();
+
+    // New fields for enhanced project tracking
+    public ICollection<ProjectStatusUpdate> StatusUpdates { get; set; } = new List<ProjectStatusUpdate>();
+    public ICollection<ProjectSeniorResponsibleOfficer> SeniorResponsibleOfficers { get; set; } = new List<ProjectSeniorResponsibleOfficer>();
+    public ICollection<ProjectDirectorate> Directorates { get; set; } = new List<ProjectDirectorate>();
+    public ICollection<ProjectBudgetOwner> BudgetOwners { get; set; } = new List<ProjectBudgetOwner>();
+    public ICollection<ProjectPmoContact> PmoContacts { get; set; } = new List<ProjectPmoContact>();
+
+    // Activity Type
+    public int? ActivityTypeLookupId { get; set; }
+    [ForeignKey(nameof(ActivityTypeLookupId))]
+    public ActivityTypeLookup? ActivityTypeLookup { get; set; }
+
+    // Risk Appetite
+    public int? RiskAppetiteLookupId { get; set; }
+    [ForeignKey(nameof(RiskAppetiteLookupId))]
+    public RiskAppetiteLookup? RiskAppetiteLookup { get; set; }
+
+    // Service Users (free text)
+    public string? ServiceUsers { get; set; }
+
+    // Internal/External flags
+    public bool IsInternal { get; set; } = false;
+    public bool IsExternal { get; set; } = false;
+
+    public bool? IsSubjectToSpendControl { get; set; }
+
+    // Phase dates - Discovery
+    public DateTime? DiscoveryStartDatePlanned { get; set; }
+    public DateTime? DiscoveryStartDateActual { get; set; }
+    public DateTime? DiscoveryEndDatePlanned { get; set; }
+    public DateTime? DiscoveryEndDateActual { get; set; }
+
+    // Phase dates - Alpha
+    public DateTime? AlphaStartDatePlanned { get; set; }
+    public DateTime? AlphaStartDateActual { get; set; }
+    public DateTime? AlphaEndDatePlanned { get; set; }
+    public DateTime? AlphaEndDateActual { get; set; }
+
+    // Phase dates - Private Beta
+    public DateTime? PrivateBetaStartDatePlanned { get; set; }
+    public DateTime? PrivateBetaStartDateActual { get; set; }
+    public DateTime? PrivateBetaEndDatePlanned { get; set; }
+    public DateTime? PrivateBetaEndDateActual { get; set; }
+
+    // Phase dates - Public Beta
+    public DateTime? PublicBetaStartDatePlanned { get; set; }
+    public DateTime? PublicBetaStartDateActual { get; set; }
+    public DateTime? PublicBetaEndDatePlanned { get; set; }
+    public DateTime? PublicBetaEndDateActual { get; set; }
 }

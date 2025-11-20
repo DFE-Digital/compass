@@ -254,6 +254,7 @@ builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
+builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController

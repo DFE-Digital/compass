@@ -1,0 +1,732 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Manage FIPS Data";
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+    var selectedProduct = ViewBag.SelectedProduct as Compass.Models.ProductDto;
+    var searchTerm = ViewBag.SearchTerm as string;
+    var phaseCategoryValues = ViewBag.PhaseCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var businessAreaCategoryValues = ViewBag.BusinessAreaCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+    var userGroupCategoryValues = ViewBag.UserGroupCategoryValues as List<Compass.Models.CategoryValueDto> ?? new List<Compass.Models.CategoryValueDto>();
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage FIPS Data</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">Manage FIPS Data</h1>
+                <p class="text-muted mb-0">
+                    <small>Search for a product by name or FIPS ID to view and update its information</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DataQualityNavigation")
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @Html.Raw(TempData["SuccessMessage"])
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div id="inlineAlertContainer"></div>
+
+        <!-- Search Form -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Search for Product</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" asp-action="ManageFipsData" id="productSearchForm">
+                            <div class="row">
+                                <div class="col-lg-10 col-md-9 col-12">
+                                    <div class="form-group">
+                                        <label for="searchTerm">Product name, FIPS ID, Business Area, or Phase</label>
+                                        <div class="product-autocomplete" style="position: relative;">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="searchTerm" 
+                                                   name="searchTerm" 
+                                                   value="@searchTerm"
+                                                   placeholder="Start typing to search..." 
+                                                   autocomplete="off" />
+                                            <input type="hidden" id="selectedFipsId" name="selectedFipsId" />
+                                            <div class="autocomplete-results" id="autocompleteResults" style="display: none;"></div>
+                                        </div>
+                                        <small class="form-text text-muted">Search by product title, FIPS ID, business area, or phase</small>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-3 col-12">
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="submit" class="btn btn-primary btn-block">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(searchTerm) && selectedProduct == null)
+        {
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>No product found</strong> matching "<strong>@searchTerm</strong>". Please try a different search term.
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (selectedProduct != null)
+        {
+            var currentPhase = selectedProduct.CategoryValues?.FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+            var currentBusinessArea = selectedProduct.CategoryValues?.FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true);
+            var currentUserGroups = selectedProduct.CategoryValues?.Where(cv => cv.CategoryType?.Name?.Equals("User group", StringComparison.OrdinalIgnoreCase) == true || 
+                                                                                cv.CategoryType?.Name?.Equals("User Group", StringComparison.OrdinalIgnoreCase) == true ||
+                                                                                cv.CategoryType?.Name?.Equals("User groups", StringComparison.OrdinalIgnoreCase) == true ||
+                                                                                cv.CategoryType?.Name?.Equals("User Groups", StringComparison.OrdinalIgnoreCase) == true).ToList() ?? new List<Compass.Models.CategoryValueDto>();
+            var currentUserGroupIds = currentUserGroups.Select(ug => ug.Id).ToList();
+
+            <!-- Product Editor -->
+            <div class="row mb-3">
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="card-title mb-0">
+                                Product Editor
+                                @if (!string.IsNullOrEmpty(selectedProduct.FipsId))
+                                {
+                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{selectedProduct.FipsId}")" 
+                                       target="_blank" 
+                                       rel="noopener noreferrer"
+                                       class="btn btn-sm btn-outline-primary ml-2">
+                                        <i class="fas fa-external-link-alt"></i> View in FIPS
+                                    </a>
+                                }
+                            </h3>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleEditMode">
+                                <i class="fas fa-edit"></i> <span id="editModeText">Edit Mode</span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <form id="productEditorForm" action="@Url.Action("UpdateProductComprehensive", "DdtReports")" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="fipsId" value="@selectedProduct.FipsId" />
+                                <input type="hidden" name="returnUrl" value="@Url.Action("ManageFipsData", new { searchTerm = selectedProduct.FipsId })" />
+                                
+                                <!-- Basic Information -->
+                                <div class="row mb-4">
+                                    <div class="col-12">
+                                        <h5 class="border-bottom pb-2 mb-3">Basic Information</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="productTitle">Product Title *</label>
+                                            <input type="text" class="form-control" id="productTitle" name="title" value="@selectedProduct.Title" required />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="fipsId">FIPS ID</label>
+                                            <input type="text" class="form-control" id="fipsId" value="@selectedProduct.FipsId" readonly style="background-color: #e9ecef;" />
+                                            <small class="form-text text-muted">FIPS ID cannot be changed</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="cmdbSysId">CMDB Sys ID</label>
+                                            <input type="text" class="form-control" id="cmdbSysId" name="cmdbSysId" value="@(selectedProduct.CmdbSysId ?? "")" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="productState">State</label>
+                                            <select class="form-control" id="productState" name="state">
+                                                @if (selectedProduct.State == "New")
+                                                {
+                                                    <option value="New" selected>New</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="New">New</option>
+                                                }
+                                                @if (selectedProduct.State == "Active")
+                                                {
+                                                    <option value="Active" selected>Active</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="Active">Active</option>
+                                                }
+                                                @if (selectedProduct.State == "Rejected")
+                                                {
+                                                    <option value="Rejected" selected>Rejected</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="Rejected">Rejected</option>
+                                                }
+                                                @if (selectedProduct.State == "Deleted")
+                                                {
+                                                    <option value="Deleted" selected>Deleted</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="Deleted">Deleted</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="shortDescription">Short Description</label>
+                                            <textarea class="form-control" id="shortDescription" name="shortDescription" rows="3">@(selectedProduct.ShortDescription ?? "")</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="longDescription">Long Description</label>
+                                            <textarea class="form-control" id="longDescription" name="longDescription" rows="5">@(selectedProduct.LongDescription ?? "")</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="productUrl">Product URL</label>
+                                            <input type="url" class="form-control" id="productUrl" name="productUrl" value="@(selectedProduct.ProductUrl ?? "")" placeholder="https://example.gov.uk" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Categories -->
+                                <div class="row mb-4">
+                                    <div class="col-12">
+                                        <h5 class="border-bottom pb-2 mb-3">Categories</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="phaseCategoryValueId">Phase</label>
+                                            <select class="form-control" id="phaseCategoryValueId" name="phaseCategoryValueId">
+                                                <option value="">-- Select Phase --</option>
+                                                @foreach (var phase in phaseCategoryValues.OrderBy(p => p.SortOrder ?? int.MaxValue).ThenBy(p => p.Name))
+                                                {
+                                                    @if (currentPhase?.Id == phase.Id)
+                                                    {
+                                                        <option value="@phase.Id" selected>@phase.Name</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@phase.Id">@phase.Name</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="businessAreaCategoryValueId">Business Area</label>
+                                            <select class="form-control" id="businessAreaCategoryValueId" name="businessAreaCategoryValueId">
+                                                <option value="">-- Select Business Area --</option>
+                                                @foreach (var area in businessAreaCategoryValues.OrderBy(a => a.SortOrder ?? int.MaxValue).ThenBy(a => a.Name))
+                                                {
+                                                    @if (currentBusinessArea?.Id == area.Id)
+                                                    {
+                                                        <option value="@area.Id" selected>@area.Name</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@area.Id">@area.Name</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="userGroupCategoryValueIds">User Groups</label>
+                                            <select class="form-control" id="userGroupCategoryValueIds" name="userGroupCategoryValueIds" multiple size="8">
+                                                @foreach (var userGroup in userGroupCategoryValues.OrderBy(u => u.Name))
+                                                {
+                                                    @if (currentUserGroupIds.Contains(userGroup.Id))
+                                                    {
+                                                        <option value="@userGroup.Id" selected>@userGroup.Name</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@userGroup.Id">@userGroup.Name</option>
+                                                    }
+                                                }
+                                            </select>
+                                            <small class="form-text text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple user groups</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Role Assignments -->
+                                <div class="row mb-4">
+                                    <div class="col-12">
+                                        <h5 class="border-bottom pb-2 mb-3">Role Assignments</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Service Owner</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="service_owner">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="serviceOwnerSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="serviceOwnerObjectId" class="js-user-picker-objectid" value="@(selectedProduct.ServiceOwner?.EntraId ?? "")" />
+                                                <input type="hidden" name="serviceOwnerEmail" class="js-user-picker-email" value="@(selectedProduct.ServiceOwner?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="serviceOwnerName" class="js-user-picker-name" value="@(selectedProduct.ServiceOwner?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No service owner selected.">
+                                                    @if (selectedProduct.ServiceOwner != null)
+                                                    {
+                                                        <span>@selectedProduct.ServiceOwner.DisplayName (@selectedProduct.ServiceOwner.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No service owner selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Product Manager</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="product_manager">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="productManagerSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="productManagerObjectId" class="js-user-picker-objectid" value="@(selectedProduct.ProductManager?.EntraId ?? "")" />
+                                                <input type="hidden" name="productManagerEmail" class="js-user-picker-email" value="@(selectedProduct.ProductManager?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="productManagerName" class="js-user-picker-name" value="@(selectedProduct.ProductManager?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No product manager selected.">
+                                                    @if (selectedProduct.ProductManager != null)
+                                                    {
+                                                        <span>@selectedProduct.ProductManager.DisplayName (@selectedProduct.ProductManager.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No product manager selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Delivery Manager</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="delivery_manager">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="deliveryManagerSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="deliveryManagerObjectId" class="js-user-picker-objectid" value="@(selectedProduct.DeliveryManager?.EntraId ?? "")" />
+                                                <input type="hidden" name="deliveryManagerEmail" class="js-user-picker-email" value="@(selectedProduct.DeliveryManager?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="deliveryManagerName" class="js-user-picker-name" value="@(selectedProduct.DeliveryManager?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No delivery manager selected.">
+                                                    @if (selectedProduct.DeliveryManager != null)
+                                                    {
+                                                        <span>@selectedProduct.DeliveryManager.DisplayName (@selectedProduct.DeliveryManager.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No delivery manager selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Information Asset Owner</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="Information_asset_owner">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="informationAssetOwnerSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="informationAssetOwnerObjectId" class="js-user-picker-objectid" value="@(selectedProduct.InformationAssetOwner?.EntraId ?? "")" />
+                                                <input type="hidden" name="informationAssetOwnerEmail" class="js-user-picker-email" value="@(selectedProduct.InformationAssetOwner?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="informationAssetOwnerName" class="js-user-picker-name" value="@(selectedProduct.InformationAssetOwner?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No information asset owner selected.">
+                                                    @if (selectedProduct.InformationAssetOwner != null)
+                                                    {
+                                                        <span>@selectedProduct.InformationAssetOwner.DisplayName (@selectedProduct.InformationAssetOwner.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No information asset owner selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Senior Responsible Officer</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="senior_responsible_officer">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="seniorResponsibleOfficerSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="seniorResponsibleOfficerObjectId" class="js-user-picker-objectid" value="@(selectedProduct.SeniorResponsibleOfficer?.EntraId ?? "")" />
+                                                <input type="hidden" name="seniorResponsibleOfficerEmail" class="js-user-picker-email" value="@(selectedProduct.SeniorResponsibleOfficer?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="seniorResponsibleOfficerName" class="js-user-picker-name" value="@(selectedProduct.SeniorResponsibleOfficer?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No senior responsible officer selected.">
+                                                    @if (selectedProduct.SeniorResponsibleOfficer != null)
+                                                    {
+                                                        <span>@selectedProduct.SeniorResponsibleOfficer.DisplayName (@selectedProduct.SeniorResponsibleOfficer.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No senior responsible officer selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Service Designs</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="service_designs">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="serviceDesignsSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="serviceDesignsObjectId" class="js-user-picker-objectid" value="@(selectedProduct.ServiceDesign?.EntraId ?? "")" />
+                                                <input type="hidden" name="serviceDesignsEmail" class="js-user-picker-email" value="@(selectedProduct.ServiceDesign?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="serviceDesignsName" class="js-user-picker-name" value="@(selectedProduct.ServiceDesign?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No service designs selected.">
+                                                    @if (selectedProduct.ServiceDesign != null)
+                                                    {
+                                                        <span>@selectedProduct.ServiceDesign.DisplayName (@selectedProduct.ServiceDesign.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No service designs selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>User Researchers</label>
+                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" data-role="user_researchers">
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control js-user-picker-input" id="userResearchersSearch" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                </div>
+                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                <input type="hidden" name="userResearchersObjectId" class="js-user-picker-objectid" value="@(selectedProduct.UserResearcher?.EntraId ?? "")" />
+                                                <input type="hidden" name="userResearchersEmail" class="js-user-picker-email" value="@(selectedProduct.UserResearcher?.EmailAddress ?? "")" />
+                                                <input type="hidden" name="userResearchersName" class="js-user-picker-name" value="@(selectedProduct.UserResearcher?.DisplayName ?? "")" />
+                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No user researchers selected.">
+                                                    @if (selectedProduct.UserResearcher != null)
+                                                    {
+                                                        <span>@selectedProduct.UserResearcher.DisplayName (@selectedProduct.UserResearcher.EmailAddress)</span>
+                                                        <button type="button" class="btn btn-sm btn-link text-danger js-user-picker-clear ml-2">Clear</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No user researchers selected.</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary btn-lg">
+                                            <i class="fas fa-save mr-2"></i> Save All Changes
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-lg ml-2" onclick="window.location.reload()">
+                                            <i class="fas fa-times mr-2"></i> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var updateProductUrl = '@Url.Action("UpdateProductComprehensive", "DdtReports")';
+            var searchTimeout;
+            
+            // Initialize product autocomplete (reusing existing pattern from Project/_Products.cshtml)
+            function initProductAutocomplete() {
+                var $input = $('#searchTerm');
+                var $hiddenInput = $('#selectedFipsId');
+                var $resultsContainer = $('#autocompleteResults');
+
+                // Handle input with debounce
+                $input.on('input', function() {
+                    clearTimeout(searchTimeout);
+                    var searchTerm = $(this).val().trim();
+
+                    if (searchTerm.length < 2) {
+                        $resultsContainer.hide().empty();
+                        $hiddenInput.val('');
+                        return;
+                    }
+
+                    searchTimeout = setTimeout(function() {
+                        $.ajax({
+                            url: '/api/products/search',
+                            data: { q: searchTerm },
+                            dataType: 'json',
+                            success: function(data) {
+                                displayProductResults(data.results, $resultsContainer);
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Failed to search products:', status, error);
+                                $resultsContainer.html('<div class="autocomplete-item no-results">Error searching products</div>');
+                                $resultsContainer.show();
+                            }
+                        });
+                    }, 300);
+                });
+
+                function displayProductResults(results, $container) {
+                    $container.empty();
+
+                    if (!results || results.length === 0) {
+                        $container.html('<div class="autocomplete-item no-results">No products found</div>');
+                        $container.show();
+                        return;
+                    }
+
+                    results.forEach(function(product) {
+                        var $item = $('<div class="autocomplete-item" data-fips-id="' + product.fipsId + '"></div>');
+                        var html = '<div class="autocomplete-name">' + escapeHtml(product.title) + '</div>';
+                        html += '<div class="autocomplete-details">';
+                        html += '<span class="badge badge-secondary mr-2">' + escapeHtml(product.fipsId) + '</span>';
+                        if (product.phase && product.phase !== "Not specified") {
+                            html += '<span class="badge badge-info mr-2">' + escapeHtml(product.phase) + '</span>';
+                        }
+                        if (product.businessArea) {
+                            html += '<span class="badge badge-primary">' + escapeHtml(product.businessArea) + '</span>';
+                        }
+                        html += '</div>';
+                        $item.html(html);
+                        
+                        $item.on('click', function() {
+                            $input.val(product.text);
+                            $hiddenInput.val(product.fipsId);
+                            $container.hide();
+                            // Auto-submit the form
+                            $('#productSearchForm').submit();
+                        });
+                        
+                        $container.append($item);
+                    });
+
+                    $container.show();
+                }
+
+                // Hide results when clicking outside
+                $(document).on('click', function(e) {
+                    if (!$(e.target).closest('.product-autocomplete').length && 
+                        !$(e.target).closest('.autocomplete-results').length) {
+                        $resultsContainer.hide();
+                    }
+                });
+
+                // Keyboard navigation (reusing existing pattern)
+                $input.on('keydown', function(e) {
+                    var $items = $resultsContainer.find('.autocomplete-item:not(.no-results)');
+                    var $selected = $items.filter('.selected');
+
+                    if (!$resultsContainer.is(':visible') || $items.length === 0) {
+                        return;
+                    }
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if ($selected.length === 0) {
+                            $items.first().addClass('selected');
+                        } else {
+                            $selected.removeClass('selected');
+                            var $next = $selected.next('.autocomplete-item');
+                            if ($next.length) {
+                                $next.addClass('selected');
+                            } else {
+                                $items.first().addClass('selected');
+                            }
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if ($selected.length === 0) {
+                            $items.last().addClass('selected');
+                        } else {
+                            $selected.removeClass('selected');
+                            var $prev = $selected.prev('.autocomplete-item');
+                            if ($prev.length) {
+                                $prev.addClass('selected');
+                            } else {
+                                $items.last().addClass('selected');
+                            }
+                        }
+                    } else if (e.key === 'Enter') {
+                        if ($selected.length) {
+                            e.preventDefault();
+                            $selected.click();
+                        }
+                    } else if (e.key === 'Escape') {
+                        $resultsContainer.hide();
+                    }
+                });
+            }
+
+            function escapeHtml(text) {
+                var map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text ? text.replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
+            }
+
+            initProductAutocomplete();
+            
+            function showInlineAlert(type, message) {
+                var $container = $('#inlineAlertContainer');
+                var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+                    message +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+                    '<span aria-hidden="true">&times;</span>' +
+                    '</button>' +
+                    '</div>';
+                $container.html(alertHtml);
+                $container[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            // Handle comprehensive form submission
+            $('#productEditorForm').on('submit', function(e) {
+                e.preventDefault();
+                var $form = $(this);
+                var $submitButton = $form.find('button[type="submit"]');
+                var originalText = $submitButton.html();
+                $submitButton.prop('disabled', true);
+                $submitButton.html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                
+                // Collect all form data
+                var formData = new FormData(this);
+                
+                // Add anti-forgery token
+                var token = $('input[name="__RequestVerificationToken"]').val();
+                if (token) {
+                    formData.append('__RequestVerificationToken', token);
+                }
+                
+                fetch(updateProductUrl, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData,
+                    credentials: 'same-origin'
+                })
+                .then(function(response) {
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data && data.success) {
+                        showInlineAlert('success', data.message || 'Product updated successfully.');
+                        // Reload page after a short delay to show updated data
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        showInlineAlert('danger', (data && data.message) || 'Update failed. Please try again.');
+                        $submitButton.prop('disabled', false);
+                        $submitButton.html(originalText);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    showInlineAlert('danger', 'An unexpected error occurred. Please check the console for details.');
+                    $submitButton.prop('disabled', false);
+                    $submitButton.html(originalText);
+                });
+            });
+        });
+    </script>
+}
+
