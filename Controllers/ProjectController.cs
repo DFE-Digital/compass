@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
 using Compass.ViewModels;
+using Microsoft.Extensions.Configuration;
 
 namespace Compass.Controllers
 {
@@ -21,6 +22,8 @@ namespace Compass.Controllers
         private readonly CompassDbContext _context;
         private readonly ILogger<ProjectController> _logger;
         private readonly IProductsApiService _productsApiService;
+        private readonly IConfiguration _configuration;
+        private readonly IProjectImportService _projectImportService;
         private const string OtherOptionValue = "__other__";
 
         private static readonly (string Value, string Label)[] MilestoneStatuses = new[]
@@ -85,11 +88,13 @@ namespace Compass.Controllers
             "High"
         };
 
-        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService)
+        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService, IConfiguration configuration, IProjectImportService projectImportService)
         {
             _context = context;
             _logger = logger;
             _productsApiService = productsApiService;
+            _configuration = configuration;
+            _projectImportService = projectImportService;
         }
 
         // GET: Project
@@ -180,7 +185,7 @@ namespace Compass.Controllers
             }
 
             var orderedQuery = query
-                .OrderByDescending(p => p.CreatedAt)
+                .OrderBy(p => p.Title)
                 .AsNoTracking();
 
             var totalCount = await orderedQuery.CountAsync();
@@ -294,6 +299,20 @@ namespace Compass.Controllers
                 .Include(p => p.RagHistory)
                 .Include(p => p.ResourceFunding)
                 .Include(p => p.FundingHistory)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.RiskAppetiteLookup)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.BusinessAreaLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.StatusUpdates)
+                    .ThenInclude(su => su.CreatedByUser)
+                .Include(p => p.StatusUpdates)
+                    .ThenInclude(su => su.UpdatedByUser)
                 .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
 
             if (project == null)
@@ -372,6 +391,30 @@ namespace Compass.Controllers
                 .OrderBy(a => a.SortOrder)
                 .ToListAsync();
 
+            ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+                .Where(at => at.IsActive)
+                .OrderBy(at => at.SortOrder)
+                .ThenBy(at => at.Name)
+                .ToListAsync();
+
+            ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
+                .Where(ra => ra.IsActive)
+                .OrderBy(ra => ra.SortOrder)
+                .ThenBy(ra => ra.Name)
+                .ToListAsync();
+
+            ViewBag.Directorates = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+
             ViewBag.DecisionStatuses = new[] { "pending", "approved", "rejected", "superseded" };
             ViewBag.ActionStatuses = ActionStatusValues;
             ViewBag.ActionPriorities = ActionPriorityValues;
@@ -403,11 +446,12 @@ namespace Compass.Controllers
                 _logger.LogInformation("Found {Count} deliverable relationships for project {ProjectId}", 
                     deliverableIds.Count, project.Id);
 
-                ViewBag.DeliverableProjects = await _context.Projects
+                ViewBag.DeliverableProjects = (await _context.Projects
                     .Include(p => p.Milestones)
                     .Where(p => deliverableIds.Contains(p.Id) && !p.IsDeleted)
+                    .ToListAsync())
                     .OrderBy(p => p.Title)
-                    .ToListAsync();
+                    .ToList();
                 
                 _logger.LogInformation("Loaded {Count} deliverable projects for project {ProjectId}", 
                     ((List<Project>)ViewBag.DeliverableProjects).Count, project.Id);
@@ -421,7 +465,109 @@ namespace Compass.Controllers
             ViewBag.CurrentTab = tab;
             ViewBag.IssuesView = string.Equals(issuesView, "priority", StringComparison.OrdinalIgnoreCase) ? "priority" : "table";
 
+            // Fetch service assessments for delivery phases tab
+            if (tab == "deliveryphases" && !string.IsNullOrEmpty(project.ProjectCode))
+            {
+                try
+                {
+                    var assessments = await GetServiceAssessmentsByProjectCodeAsync(project.ProjectCode);
+                    ViewBag.ServiceAssessments = assessments;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error fetching service assessments for project code {ProjectCode}", project.ProjectCode);
+                    ViewBag.ServiceAssessments = new List<object>();
+                }
+            }
+            else
+            {
+                ViewBag.ServiceAssessments = new List<object>();
+            }
+
             return View(project);
+        }
+
+        private async Task<List<object>> GetServiceAssessmentsByProjectCodeAsync(string projectCode)
+        {
+            try
+            {
+                var apiUrl = _configuration["ServiceAssessments:ApiUrl"] ?? "https://service-assessments.education.gov.uk";
+                var apiToken = _configuration["ServiceAssessments:ApiToken"] ?? "";
+
+                if (string.IsNullOrEmpty(apiToken))
+                {
+                    _logger.LogWarning("Service Assessment API token not configured");
+                    return new List<object>();
+                }
+
+                using var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.Clear();
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiToken}");
+
+                // Fetch all published assessments and filter by project code
+                var endpoint = $"{apiUrl}/api/assessments/published/summary";
+                _logger.LogInformation("Fetching service assessments from {Endpoint}", endpoint);
+
+                var response = await httpClient.GetAsync(endpoint);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Service Assessment API call failed with status {StatusCode}", response.StatusCode);
+                    return new List<object>();
+                }
+
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                var apiResponse = System.Text.Json.JsonSerializer.Deserialize<ServiceAssessmentsApiResponse>(jsonContent, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (apiResponse?.Assessments == null)
+                {
+                    return new List<object>();
+                }
+
+                // Filter by project code
+                var filteredAssessments = apiResponse.Assessments
+                    .Where(a => !string.IsNullOrEmpty(a.ProjectCode) && 
+                                string.Equals(a.ProjectCode, projectCode, StringComparison.OrdinalIgnoreCase))
+                    .Select(a => new
+                    {
+                        a.Id,
+                        a.AssessmentID,
+                        a.Phase,
+                        a.Outcome,
+                        a.AssessmentDateTime,
+                        a.Type,
+                        a.Status
+                    })
+                    .Cast<object>()
+                    .ToList();
+
+                return filteredAssessments;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching service assessments by project code {ProjectCode}", projectCode);
+                return new List<object>();
+            }
+        }
+
+        private class ServiceAssessmentsApiResponse
+        {
+            public List<ServiceAssessmentSummary>? Assessments { get; set; }
+        }
+
+        private class ServiceAssessmentSummary
+        {
+            public int Id { get; set; }
+            public int AssessmentID { get; set; }
+            public string? Phase { get; set; }
+            public string? Outcome { get; set; }
+            public DateTime? AssessmentDateTime { get; set; }
+            public string? Type { get; set; }
+            public string? Status { get; set; }
+            public string ProjectCode { get; set; } = string.Empty;
         }
 
         // POST: Project/AddSuccess
@@ -1281,6 +1427,32 @@ namespace Compass.Controllers
             .ThenBy(g => g.Name)
             .ToListAsync();
 
+        // Get new lookup tables
+        ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+            .Where(at => at.IsActive)
+            .OrderBy(at => at.SortOrder)
+            .ThenBy(at => at.Name)
+            .ToListAsync();
+
+        ViewBag.Directorates = await _context.BusinessAreaLookups
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .ToListAsync();
+
+        ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
+            .Where(ra => ra.IsActive)
+            .OrderBy(ra => ra.SortOrder)
+            .ThenBy(ra => ra.Name)
+            .ToListAsync();
+
+        // Get business area lookups for Budget Owner
+        ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .ToListAsync();
+
         ViewBag.PrimaryContactUser = null;
 
         return View(new Project());
@@ -1294,7 +1466,21 @@ namespace Compass.Controllers
                 return NotFound();
             }
 
-            var project = await _context.Projects.FindAsync(id);
+            var project = await _context.Projects
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.RiskAppetiteLookup)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.BusinessAreaLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.StatusUpdates)
+                    .ThenInclude(su => su.CreatedByUser)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
             if (project == null || project.IsDeleted)
             {
                 return NotFound();
@@ -1303,13 +1489,39 @@ namespace Compass.Controllers
             // Get phases from CMS for dropdown
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
 
+            // Get new lookup tables
+            ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+                .Where(at => at.IsActive)
+                .OrderBy(at => at.SortOrder)
+                .ThenBy(at => at.Name)
+                .ToListAsync();
+
+            ViewBag.Directorates = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+
+            ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
+                .Where(ra => ra.IsActive)
+                .OrderBy(ra => ra.SortOrder)
+                .ThenBy(ra => ra.Name)
+                .ToListAsync();
+
+            // Get business area lookups for Budget Owner
+            ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+
             return View(project);
         }
 
         // POST: Project/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments")] Project project)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
         {
             if (id != project.Id)
             {
@@ -1332,7 +1544,13 @@ namespace Compass.Controllers
             {
                 try
                 {
-                    var existingProject = await _context.Projects.FindAsync(id);
+                    var existingProject = await _context.Projects
+                        .Include(p => p.SeniorResponsibleOfficers)
+                        .Include(p => p.Directorates)
+                        .Include(p => p.BudgetOwners)
+                        .Include(p => p.PmoContacts)
+                        .FirstOrDefaultAsync(p => p.Id == id);
+
                     if (existingProject == null || existingProject.IsDeleted)
                     {
                         return NotFound();
@@ -1341,6 +1559,7 @@ namespace Compass.Controllers
                     _logger.LogInformation("Updating project {ProjectId} - Old Phase: {OldPhase}, New Phase: {NewPhase}", 
                         id, existingProject.Phase, project.Phase);
 
+                    // Update basic fields
                     existingProject.Title = project.Title;
                     existingProject.BusinessArea = project.BusinessArea;
                     existingProject.HistoricBuRTId = project.HistoricBuRTId;
@@ -1348,7 +1567,36 @@ namespace Compass.Controllers
                     existingProject.Phase = project.Phase;
                     existingProject.IsMultiDepartmentProject = project.IsMultiDepartmentProject;
                     existingProject.OtherDepartments = project.OtherDepartments;
+                    
+                    // Update new fields
+                    existingProject.ActivityTypeLookupId = project.ActivityTypeLookupId;
+                    existingProject.RiskAppetiteLookupId = project.RiskAppetiteLookupId;
+                    existingProject.ServiceUsers = project.ServiceUsers;
+                    existingProject.IsInternal = project.IsInternal;
+                    existingProject.IsExternal = project.IsExternal;
+                    
+                    // Update phase dates
+                    existingProject.DiscoveryStartDatePlanned = project.DiscoveryStartDatePlanned;
+                    existingProject.DiscoveryStartDateActual = project.DiscoveryStartDateActual;
+                    existingProject.DiscoveryEndDatePlanned = project.DiscoveryEndDatePlanned;
+                    existingProject.DiscoveryEndDateActual = project.DiscoveryEndDateActual;
+                    existingProject.AlphaStartDatePlanned = project.AlphaStartDatePlanned;
+                    existingProject.AlphaStartDateActual = project.AlphaStartDateActual;
+                    existingProject.AlphaEndDatePlanned = project.AlphaEndDatePlanned;
+                    existingProject.AlphaEndDateActual = project.AlphaEndDateActual;
+                    existingProject.PrivateBetaStartDatePlanned = project.PrivateBetaStartDatePlanned;
+                    existingProject.PrivateBetaStartDateActual = project.PrivateBetaStartDateActual;
+                    existingProject.PrivateBetaEndDatePlanned = project.PrivateBetaEndDatePlanned;
+                    existingProject.PrivateBetaEndDateActual = project.PrivateBetaEndDateActual;
+                    existingProject.PublicBetaStartDatePlanned = project.PublicBetaStartDatePlanned;
+                    existingProject.PublicBetaStartDateActual = project.PublicBetaStartDateActual;
+                    existingProject.PublicBetaEndDatePlanned = project.PublicBetaEndDatePlanned;
+                    existingProject.PublicBetaEndDateActual = project.PublicBetaEndDateActual;
+                    
                     existingProject.UpdatedAt = DateTime.UtcNow;
+
+                    // Handle many-to-many relationships
+                    await UpdateProjectRelationshipsAsync(existingProject);
 
                     await _context.SaveChangesAsync();
 
@@ -1373,16 +1621,377 @@ namespace Compass.Controllers
                 }
             }
 
-            // Reload phases if there's an error
+            // Reload ViewBag data if there's an error
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+            ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+                .Where(at => at.IsActive)
+                .OrderBy(at => at.SortOrder)
+                .ThenBy(at => at.Name)
+                .ToListAsync();
+            ViewBag.Directorates = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+            ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
+                .Where(ra => ra.IsActive)
+                .OrderBy(ra => ra.SortOrder)
+                .ThenBy(ra => ra.Name)
+                .ToListAsync();
+            ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
 
             return View(project);
+        }
+
+        private async Task UpdateProjectRelationshipsAsync(Project project)
+        {
+            // Update Senior Responsible Officers
+            var sroUserIdsString = Request.Form["SelectedSroUserIds"].ToString();
+            var selectedSroUserIds = new List<Guid>();
+            if (!string.IsNullOrEmpty(sroUserIdsString))
+            {
+                selectedSroUserIds = sroUserIdsString
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(x => Guid.TryParse(x.Trim(), out _))
+                    .Select(x => Guid.Parse(x.Trim()))
+                    .ToList();
+            }
+
+            // Load existing SROs with users
+            var existingSros = await _context.ProjectSeniorResponsibleOfficers
+                .Include(sro => sro.User)
+                .Where(sro => sro.ProjectId == project.Id)
+                .ToListAsync();
+
+            // Remove existing SROs not in the selection
+            var srosToRemove = existingSros
+                .Where(sro => sro.User != null && !selectedSroUserIds.Contains(Guid.Parse(sro.User.AzureObjectId ?? "")))
+                .ToList();
+            foreach (var sro in srosToRemove)
+            {
+                _context.ProjectSeniorResponsibleOfficers.Remove(sro);
+            }
+
+            // Add new SROs
+            var existingSroUserIds = existingSros
+                .Where(sro => sro.User != null)
+                .Select(sro => Guid.Parse(sro.User!.AzureObjectId ?? ""))
+                .ToList();
+            foreach (var userId in selectedSroUserIds)
+            {
+                if (!existingSroUserIds.Contains(userId))
+                {
+                    var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                    if (user != null)
+                    {
+                        project.SeniorResponsibleOfficers.Add(new ProjectSeniorResponsibleOfficer
+                        {
+                            ProjectId = project.Id,
+                            UserId = user.Id,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+
+            // Update Directorates
+            var selectedDirectorateIds = Request.Form["SelectedDirectorateIds"]
+                .Where(x => !string.IsNullOrEmpty(x) && int.TryParse(x, out _))
+                .Select(int.Parse)
+                .ToList();
+
+                var directoratesToRemove = project.Directorates
+                    .Where(d => !selectedDirectorateIds.Contains(d.BusinessAreaLookupId))
+                    .ToList();
+                foreach (var directorate in directoratesToRemove)
+                {
+                    _context.ProjectDirectorates.Remove(directorate);
+                }
+
+                var existingDirectorateIds = project.Directorates
+                    .Select(d => d.BusinessAreaLookupId)
+                    .ToList();
+                foreach (var directorateId in selectedDirectorateIds)
+                {
+                    if (!existingDirectorateIds.Contains(directorateId))
+                    {
+                        project.Directorates.Add(new ProjectDirectorate
+                        {
+                            ProjectId = project.Id,
+                            BusinessAreaLookupId = directorateId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+            // Update Budget Owners
+            var selectedBudgetOwnerIds = Request.Form["SelectedBudgetOwnerIds"]
+                .Where(x => !string.IsNullOrEmpty(x) && int.TryParse(x, out _))
+                .Select(int.Parse)
+                .ToList();
+
+            var budgetOwnersToRemove = project.BudgetOwners
+                .Where(bo => !selectedBudgetOwnerIds.Contains(bo.BusinessAreaLookupId))
+                .ToList();
+            foreach (var budgetOwner in budgetOwnersToRemove)
+            {
+                _context.ProjectBudgetOwners.Remove(budgetOwner);
+            }
+
+            var existingBudgetOwnerIds = project.BudgetOwners
+                .Select(bo => bo.BusinessAreaLookupId)
+                .ToList();
+            foreach (var budgetOwnerId in selectedBudgetOwnerIds)
+            {
+                if (!existingBudgetOwnerIds.Contains(budgetOwnerId))
+                {
+                    project.BudgetOwners.Add(new ProjectBudgetOwner
+                    {
+                        ProjectId = project.Id,
+                        BusinessAreaLookupId = budgetOwnerId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            // Update PMO Contacts
+            var pmoUserIdsString = Request.Form["SelectedPmoUserIds"].ToString();
+            var selectedPmoUserIds = new List<Guid>();
+            if (!string.IsNullOrEmpty(pmoUserIdsString))
+            {
+                selectedPmoUserIds = pmoUserIdsString
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(x => Guid.TryParse(x.Trim(), out _))
+                    .Select(x => Guid.Parse(x.Trim()))
+                    .ToList();
+            }
+
+            // Load existing PMO contacts with users
+            var existingPmoContacts = await _context.ProjectPmoContacts
+                .Include(pc => pc.User)
+                .Where(pc => pc.ProjectId == project.Id)
+                .ToListAsync();
+
+            var pmoContactsToRemove = existingPmoContacts
+                .Where(pc => pc.User != null && !selectedPmoUserIds.Contains(Guid.Parse(pc.User.AzureObjectId ?? "")))
+                .ToList();
+            foreach (var pmoContact in pmoContactsToRemove)
+            {
+                _context.ProjectPmoContacts.Remove(pmoContact);
+            }
+
+            var existingPmoUserIds = existingPmoContacts
+                .Where(pc => pc.User != null)
+                .Select(pc => Guid.Parse(pc.User!.AzureObjectId ?? ""))
+                .ToList();
+            foreach (var userId in selectedPmoUserIds)
+            {
+                if (!existingPmoUserIds.Contains(userId))
+                {
+                    var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                    if (user != null)
+                    {
+                        project.PmoContacts.Add(new ProjectPmoContact
+                        {
+                            ProjectId = project.Id,
+                            UserId = user.Id,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // STATUS UPDATES
+        // ========================================
+
+        // POST: Project/AddStatusUpdate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddStatusUpdate(int projectId, string narrative, DateTime? createdAt)
+        {
+            if (string.IsNullOrWhiteSpace(narrative))
+            {
+                TempData["ErrorMessage"] = "Status update narrative is required.";
+                return RedirectToAction(nameof(Details), new { id = projectId });
+            }
+
+            var project = await _context.Projects.FindAsync(projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return Unauthorized();
+            }
+
+            // Get current user's Entra info
+            var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+            var userEmailClaim = User.FindFirst(ClaimTypes.Email)?.Value ?? currentUser.Email;
+            var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value ?? currentUser.Name;
+
+            // Get or create EntraUser in CMS if we have an ObjectId
+            EntraUserDto? entraUser = null;
+            if (!string.IsNullOrWhiteSpace(userObjectIdClaim) && Guid.TryParse(userObjectIdClaim, out var objectIdGuid))
+            {
+                try
+                {
+                    entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                        userEmailClaim ?? string.Empty,
+                        userObjectIdClaim,
+                        userNameClaim,
+                        currentUser.FirstName,
+                        currentUser.LastName
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get or create EntraUser for status update creator");
+                }
+            }
+
+            var createdDate = createdAt.HasValue ? createdAt.Value.Date : DateTime.UtcNow.Date;
+
+            var statusUpdate = new ProjectStatusUpdate
+            {
+                ProjectId = projectId,
+                Narrative = narrative,
+                CreatedByEntraId = entraUser?.EntraId ?? userObjectIdClaim,
+                CreatedByName = entraUser?.DisplayName ?? userNameClaim,
+                CreatedByEmail = entraUser?.EmailAddress ?? userEmailClaim,
+                CreatedByUserId = currentUser.Id, // Keep for legacy compatibility
+                CreatedAt = createdDate
+            };
+
+            _context.ProjectStatusUpdates.Add(statusUpdate);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Status update added successfully.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        // POST: Project/EditStatusUpdate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditStatusUpdate(int projectId, int statusUpdateId, string narrative, DateTime? createdAt, string? createdByEntraId, string? createdByEmail, string? createdByName)
+        {
+            if (string.IsNullOrWhiteSpace(narrative))
+            {
+                TempData["ErrorMessage"] = "Status update narrative is required.";
+                return RedirectToAction(nameof(Details), new { id = projectId });
+            }
+
+            var statusUpdate = await _context.ProjectStatusUpdates
+                .FirstOrDefaultAsync(su => su.Id == statusUpdateId && su.ProjectId == projectId);
+
+            if (statusUpdate == null)
+            {
+                return NotFound();
+            }
+
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return Unauthorized();
+            }
+
+            // Update narrative
+            statusUpdate.Narrative = narrative;
+            
+            // Update date if provided
+            if (createdAt.HasValue)
+            {
+                statusUpdate.CreatedAt = createdAt.Value;
+            }
+            
+            // Update creator if EntraUser fields provided
+            if (!string.IsNullOrWhiteSpace(createdByEntraId) || !string.IsNullOrWhiteSpace(createdByEmail))
+            {
+                // Get or create EntraUser in CMS if we have EntraId
+                EntraUserDto? entraUser = null;
+                if (!string.IsNullOrWhiteSpace(createdByEntraId) && Guid.TryParse(createdByEntraId, out _))
+                {
+                    try
+                    {
+                        entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                            createdByEmail ?? string.Empty,
+                            createdByEntraId,
+                            createdByName,
+                            null,
+                            null
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get or create EntraUser for status update creator");
+                    }
+                }
+
+                // Use EntraUser data if available, otherwise use provided values
+                statusUpdate.CreatedByEntraId = entraUser?.EntraId ?? createdByEntraId;
+                statusUpdate.CreatedByName = entraUser?.DisplayName ?? createdByName;
+                statusUpdate.CreatedByEmail = entraUser?.EmailAddress ?? createdByEmail;
+            }
+            
+            // If this was a bulk import, mark it as no longer a bulk import since it's been manually edited
+            if (statusUpdate.IsBulkImport)
+            {
+                statusUpdate.IsBulkImport = false;
+            }
+            
+            statusUpdate.UpdatedByUserId = currentUser.Id;
+            statusUpdate.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Status update updated successfully.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        // POST: Project/DeleteStatusUpdate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> DeleteStatusUpdate(int projectId, int statusUpdateId)
+        {
+            var statusUpdate = await _context.ProjectStatusUpdates
+                .FirstOrDefaultAsync(su => su.Id == statusUpdateId && su.ProjectId == projectId);
+
+            if (statusUpdate == null)
+            {
+                return NotFound();
+            }
+
+            _context.ProjectStatusUpdates.Remove(statusUpdate);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Status update deleted successfully.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        private async Task<User?> GetCurrentUserAsync()
+        {
+            var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+            if (string.IsNullOrWhiteSpace(userObjectIdClaim) || !Guid.TryParse(userObjectIdClaim, out var objectId))
+            {
+                return null;
+            }
+
+            return await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == objectId.ToString());
         }
 
         // POST: Project/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,HistoricBuRTId,TotalPermFte,TotalMspFte,Status,IsMultiDepartmentProject,OtherDepartments,DeliveryPriorityId,PrimaryContactUserId")] Project project)
+        public async Task<IActionResult> Create([Bind("Title,Aim,StartDate,TargetDeliveryDate,IsFlagship,IsAiInitiative,RagStatus,RagJustification,Phase,BusinessArea,HistoricBuRTId,TotalPermFte,TotalMspFte,Status,IsMultiDepartmentProject,OtherDepartments,DeliveryPriorityId,PrimaryContactUserId,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
         {
             _logger.LogInformation("Create POST called - Title: {Title}, Aim: {Aim}", project.Title, project.Aim);
             _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
@@ -1548,8 +2157,12 @@ namespace Compass.Controllers
 
                     await _context.SaveChangesAsync();
 
+                    // Handle new many-to-many relationships after project is saved
+                    await UpdateProjectRelationshipsAsync(project);
+                    await _context.SaveChangesAsync();
+
                     TempData["SuccessMessage"] = "Project created successfully!";
-                    return RedirectToAction(nameof(Index));
+                    return RedirectToAction(nameof(Details), new { id = project.Id });
                 }
                 catch (Exception ex)
                 {
@@ -2166,6 +2779,12 @@ namespace Compass.Controllers
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    TempData["ErrorMessage"] = "Title is required.";
+                    return RedirectToAction(nameof(Details), new { id });
+                }
+
                 var project = await _context.Projects.FindAsync(id);
                 if (project == null || project.IsDeleted)
                 {
@@ -2173,16 +2792,18 @@ namespace Compass.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                project.Title = title;
+                project.Title = title.Trim();
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Project title updated successfully.";
+                return RedirectToAction(nameof(Details), new { id });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating project title");
+                _logger.LogError(ex, "Error updating project title for project {ProjectId}", id);
                 TempData["ErrorMessage"] = "An error occurred while updating the project title.";
+                return RedirectToAction(nameof(Details), new { id });
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "settings" });
@@ -3113,6 +3734,150 @@ namespace Compass.Controllers
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
         }
 
+        // POST: Project/UpdateActivityType
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateActivityType(int id, int? activityTypeLookupId)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Validate activity type exists if provided
+                if (activityTypeLookupId.HasValue)
+                {
+                    var activityType = await _context.ActivityTypeLookups.FindAsync(activityTypeLookupId.Value);
+                    if (activityType == null || !activityType.IsActive)
+                    {
+                        TempData["ErrorMessage"] = "Selected activity type is not valid.";
+                        return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+                    }
+                }
+
+                project.ActivityTypeLookupId = activityTypeLookupId;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Activity type updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating activity type");
+                TempData["ErrorMessage"] = "An error occurred while updating the activity type.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateRiskAppetite
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateRiskAppetite(int id, int? riskAppetiteLookupId)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Validate risk appetite exists if provided
+                if (riskAppetiteLookupId.HasValue)
+                {
+                    var riskAppetite = await _context.RiskAppetiteLookups.FindAsync(riskAppetiteLookupId.Value);
+                    if (riskAppetite == null || !riskAppetite.IsActive)
+                    {
+                        TempData["ErrorMessage"] = "Selected risk appetite is not valid.";
+                        return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+                    }
+                }
+
+                project.RiskAppetiteLookupId = riskAppetiteLookupId;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Risk appetite updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating risk appetite");
+                TempData["ErrorMessage"] = "An error occurred while updating the risk appetite.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateServiceUsers
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateServiceUsers(int id, string? serviceUsers)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.ServiceUsers = serviceUsers;
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Service users updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating service users");
+                TempData["ErrorMessage"] = "An error occurred while updating the service users.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateServiceType
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateServiceType(int id)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Checkboxes: when checked, they send "true", when unchecked they send empty string (via JS) or nothing
+                // Check if the form field exists and equals "true"
+                var isInternalValue = Request.Form["isInternal"].ToString();
+                var isExternalValue = Request.Form["isExternal"].ToString();
+                
+                project.IsInternal = !string.IsNullOrEmpty(isInternalValue) && isInternalValue == "true";
+                project.IsExternal = !string.IsNullOrEmpty(isExternalValue) && isExternalValue == "true";
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Service type updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating service type");
+                TempData["ErrorMessage"] = "An error occurred while updating the service type.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
         // POST: Project/UpdateStartDate
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -3169,6 +3934,389 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateSubjectToSpendControl
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSubjectToSpendControl(int id, string? isSubjectToSpendControl)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Parse the radio button value
+                if (string.IsNullOrEmpty(isSubjectToSpendControl))
+                {
+                    project.IsSubjectToSpendControl = null;
+                }
+                else if (bool.TryParse(isSubjectToSpendControl, out bool value))
+                {
+                    project.IsSubjectToSpendControl = value;
+                }
+                else
+                {
+                    project.IsSubjectToSpendControl = null;
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Subject to spend control updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating subject to spend control");
+                TempData["ErrorMessage"] = "An error occurred while updating subject to spend control.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateSros
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSros(int id, string selectedSroUserIds)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var selectedUserIds = new List<Guid>();
+                if (!string.IsNullOrEmpty(selectedSroUserIds))
+                {
+                    selectedUserIds = selectedSroUserIds
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Where(x => Guid.TryParse(x.Trim(), out _))
+                        .Select(x => Guid.Parse(x.Trim()))
+                        .ToList();
+                }
+
+                // Remove existing SROs not in the selection
+                var existingSros = project.SeniorResponsibleOfficers.ToList();
+                var srosToRemove = existingSros
+                    .Where(sro => sro.User != null && !selectedUserIds.Contains(Guid.Parse(sro.User.AzureObjectId ?? "")))
+                    .ToList();
+                foreach (var sro in srosToRemove)
+                {
+                    _context.ProjectSeniorResponsibleOfficers.Remove(sro);
+                }
+
+                // Add new SROs
+                var existingSroUserIds = existingSros
+                    .Where(sro => sro.User != null)
+                    .Select(sro => Guid.Parse(sro.User!.AzureObjectId ?? ""))
+                    .ToList();
+                foreach (var userId in selectedUserIds)
+                {
+                    if (!existingSroUserIds.Contains(userId))
+                    {
+                        var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                        if (user != null)
+                        {
+                            project.SeniorResponsibleOfficers.Add(new ProjectSeniorResponsibleOfficer
+                            {
+                                ProjectId = project.Id,
+                                UserId = user.Id,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Senior Responsible Officers updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating SROs");
+                TempData["ErrorMessage"] = "An error occurred while updating Senior Responsible Officers.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        // POST: Project/UpdatePmoContacts
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdatePmoContacts(int id, string selectedPmoUserIds)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var selectedUserIds = new List<Guid>();
+                if (!string.IsNullOrEmpty(selectedPmoUserIds))
+                {
+                    selectedUserIds = selectedPmoUserIds
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Where(x => Guid.TryParse(x.Trim(), out _))
+                        .Select(x => Guid.Parse(x.Trim()))
+                        .ToList();
+                }
+
+                // Remove existing PMO contacts not in the selection
+                var existingPmoContacts = project.PmoContacts.ToList();
+                var pmoContactsToRemove = existingPmoContacts
+                    .Where(pc => pc.User != null && !selectedUserIds.Contains(Guid.Parse(pc.User.AzureObjectId ?? "")))
+                    .ToList();
+                foreach (var pmoContact in pmoContactsToRemove)
+                {
+                    _context.ProjectPmoContacts.Remove(pmoContact);
+                }
+
+                // Add new PMO contacts
+                var existingPmoUserIds = existingPmoContacts
+                    .Where(pc => pc.User != null)
+                    .Select(pc => Guid.Parse(pc.User!.AzureObjectId ?? ""))
+                    .ToList();
+                foreach (var userId in selectedUserIds)
+                {
+                    if (!existingPmoUserIds.Contains(userId))
+                    {
+                        var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                        if (user != null)
+                        {
+                            project.PmoContacts.Add(new ProjectPmoContact
+                            {
+                                ProjectId = project.Id,
+                                UserId = user.Id,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "PMO Contacts updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating PMO contacts");
+                TempData["ErrorMessage"] = "An error occurred while updating PMO Contacts.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        // POST: Project/UpdateDirectorates
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateDirectorates(int id, List<int> selectedDirectorateIds)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.Directorates)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                selectedDirectorateIds ??= new List<int>();
+
+                // Remove existing directorates not in the selection
+                var directoratesToRemove = project.Directorates
+                    .Where(d => !selectedDirectorateIds.Contains(d.BusinessAreaLookupId))
+                    .ToList();
+                foreach (var directorate in directoratesToRemove)
+                {
+                    _context.ProjectDirectorates.Remove(directorate);
+                }
+
+                // Add new directorates
+                var existingDirectorateIds = project.Directorates
+                    .Select(d => d.BusinessAreaLookupId)
+                    .ToList();
+                foreach (var directorateId in selectedDirectorateIds)
+                {
+                    if (!existingDirectorateIds.Contains(directorateId))
+                    {
+                        project.Directorates.Add(new ProjectDirectorate
+                        {
+                            ProjectId = project.Id,
+                            BusinessAreaLookupId = directorateId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Directorates updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating directorates");
+                TempData["ErrorMessage"] = "An error occurred while updating Directorates.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        // POST: Project/UpdateBudgetOwners
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBudgetOwners(int id, List<int> selectedBudgetOwnerIds)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.BudgetOwners)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                selectedBudgetOwnerIds ??= new List<int>();
+
+                // Remove existing budget owners not in the selection
+                var budgetOwnersToRemove = project.BudgetOwners
+                    .Where(bo => !selectedBudgetOwnerIds.Contains(bo.BusinessAreaLookupId))
+                    .ToList();
+                foreach (var budgetOwner in budgetOwnersToRemove)
+                {
+                    _context.ProjectBudgetOwners.Remove(budgetOwner);
+                }
+
+                // Add new budget owners
+                var existingBudgetOwnerIds = project.BudgetOwners
+                    .Select(bo => bo.BusinessAreaLookupId)
+                    .ToList();
+                foreach (var budgetOwnerId in selectedBudgetOwnerIds)
+                {
+                    if (!existingBudgetOwnerIds.Contains(budgetOwnerId))
+                    {
+                        project.BudgetOwners.Add(new ProjectBudgetOwner
+                        {
+                            ProjectId = project.Id,
+                            BusinessAreaLookupId = budgetOwnerId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Budget Owners updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating budget owners");
+                TempData["ErrorMessage"] = "An error occurred while updating Budget Owners.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        // GET: Project/EditDeliveryPhases
+        public async Task<IActionResult> EditDeliveryPhases(int projectId)
+        {
+            var project = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            return View(project);
+        }
+
+        // POST: Project/UpdateDeliveryPhases
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateDeliveryPhases(int id,
+            DateTime? discoveryStartDatePlanned, DateTime? discoveryStartDateActual,
+            DateTime? discoveryEndDatePlanned, DateTime? discoveryEndDateActual,
+            DateTime? alphaStartDatePlanned, DateTime? alphaStartDateActual,
+            DateTime? alphaEndDatePlanned, DateTime? alphaEndDateActual,
+            DateTime? privateBetaStartDatePlanned, DateTime? privateBetaStartDateActual,
+            DateTime? privateBetaEndDatePlanned, DateTime? privateBetaEndDateActual,
+            DateTime? publicBetaStartDatePlanned, DateTime? publicBetaStartDateActual,
+            DateTime? publicBetaEndDatePlanned, DateTime? publicBetaEndDateActual)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Update Discovery dates
+                project.DiscoveryStartDatePlanned = discoveryStartDatePlanned;
+                project.DiscoveryStartDateActual = discoveryStartDateActual;
+                project.DiscoveryEndDatePlanned = discoveryEndDatePlanned;
+                project.DiscoveryEndDateActual = discoveryEndDateActual;
+
+                // Update Alpha dates
+                project.AlphaStartDatePlanned = alphaStartDatePlanned;
+                project.AlphaStartDateActual = alphaStartDateActual;
+                project.AlphaEndDatePlanned = alphaEndDatePlanned;
+                project.AlphaEndDateActual = alphaEndDateActual;
+
+                // Update Private Beta dates
+                project.PrivateBetaStartDatePlanned = privateBetaStartDatePlanned;
+                project.PrivateBetaStartDateActual = privateBetaStartDateActual;
+                project.PrivateBetaEndDatePlanned = privateBetaEndDatePlanned;
+                project.PrivateBetaEndDateActual = privateBetaEndDateActual;
+
+                // Update Public Beta dates
+                project.PublicBetaStartDatePlanned = publicBetaStartDatePlanned;
+                project.PublicBetaStartDateActual = publicBetaStartDateActual;
+                project.PublicBetaEndDatePlanned = publicBetaEndDatePlanned;
+                project.PublicBetaEndDateActual = publicBetaEndDateActual;
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Delivery phases updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating delivery phases");
+                TempData["ErrorMessage"] = "An error occurred while updating delivery phases.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "deliveryphases" });
         }
 
         // POST: Project/AddDeliverable
@@ -8869,5 +10017,81 @@ namespace Compass.Controllers
         }
 
         private sealed record LinkedEntityResult(int Id, int? ProjectId, string Title, string Description);
+
+        // ========================================
+        // CSV IMPORT
+        // ========================================
+
+        // GET: Project/Import
+        [HttpGet]
+        public IActionResult Import()
+        {
+            return View();
+        }
+
+        // POST: Project/PreviewImport
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PreviewImport(IFormFile csvFile)
+        {
+            if (csvFile == null || csvFile.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a CSV file to upload.";
+                return RedirectToAction(nameof(Import));
+            }
+
+            if (!csvFile.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["ErrorMessage"] = "Please upload a CSV file.";
+                return RedirectToAction(nameof(Import));
+            }
+
+            try
+            {
+                using var stream = csvFile.OpenReadStream();
+                var preview = await _projectImportService.PreviewImportAsync(stream);
+
+                return View("ImportPreview", preview);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error previewing CSV import");
+                TempData["ErrorMessage"] = $"Error reading CSV file: {ex.Message}";
+                return RedirectToAction(nameof(Import));
+            }
+        }
+
+        // POST: Project/ProcessImport
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ProcessImport(IFormFile csvFile)
+        {
+            if (csvFile == null || csvFile.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a CSV file to upload.";
+                return RedirectToAction(nameof(Import));
+            }
+
+            if (!csvFile.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["ErrorMessage"] = "Please upload a CSV file.";
+                return RedirectToAction(nameof(Import));
+            }
+
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                using var stream = csvFile.OpenReadStream();
+                var result = await _projectImportService.ImportProjectsFromCsvAsync(stream, currentUser?.Id);
+
+                return View("ImportResults", result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing CSV import");
+                TempData["ErrorMessage"] = $"Error importing projects: {ex.Message}";
+                return RedirectToAction(nameof(Import));
+            }
+        }
     }
 }

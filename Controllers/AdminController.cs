@@ -2869,6 +2869,390 @@ public class AdminController : Controller
     }
 
     // ========================================
+    // SETTINGS - Activity Types
+    // ========================================
+
+    // GET: Admin/ActivityTypes
+    public async Task<IActionResult> ActivityTypes()
+    {
+        var activityTypes = await _context.ActivityTypeLookups
+            .OrderBy(at => at.SortOrder)
+            .ThenBy(at => at.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/ActivityTypes.cshtml", activityTypes);
+    }
+
+    // POST: Admin/CreateActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateActivityType([Bind("Name,Description,SortOrder,IsActive")] ActivityTypeLookup activityType)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.ActivityTypeLookups.AnyAsync(at => at.Name == activityType.Name))
+                {
+                    TempData["ErrorMessage"] = "An activity type with this name already exists.";
+                }
+                else
+                {
+                    activityType.CreatedAt = DateTime.UtcNow;
+                    activityType.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(activityType);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating activity type");
+                TempData["ErrorMessage"] = "An error occurred while creating the activity type. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // POST: Admin/EditActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditActivityType(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] ActivityTypeLookup activityType)
+    {
+        if (id != activityType.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.ActivityTypeLookups.AnyAsync(at => at.Name == activityType.Name && at.Id != id))
+                {
+                    TempData["ErrorMessage"] = "An activity type with this name already exists.";
+                }
+                else
+                {
+                    var existing = await _context.ActivityTypeLookups.FindAsync(id);
+                    if (existing == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existing.Name = activityType.Name;
+                    existing.Description = activityType.Description;
+                    existing.SortOrder = activityType.SortOrder;
+                    existing.IsActive = activityType.IsActive;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating activity type");
+                TempData["ErrorMessage"] = "An error occurred while updating the activity type. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // POST: Admin/DeleteActivityType
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteActivityType(int id)
+    {
+        try
+        {
+            var activityType = await _context.ActivityTypeLookups.FindAsync(id);
+            if (activityType != null)
+            {
+                var projectCount = await _context.Projects.CountAsync(p => p.ActivityTypeLookupId == id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete activity type '{activityType.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.ActivityTypeLookups.Remove(activityType);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Activity type '{activityType.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting activity type");
+            TempData["ErrorMessage"] = "An error occurred while deleting the activity type. Please try again.";
+        }
+
+        return RedirectToAction(nameof(ActivityTypes));
+    }
+
+    // ========================================
+    // SETTINGS - Directorates
+    // ========================================
+
+    // GET: Admin/Directorates
+    public async Task<IActionResult> Directorates()
+    {
+        var directorates = await _context.DirectorateLookups
+            .OrderBy(d => d.SortOrder)
+            .ThenBy(d => d.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/Directorates.cshtml", directorates);
+    }
+
+    // POST: Admin/CreateDirectorate
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateDirectorate([Bind("Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name))
+                {
+                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
+                }
+                else
+                {
+                    directorate.CreatedAt = DateTime.UtcNow;
+                    directorate.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(directorate);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating directorate");
+                TempData["ErrorMessage"] = "An error occurred while creating the directorate. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Directorates));
+    }
+
+    // POST: Admin/EditDirectorate
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditDirectorate(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
+    {
+        if (id != directorate.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name && d.Id != id))
+                {
+                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
+                }
+                else
+                {
+                    var existing = await _context.DirectorateLookups.FindAsync(id);
+                    if (existing == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existing.Name = directorate.Name;
+                    existing.Description = directorate.Description;
+                    existing.SortOrder = directorate.SortOrder;
+                    existing.IsActive = directorate.IsActive;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating directorate");
+                TempData["ErrorMessage"] = "An error occurred while updating the directorate. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(Directorates));
+    }
+
+    // POST: Admin/DeleteDirectorate
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteDirectorate(int id)
+    {
+        try
+        {
+            var directorate = await _context.DirectorateLookups.FindAsync(id);
+            if (directorate != null)
+            {
+                var projectCount = await _context.ProjectDirectorates.CountAsync(pd => pd.BusinessAreaLookupId == id);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete directorate '{directorate.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.DirectorateLookups.Remove(directorate);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting directorate");
+            TempData["ErrorMessage"] = "An error occurred while deleting the directorate. Please try again.";
+        }
+
+        return RedirectToAction(nameof(Directorates));
+    }
+
+    // ========================================
+    // SETTINGS - Risk Appetite
+    // ========================================
+
+    // GET: Admin/RiskAppetites
+    public async Task<IActionResult> RiskAppetites()
+    {
+        var riskAppetites = await _context.RiskAppetiteLookups
+            .OrderBy(ra => ra.SortOrder)
+            .ThenBy(ra => ra.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/RiskAppetites.cshtml", riskAppetites);
+    }
+
+    // POST: Admin/CreateRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRiskAppetite([Bind("Name,Description,SortOrder,IsActive")] RiskAppetiteLookup riskAppetite)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.RiskAppetiteLookups.AnyAsync(ra => ra.Name == riskAppetite.Name))
+                {
+                    TempData["ErrorMessage"] = "A risk appetite with this name already exists.";
+                }
+                else
+                {
+                    riskAppetite.CreatedAt = DateTime.UtcNow;
+                    riskAppetite.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(riskAppetite);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating risk appetite");
+                TempData["ErrorMessage"] = "An error occurred while creating the risk appetite. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
+    }
+
+    // POST: Admin/EditRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRiskAppetite(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] RiskAppetiteLookup riskAppetite)
+    {
+        if (id != riskAppetite.Id)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                if (await _context.RiskAppetiteLookups.AnyAsync(ra => ra.Name == riskAppetite.Name && ra.Id != id))
+                {
+                    TempData["ErrorMessage"] = "A risk appetite with this name already exists.";
+                }
+                else
+                {
+                    var existing = await _context.RiskAppetiteLookups.FindAsync(id);
+                    if (existing == null)
+                    {
+                        return NotFound();
+                    }
+
+                    existing.Name = riskAppetite.Name;
+                    existing.Description = riskAppetite.Description;
+                    existing.SortOrder = riskAppetite.SortOrder;
+                    existing.IsActive = riskAppetite.IsActive;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been updated successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating risk appetite");
+                TempData["ErrorMessage"] = "An error occurred while updating the risk appetite. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
+    }
+
+    // POST: Admin/DeleteRiskAppetite
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRiskAppetite(int id)
+    {
+        try
+        {
+            var riskAppetite = await _context.RiskAppetiteLookups.FindAsync(id);
+            if (riskAppetite != null)
+            {
+                var projectCount = await _context.Projects.CountAsync(p => p.RiskAppetiteLookupId == id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete risk appetite '{riskAppetite.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.RiskAppetiteLookups.Remove(riskAppetite);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Risk appetite '{riskAppetite.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting risk appetite");
+            TempData["ErrorMessage"] = "An error occurred while deleting the risk appetite. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RiskAppetites));
+    }
+
+    // ========================================
     // SETTINGS - GDD Roles
     // ========================================
 

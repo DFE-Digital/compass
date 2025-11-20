@@ -1,0 +1,977 @@
+@model Compass.Controllers.RaidIndexViewModel
+@{
+    ViewData["Title"] = "RAID Management";
+    var viewType = ViewBag.ViewType as string ?? "all";
+    var groupBy = ViewBag.GroupBy as string ?? "none";
+    var currentBusinessArea = ViewBag.CurrentBusinessArea as string;
+    var currentOwnerEmail = ViewBag.CurrentOwnerEmail as string;
+    var currentFipsId = ViewBag.CurrentFipsId as string;
+    var currentStatus = ViewBag.CurrentStatus as string;
+    var currentPage = ViewBag.CurrentPage as int? ?? 1;
+    var pageSize = ViewBag.PageSize as int? ?? 50;
+    var sortBy = ViewBag.SortBy as string;
+    var sortOrder = ViewBag.SortOrder as string ?? "asc";
+    var totalRisks = ViewBag.TotalRisks as int? ?? 0;
+    var totalIssues = ViewBag.TotalIssues as int? ?? 0;
+    var totalActions = ViewBag.TotalActions as int? ?? 0;
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var products = ViewBag.Products as List<Compass.Models.ProductDto> ?? new List<Compass.Models.ProductDto>();
+    var owners = ViewBag.Owners as List<string> ?? new List<string>();
+    var userLeadershipBusinessAreas = ViewBag.UserLeadershipBusinessAreas as List<string> ?? new List<string>();
+    var userByEmail = ViewBag.UserByEmail as Dictionary<string, Compass.Models.User> ?? new Dictionary<string, Compass.Models.User>();
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">RAID Management</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">RAID Management</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        @if (userLeadershipBusinessAreas.Any())
+        {
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Showing RAID items for your leadership business areas: 
+                @string.Join(", ", userLeadershipBusinessAreas)
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- View Type -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">View Type</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { viewType = "all", groupBy, businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(viewType == "all" ? "active" : "")">
+                                All
+                                <span class="badge badge-light float-right">@(totalRisks + totalIssues + totalActions)</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType = "risks", groupBy, businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(viewType == "risks" ? "active" : "")">
+                                Risks
+                                <span class="badge badge-light float-right">@totalRisks</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType = "issues", groupBy, businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(viewType == "issues" ? "active" : "")">
+                                Issues
+                                <span class="badge badge-light float-right">@totalIssues</span>
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType = "actions", groupBy, businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(viewType == "actions" ? "active" : "")">
+                                Actions
+                                <span class="badge badge-light float-right">@totalActions</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group By -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Group By</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Index", new { viewType, groupBy = "none", businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(groupBy == "none" ? "active" : "")">
+                                None
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType, groupBy = "business_area", businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(groupBy == "business_area" ? "active" : "")">
+                                Business Area
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType, groupBy = "owner", businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(groupBy == "owner" ? "active" : "")">
+                                Owner
+                            </a>
+                            <a href="@Url.Action("Index", new { viewType, groupBy = "project", businessArea = currentBusinessArea, ownerEmail = currentOwnerEmail, fipsId = currentFipsId, status = currentStatus, sortBy, sortOrder })" 
+                               class="list-group-item list-group-item-action @(groupBy == "project" ? "active" : "")">
+                                Project
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="filterForm">
+                            <input type="hidden" name="viewType" value="@viewType" />
+                            <input type="hidden" name="groupBy" value="@groupBy" />
+                            
+                            <!-- Business Area -->
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select class="form-control" name="businessArea" id="businessArea" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        <option value="@ba" selected="@(ba == currentBusinessArea)">@ba</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Owner -->
+                            <div class="form-group">
+                                <label for="ownerEmail">Owner</label>
+                                <select class="form-control" name="ownerEmail" id="ownerEmail" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    @foreach (var owner in owners)
+                                    {
+                                        <option value="@owner" selected="@(owner == currentOwnerEmail)">@owner</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Project Delivery Item -->
+                            <div class="form-group">
+                                <label for="fipsId">Project Delivery Item</label>
+                                <select class="form-control" name="fipsId" id="fipsId" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    @foreach (var product in products)
+                                    {
+                                        <option value="@product.FipsId" selected="@(product.FipsId == currentFipsId)">@product.Title</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Status -->
+                            <div class="form-group">
+                                <label for="status">Status</label>
+                                <select class="form-control" name="status" id="status" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    <option value="open" selected="@(currentStatus == "open")">Open</option>
+                                    <option value="closed" selected="@(currentStatus == "closed")">Closed</option>
+                                    <option value="resolved" selected="@(currentStatus == "resolved")">Resolved</option>
+                                    <option value="in_progress" selected="@(currentStatus == "in_progress")">In Progress</option>
+                                    <option value="not_started" selected="@(currentStatus == "not_started")">Not Started</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-sm btn-block">Apply Filters</button>
+                            <a href="@Url.Action("Index", new { viewType, groupBy })" class="btn btn-secondary btn-sm btn-block">Clear Filters</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Data -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (Model.DashboardData != null)
+                {
+                    <!-- Dashboard View -->
+                    <!-- Summary Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h3 class="mb-0">@Model.DashboardData.OpenRisksCount</h3>
+                                            <p class="mb-0">Open Risks</p>
+                                        </div>
+                                        <div class="text-white" style="font-size: 3rem; opacity: 0.3;">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent border-top-0">
+                                    <a href="@Url.Action("Index", new { viewType = "risks", status = "open" })" class="text-white">
+                                        View all risks <i class="fas fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h3 class="mb-0">@Model.DashboardData.OpenIssuesCount</h3>
+                                            <p class="mb-0">Open Issues</p>
+                                        </div>
+                                        <div class="text-white" style="font-size: 3rem; opacity: 0.3;">
+                                            <i class="fas fa-bug"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent border-top-0">
+                                    <a href="@Url.Action("Index", new { viewType = "issues", status = "open" })" class="text-white">
+                                        View all issues <i class="fas fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h3 class="mb-0">@Model.DashboardData.OpenActionsCount</h3>
+                                            <p class="mb-0">Open Actions</p>
+                                        </div>
+                                        <div class="text-white" style="font-size: 3rem; opacity: 0.3;">
+                                            <i class="fas fa-tasks"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent border-top-0">
+                                    <a href="@Url.Action("Index", new { viewType = "actions", status = "in_progress" })" class="text-white">
+                                        View all actions <i class="fas fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Business Areas Table -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Business Areas & Leadership</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Business Area</th>
+                                        <th>Deputy Director / SRO</th>
+                                        <th>Director General</th>
+                                        <th class="text-center">Risks</th>
+                                        <th class="text-center">Issues</th>
+                                        <th class="text-center">Actions</th>
+                                        <th class="text-center">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var summary in Model.DashboardData.BusinessAreaSummaries)
+                                    {
+                                        var total = summary.OpenRisksCount + summary.OpenIssuesCount + summary.OpenActionsCount;
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("Index", new { businessArea = summary.BusinessArea })">
+                                                    <strong>@summary.BusinessArea</strong>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                @if (summary.DeputyDirectorSro != null)
+                                                {
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(summary.DeputyDirectorSro.Email))
+                                                        {
+                                                            <a href="mailto:@summary.DeputyDirectorSro.Email">@summary.DeputyDirectorSro.Name</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @summary.DeputyDirectorSro.Name
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (summary.DirectorGeneral != null)
+                                                {
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(summary.DirectorGeneral.Email))
+                                                        {
+                                                            <a href="mailto:@summary.DirectorGeneral.Email">@summary.DirectorGeneral.Name</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @summary.DirectorGeneral.Name
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (summary.OpenRisksCount > 0)
+                                                {
+                                                    <a href="@Url.Action("Index", new { businessArea = summary.BusinessArea, viewType = "risks", status = "open" })">
+                                                        <span class="badge badge-danger">@summary.OpenRisksCount</span>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (summary.OpenIssuesCount > 0)
+                                                {
+                                                    <a href="@Url.Action("Index", new { businessArea = summary.BusinessArea, viewType = "issues", status = "open" })">
+                                                        <span class="badge badge-warning">@summary.OpenIssuesCount</span>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                @if (summary.OpenActionsCount > 0)
+                                                {
+                                                    <a href="@Url.Action("Index", new { businessArea = summary.BusinessArea, viewType = "actions", status = "in_progress" })">
+                                                        <span class="badge badge-info">@summary.OpenActionsCount</span>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">0</span>
+                                                }
+                                            </td>
+                                            <td class="text-center"><strong>@total</strong></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Top 10 Critical Risks and Issues -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-danger text-white">
+                                    <h3 class="card-title mb-0">Top 10 Critical Risks</h3>
+                                </div>
+                                <div class="card-body table-responsive p-0">
+                                    @if (Model.DashboardData.TopCriticalRisks.Any())
+                                    {
+                                        <table class="table table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Title</th>
+                                                    <th class="text-center">Risk Score</th>
+                                                    <th>Owner</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var risk in Model.DashboardData.TopCriticalRisks)
+                                                {
+                                                    var riskOwner = risk.OwnerEmail != null && userByEmail.ContainsKey(risk.OwnerEmail.ToLower()) 
+                                                        ? userByEmail[risk.OwnerEmail.ToLower()] 
+                                                        : null;
+                                                    <tr>
+                                                        <td>
+                                                            <a href="@Url.Action("Details", "Risk", new { id = risk.Id })">@risk.Title</a>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <span class="badge badge-danger">@risk.RiskScore</span>
+                                                        </td>
+                                                        <td>@(riskOwner?.Name ?? risk.OwnerEmail ?? "Unassigned")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-3 text-center text-muted">
+                                            No critical risks found
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-warning text-white">
+                                    <h3 class="card-title mb-0">Top 10 Critical Issues</h3>
+                                </div>
+                                <div class="card-body table-responsive p-0">
+                                    @if (Model.DashboardData.TopCriticalIssues.Any())
+                                    {
+                                        <table class="table table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Title</th>
+                                                    <th class="text-center">Severity</th>
+                                                    <th>Owner</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var issue in Model.DashboardData.TopCriticalIssues)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <span class="badge badge-danger">Critical</span>
+                                                        </td>
+                                                        <td>@(issue.OwnerUser?.Name ?? issue.OwnerUser?.Email ?? "Unassigned")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-3 text-center text-muted">
+                                            No critical issues found
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (groupBy == "none")
+                {
+                    <!-- Risks Table -->
+                    @if (viewType == "all" || viewType == "risks")
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Risks (@Model.Risks.Count of @totalRisks)</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table risks-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-risk-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-risk-score sortable" data-column="RiskScore" tabindex="0" role="button" aria-label="Sort by Risk Score">Risk Score <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-risk-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-risk-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-risk-owner">Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var risk in Model.Risks)
+                                        {
+                                            var riskOwner = risk.OwnerEmail != null && userByEmail.ContainsKey(risk.OwnerEmail.ToLower()) 
+                                                ? userByEmail[risk.OwnerEmail.ToLower()] 
+                                                : null;
+                                            var riskScoreClass = risk.RiskScore >= 20 ? "badge-danger" : risk.RiskScore >= 15 ? "badge-warning" : risk.RiskScore >= 10 ? "badge-info" : "badge-secondary";
+                                            <tr>
+                                                <td><a href="@Url.Action("Details", "Risk", new { id = risk.Id })">@risk.Title</a></td>
+                                                <td data-sort-value="@risk.RiskScore"><span class="badge @riskScoreClass">@risk.RiskScore</span></td>
+                                                <td>@(risk.BusinessArea ?? "-")</td>
+                                                <td><span class="badge badge-secondary">@risk.Status</span></td>
+                                                <td>@(riskOwner?.Name ?? risk.OwnerEmail ?? "Unassigned")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Issues Table -->
+                    @if (viewType == "all" || viewType == "issues")
+                    {
+                        <div class="card @(viewType == "all" ? "mt-3" : "")">
+                            <div class="card-header">
+                                <h3 class="card-title">Issues (@Model.Issues.Count of @totalIssues)</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table issues-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-issue-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-issue-severity sortable" data-column="Severity" tabindex="0" role="button" aria-label="Sort by Severity">Severity <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-issue-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-issue-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-issue-owner">Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in Model.Issues)
+                                        {
+                                            <tr>
+                                                <td><a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a></td>
+                                                <td data-sort-value="@(issue.Severity == "critical" ? "4" : issue.Severity == "high" ? "3" : issue.Severity == "medium" ? "2" : "1")"><span class="badge badge-@(issue.Severity == "critical" ? "danger" : issue.Severity == "high" ? "warning" : "info")">@issue.Severity</span></td>
+                                                <td>@(issue.BusinessArea ?? "-")</td>
+                                                <td><span class="badge badge-secondary">@issue.Status</span></td>
+                                                <td>@(issue.OwnerUser?.Name ?? issue.OwnerUser?.Email ?? "Unassigned")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Actions Table -->
+                    @if (viewType == "all" || viewType == "actions")
+                    {
+                        <div class="card @(viewType == "all" ? "mt-3" : "")">
+                            <div class="card-header">
+                                <h3 class="card-title">Actions (@Model.Actions.Count of @totalActions)</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table actions-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-action-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-action-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-action-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-action-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-action-assigned">Assigned To</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var action in Model.Actions)
+                                        {
+                                            <tr>
+                                                <td><a href="@Url.Action("Details", "Action", new { id = action.Id })">@action.Title</a></td>
+                                                <td data-sort-value="@(action.Priority == "high" ? "3" : action.Priority == "medium" ? "2" : "1")"><span class="badge badge-@(action.Priority == "high" ? "danger" : action.Priority == "medium" ? "warning" : "info")">@action.Priority</span></td>
+                                                <td>@(action.BusinessArea ?? "-")</td>
+                                                <td><span class="badge badge-secondary">@action.Status</span></td>
+                                                <td>@(action.AssignedToUser?.Name ?? action.AssignedToUser?.Email ?? action.AssignedToEmail ?? "Unassigned")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Pagination -->
+                    @if (groupBy == "none")
+                    {
+                        var totalPagesRisks = (int)Math.Ceiling((double)totalRisks / pageSize);
+                        var totalPagesIssues = (int)Math.Ceiling((double)totalIssues / pageSize);
+                        var totalPagesActions = (int)Math.Ceiling((double)totalActions / pageSize);
+                        var maxTotalPages = Math.Max(Math.Max(totalPagesRisks, totalPagesIssues), totalPagesActions);
+                        var hasRisksPagination = viewType == "all" || viewType == "risks";
+                        var hasIssuesPagination = viewType == "all" || viewType == "issues";
+                        var hasActionsPagination = viewType == "all" || viewType == "actions";
+                        
+                        @if (maxTotalPages > 1)
+                        {
+                            <div class="card mt-3">
+                                <div class="card-footer">
+                                    <nav aria-label="RAID pagination">
+                                        <ul class="pagination justify-content-center mb-0">
+                                            <li class="page-item @(currentPage > 1 ? string.Empty : "disabled")">
+                                                <a class="page-link"
+                                                   asp-action="Index"
+                                                   asp-route-page="@(currentPage > 1 ? currentPage - 1 : 1)"
+                                                   asp-route-viewType="@viewType"
+                                                   asp-route-groupBy="@groupBy"
+                                                   asp-route-businessArea="@currentBusinessArea"
+                                                   asp-route-ownerEmail="@currentOwnerEmail"
+                                                   asp-route-fipsId="@currentFipsId"
+                                                   asp-route-status="@currentStatus"
+                                                   asp-route-pageSize="@pageSize"
+                                                   rel="prev">Previous</a>
+                                            </li>
+                                            @for (var i = 1; i <= maxTotalPages; i++)
+                                            {
+                                                <li class="page-item @(i == currentPage ? "active" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="Index"
+                                                       asp-route-page="@i"
+                                                       asp-route-viewType="@viewType"
+                                                       asp-route-groupBy="@groupBy"
+                                                       asp-route-businessArea="@currentBusinessArea"
+                                                       asp-route-ownerEmail="@currentOwnerEmail"
+                                                       asp-route-fipsId="@currentFipsId"
+                                                       asp-route-status="@currentStatus"
+                                                       asp-route-pageSize="@pageSize">@i</a>
+                                                </li>
+                                            }
+                                            <li class="page-item @(currentPage < maxTotalPages ? string.Empty : "disabled")">
+                                                <a class="page-link"
+                                                   asp-action="Index"
+                                                   asp-route-page="@(currentPage < maxTotalPages ? currentPage + 1 : maxTotalPages)"
+                                                   asp-route-viewType="@viewType"
+                                                   asp-route-groupBy="@groupBy"
+                                                   asp-route-businessArea="@currentBusinessArea"
+                                                   asp-route-ownerEmail="@currentOwnerEmail"
+                                                   asp-route-fipsId="@currentFipsId"
+                                                   asp-route-status="@currentStatus"
+                                                   asp-route-pageSize="@pageSize"
+                                                   rel="next">Next</a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
+                else if (Model.GroupedData != null)
+                {
+                    <!-- Grouped Views -->
+                    @if (groupBy == "business_area")
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Grouped by Business Area</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Business Area</th>
+                                            <th class="text-center">Risks</th>
+                                            <th class="text-center">Issues</th>
+                                            <th class="text-center">Actions</th>
+                                            <th class="text-center">Decisions</th>
+                                            <th class="text-center">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var group in Model.GroupedData.BusinessAreaGroups)
+                                        {
+                                            var total = group.RiskCount + group.IssueCount + group.ActionCount + group.DecisionCount;
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Summary", new { groupBy = "business_area", groupValue = group.BusinessArea })">
+                                                        @group.BusinessArea
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.RiskCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "business_area", groupValue = group.BusinessArea, itemType = "risks" })">
+                                                            <span class="badge badge-info">@group.RiskCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.IssueCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "business_area", groupValue = group.BusinessArea, itemType = "issues" })">
+                                                            <span class="badge badge-warning">@group.IssueCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.ActionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "business_area", groupValue = group.BusinessArea, itemType = "actions" })">
+                                                            <span class="badge badge-primary">@group.ActionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.DecisionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "business_area", groupValue = group.BusinessArea, itemType = "decisions" })">
+                                                            <span class="badge badge-success">@group.DecisionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center"><strong>@total</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (groupBy == "owner")
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Grouped by Owner</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Owner</th>
+                                            <th class="text-center">Risks</th>
+                                            <th class="text-center">Issues</th>
+                                            <th class="text-center">Actions</th>
+                                            <th class="text-center">Decisions</th>
+                                            <th class="text-center">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var group in Model.GroupedData.OwnerGroups)
+                                        {
+                                            var total = group.RiskCount + group.IssueCount + group.ActionCount + group.DecisionCount;
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Summary", new { groupBy = "owner", groupValue = group.OwnerEmail })">
+                                                        @group.OwnerName
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.RiskCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "owner", groupValue = group.OwnerEmail, itemType = "risks" })">
+                                                            <span class="badge badge-info">@group.RiskCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.IssueCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "owner", groupValue = group.OwnerEmail, itemType = "issues" })">
+                                                            <span class="badge badge-warning">@group.IssueCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.ActionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "owner", groupValue = group.OwnerEmail, itemType = "actions" })">
+                                                            <span class="badge badge-primary">@group.ActionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.DecisionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "owner", groupValue = group.OwnerEmail, itemType = "decisions" })">
+                                                            <span class="badge badge-success">@group.DecisionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center"><strong>@total</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (groupBy == "project")
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Grouped by Project</h3>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th class="text-center">Risks</th>
+                                            <th class="text-center">Issues</th>
+                                            <th class="text-center">Actions</th>
+                                            <th class="text-center">Decisions</th>
+                                            <th class="text-center">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var group in Model.GroupedData.ProjectGroups)
+                                        {
+                                            var total = group.RiskCount + group.IssueCount + group.ActionCount + group.DecisionCount;
+                                            <tr>
+                                                <td>
+                                                    <a href="@Url.Action("Summary", new { groupBy = "project", groupValue = group.FipsId })">
+                                                        @group.ProjectTitle
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.RiskCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "project", groupValue = group.FipsId, itemType = "risks" })">
+                                                            <span class="badge badge-info">@group.RiskCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.IssueCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "project", groupValue = group.FipsId, itemType = "issues" })">
+                                                            <span class="badge badge-warning">@group.IssueCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.ActionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "project", groupValue = group.FipsId, itemType = "actions" })">
+                                                            <span class="badge badge-primary">@group.ActionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (group.DecisionCount > 0)
+                                                    {
+                                                        <a href="@Url.Action("Summary", new { groupBy = "project", groupValue = group.FipsId, itemType = "decisions" })">
+                                                            <span class="badge badge-success">@group.DecisionCount</span>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center"><strong>@total</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No grouped data available.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'RiskScore' || column === 'Severity' || column === 'Priority') {
+                        var aSortValue = $(a).find('td').eq(colIndex).attr('data-sort-value');
+                        var bSortValue = $(b).find('td').eq(colIndex).attr('data-sort-value');
+                        aVal = aSortValue ? parseInt(aSortValue) : $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = bSortValue ? parseInt(bSortValue) : $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable .fa-sort-up, .sortable .fa-sort-down').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.find('i').removeClass('fa-sort').addClass(iconClass);
+            }
+        }
+    </script>
+}
+

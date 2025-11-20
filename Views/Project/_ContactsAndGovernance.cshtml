@@ -1,0 +1,596 @@
+@model Compass.Models.Project
+@using System.Linq
+
+<div class="row">
+    <div class="col-lg-12">
+        <!-- Governance Structure -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Governance Structure</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Type</th>
+                                <th style="width: 65%;">Information</th>
+                                <th style="width: 10%;" class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Senior Responsible Officers -->
+                            <tr>
+                                <td class="font-weight-bold">Senior Responsible Officer(s)</td>
+                                <td>
+                                    @if (Model.SeniorResponsibleOfficers?.Any() == true)
+                                    {
+                                        <div>
+                                            @foreach (var sro in Model.SeniorResponsibleOfficers)
+                                            {
+                                                @if (sro.User != null)
+                                                {
+                                                    <div class="mb-1">
+                                                        @if (!string.IsNullOrEmpty(sro.User.Email))
+                                                        {
+                                                            <a href="mailto:@sro.User.Email" class="font-weight-bold">@sro.User.Name</a>
+                                                            <br />
+                                                            <small class="text-muted">@sro.User.Email</small>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="font-weight-bold">@sro.User.Name</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No Senior Responsible Officers assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editSrosModal">Change</a>
+                                </td>
+                            </tr>
+                            
+                            <!-- PMO Contacts -->
+                            <tr>
+                                <td class="font-weight-bold">PMO Contact(s)</td>
+                                <td>
+                                    @if (Model.PmoContacts?.Any() == true)
+                                    {
+                                        <div>
+                                            @foreach (var pmo in Model.PmoContacts)
+                                            {
+                                                @if (pmo.User != null)
+                                                {
+                                                    <div class="mb-1">
+                                                        @if (!string.IsNullOrEmpty(pmo.User.Email))
+                                                        {
+                                                            <a href="mailto:@pmo.User.Email" class="font-weight-bold">@pmo.User.Name</a>
+                                                            <br />
+                                                            <small class="text-muted">@pmo.User.Email</small>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="font-weight-bold">@pmo.User.Name</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No PMO contacts assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editPmoContactsModal">Change</a>
+                                </td>
+                            </tr>
+                            
+                            <!-- Directorates -->
+                            <tr>
+                                <td class="font-weight-bold">Directorate(s)</td>
+                                <td>
+                            @if (Model.Directorates?.Any() == true)
+                            {
+                                <div>
+                                    @foreach (var directorate in Model.Directorates.OrderBy(d => d.BusinessAreaLookup != null ? d.BusinessAreaLookup.Name : ""))
+                                    {
+                                        @if (directorate.BusinessAreaLookup != null)
+                                        {
+                                            <div class="mb-1">
+                                                <span class="font-weight-bold">@directorate.BusinessAreaLookup.Name</span>
+                                                @if (!string.IsNullOrEmpty(directorate.BusinessAreaLookup.Description))
+                                                {
+                                                    <br />
+                                                    <small class="text-muted">@directorate.BusinessAreaLookup.Description</small>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                                    else
+                                    {
+                                        <span class="text-muted">No directorates assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editDirectoratesModal">Change</a>
+                                </td>
+                            </tr>
+                            
+                            <!-- Budget Owners -->
+                            <tr>
+                                <td class="font-weight-bold">Budget Owner(s)</td>
+                                <td>
+                                    @if (Model.BudgetOwners?.Any() == true)
+                                    {
+                                        <div>
+                                            @foreach (var budgetOwner in Model.BudgetOwners.OrderBy(bo => bo.BusinessAreaLookup != null ? bo.BusinessAreaLookup.Name : ""))
+                                            {
+                                                @if (budgetOwner.BusinessAreaLookup != null)
+                                                {
+                                                    <div class="mb-1">
+                                                        <span class="font-weight-bold">@budgetOwner.BusinessAreaLookup.Name</span>
+                                                        @if (!string.IsNullOrEmpty(budgetOwner.BusinessAreaLookup.Description))
+                                                        {
+                                                            <br />
+                                                            <small class="text-muted">@budgetOwner.BusinessAreaLookup.Description</small>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No budget owners assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editBudgetOwnersModal">Change</a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit SROs Modal -->
+<div class="modal fade" id="editSrosModal" tabindex="-1" role="dialog" aria-labelledby="editSrosModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSrosModalLabel">Edit Senior Responsible Officers</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSros" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Search for users</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="sroSearchModal" placeholder="Search for users..." />
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-outline-secondary" id="addSroBtnModal">Add</button>
+                            </div>
+                        </div>
+                        <div id="sroResultsModal" class="list-group mt-2" style="display: none;"></div>
+                        <div id="selectedSrosModal" class="mt-2"></div>
+                        <input type="hidden" name="selectedSroUserIds" id="selectedSroUserIdsModal" />
+                        <small class="form-text text-muted">Select one or more Senior Responsible Officers</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit PMO Contacts Modal -->
+<div class="modal fade" id="editPmoContactsModal" tabindex="-1" role="dialog" aria-labelledby="editPmoContactsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPmoContactsModalLabel">Edit PMO Contacts</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdatePmoContacts" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Search for users</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="pmoSearchModal" placeholder="Search for users..." />
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-outline-secondary" id="addPmoBtnModal">Add</button>
+                            </div>
+                        </div>
+                        <div id="pmoResultsModal" class="list-group mt-2" style="display: none;"></div>
+                        <div id="selectedPmosModal" class="mt-2"></div>
+                        <input type="hidden" name="selectedPmoUserIds" id="selectedPmoUserIdsModal" />
+                        <small class="form-text text-muted">Select one or more PMO contacts</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Directorates Modal -->
+<div class="modal fade" id="editDirectoratesModal" tabindex="-1" role="dialog" aria-labelledby="editDirectoratesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editDirectoratesModalLabel">Edit Directorates</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateDirectorates" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Directorate(s)</label>
+                        <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                            @if (ViewBag.Directorates != null)
+                            {
+                                @foreach (var businessArea in ViewBag.Directorates)
+                                {
+                                    var isSelected = Model.Directorates?.Any(d => d.BusinessAreaLookupId == businessArea.Id) == true;
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" 
+                                               name="selectedDirectorateIds" value="@businessArea.Id" 
+                                               id="directorateModal_@businessArea.Id" @(isSelected ? "checked" : "") />
+                                        <label class="form-check-label" for="directorateModal_@businessArea.Id">
+                                            @businessArea.Name
+                                            @if (!string.IsNullOrEmpty(businessArea.Description))
+                                            {
+                                                <small class="text-muted"> - @businessArea.Description</small>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <small class="form-text text-muted">Select one or more directorates</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Budget Owners Modal -->
+<div class="modal fade" id="editBudgetOwnersModal" tabindex="-1" role="dialog" aria-labelledby="editBudgetOwnersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editBudgetOwnersModalLabel">Edit Budget Owners</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateBudgetOwners" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Budget Owner(s)</label>
+                        <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                            @if (ViewBag.BudgetOwnerBusinessAreas != null)
+                            {
+                                @foreach (var businessArea in ViewBag.BudgetOwnerBusinessAreas)
+                                {
+                                    var isSelected = Model.BudgetOwners?.Any(bo => bo.BusinessAreaLookupId == businessArea.Id) == true;
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" 
+                                               name="selectedBudgetOwnerIds" value="@businessArea.Id" 
+                                               id="budgetownerModal_@businessArea.Id" @(isSelected ? "checked" : "") />
+                                        <label class="form-check-label" for="budgetownerModal_@businessArea.Id">
+                                            @businessArea.Name
+                                            @if (!string.IsNullOrEmpty(businessArea.Description))
+                                            {
+                                                <small class="text-muted"> - @businessArea.Description</small>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <small class="form-text text-muted">Select one or more budget owners from business areas</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        // ========================================
+        // Senior Responsible Officers (SROs) Modal
+        // ========================================
+        let selectedSrosModal = [];
+        let sroSearchTimeoutModal;
+
+        // Initialize with existing SROs when modal opens
+        $('#editSrosModal').on('show.bs.modal', function() {
+            selectedSrosModal = [];
+            @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
+            {
+                @foreach (var sro in Model.SeniorResponsibleOfficers)
+                {
+                    @if (sro.User != null && !string.IsNullOrEmpty(sro.User.AzureObjectId))
+                    {
+                        <text>
+                        selectedSrosModal.push({
+                            id: '@sro.User.AzureObjectId',
+                            name: '@Html.Raw(sro.User.Name?.Replace("'", "\\'") ?? "")',
+                            email: '@Html.Raw(sro.User.Email?.Replace("'", "\\'") ?? "")'
+                        });
+                        </text>
+                    }
+                }
+            }
+            updateSelectedSrosModal();
+            $('#sroSearchModal').val('');
+            hideSroResultsModal();
+        });
+
+        const sroSearchInputModal = document.getElementById('sroSearchModal');
+        if (sroSearchInputModal) {
+            sroSearchInputModal.addEventListener('input', function() {
+                clearTimeout(sroSearchTimeoutModal);
+                const query = this.value;
+                
+                if (query.length < 2) {
+                    hideSroResultsModal();
+                    return;
+                }
+                
+                sroSearchTimeoutModal = setTimeout(() => {
+                    searchUsersModal(query, 'sro');
+                }, 300);
+            });
+        }
+
+        document.getElementById('addSroBtnModal')?.addEventListener('click', function() {
+            const query = sroSearchInputModal?.value;
+            if (query && query.length >= 2) {
+                searchUsersModal(query, 'sro', true);
+            }
+        });
+
+        function addSroModal(user) {
+            if (!selectedSrosModal.find(s => s.id === user.id)) {
+                selectedSrosModal.push(user);
+                updateSelectedSrosModal();
+            }
+            if (sroSearchInputModal) sroSearchInputModal.value = '';
+            hideSroResultsModal();
+        }
+
+        function removeSroModal(userId) {
+            selectedSrosModal = selectedSrosModal.filter(s => s.id !== userId);
+            updateSelectedSrosModal();
+        }
+
+        function updateSelectedSrosModal() {
+            const container = document.getElementById('selectedSrosModal');
+            const hiddenInput = document.getElementById('selectedSroUserIdsModal');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedSrosModal.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected SROs:</strong></div>';
+            selectedSrosModal.forEach(sro => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${sro.name}${sro.email ? ` (${sro.email})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSroModal('${sro.id}')">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedSrosModal.map(s => s.id).join(',');
+        }
+
+        // ========================================
+        // PMO Contacts Modal
+        // ========================================
+        let selectedPmosModal = [];
+        let pmoSearchTimeoutModal;
+
+        // Initialize with existing PMO contacts when modal opens
+        $('#editPmoContactsModal').on('show.bs.modal', function() {
+            selectedPmosModal = [];
+            @if (Model.PmoContacts != null && Model.PmoContacts.Any())
+            {
+                @foreach (var pmo in Model.PmoContacts)
+                {
+                    @if (pmo.User != null && !string.IsNullOrEmpty(pmo.User.AzureObjectId))
+                    {
+                        <text>
+                        selectedPmosModal.push({
+                            id: '@pmo.User.AzureObjectId',
+                            name: '@Html.Raw(pmo.User.Name?.Replace("'", "\\'") ?? "")',
+                            email: '@Html.Raw(pmo.User.Email?.Replace("'", "\\'") ?? "")'
+                        });
+                        </text>
+                    }
+                }
+            }
+            updateSelectedPmosModal();
+            $('#pmoSearchModal').val('');
+            hidePmoResultsModal();
+        });
+
+        const pmoSearchInputModal = document.getElementById('pmoSearchModal');
+        if (pmoSearchInputModal) {
+            pmoSearchInputModal.addEventListener('input', function() {
+                clearTimeout(pmoSearchTimeoutModal);
+                const query = this.value;
+                
+                if (query.length < 2) {
+                    hidePmoResultsModal();
+                    return;
+                }
+                
+                pmoSearchTimeoutModal = setTimeout(() => {
+                    searchUsersModal(query, 'pmo');
+                }, 300);
+            });
+        }
+
+        document.getElementById('addPmoBtnModal')?.addEventListener('click', function() {
+            const query = pmoSearchInputModal?.value;
+            if (query && query.length >= 2) {
+                searchUsersModal(query, 'pmo', true);
+            }
+        });
+
+        function addPmoModal(user) {
+            if (!selectedPmosModal.find(p => p.id === user.id)) {
+                selectedPmosModal.push(user);
+                updateSelectedPmosModal();
+            }
+            if (pmoSearchInputModal) pmoSearchInputModal.value = '';
+            hidePmoResultsModal();
+        }
+
+        function removePmoModal(userId) {
+            selectedPmosModal = selectedPmosModal.filter(p => p.id !== userId);
+            updateSelectedPmosModal();
+        }
+
+        function updateSelectedPmosModal() {
+            const container = document.getElementById('selectedPmosModal');
+            const hiddenInput = document.getElementById('selectedPmoUserIdsModal');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedPmosModal.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div>';
+            selectedPmosModal.forEach(pmo => {
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2">
+                        ${pmo.name}${pmo.email ? ` (${pmo.email})` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmoModal('${pmo.id}')">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
+        }
+
+        // ========================================
+        // User Search (shared for SROs and PMO modals)
+        // ========================================
+        function searchUsersModal(query, type, selectFirst = false) {
+            fetch(`/Users/Search?term=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (selectFirst && data.length > 0) {
+                        if (type === 'sro') {
+                            addSroModal({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
+                        } else if (type === 'pmo') {
+                            addPmoModal({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
+                        }
+                    } else {
+                        showUserResultsModal(data, type);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching users:', error);
+                });
+        }
+
+        function showUserResultsModal(users, type) {
+            const containerId = type === 'sro' ? 'sroResultsModal' : 'pmoResultsModal';
+            let container = document.getElementById(containerId);
+            const searchInput = type === 'sro' ? sroSearchInputModal : pmoSearchInputModal;
+            
+            if (!container) {
+                container = document.createElement('div');
+                container.id = containerId;
+                container.className = 'list-group mt-2';
+                if (searchInput && searchInput.parentNode) {
+                    searchInput.parentNode.appendChild(container);
+                }
+            }
+            
+            container.innerHTML = '';
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-muted">No users found</div>';
+            } else {
+                users.forEach(user => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<strong>${user.displayName || user.name}</strong>${user.email ? ` (${user.email})` : ''}`;
+                    item.addEventListener('click', () => {
+                        if (type === 'sro') {
+                            addSroModal({ id: user.id, name: user.displayName || user.name, email: user.email });
+                        } else if (type === 'pmo') {
+                            addPmoModal({ id: user.id, name: user.displayName || user.name, email: user.email });
+                        }
+                    });
+                    container.appendChild(item);
+                });
+            }
+            
+            container.style.display = 'block';
+        }
+
+        function hideSroResultsModal() {
+            const container = document.getElementById('sroResultsModal');
+            if (container) container.style.display = 'none';
+        }
+
+        function hidePmoResultsModal() {
+            const container = document.getElementById('pmoResultsModal');
+            if (container) container.style.display = 'none';
+        }
+    })();
+</script>

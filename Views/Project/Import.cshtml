@@ -1,0 +1,110 @@
+@{
+    ViewData["Title"] = "Import Projects from CSV";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Import Projects from CSV</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Projects</a></li>
+                    <li class="breadcrumb-item active">Import</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Upload CSV File</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Upload a CSV file containing project data. The file should include columns such as:
+                            <strong>Deliverable</strong>, <strong>DeliverableID</strong>, <strong>SRO</strong>, 
+                            <strong>CurrentDeliveryPhase</strong>, <strong>ActivityType</strong>, <strong>Directorate</strong>, 
+                            <strong>BudgetOwner</strong>, <strong>RiskAppetite</strong>, and others.
+                        </p>
+
+                        @if (TempData["ErrorMessage"] != null)
+                        {
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                @TempData["ErrorMessage"]
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        }
+
+                        <form asp-action="PreviewImport" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <div class="form-group">
+                                <label for="csvFile">Select CSV File</label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="csvFile" name="csvFile" accept=".csv" required />
+                                    <label class="custom-file-label" for="csvFile">Choose file...</label>
+                                </div>
+                                <small class="form-text text-muted">Maximum file size: 10MB</small>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-upload"></i> Preview Import
+                                </button>
+                                <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h3 class="card-title">CSV Format Requirements</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>The CSV file should have the following columns (case-sensitive):</p>
+                        <ul>
+                            <li><strong>Deliverable</strong> - Project title (required)</li>
+                            <li><strong>DeliverableID</strong> - Historic BuRT ID</li>
+                            <li><strong>CurrentStatusUpdate</strong> - Status update text</li>
+                            <li><strong>SRO</strong> - Senior Responsible Officer (email or name)</li>
+                            <li><strong>CurrentDeliveryPhase</strong> - Phase (Discovery, Alpha, Private Beta, Public Beta, Live)</li>
+                            <li><strong>DiscStartDate</strong> - Discovery start date</li>
+                            <li><strong>AlphaStartDate</strong> - Alpha start date</li>
+                            <li><strong>PrivateBetaStartDate</strong> - Private Beta start date</li>
+                            <li><strong>PublicBetaStartDate</strong> - Public Beta start date</li>
+                            <li><strong>ActivityType</strong> - Activity type name</li>
+                            <li><strong>Directorate</strong> - Directorate/Business area name</li>
+                            <li><strong>Group(BudgetOwner)</strong> - Budget owner business area name</li>
+                            <li><strong>RiskAppetite</strong> - Risk appetite name</li>
+                            <li><strong>UsersOfService</strong> - Service users description</li>
+                            <li><strong>ExternalInternal</strong> - "Internal", "External", or "Both"</li>
+                            <li><strong>PMO Contact</strong> - PMO contact (email or name)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Update file input label when file is selected
+            $('.custom-file-input').on('change', function() {
+                var fileName = $(this).val().split('\\').pop();
+                $(this).next('.custom-file-label').html(fileName || 'Choose file...');
+            });
+        });
+    </script>
+}
+

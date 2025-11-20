@@ -425,16 +425,18 @@ public class ProductsApiService : IProductsApiService
 
         var cacheKey = $"product_{fipsId}";
         
-        if (_cache.TryGetValue(cacheKey, out ProductDto? cachedProduct))
-        {
-            return cachedProduct;
-        }
+        // Clear cache to ensure we get fresh data with all fields
+        _cache.Remove(cacheKey);
+        
+        // Don't use cache for detailed product loads (to ensure we get all fields)
+        // if (_cache.TryGetValue(cacheKey, out ProductDto? cachedProduct))
+        // {
+        //     return cachedProduct;
+        // }
 
         try
         {
-            // Explicitly request fields we need, including product_url which may not be in default response
-            // Populate category_values with category_type to get Business area
-            // fips_id will be included automatically since we're filtering by it
+            // Explicitly request all fields we need for editing
             var queryParams = new[]
             {
                 "filters[fips_id][$eq]=" + fipsId,
@@ -443,9 +445,34 @@ public class ProductsApiService : IProductsApiService
                 "fields[2]=title",
                 "fields[3]=fips_id",
                 "fields[4]=product_url",
+                "fields[5]=short_description",
+                "fields[6]=long_description",
+                "fields[7]=cmdb_sys_id",
+                "fields[8]=state",
                 "populate[category_values][fields][0]=id",
                 "populate[category_values][fields][1]=name",
-                "populate[category_values][populate][category_type][fields][0]=name"
+                "populate[category_values][populate][category_type][fields][0]=name",
+                "populate[service_owner][fields][0]=id",
+                "populate[service_owner][fields][1]=emailAddress",
+                "populate[service_owner][fields][2]=displayName",
+                "populate[product_manager][fields][0]=id",
+                "populate[product_manager][fields][1]=emailAddress",
+                "populate[product_manager][fields][2]=displayName",
+                "populate[delivery_manager][fields][0]=id",
+                "populate[delivery_manager][fields][1]=emailAddress",
+                "populate[delivery_manager][fields][2]=displayName",
+                "populate[Information_asset_owner][fields][0]=id",
+                "populate[Information_asset_owner][fields][1]=emailAddress",
+                "populate[Information_asset_owner][fields][2]=displayName",
+                "populate[senior_responsible_officer][fields][0]=id",
+                "populate[senior_responsible_officer][fields][1]=emailAddress",
+                "populate[senior_responsible_officer][fields][2]=displayName",
+                "populate[service_designs][fields][0]=id",
+                "populate[service_designs][fields][1]=emailAddress",
+                "populate[service_designs][fields][2]=displayName",
+                "populate[user_researchers][fields][0]=id",
+                "populate[user_researchers][fields][1]=emailAddress",
+                "populate[user_researchers][fields][2]=displayName"
             };
 
             var queryString = string.Join("&", queryParams);
@@ -467,6 +494,13 @@ public class ProductsApiService : IProductsApiService
 
             if (product != null)
             {
+                // Log the deserialized values to help debug missing fields
+                _logger.LogInformation("Deserialized product fields for {FipsId}: ShortDescription={ShortDescription}, LongDescription={LongDescription}, CmdbSysId={CmdbSysId}",
+                    fipsId, 
+                    product.ShortDescription ?? "null", 
+                    product.LongDescription ?? "null", 
+                    product.CmdbSysId ?? "null");
+                
                 // Extract phase from category_values
                 if (product.CategoryValues != null)
                 {
@@ -942,6 +976,115 @@ public class ProductsApiService : IProductsApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product Phase for {FipsId}", fipsId);
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveDuplicatePhasesAsync(string fipsId, int phaseCategoryValueIdToKeep)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            // Get all current phase category values
+            var existingPhases = product.CategoryValues?
+                .Where(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true)
+                .ToList() ?? new List<CategoryValueDto>();
+            
+            if (existingPhases.Count <= 1)
+            {
+                _logger.LogInformation("Product {FipsId} does not have duplicate phases", fipsId);
+                return true; // No duplicates to remove
+            }
+
+            // Log which phases are being removed
+            var phasesToRemove = existingPhases
+                .Where(p => p.Id != phaseCategoryValueIdToKeep)
+                .Select(p => p.Name ?? $"ID {p.Id}")
+                .ToList();
+            
+            if (phasesToRemove.Any())
+            {
+                _logger.LogInformation("Removing {Count} duplicate phase(s) from product {FipsId}: {Phases}", 
+                    phasesToRemove.Count, fipsId, string.Join(", ", phasesToRemove));
+            }
+
+            // Get all current category values EXCEPT Phase (remove all existing phases)
+            var currentCategoryValues = new List<int>();
+            if (product.CategoryValues != null)
+            {
+                foreach (var cv in product.CategoryValues)
+                {
+                    // Only keep non-Phase category values (Business Area, User Groups, etc.)
+                    var categoryType = cv.CategoryType?.Name;
+                    if (categoryType != null && !categoryType.Equals("Phase", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentCategoryValues.Add(cv.Id);
+                    }
+                }
+            }
+
+            // Add the phase to keep (ensuring only ONE phase is assigned)
+            currentCategoryValues.Add(phaseCategoryValueIdToKeep);
+            
+            _logger.LogInformation("Keeping phase ID {PhaseId} for product {FipsId}", 
+                phaseCategoryValueIdToKeep, fipsId);
+
+            var updateData = new
+            {
+                data = new
+                {
+                    fips_id = product.FipsId,
+                    category_values = currentCategoryValues
+                }
+            };
+
+            var json = JsonSerializer.Serialize(updateData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                _logger.LogInformation("Successfully removed duplicate phases for product {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to remove duplicate phases for product {FipsId}. Status: {StatusCode}, Error: {Error}", 
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing duplicate phases for product {FipsId}", fipsId);
             return false;
         }
     }
@@ -1715,6 +1858,88 @@ public class ProductsApiService : IProductsApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateProductBasicInfoAsync(string fipsId, string? title, string? shortDescription, string? longDescription, string? cmdbSysId)
+    {
+        try
+        {
+            var product = await GetProductByFipsIdAsync(fipsId);
+            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            {
+                _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
+                return false;
+            }
+
+            var updateData = new Dictionary<string, object>
+            {
+                ["fips_id"] = product.FipsId!
+            };
+
+            if (title != null)
+            {
+                updateData["title"] = title.Trim();
+            }
+
+            if (shortDescription != null)
+            {
+                updateData["short_description"] = shortDescription.Trim();
+            }
+
+            if (longDescription != null)
+            {
+                updateData["long_description"] = longDescription.Trim();
+            }
+
+            if (cmdbSysId != null)
+            {
+                updateData["cmdb_sys_id"] = cmdbSysId.Trim();
+            }
+
+            var dataObject = new { data = updateData };
+            var json = JsonSerializer.Serialize(dataObject);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var writeApiKey = _configuration["CmsApi:WriteApiKey"];
+            var baseUrl = _configuration["CmsApi:BaseUrl"] ?? "http://localhost:1337/api";
+            
+            using var httpClient = new HttpClient();
+            var baseUri = baseUrl.TrimEnd('/');
+            if (!baseUri.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUri += "/api";
+            }
+            httpClient.BaseAddress = new Uri(baseUri + "/");
+            
+            if (!string.IsNullOrEmpty(writeApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
+            }
+
+            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _cache.Remove($"product_{fipsId}");
+                _cache.Remove("products_list_all");
+                _cache.Remove("products_list_all_states");
+                _logger.LogInformation("Successfully updated product basic info for {FipsId}", fipsId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to update product basic info for {FipsId}. Status: {StatusCode}, Error: {Error}", 
+                    fipsId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product basic info for {FipsId}", fipsId);
             return false;
         }
     }
