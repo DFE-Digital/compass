@@ -109,6 +109,9 @@ namespace Compass.Controllers
             // Check if user has admin role (now available globally via claims from middleware)
             ViewBag.HasAdminRole = User.IsCompassAdmin();
 
+            // Get current user
+            var currentUser = await GetCurrentUserAsync();
+            
             // Get user's projects (where they are a named contact or primary contact)
             var userProjects = new List<Project>();
             if (!string.IsNullOrEmpty(userEmail))
@@ -132,6 +135,36 @@ namespace Compass.Controllers
                         .ThenInclude(pc => pc.User)
                     .OrderBy(p => p.Title)
                     .ToListAsync();
+            }
+
+            // Get watched projects
+            var watchedProjects = new List<Project>();
+            if (currentUser != null)
+            {
+                var watchedProjectIds = await _context.ProjectWatchlists
+                    .Where(w => w.UserId == currentUser.Id)
+                    .Select(w => w.ProjectId)
+                    .ToListAsync();
+
+                if (watchedProjectIds.Any())
+                {
+                    watchedProjects = await _context.Projects
+                        .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
+                        .AsNoTracking()
+                        .Include(p => p.DeliveryPriority)
+                        .Include(p => p.PrimaryContactUser)
+                        .Include(p => p.ProjectMissions)
+                            .ThenInclude(pm => pm.Mission)
+                        .Include(p => p.ProjectObjectives)
+                            .ThenInclude(po => po.Objective)
+                        .Include(p => p.FundingAllocations)
+                            .ThenInclude(fa => fa.FundingSource)
+                        .Include(p => p.Outcomes)
+                        .Include(p => p.ProjectContacts)
+                            .ThenInclude(pc => pc.User)
+                        .OrderBy(p => p.Title)
+                        .ToListAsync();
+                }
             }
 
             var query = _context.Projects
@@ -218,6 +251,7 @@ namespace Compass.Controllers
             {
                 Projects = projects.AsReadOnly(),
                 UserProjects = userProjects.AsReadOnly(),
+                WatchedProjects = watchedProjects.AsReadOnly(),
                 PageNumber = pageNumber,
                 PageSize = pageSize,
                 TotalCount = totalCount
@@ -304,7 +338,7 @@ namespace Compass.Controllers
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.BusinessAreaLookup)
+                    .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -313,6 +347,10 @@ namespace Compass.Controllers
                     .ThenInclude(su => su.CreatedByUser)
                 .Include(p => p.StatusUpdates)
                     .ThenInclude(su => su.UpdatedByUser)
+                .Include(p => p.Artefacts)
+                    .ThenInclude(a => a.CreatedByUser)
+                .Include(p => p.Artefacts)
+                    .ThenInclude(a => a.UpdatedByUser)
                 .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
 
             if (project == null)
@@ -374,6 +412,31 @@ namespace Compass.Controllers
 
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
 
+            // Check if project is in user's watchlist
+            var currentUserDetails = await GetCurrentUserAsync();
+            var userEmail = User.Identity?.Name;
+            var isInUserProjects = false;
+            
+            if (currentUserDetails != null)
+            {
+                var isInWatchlist = await _context.ProjectWatchlists
+                    .AnyAsync(w => w.UserId == currentUserDetails.Id && w.ProjectId == project.Id);
+                ViewBag.IsInWatchlist = isInWatchlist;
+                
+                // Check if project is in user's deliverables (user is a named contact or primary contact)
+                if (!string.IsNullOrEmpty(userEmail))
+                {
+                    isInUserProjects = project.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
+                                      (project.PrimaryContactUser != null && project.PrimaryContactUser.Email.ToLower() == userEmail.ToLower());
+                }
+            }
+            else
+            {
+                ViewBag.IsInWatchlist = false;
+            }
+            
+            ViewBag.IsInUserProjects = isInUserProjects;
+
             ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
                 .Where(dp => dp.IsActive)
                 .OrderBy(dp => dp.SortOrder)
@@ -403,10 +466,10 @@ namespace Compass.Controllers
                 .ThenBy(ra => ra.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
+            ViewBag.Directorates = await _context.DirectorateLookups
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.SortOrder)
+                .ThenBy(d => d.Name)
                 .ToListAsync();
 
             ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
@@ -604,12 +667,43 @@ namespace Compass.Controllers
                     return NotFound();
                 }
 
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized();
+                }
+
+                // Get current user's Entra info
+                var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+                var userEmailClaim = User.FindFirst(ClaimTypes.Email)?.Value ?? currentUser.Email;
+                var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value ?? currentUser.Name;
+
+                // Get or create EntraUser in CMS if we have an ObjectId
+                EntraUserDto? entraUser = null;
+                if (!string.IsNullOrWhiteSpace(userObjectIdClaim) && Guid.TryParse(userObjectIdClaim, out var objectIdGuid))
+                {
+                    try
+                    {
+                        entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                            userEmailClaim ?? string.Empty,
+                            userObjectIdClaim,
+                            userNameClaim,
+                            currentUser.FirstName,
+                            currentUser.LastName
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get or create EntraUser for success creator");
+                    }
+                }
+
                 var success = new ProjectSuccess
                 {
                     ProjectId = input.ProjectId,
                     SuccessDescription = input.SuccessDescription,
-                    RecordedByEmail = User.FindFirstValue(ClaimTypes.Email) ?? "unknown@example.com",
-                    RecordedByName = User.FindFirstValue(ClaimTypes.Name) ?? "Unknown User",
+                    RecordedByEmail = entraUser?.EmailAddress ?? userEmailClaim ?? currentUser.Email,
+                    RecordedByName = entraUser?.DisplayName ?? userNameClaim ?? currentUser.Name,
                     RecordedAt = DateTime.UtcNow,
                     IsReportedToSlt = input.IsReportedToSlt
                 };
@@ -1434,10 +1528,10 @@ namespace Compass.Controllers
             .ThenBy(at => at.Name)
             .ToListAsync();
 
-        ViewBag.Directorates = await _context.BusinessAreaLookups
-            .Where(ba => ba.IsActive)
-            .OrderBy(ba => ba.SortOrder)
-            .ThenBy(ba => ba.Name)
+        ViewBag.Directorates = await _context.DirectorateLookups
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .ThenBy(d => d.Name)
             .ToListAsync();
 
         ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
@@ -1472,7 +1566,7 @@ namespace Compass.Controllers
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.BusinessAreaLookup)
+                    .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -1496,10 +1590,10 @@ namespace Compass.Controllers
                 .ThenBy(at => at.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
+            ViewBag.Directorates = await _context.DirectorateLookups
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.SortOrder)
+                .ThenBy(d => d.Name)
                 .ToListAsync();
 
             ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
@@ -1628,10 +1722,10 @@ namespace Compass.Controllers
                 .OrderBy(at => at.SortOrder)
                 .ThenBy(at => at.Name)
                 .ToListAsync();
-            ViewBag.Directorates = await _context.BusinessAreaLookups
-                .Where(ba => ba.IsActive)
-                .OrderBy(ba => ba.SortOrder)
-                .ThenBy(ba => ba.Name)
+            ViewBag.Directorates = await _context.DirectorateLookups
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.SortOrder)
+                .ThenBy(d => d.Name)
                 .ToListAsync();
             ViewBag.RiskAppetites = await _context.RiskAppetiteLookups
                 .Where(ra => ra.IsActive)
@@ -1705,7 +1799,7 @@ namespace Compass.Controllers
                 .ToList();
 
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.BusinessAreaLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -1713,7 +1807,7 @@ namespace Compass.Controllers
                 }
 
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.BusinessAreaLookupId)
+                    .Select(d => d.DirectorateLookupId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -1722,7 +1816,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            BusinessAreaLookupId = directorateId,
+                            DirectorateLookupId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -1813,15 +1907,39 @@ namespace Compass.Controllers
         // POST: Project/AddStatusUpdate
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddStatusUpdate(int projectId, string narrative, DateTime? createdAt)
+        public async Task<IActionResult> AddStatusUpdate([Bind(Prefix = "Input")] ProjectStatusUpdateInputModel input)
         {
-            if (string.IsNullOrWhiteSpace(narrative))
+            if (input == null || input.ProjectId == 0)
             {
-                TempData["ErrorMessage"] = "Status update narrative is required.";
-                return RedirectToAction(nameof(Details), new { id = projectId });
+                TempData["ErrorMessage"] = "Invalid project ID.";
+                return RedirectToAction(nameof(Index));
             }
 
-            var project = await _context.Projects.FindAsync(projectId);
+            if (string.IsNullOrWhiteSpace(input.Narrative))
+            {
+                TempData["ErrorMessage"] = "Status update narrative is required.";
+                return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "statusupdates" });
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var projectSummary = await GetProjectSummaryAsync(input.ProjectId);
+                if (projectSummary == null)
+                {
+                    return NotFound();
+                }
+
+                var viewModel = new ProjectStatusUpdateFormViewModel
+                {
+                    ProjectTitle = projectSummary.Title,
+                    ProjectSummary = projectSummary,
+                    Input = input
+                };
+
+                return View("CreateStatusUpdate", viewModel);
+            }
+
+            var project = await _context.Projects.FindAsync(input.ProjectId);
             if (project == null || project.IsDeleted)
             {
                 return NotFound();
@@ -1858,12 +1976,46 @@ namespace Compass.Controllers
                 }
             }
 
-            var createdDate = createdAt.HasValue ? createdAt.Value.Date : DateTime.UtcNow.Date;
+            // Handle date input - date inputs come through as midnight (00:00:00)
+            // If time is midnight, treat it as "date only" and use current time
+            DateTime createdDate;
+            if (input.CreatedAt.HasValue)
+            {
+                var providedDateTime = input.CreatedAt.Value;
+                var providedDate = providedDateTime.Date;
+                var providedTime = providedDateTime.TimeOfDay;
+                var today = DateTime.UtcNow.Date;
+                
+                // If the time component is midnight (00:00:00), treat as date-only input
+                // and use current time to maintain proper ordering
+                if (providedTime == TimeSpan.Zero)
+                {
+                    if (providedDate == today)
+                    {
+                        // If date is today, use current time
+                        createdDate = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        // For past/future dates, use the date with current time to maintain chronological order
+                        createdDate = providedDate.Add(DateTime.UtcNow.TimeOfDay);
+                    }
+                }
+                else
+                {
+                    // Time component was provided, use it as-is
+                    createdDate = providedDateTime;
+                }
+            }
+            else
+            {
+                createdDate = DateTime.UtcNow;
+            }
 
             var statusUpdate = new ProjectStatusUpdate
             {
-                ProjectId = projectId,
-                Narrative = narrative,
+                ProjectId = input.ProjectId,
+                Narrative = input.Narrative,
                 CreatedByEntraId = entraUser?.EntraId ?? userObjectIdClaim,
                 CreatedByName = entraUser?.DisplayName ?? userNameClaim,
                 CreatedByEmail = entraUser?.EmailAddress ?? userEmailClaim,
@@ -1875,7 +2027,42 @@ namespace Compass.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Status update added successfully.";
-            return RedirectToAction(nameof(Details), new { id = projectId });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "statusupdates" });
+        }
+
+        // GET: Project/EditStatusUpdate
+        [HttpGet]
+        public async Task<IActionResult> EditStatusUpdate(int projectId, int statusUpdateId)
+        {
+            var statusUpdate = await _context.ProjectStatusUpdates
+                .Include(su => su.Project)
+                .FirstOrDefaultAsync(su => su.Id == statusUpdateId && su.ProjectId == projectId);
+
+            if (statusUpdate == null || statusUpdate.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectStatusUpdateFormViewModel
+            {
+                ProjectTitle = statusUpdate.Project.Title,
+                ProjectSummary = CreateProjectSummary(statusUpdate.Project),
+                Input = new ProjectStatusUpdateInputModel
+                {
+                    ProjectId = projectId,
+                    StatusUpdateId = statusUpdateId,
+                    Narrative = statusUpdate.Narrative,
+                    CreatedAt = statusUpdate.CreatedAt,
+                    CreatedByEntraId = statusUpdate.CreatedByEntraId,
+                    CreatedByEmail = statusUpdate.CreatedByEmail,
+                    CreatedByName = statusUpdate.CreatedByName
+                },
+                CreatedAt = statusUpdate.CreatedAt,
+                CreatedByName = statusUpdate.CreatedByName,
+                CreatedByEmail = statusUpdate.CreatedByEmail
+            };
+
+            return View("EditStatusUpdate", viewModel);
         }
 
         // POST: Project/EditStatusUpdate
@@ -1886,7 +2073,7 @@ namespace Compass.Controllers
             if (string.IsNullOrWhiteSpace(narrative))
             {
                 TempData["ErrorMessage"] = "Status update narrative is required.";
-                return RedirectToAction(nameof(Details), new { id = projectId });
+                return RedirectToAction(nameof(Details), new { id = projectId, tab = "statusupdates" });
             }
 
             var statusUpdate = await _context.ProjectStatusUpdates
@@ -1906,10 +2093,29 @@ namespace Compass.Controllers
             // Update narrative
             statusUpdate.Narrative = narrative;
             
-            // Update date if provided
+            // Update date if provided - handle date-only inputs (midnight) properly
             if (createdAt.HasValue)
             {
-                statusUpdate.CreatedAt = createdAt.Value;
+                var providedDateTime = createdAt.Value;
+                var providedTime = providedDateTime.TimeOfDay;
+                
+                // If the time component is midnight (00:00:00), treat as date-only input
+                // Preserve the original time if it was set, otherwise use current time
+                if (providedTime == TimeSpan.Zero && statusUpdate.CreatedAt.TimeOfDay != TimeSpan.Zero)
+                {
+                    // Date-only input but original had time - preserve original time with new date
+                    statusUpdate.CreatedAt = providedDateTime.Date.Add(statusUpdate.CreatedAt.TimeOfDay);
+                }
+                else if (providedTime == TimeSpan.Zero)
+                {
+                    // Date-only input and original also had no time - use current time
+                    statusUpdate.CreatedAt = providedDateTime.Date.Add(DateTime.UtcNow.TimeOfDay);
+                }
+                else
+                {
+                    // Time component was provided, use it as-is
+                    statusUpdate.CreatedAt = providedDateTime;
+                }
             }
             
             // Update creator if EntraUser fields provided
@@ -1953,7 +2159,7 @@ namespace Compass.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Status update updated successfully.";
-            return RedirectToAction(nameof(Details), new { id = projectId });
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "statusupdates" });
         }
 
         // POST: Project/DeleteStatusUpdate
@@ -1974,7 +2180,332 @@ namespace Compass.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Status update deleted successfully.";
-            return RedirectToAction(nameof(Details), new { id = projectId });
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "statusupdates" });
+        }
+
+        // GET: Project/CreateStatusUpdate
+        [HttpGet]
+        public async Task<IActionResult> CreateStatusUpdate(int projectId)
+        {
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectStatusUpdateFormViewModel
+            {
+                ProjectTitle = projectSummary.Title,
+                ProjectSummary = projectSummary,
+                Input = new ProjectStatusUpdateInputModel
+                {
+                    ProjectId = projectSummary.Id
+                }
+            };
+
+            return View("CreateStatusUpdate", viewModel);
+        }
+
+        // GET: Project/StatusUpdateDetails
+        [HttpGet]
+        public async Task<IActionResult> StatusUpdateDetails(int projectId, int statusUpdateId)
+        {
+            var statusUpdate = await _context.ProjectStatusUpdates
+                .Include(su => su.Project)
+                .Include(su => su.CreatedByUser)
+                .Include(su => su.UpdatedByUser)
+                .FirstOrDefaultAsync(su => su.Id == statusUpdateId && su.ProjectId == projectId);
+
+            if (statusUpdate == null || statusUpdate.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectStatusUpdateDetailsViewModel
+            {
+                ProjectId = statusUpdate.ProjectId,
+                StatusUpdateId = statusUpdate.Id,
+                ProjectTitle = statusUpdate.Project.Title,
+                Narrative = statusUpdate.Narrative,
+                CreatedAt = statusUpdate.CreatedAt,
+                CreatedByName = statusUpdate.CreatedByName ?? statusUpdate.CreatedByUser?.Name,
+                CreatedByEmail = statusUpdate.CreatedByEmail ?? statusUpdate.CreatedByUser?.Email,
+                UpdatedAt = statusUpdate.UpdatedAt,
+                UpdatedByName = statusUpdate.UpdatedByUser?.Name,
+                IsBulkImport = statusUpdate.IsBulkImport,
+                ProjectSummary = CreateProjectSummary(statusUpdate.Project)
+            };
+
+            return View("StatusUpdateDetails", viewModel);
+        }
+
+        // GET: Project/CreateArtefact
+        [HttpGet]
+        public async Task<IActionResult> CreateArtefact(int projectId)
+        {
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectArtefactFormViewModel
+            {
+                ProjectTitle = projectSummary.Title,
+                ProjectSummary = projectSummary,
+                Input = new ProjectArtefactInputModel
+                {
+                    ProjectId = projectSummary.Id
+                }
+            };
+
+            return View("CreateArtefact", viewModel);
+        }
+
+        // POST: Project/AddArtefact
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddArtefact([Bind(Prefix = "Input")] ProjectArtefactInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                var projectSummary = await GetProjectSummaryAsync(input.ProjectId);
+                if (projectSummary == null)
+                {
+                    return NotFound();
+                }
+
+                var viewModel = new ProjectArtefactFormViewModel
+                {
+                    ProjectTitle = projectSummary.Title,
+                    ProjectSummary = projectSummary,
+                    Input = input
+                };
+
+                return View("CreateArtefact", viewModel);
+            }
+
+            var project = await _context.Projects.FindAsync(input.ProjectId);
+            if (project == null || project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var currentUser = await GetCurrentUserAsync();
+            var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+            var userNameClaim = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var userEmailClaim = User.FindFirstValue(ClaimTypes.Email);
+
+            EntraUserDto? entraUser = null;
+            if (!string.IsNullOrWhiteSpace(userObjectIdClaim) && Guid.TryParse(userObjectIdClaim, out _))
+            {
+                try
+                {
+                    entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                        userEmailClaim ?? string.Empty,
+                        userObjectIdClaim,
+                        userNameClaim,
+                        null,
+                        null
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get or create EntraUser for artefact creator");
+                }
+            }
+
+            var artefact = new ProjectArtefact
+            {
+                ProjectId = input.ProjectId,
+                Title = input.Title,
+                Description = input.Description,
+                Url = input.Url,
+                CreatedByEntraId = entraUser?.EntraId ?? userObjectIdClaim,
+                CreatedByName = entraUser?.DisplayName ?? userNameClaim,
+                CreatedByEmail = entraUser?.EmailAddress ?? userEmailClaim,
+                CreatedByUserId = currentUser?.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.ProjectArtefacts.Add(artefact);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Artefact added successfully.";
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "artefacts" });
+        }
+
+        // GET: Project/ArtefactDetails
+        [HttpGet]
+        public async Task<IActionResult> ArtefactDetails(int projectId, int artefactId)
+        {
+            var artefact = await _context.ProjectArtefacts
+                .Include(a => a.Project)
+                .Include(a => a.CreatedByUser)
+                .Include(a => a.UpdatedByUser)
+                .FirstOrDefaultAsync(a => a.Id == artefactId && a.ProjectId == projectId && !a.IsDeleted);
+
+            if (artefact == null || artefact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectArtefactDetailsViewModel
+            {
+                ProjectId = artefact.ProjectId,
+                ArtefactId = artefact.Id,
+                ProjectTitle = artefact.Project.Title,
+                Title = artefact.Title,
+                Description = artefact.Description,
+                Url = artefact.Url,
+                CreatedAt = artefact.CreatedAt,
+                CreatedByName = artefact.CreatedByName ?? artefact.CreatedByUser?.Name,
+                CreatedByEmail = artefact.CreatedByEmail ?? artefact.CreatedByUser?.Email,
+                UpdatedAt = artefact.UpdatedAt,
+                UpdatedByName = artefact.UpdatedByUser?.Name,
+                ProjectSummary = CreateProjectSummary(artefact.Project)
+            };
+
+            return View("ArtefactDetails", viewModel);
+        }
+
+        // GET: Project/EditArtefact
+        [HttpGet]
+        public async Task<IActionResult> EditArtefact(int projectId, int artefactId)
+        {
+            var artefact = await _context.ProjectArtefacts
+                .Include(a => a.Project)
+                .FirstOrDefaultAsync(a => a.Id == artefactId && a.ProjectId == projectId && !a.IsDeleted);
+
+            if (artefact == null || artefact.Project.IsDeleted)
+            {
+                return NotFound();
+            }
+
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new ProjectArtefactFormViewModel
+            {
+                ProjectTitle = artefact.Project.Title,
+                ProjectSummary = projectSummary,
+                Input = new ProjectArtefactInputModel
+                {
+                    ProjectId = projectId,
+                    ArtefactId = artefactId,
+                    Title = artefact.Title,
+                    Description = artefact.Description,
+                    Url = artefact.Url,
+                    CreatedByEntraId = artefact.CreatedByEntraId,
+                    CreatedByEmail = artefact.CreatedByEmail,
+                    CreatedByName = artefact.CreatedByName
+                },
+                CreatedAt = artefact.CreatedAt,
+                CreatedByName = artefact.CreatedByName,
+                CreatedByEmail = artefact.CreatedByEmail
+            };
+
+            return View("EditArtefact", viewModel);
+        }
+
+        // POST: Project/EditArtefact
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditArtefact(int projectId, int artefactId, [Bind(Prefix = "Input")] ProjectArtefactInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                var projectSummary = await GetProjectSummaryAsync(projectId);
+                if (projectSummary == null)
+                {
+                    return NotFound();
+                }
+
+                var viewModel = new ProjectArtefactFormViewModel
+                {
+                    ProjectTitle = projectSummary.Title,
+                    ProjectSummary = projectSummary,
+                    Input = input
+                };
+
+                return View("EditArtefact", viewModel);
+            }
+
+            var artefact = await _context.ProjectArtefacts
+                .FirstOrDefaultAsync(a => a.Id == artefactId && a.ProjectId == projectId && !a.IsDeleted);
+
+            if (artefact == null)
+            {
+                return NotFound();
+            }
+
+            var currentUser = await GetCurrentUserAsync();
+
+            artefact.Title = input.Title;
+            artefact.Description = input.Description;
+            artefact.Url = input.Url;
+
+            // Update creator if EntraUser fields provided
+            if (!string.IsNullOrWhiteSpace(input.CreatedByEntraId) || !string.IsNullOrWhiteSpace(input.CreatedByEmail))
+            {
+                EntraUserDto? entraUser = null;
+                if (!string.IsNullOrWhiteSpace(input.CreatedByEntraId) && Guid.TryParse(input.CreatedByEntraId, out _))
+                {
+                    try
+                    {
+                        entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                            input.CreatedByEmail ?? string.Empty,
+                            input.CreatedByEntraId,
+                            input.CreatedByName,
+                            null,
+                            null
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get or create EntraUser for artefact creator");
+                    }
+                }
+
+                artefact.CreatedByEntraId = entraUser?.EntraId ?? input.CreatedByEntraId;
+                artefact.CreatedByName = entraUser?.DisplayName ?? input.CreatedByName;
+                artefact.CreatedByEmail = entraUser?.EmailAddress ?? input.CreatedByEmail;
+            }
+
+            artefact.UpdatedByUserId = currentUser?.Id;
+            artefact.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Artefact updated successfully.";
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "artefacts" });
+        }
+
+        // POST: Project/DeleteArtefact
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> DeleteArtefact(int projectId, int artefactId)
+        {
+            var artefact = await _context.ProjectArtefacts
+                .FirstOrDefaultAsync(a => a.Id == artefactId && a.ProjectId == projectId && !a.IsDeleted);
+
+            if (artefact == null)
+            {
+                return NotFound();
+            }
+
+            artefact.IsDeleted = true;
+            artefact.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Artefact deleted successfully.";
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "artefacts" });
         }
 
         private async Task<User?> GetCurrentUserAsync()
@@ -2052,6 +2583,7 @@ namespace Compass.Controllers
                     project.ProjectCode = $"DDTDEL-{nextNumber:D4}";
                     project.CreatedAt = DateTime.UtcNow;
                     project.UpdatedAt = DateTime.UtcNow;
+                    project.CreationMethod = "Manual";
 
                     _logger.LogInformation("Adding project to context with code: {ProjectCode}", project.ProjectCode);
                     _context.Projects.Add(project);
@@ -2222,6 +2754,14 @@ namespace Compass.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddOutcome([Bind(Prefix = "Input")] ProjectOutcomeInputModel input)
         {
+            var achievementStatus = input.AchievementStatus ?? "In progress";
+            
+            // Require notes if creating with "Yes" or "No" status
+            if ((achievementStatus == "Yes" || achievementStatus == "No") && string.IsNullOrWhiteSpace(input.AchievementNotes))
+            {
+                ModelState.AddModelError("Input.AchievementNotes", "Notes are required when setting achievement status to 'Yes' or 'No'.");
+            }
+            
             if (!ModelState.IsValid)
             {
                 var projectSummary = await GetProjectSummaryAsync(input.ProjectId);
@@ -2258,6 +2798,8 @@ namespace Compass.Controllers
                     MeasureOfSuccess = input.MeasureOfSuccess,
                     ConfidenceLevel = input.ConfidenceLevel,
                     ConfidenceExplanation = input.ConfidenceExplanation,
+                    AchievementStatus = input.AchievementStatus ?? "In progress",
+                    AchievementNotes = input.AchievementNotes,
                     SortOrder = maxSortOrder + 1,
                     CreatedByEmail = userEmail,
                     CreatedByName = currentUser?.Name,
@@ -2306,10 +2848,32 @@ namespace Compass.Controllers
 
             try
             {
+                var previousStatus = projectOutcome.AchievementStatus ?? "In progress";
+                var newStatus = input.AchievementStatus ?? "In progress";
+                
+                // Require notes if status is changing from "In progress" to "Yes" or "No", or between "Yes" and "No"
+                var statusChanged = previousStatus != newStatus;
+                var requiresNotes = statusChanged && (
+                    (previousStatus == "In progress" && (newStatus == "Yes" || newStatus == "No")) ||
+                    ((previousStatus == "Yes" || previousStatus == "No") && (newStatus == "Yes" || newStatus == "No"))
+                );
+                
+                if (requiresNotes && string.IsNullOrWhiteSpace(input.AchievementNotes))
+                {
+                    ModelState.AddModelError("Input.AchievementNotes", "Notes are required when changing the achievement status.");
+                    var invalidViewModel = BuildOutcomeFormViewModel(CreateProjectSummary(projectOutcome.Project), input, showDeleteButton: true);
+                    return View("EditOutcome", invalidViewModel);
+                }
+                
                 projectOutcome.Outcome = input.Outcome;
                 projectOutcome.MeasureOfSuccess = input.MeasureOfSuccess;
                 projectOutcome.ConfidenceLevel = input.ConfidenceLevel;
                 projectOutcome.ConfidenceExplanation = input.ConfidenceExplanation;
+                projectOutcome.AchievementStatus = newStatus;
+                if (statusChanged && !string.IsNullOrWhiteSpace(input.AchievementNotes))
+                {
+                    projectOutcome.AchievementNotes = input.AchievementNotes;
+                }
                 projectOutcome.SortOrder = input.SortOrder;
                 projectOutcome.UpdatedAt = DateTime.UtcNow;
 
@@ -2991,6 +3555,68 @@ namespace Compass.Controllers
             return View(project);
         }
 
+        // GET: Project/EditPriorityOutcomes
+        [HttpGet]
+        public async Task<IActionResult> EditPriorityOutcomes(int projectId)
+        {
+            var project = await _context.Projects
+                .Include(p => p.ProjectObjectives)
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var selectedObjectiveIds = project.ProjectObjectives?.Select(po => po.ObjectiveId).ToList() ?? new List<int>();
+            
+            // Get objectives for strategic alignment
+            var objectives = await _context.Objectives
+                .Where(o => !o.IsDeleted && o.Status == "active")
+                .OrderBy(o => o.Theme)
+                .ThenBy(o => o.Title)
+                .ToListAsync();
+            
+            ViewBag.Objectives = objectives;
+
+            var objectiveOptions = new List<SelectListItem>();
+            var objectivesByTheme = objectives.GroupBy(o => o.Theme ?? "Other").OrderBy(g => g.Key);
+
+            foreach (var themeGroup in objectivesByTheme)
+            {
+                foreach (var objective in themeGroup.OrderBy(o => o.Title))
+                {
+                    objectiveOptions.Add(new SelectListItem
+                    {
+                        Value = objective.Id.ToString(),
+                        Text = $"{themeGroup.Key}: {objective.Title}",
+                        Selected = selectedObjectiveIds.Contains(objective.Id)
+                    });
+                }
+            }
+
+            var viewModel = new PriorityOutcomesFormViewModel
+            {
+                ProjectTitle = project.Title,
+                ProjectSummary = projectSummary,
+                Input = new PriorityOutcomesInputModel
+                {
+                    ProjectId = projectId,
+                    StrategicObjectives = project.StrategicObjectives,
+                    SelectedObjectiveIds = selectedObjectiveIds
+                },
+                ObjectiveOptions = objectiveOptions
+            };
+
+            return View("EditPriorityOutcomes", viewModel);
+        }
+
         // POST: Project/UpdateStrategicObjectives
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -3023,13 +3649,13 @@ namespace Compass.Controllers
         // POST: Project/UpdateStrategicObjectivesAndLinks
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateStrategicObjectivesAndLinks(int id, string? strategicObjectivesText, List<int> selectedObjectiveIds)
+        public async Task<IActionResult> UpdateStrategicObjectivesAndLinks([Bind(Prefix = "Input")] PriorityOutcomesInputModel input)
         {
             try
             {
                 var project = await _context.Projects
                     .Include(p => p.ProjectObjectives)
-                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+                    .FirstOrDefaultAsync(p => p.Id == input.ProjectId && !p.IsDeleted);
 
                 if (project == null)
                 {
@@ -3038,20 +3664,20 @@ namespace Compass.Controllers
                 }
 
                 // Update narrative text
-                project.StrategicObjectives = strategicObjectivesText;
+                project.StrategicObjectives = input.StrategicObjectives;
 
                 // Update linked objectives
                 // Remove existing links
                 _context.ProjectObjectives.RemoveRange(project.ProjectObjectives);
 
                 // Add new links
-                if (selectedObjectiveIds != null && selectedObjectiveIds.Any())
+                if (input.SelectedObjectiveIds != null && input.SelectedObjectiveIds.Any())
                 {
-                    foreach (var objectiveId in selectedObjectiveIds)
+                    foreach (var objectiveId in input.SelectedObjectiveIds)
                     {
                         project.ProjectObjectives.Add(new ProjectObjective
                         {
-                            ProjectId = id,
+                            ProjectId = input.ProjectId,
                             ObjectiveId = objectiveId
                         });
                     }
@@ -3060,15 +3686,77 @@ namespace Compass.Controllers
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Strategic objectives updated successfully.";
+                TempData["SuccessMessage"] = "Priority outcomes updated successfully.";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating strategic objectives and links");
-                TempData["ErrorMessage"] = "An error occurred while updating strategic objectives.";
+                _logger.LogError(ex, "Error updating priority outcomes and links");
+                TempData["ErrorMessage"] = "An error occurred while updating priority outcomes.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = id, tab = "strategicalignment" });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "strategicalignment" });
+        }
+
+        // GET: Project/EditMissionPillars
+        [HttpGet]
+        public async Task<IActionResult> EditMissionPillars(int projectId)
+        {
+            var project = await _context.Projects
+                .Include(p => p.ProjectMissions)
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+
+            if (project == null)
+            {
+                return NotFound();
+            }
+
+            var projectSummary = await GetProjectSummaryAsync(projectId);
+            if (projectSummary == null)
+            {
+                return NotFound();
+            }
+
+            var selectedMissionIds = project.ProjectMissions?.Select(pm => pm.MissionId).ToList() ?? new List<int>();
+            
+            // Get missions for strategic alignment
+            var missions = await _context.Missions
+                .Where(m => !m.IsDeleted && m.Status == "Active")
+                .OrderBy(m => m.Theme)
+                .ThenBy(m => m.Title)
+                .ToListAsync();
+            
+            ViewBag.Missions = missions;
+
+            var missionOptions = new List<SelectListItem>();
+            var missionsByTheme = missions.GroupBy(m => m.Theme ?? "Other").OrderBy(g => g.Key);
+
+            foreach (var themeGroup in missionsByTheme)
+            {
+                foreach (var mission in themeGroup.OrderBy(m => m.Title))
+                {
+                    missionOptions.Add(new SelectListItem
+                    {
+                        Value = mission.Id.ToString(),
+                        Text = $"{themeGroup.Key}: {mission.Title}",
+                        Selected = selectedMissionIds.Contains(mission.Id)
+                    });
+                }
+            }
+
+            var viewModel = new MissionPillarsFormViewModel
+            {
+                ProjectTitle = project.Title,
+                ProjectSummary = projectSummary,
+                Input = new MissionPillarsInputModel
+                {
+                    ProjectId = projectId,
+                    MissionPillars = project.MissionPillars,
+                    SelectedMissionIds = selectedMissionIds
+                },
+                MissionOptions = missionOptions
+            };
+
+            return View("EditMissionPillars", viewModel);
         }
 
         // POST: Project/UpdateMissionPillars
@@ -3103,13 +3791,13 @@ namespace Compass.Controllers
         // POST: Project/UpdateMissionPillarsAndLinks
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateMissionPillarsAndLinks(int id, string? missionPillarsText, List<int> selectedMissionIds)
+        public async Task<IActionResult> UpdateMissionPillarsAndLinks([Bind(Prefix = "Input")] MissionPillarsInputModel input)
         {
             try
             {
                 var project = await _context.Projects
                     .Include(p => p.ProjectMissions)
-                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+                    .FirstOrDefaultAsync(p => p.Id == input.ProjectId && !p.IsDeleted);
 
                 if (project == null)
                 {
@@ -3118,20 +3806,20 @@ namespace Compass.Controllers
                 }
 
                 // Update narrative text
-                project.MissionPillars = missionPillarsText;
+                project.MissionPillars = input.MissionPillars;
 
                 // Update linked missions
                 // Remove existing links
                 _context.ProjectMissions.RemoveRange(project.ProjectMissions);
 
                 // Add new links
-                if (selectedMissionIds != null && selectedMissionIds.Any())
+                if (input.SelectedMissionIds != null && input.SelectedMissionIds.Any())
                 {
-                    foreach (var missionId in selectedMissionIds)
+                    foreach (var missionId in input.SelectedMissionIds)
                     {
                         project.ProjectMissions.Add(new ProjectMission
                         {
-                            ProjectId = id,
+                            ProjectId = input.ProjectId,
                             MissionId = missionId
                         });
                     }
@@ -3148,7 +3836,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating mission pillars.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = id, tab = "strategicalignment" });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "strategicalignment" });
         }
 
         // POST: Project/UpdateMultiDepartmentCooperation
@@ -4147,7 +4835,7 @@ namespace Compass.Controllers
 
                 // Remove existing directorates not in the selection
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.BusinessAreaLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -4156,7 +4844,7 @@ namespace Compass.Controllers
 
                 // Add new directorates
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.BusinessAreaLookupId)
+                    .Select(d => d.DirectorateLookupId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -4165,7 +4853,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            BusinessAreaLookupId = directorateId,
+                            DirectorateLookupId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -4182,7 +4870,9 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating Directorates.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+            var returnTab = Request.Form["returnTab"].ToString();
+            var tab = string.IsNullOrEmpty(returnTab) ? "contactsandgovernance" : returnTab;
+            return RedirectToAction(nameof(Details), new { id = id, tab = tab });
         }
 
         // POST: Project/UpdateBudgetOwners
@@ -4317,6 +5007,64 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "deliveryphases" });
+        }
+
+        // POST: Project/UpdateDeliveryPhase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateDeliveryPhase(int id, string phaseName,
+            DateTime? startDatePlanned, DateTime? startDateActual,
+            DateTime? endDatePlanned, DateTime? endDateActual)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    return Json(new { success = false, message = "Project not found." });
+                }
+
+                // Update dates based on phase name
+                switch (phaseName?.ToLowerInvariant())
+                {
+                    case "discovery":
+                        project.DiscoveryStartDatePlanned = startDatePlanned;
+                        project.DiscoveryStartDateActual = startDateActual;
+                        project.DiscoveryEndDatePlanned = endDatePlanned;
+                        project.DiscoveryEndDateActual = endDateActual;
+                        break;
+                    case "alpha":
+                        project.AlphaStartDatePlanned = startDatePlanned;
+                        project.AlphaStartDateActual = startDateActual;
+                        project.AlphaEndDatePlanned = endDatePlanned;
+                        project.AlphaEndDateActual = endDateActual;
+                        break;
+                    case "private beta":
+                        project.PrivateBetaStartDatePlanned = startDatePlanned;
+                        project.PrivateBetaStartDateActual = startDateActual;
+                        project.PrivateBetaEndDatePlanned = endDatePlanned;
+                        project.PrivateBetaEndDateActual = endDateActual;
+                        break;
+                    case "public beta":
+                        project.PublicBetaStartDatePlanned = startDatePlanned;
+                        project.PublicBetaStartDateActual = startDateActual;
+                        project.PublicBetaEndDatePlanned = endDatePlanned;
+                        project.PublicBetaEndDateActual = endDateActual;
+                        break;
+                    default:
+                        return Json(new { success = false, message = "Invalid phase name." });
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true, message = "Delivery phase dates updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating delivery phase dates");
+                return Json(new { success = false, message = "An error occurred while updating delivery phase dates." });
+            }
         }
 
         // POST: Project/AddDeliverable
@@ -7008,7 +7756,8 @@ namespace Compass.Controllers
                 RecordedAt = success.RecordedAt,
                 RecordedByEmail = success.RecordedByEmail,
                 RecordedByName = success.RecordedByName,
-                IsReportedToSlt = success.IsReportedToSlt
+                IsReportedToSlt = success.IsReportedToSlt,
+                ProjectSummary = CreateProjectSummary(success.Project)
             };
 
             return View("SuccessDetails", viewModel);
@@ -7046,7 +7795,8 @@ namespace Compass.Controllers
             var input = new ProjectOutcomeInputModel
             {
                 ProjectId = projectSummary.Id,
-                ConfidenceLevel = "Medium"
+                ConfidenceLevel = "Medium",
+                AchievementStatus = "In progress"
             };
 
             var viewModel = BuildOutcomeFormViewModel(projectSummary, input, showDeleteButton: false);
@@ -7073,6 +7823,8 @@ namespace Compass.Controllers
                 MeasureOfSuccess = outcome.MeasureOfSuccess,
                 ConfidenceLevel = outcome.ConfidenceLevel,
                 ConfidenceExplanation = outcome.ConfidenceExplanation,
+                AchievementStatus = outcome.AchievementStatus ?? "In progress",
+                AchievementNotes = outcome.AchievementNotes,
                 SortOrder = outcome.SortOrder
             };
 
@@ -7101,6 +7853,7 @@ namespace Compass.Controllers
                 MeasureOfSuccess = outcome.MeasureOfSuccess,
                 ConfidenceLevel = outcome.ConfidenceLevel,
                 ConfidenceExplanation = outcome.ConfidenceExplanation,
+                AchievementStatus = outcome.AchievementStatus ?? "In progress",
                 SortOrder = outcome.SortOrder,
                 CreatedAt = outcome.CreatedAt,
                 UpdatedAt = outcome.UpdatedAt,
@@ -10091,6 +10844,92 @@ namespace Compass.Controllers
                 _logger.LogError(ex, "Error processing CSV import");
                 TempData["ErrorMessage"] = $"Error importing projects: {ex.Message}";
                 return RedirectToAction(nameof(Import));
+            }
+        }
+
+        // ========================================
+        // WATCHLIST
+        // ========================================
+
+        // POST: Project/AddToWatchlist
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddToWatchlist(int projectId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Json(new { success = false, message = "User not found." });
+                }
+
+                var project = await _context.Projects
+                    .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    return Json(new { success = false, message = "Project not found." });
+                }
+
+                // Check if already in watchlist
+                var existing = await _context.ProjectWatchlists
+                    .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId);
+
+                if (existing != null)
+                {
+                    return Json(new { success = false, message = "Project is already in your watchlist." });
+                }
+
+                var watchlist = new ProjectWatchlist
+                {
+                    UserId = currentUser.Id,
+                    ProjectId = projectId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.ProjectWatchlists.Add(watchlist);
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true, message = "Project added to watchlist." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding project to watchlist");
+                return Json(new { success = false, message = "An error occurred while adding the project to your watchlist." });
+            }
+        }
+
+        // POST: Project/RemoveFromWatchlist
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveFromWatchlist(int projectId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Json(new { success = false, message = "User not found." });
+                }
+
+                var watchlist = await _context.ProjectWatchlists
+                    .FirstOrDefaultAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId);
+
+                if (watchlist == null)
+                {
+                    return Json(new { success = false, message = "Project is not in your watchlist." });
+                }
+
+                _context.ProjectWatchlists.Remove(watchlist);
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true, message = "Project removed from watchlist." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing project from watchlist");
+                return Json(new { success = false, message = "An error occurred while removing the project from your watchlist." });
             }
         }
     }

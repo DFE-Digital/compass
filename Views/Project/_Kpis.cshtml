@@ -25,14 +25,29 @@
     <div class="card-body table-responsive p-0">
         @if (activeKpis.Any())
         {
-            <table class="table table-hover text-nowrap">
+            <table class="table table-hover text-nowrap sortable-table">
                 <thead>
                     <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Category</th>
-                        <th scope="col">Stages</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Target</th>
+                        <th scope="col" class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                            Name
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Category" tabindex="0" role="button" aria-label="Sort by Category">
+                            Category
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Stages" tabindex="0" role="button" aria-label="Sort by Stages">
+                            Stages
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                            Status
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Target" tabindex="0" role="button" aria-label="Sort by Target">
+                            Target
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -165,7 +180,7 @@
         }
         else
         {
-            <div class="p-4">
+            <div class="p-3">
                 <p class="text-muted mb-2">No KPIs recorded.</p>
                 <a href="@Url.Action("CreateKpi", "Project", new { projectId = Model.Id })">Add the first KPI</a>
             </div>
@@ -180,13 +195,25 @@
     <div class="card-body table-responsive p-0">
         @if (archivedKpis.Any())
         {
-            <table class="table table-hover text-nowrap">
+            <table class="table table-hover text-nowrap sortable-table">
                 <thead>
                     <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Category</th>
-                        <th scope="col">Stages</th>
-                        <th scope="col">Status</th>
+                        <th scope="col" class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                            Name
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Category" tabindex="0" role="button" aria-label="Sort by Category">
+                            Category
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Stages" tabindex="0" role="button" aria-label="Sort by Stages">
+                            Stages
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th scope="col" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                            Status
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -212,7 +239,7 @@
         }
         else
         {
-            <div class="p-4">
+            <div class="p-3">
                 <p class="text-muted mb-0">No archived KPIs recorded.</p>
             </div>
         }
@@ -285,6 +312,135 @@
         {
             return new List<string>();
         }
+
+        return storedStages
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(stage => stage.Trim())
+            .Where(stage => !string.IsNullOrWhiteSpace(stage))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+}
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
+                    }
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Status') {
+                        // Sort by badge text
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else if (column === 'Name') {
+                        // Sort by link text
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = table.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+        }
+        
+        // Initialize both KPI tables
+        var activeTable = document.querySelector('#kpis .sortable-table');
+        if (activeTable) {
+            initializeSortableTable(activeTable);
+        }
+        
+        // Find archived table (second sortable-table after #kpis)
+        var allCards = document.querySelectorAll('.card');
+        var archivedCard = null;
+        for (var i = 0; i < allCards.length; i++) {
+            if (allCards[i].querySelector('.card-title') && allCards[i].querySelector('.card-title').textContent.trim() === 'Archived KPIs') {
+                archivedCard = allCards[i];
+                break;
+            }
+        }
+        
+        if (archivedCard) {
+            var archivedTable = archivedCard.querySelector('.sortable-table');
+            if (archivedTable) {
+                initializeSortableTable(archivedTable);
+            }
+        }
+    })();
+</script>
 
         return storedStages
             .Split(',', StringSplitOptions.RemoveEmptyEntries)

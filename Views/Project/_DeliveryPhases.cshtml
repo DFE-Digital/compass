@@ -55,6 +55,15 @@
             _ => "badge-secondary"
         };
     }
+    
+    int? CalculateDays(DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            return (endDate.Value - startDate.Value).Days;
+        }
+        return null;
+    }
 }
 
 <div class="row">
@@ -71,20 +80,26 @@
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
-                                <th style="width: 15%;">Phase</th>
-                                <th style="width: 20%;">Start date (planned)</th>
-                                <th style="width: 20%;">Start date (actual)</th>
-                                <th style="width: 20%;">End date (planned)</th>
-                                <th style="width: 20%;">End date (actual)</th>
-                                <th style="width: 15%;">Assessment outcome</th>
+                                <th style="width: 10%;">Phase</th>
+                                <th style="width: 11%;">Start date (planned)</th>
+                                <th style="width: 11%;">Start date (actual)</th>
+                                <th style="width: 11%;">End date (planned)</th>
+                                <th style="width: 11%;">End date (actual)</th>
+                                <th style="width: 12%;">Planned days</th>
+                                <th style="width: 12%;">Actual days</th>
+                                <th style="width: 22%;">Assessment outcome</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var phase in phases)
                             {
                                 var assessmentOutcome = GetAssessmentOutcome(phase.Name);
+                                var plannedDays = CalculateDays(phase.StartPlanned, phase.EndPlanned);
+                                var actualDays = CalculateDays(phase.StartActual, phase.EndActual);
                                 <tr>
-                                    <td class="font-weight-bold">@phase.Name</td>
+                                    <td class="font-weight-bold">
+                                            @phase.Name
+                                    </td>
                                     <td>
                                         @if (phase.StartPlanned.HasValue)
                                         {
@@ -126,6 +141,26 @@
                                         }
                                     </td>
                                     <td>
+                                        @if (plannedDays.HasValue)
+                                        {
+                                            @plannedDays.Value
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (actualDays.HasValue)
+                                        {
+                                            @actualDays.Value
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
                                         @if (!string.IsNullOrEmpty(assessmentOutcome))
                                         {
                                             <span class="badge @GetOutcomeBadgeClass(assessmentOutcome)">@assessmentOutcome</span>
@@ -160,4 +195,3 @@
         </div>
     </div>
 </div>
-
