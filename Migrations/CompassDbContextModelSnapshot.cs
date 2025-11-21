@@ -4861,6 +4861,10 @@ namespace Compass.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CreationMethod")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("DeliveryPriorityChangeReason")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -5040,6 +5044,73 @@ namespace Compass.Migrations
                     b.ToTable("Projects");
                 });
 
+            modelBuilder.Entity("Compass.Models.ProjectArtefact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByEntraId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("ProjectArtefacts");
+                });
+
             modelBuilder.Entity("Compass.Models.ProjectBudgetOwner", b =>
                 {
                     b.Property<int>("Id")
@@ -5156,22 +5227,22 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BusinessAreaLookupId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("DirectorateLookupId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessAreaLookupId");
+                    b.HasIndex("DirectorateLookupId");
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("ProjectId", "BusinessAreaLookupId")
+                    b.HasIndex("ProjectId", "DirectorateLookupId")
                         .IsUnique();
 
                     b.ToTable("ProjectDirectorates");
@@ -5447,6 +5518,14 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AchievementNotes")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("AchievementStatus")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ConfidenceExplanation")
                         .HasMaxLength(450)
@@ -5897,6 +5976,32 @@ namespace Compass.Migrations
                     b.HasIndex("RecordedAt");
 
                     b.ToTable("ProjectSuccesses");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectWatchlist", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ProjectWatchlists");
                 });
 
             modelBuilder.Entity("Compass.Models.RaidEvidenceType", b =>
@@ -8441,6 +8546,31 @@ namespace Compass.Migrations
                     b.Navigation("RiskAppetiteLookup");
                 });
 
+            modelBuilder.Entity("Compass.Models.ProjectArtefact", b =>
+                {
+                    b.HasOne("Compass.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany("Artefacts")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("UpdatedByUser");
+                });
+
             modelBuilder.Entity("Compass.Models.ProjectBudgetOwner", b =>
                 {
                     b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
@@ -8480,9 +8610,9 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.ProjectDirectorate", b =>
                 {
-                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
                         .WithMany()
-                        .HasForeignKey("BusinessAreaLookupId")
+                        .HasForeignKey("DirectorateLookupId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -8492,7 +8622,7 @@ namespace Compass.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("BusinessAreaLookup");
+                    b.Navigation("DirectorateLookup");
 
                     b.Navigation("Project");
                 });
@@ -8714,6 +8844,25 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProjectWatchlist", b =>
+                {
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
@@ -9261,6 +9410,8 @@ namespace Compass.Migrations
             modelBuilder.Entity("Compass.Models.Project", b =>
                 {
                     b.Navigation("Actions");
+
+                    b.Navigation("Artefacts");
 
                     b.Navigation("BudgetOwners");
 

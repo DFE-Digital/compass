@@ -10,11 +10,17 @@
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
                         <thead>
                             <tr>
-                                <th style="width: 25%;">Type</th>
-                                <th style="width: 65%;">Information</th>
+                                <th style="width: 25%;" class="sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type">
+                                    Type
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th style="width: 65%;" class="sortable" data-column="Information" tabindex="0" role="button" aria-label="Sort by Information">
+                                    Information
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
                                 <th style="width: 10%;" class="text-right">Actions</th>
                             </tr>
                         </thead>
@@ -100,16 +106,16 @@
                             @if (Model.Directorates?.Any() == true)
                             {
                                 <div>
-                                    @foreach (var directorate in Model.Directorates.OrderBy(d => d.BusinessAreaLookup != null ? d.BusinessAreaLookup.Name : ""))
+                                    @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : ""))
                                     {
-                                        @if (directorate.BusinessAreaLookup != null)
+                                        @if (directorate.DirectorateLookup != null)
                                         {
                                             <div class="mb-1">
-                                                <span class="font-weight-bold">@directorate.BusinessAreaLookup.Name</span>
-                                                @if (!string.IsNullOrEmpty(directorate.BusinessAreaLookup.Description))
+                                                <span class="font-weight-bold">@directorate.DirectorateLookup.Name</span>
+                                                @if (!string.IsNullOrEmpty(directorate.DirectorateLookup.Description))
                                                 {
                                                     <br />
-                                                    <small class="text-muted">@directorate.BusinessAreaLookup.Description</small>
+                                                    <small class="text-muted">@directorate.DirectorateLookup.Description</small>
                                                 }
                                             </div>
                                         }
@@ -177,25 +183,35 @@
                 </button>
             </div>
             <form asp-action="UpdateSros" method="post">
+                @Html.AntiForgeryToken()
                 <input type="hidden" name="id" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
                         <label class="control-label">Search for users</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="sroSearchModal" placeholder="Search for users..." />
-                            <div class="input-group-append">
-                                <button type="button" class="btn btn-outline-secondary" id="addSroBtnModal">Add</button>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="sroUserPicker">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="sroSearchModal"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                             </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" class="js-user-picker-objectid" id="sroTempObjectId" />
+                            <input type="hidden" class="js-user-picker-name" id="sroTempName" />
+                            <input type="hidden" class="js-user-picker-email" id="sroTempEmail" />
                         </div>
-                        <div id="sroResultsModal" class="list-group mt-2" style="display: none;"></div>
-                        <div id="selectedSrosModal" class="mt-2"></div>
-                        <input type="hidden" name="selectedSroUserIds" id="selectedSroUserIdsModal" />
+                        <div id="selectedSrosModal" class="mt-3"></div>
+                        <input type="hidden" name="selectedSroUserIds" id="selectedSroUserIdsModal" value="" />
                         <small class="form-text text-muted">Select one or more Senior Responsible Officers</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -213,25 +229,35 @@
                 </button>
             </div>
             <form asp-action="UpdatePmoContacts" method="post">
+                @Html.AntiForgeryToken()
                 <input type="hidden" name="id" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
                         <label class="control-label">Search for users</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="pmoSearchModal" placeholder="Search for users..." />
-                            <div class="input-group-append">
-                                <button type="button" class="btn btn-outline-secondary" id="addPmoBtnModal">Add</button>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="pmoUserPicker">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="pmoSearchModal"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                             </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" class="js-user-picker-objectid" id="pmoTempObjectId" />
+                            <input type="hidden" class="js-user-picker-name" id="pmoTempName" />
+                            <input type="hidden" class="js-user-picker-email" id="pmoTempEmail" />
                         </div>
-                        <div id="pmoResultsModal" class="list-group mt-2" style="display: none;"></div>
-                        <div id="selectedPmosModal" class="mt-2"></div>
-                        <input type="hidden" name="selectedPmoUserIds" id="selectedPmoUserIdsModal" />
+                        <div id="selectedPmosModal" class="mt-3"></div>
+                        <input type="hidden" name="selectedPmoUserIds" id="selectedPmoUserIdsModal" value="" />
                         <small class="form-text text-muted">Select one or more PMO contacts</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -256,18 +282,18 @@
                         <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
                             @if (ViewBag.Directorates != null)
                             {
-                                @foreach (var businessArea in ViewBag.Directorates)
+                                @foreach (var directorate in ViewBag.Directorates)
                                 {
-                                    var isSelected = Model.Directorates?.Any(d => d.BusinessAreaLookupId == businessArea.Id) == true;
+                                    var isSelected = Model.Directorates?.Any(d => d.DirectorateLookupId == directorate.Id) == true;
                                     <div class="form-check">
                                         <input type="checkbox" class="form-check-input" 
-                                               name="selectedDirectorateIds" value="@businessArea.Id" 
-                                               id="directorateModal_@businessArea.Id" @(isSelected ? "checked" : "") />
-                                        <label class="form-check-label" for="directorateModal_@businessArea.Id">
-                                            @businessArea.Name
-                                            @if (!string.IsNullOrEmpty(businessArea.Description))
+                                               name="selectedDirectorateIds" value="@directorate.Id" 
+                                               id="directorateModal_@directorate.Id" @(isSelected ? "checked" : "") />
+                                        <label class="form-check-label" for="directorateModal_@directorate.Id">
+                                            @directorate.Name
+                                            @if (!string.IsNullOrEmpty(directorate.Description))
                                             {
-                                                <small class="text-muted"> - @businessArea.Description</small>
+                                                <small class="text-muted"> - @directorate.Description</small>
                                             }
                                         </label>
                                     </div>
@@ -279,7 +305,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -302,23 +328,42 @@
                     <div class="form-group">
                         <label class="control-label">Budget Owner(s)</label>
                         <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
-                            @if (ViewBag.BudgetOwnerBusinessAreas != null)
+                            @if (ViewBag.BusinessAreas != null)
                             {
-                                @foreach (var businessArea in ViewBag.BudgetOwnerBusinessAreas)
+                                @foreach (var businessAreaName in ViewBag.BusinessAreas)
                                 {
-                                    var isSelected = Model.BudgetOwners?.Any(bo => bo.BusinessAreaLookupId == businessArea.Id) == true;
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" 
-                                               name="selectedBudgetOwnerIds" value="@businessArea.Id" 
-                                               id="budgetownerModal_@businessArea.Id" @(isSelected ? "checked" : "") />
-                                        <label class="form-check-label" for="budgetownerModal_@businessArea.Id">
-                                            @businessArea.Name
-                                            @if (!string.IsNullOrEmpty(businessArea.Description))
-                                            {
-                                                <small class="text-muted"> - @businessArea.Description</small>
-                                            }
-                                        </label>
-                                    </div>
+                                    // Find matching BusinessAreaLookup by name
+                                    var businessAreaLookup = ViewBag.BudgetOwnerBusinessAreas != null 
+                                        ? ((List<Compass.Models.BusinessAreaLookup>)ViewBag.BudgetOwnerBusinessAreas)
+                                            .FirstOrDefault(ba => ba.Name == businessAreaName)
+                                        : null;
+                                    
+                                    if (businessAreaLookup != null)
+                                    {
+                                        var isSelected = Model.BudgetOwners?.Any(bo => bo.BusinessAreaLookupId == businessAreaLookup.Id) == true;
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" 
+                                                   name="selectedBudgetOwnerIds" value="@businessAreaLookup.Id" 
+                                                   id="budgetownerModal_@businessAreaLookup.Id" @(isSelected ? "checked" : "") />
+                                            <label class="form-check-label" for="budgetownerModal_@businessAreaLookup.Id">
+                                                @businessAreaLookup.Name
+                                                @if (!string.IsNullOrEmpty(businessAreaLookup.Description))
+                                                {
+                                                    <small class="text-muted"> - @businessAreaLookup.Description</small>
+                                                }
+                                            </label>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        // If no matching BusinessAreaLookup found, still show the option but disabled
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" disabled />
+                                            <label class="form-check-label text-muted">
+                                                @businessAreaName <small>(not available in lookup)</small>
+                                            </label>
+                                        </div>
+                                    }
                                 }
                             }
                         </div>
@@ -327,270 +372,486 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<script src="~/js/user-picker.js" asp-append-version="true"></script>
 <script nonce="@Context.Items["Nonce"]">
     (function() {
-        // ========================================
-        // Senior Responsible Officers (SROs) Modal
-        // ========================================
-        let selectedSrosModal = [];
-        let sroSearchTimeoutModal;
+        // Wait for jQuery to be available
+        function initContactsAndGovernance() {
+            if (typeof jQuery === 'undefined') {
+                setTimeout(initContactsAndGovernance, 100);
+                return;
+            }
+            
+            const $ = jQuery;
+            
+            // ========================================
+            // Senior Responsible Officers (SROs) Modal
+            // ========================================
+            let selectedSrosModal = [];
 
-        // Initialize with existing SROs when modal opens
-        $('#editSrosModal').on('show.bs.modal', function() {
-            selectedSrosModal = [];
-            @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
-            {
-                @foreach (var sro in Model.SeniorResponsibleOfficers)
+            // Handle user selection for SROs
+            function handleSroUserSelected(e, user) {
+                console.log('SRO userSelected event received:', e, user);
+                
+                // Extract user data - jQuery passes as second param, native event has detail
+                let userData = null;
+                if (user) {
+                    // jQuery event with user as second parameter
+                    userData = user;
+                } else if (e && e.detail) {
+                    // Native CustomEvent
+                    userData = e.detail;
+                } else if (e && e.originalEvent && e.originalEvent.detail) {
+                    // jQuery wrapped native event
+                    userData = e.originalEvent.detail;
+                }
+                
+                console.log('Extracted user data:', userData);
+                
+                if (userData && (userData.objectId || userData.id)) {
+                    const userId = userData.objectId || userData.id;
+                    console.log('Adding SRO with ID:', userId);
+                    addSroModal({
+                        id: userId,
+                        name: userData.name || '',
+                        email: userData.email || ''
+                    });
+                    clearSroPicker();
+                } else {
+                    console.error('No valid user data found in event:', e, user);
+                }
+            }
+        
+            // Initialize with existing SROs and attach event listeners when modal opens
+            $('#editSrosModal').on('shown.bs.modal', function() {
+                selectedSrosModal = [];
+                @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
                 {
-                    @if (sro.User != null && !string.IsNullOrEmpty(sro.User.AzureObjectId))
+                    @foreach (var sro in Model.SeniorResponsibleOfficers)
                     {
-                        <text>
-                        selectedSrosModal.push({
-                            id: '@sro.User.AzureObjectId',
-                            name: '@Html.Raw(sro.User.Name?.Replace("'", "\\'") ?? "")',
-                            email: '@Html.Raw(sro.User.Email?.Replace("'", "\\'") ?? "")'
-                        });
-                        </text>
+                        @if (sro.User != null && !string.IsNullOrEmpty(sro.User.AzureObjectId))
+                        {
+                            <text>
+                            selectedSrosModal.push({
+                                id: '@sro.User.AzureObjectId',
+                                name: '@Html.Raw(sro.User.Name?.Replace("'", "\\'") ?? "")',
+                                email: '@Html.Raw(sro.User.Email?.Replace("'", "\\'") ?? "")'
+                            });
+                            </text>
+                        }
                     }
                 }
-            }
-            updateSelectedSrosModal();
-            $('#sroSearchModal').val('');
-            hideSroResultsModal();
-        });
-
-        const sroSearchInputModal = document.getElementById('sroSearchModal');
-        if (sroSearchInputModal) {
-            sroSearchInputModal.addEventListener('input', function() {
-                clearTimeout(sroSearchTimeoutModal);
-                const query = this.value;
+                updateSelectedSrosModal();
+                clearSroPicker();
                 
-                if (query.length < 2) {
-                    hideSroResultsModal();
-                    return;
+                // Ensure user picker is initialized (it should auto-initialize on DOMContentLoaded)
+                // But we'll manually trigger initialization if needed for modals
+                const sroPicker = document.getElementById('sroUserPicker');
+                if (sroPicker && sroPicker.hasAttribute('data-user-picker') && !window.userPickerInstances) {
+                    window.userPickerInstances = window.userPickerInstances || {};
                 }
                 
-                sroSearchTimeoutModal = setTimeout(() => {
-                    searchUsersModal(query, 'sro');
-                }, 300);
+                // Attach event listeners - use both jQuery and native for maximum compatibility
+                const sroInput = document.getElementById('sroSearchModal');
+                if (sroInput) {
+                    // Remove existing listeners to avoid duplicates
+                    $(sroInput).off('userSelected');
+                    sroInput.removeEventListener('userSelected', handleSroUserSelected);
+                    
+                    // Attach new listeners - use capture phase for native events
+                    $(sroInput).on('userSelected', handleSroUserSelected);
+                    sroInput.addEventListener('userSelected', handleSroUserSelected, true);
+                    
+                    // Also listen on the picker container as fallback
+                    if (sroPicker) {
+                        $(sroPicker).off('userSelected');
+                        $(sroPicker).on('userSelected', handleSroUserSelected);
+                    }
+                }
             });
-        }
+        
+            // Document-level delegation as fallback (capture phase to catch early)
+            document.addEventListener('userSelected', function(e) {
+                if (e.target && e.target.id === 'sroSearchModal') {
+                    handleSroUserSelected(e);
+                }
+            }, true);
+            
+            $(document).on('userSelected', '#sroSearchModal', handleSroUserSelected);
 
-        document.getElementById('addSroBtnModal')?.addEventListener('click', function() {
-            const query = sroSearchInputModal?.value;
-            if (query && query.length >= 2) {
-                searchUsersModal(query, 'sro', true);
+            function clearSroPicker() {
+                const picker = document.getElementById('sroUserPicker');
+                if (picker) {
+                    const input = picker.querySelector('.js-user-picker-input');
+                    const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                    const nameInput = picker.querySelector('.js-user-picker-name');
+                    const emailInput = picker.querySelector('.js-user-picker-email');
+                    const summary = picker.querySelector('.js-user-picker-summary');
+                    const message = picker.querySelector('.js-user-picker-message');
+                    
+                    if (input) input.value = '';
+                    if (objectIdInput) objectIdInput.value = '';
+                    if (nameInput) nameInput.value = '';
+                    if (emailInput) emailInput.value = '';
+                    if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                    if (message) message.textContent = '';
+                }
             }
-        });
 
-        function addSroModal(user) {
-            if (!selectedSrosModal.find(s => s.id === user.id)) {
-                selectedSrosModal.push(user);
+            function addSroModal(user) {
+                console.log('addSroModal called with:', user);
+                // Normalize the ID - use objectId if available, otherwise id
+                const userId = user.objectId || user.id;
+                if (!userId) {
+                    console.error('No user ID found:', user);
+                    return;
+                }
+                if (!selectedSrosModal.find(s => s.id === userId)) {
+                    selectedSrosModal.push({
+                        id: userId,
+                        name: user.name || '',
+                        email: user.email || ''
+                    });
+                    updateSelectedSrosModal();
+                } else {
+                    console.log('User already in list:', userId);
+                }
+            }
+
+            function removeSroModal(userId) {
+                selectedSrosModal = selectedSrosModal.filter(s => s.id !== userId);
                 updateSelectedSrosModal();
             }
-            if (sroSearchInputModal) sroSearchInputModal.value = '';
-            hideSroResultsModal();
-        }
 
-        function removeSroModal(userId) {
-            selectedSrosModal = selectedSrosModal.filter(s => s.id !== userId);
-            updateSelectedSrosModal();
-        }
-
-        function updateSelectedSrosModal() {
-            const container = document.getElementById('selectedSrosModal');
-            const hiddenInput = document.getElementById('selectedSroUserIdsModal');
-            
-            if (!container || !hiddenInput) return;
-            
-            if (selectedSrosModal.length === 0) {
-                container.innerHTML = '';
-                hiddenInput.value = '';
-                return;
-            }
-            
-            let html = '<div class="mt-2"><strong>Selected SROs:</strong></div>';
-            selectedSrosModal.forEach(sro => {
-                html += `
-                    <div class="badge badge-primary mr-2 mb-2">
-                        ${sro.name}${sro.email ? ` (${sro.email})` : ''}
-                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSroModal('${sro.id}')">×</button>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-            hiddenInput.value = selectedSrosModal.map(s => s.id).join(',');
-        }
-
-        // ========================================
-        // PMO Contacts Modal
-        // ========================================
-        let selectedPmosModal = [];
-        let pmoSearchTimeoutModal;
-
-        // Initialize with existing PMO contacts when modal opens
-        $('#editPmoContactsModal').on('show.bs.modal', function() {
-            selectedPmosModal = [];
-            @if (Model.PmoContacts != null && Model.PmoContacts.Any())
-            {
-                @foreach (var pmo in Model.PmoContacts)
-                {
-                    @if (pmo.User != null && !string.IsNullOrEmpty(pmo.User.AzureObjectId))
-                    {
-                        <text>
-                        selectedPmosModal.push({
-                            id: '@pmo.User.AzureObjectId',
-                            name: '@Html.Raw(pmo.User.Name?.Replace("'", "\\'") ?? "")',
-                            email: '@Html.Raw(pmo.User.Email?.Replace("'", "\\'") ?? "")'
-                        });
-                        </text>
-                    }
-                }
-            }
-            updateSelectedPmosModal();
-            $('#pmoSearchModal').val('');
-            hidePmoResultsModal();
-        });
-
-        const pmoSearchInputModal = document.getElementById('pmoSearchModal');
-        if (pmoSearchInputModal) {
-            pmoSearchInputModal.addEventListener('input', function() {
-                clearTimeout(pmoSearchTimeoutModal);
-                const query = this.value;
+            function updateSelectedSrosModal() {
+                const container = document.getElementById('selectedSrosModal');
+                const hiddenInput = document.getElementById('selectedSroUserIdsModal');
                 
-                if (query.length < 2) {
-                    hidePmoResultsModal();
+                if (!container || !hiddenInput) return;
+                
+                if (selectedSrosModal.length === 0) {
+                    container.innerHTML = '';
+                    hiddenInput.value = '';
                     return;
                 }
                 
-                pmoSearchTimeoutModal = setTimeout(() => {
-                    searchUsersModal(query, 'pmo');
-                }, 300);
-            });
-        }
-
-        document.getElementById('addPmoBtnModal')?.addEventListener('click', function() {
-            const query = pmoSearchInputModal?.value;
-            if (query && query.length >= 2) {
-                searchUsersModal(query, 'pmo', true);
-            }
-        });
-
-        function addPmoModal(user) {
-            if (!selectedPmosModal.find(p => p.id === user.id)) {
-                selectedPmosModal.push(user);
-                updateSelectedPmosModal();
-            }
-            if (pmoSearchInputModal) pmoSearchInputModal.value = '';
-            hidePmoResultsModal();
-        }
-
-        function removePmoModal(userId) {
-            selectedPmosModal = selectedPmosModal.filter(p => p.id !== userId);
-            updateSelectedPmosModal();
-        }
-
-        function updateSelectedPmosModal() {
-            const container = document.getElementById('selectedPmosModal');
-            const hiddenInput = document.getElementById('selectedPmoUserIdsModal');
-            
-            if (!container || !hiddenInput) return;
-            
-            if (selectedPmosModal.length === 0) {
-                container.innerHTML = '';
-                hiddenInput.value = '';
-                return;
-            }
-            
-            let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div>';
-            selectedPmosModal.forEach(pmo => {
-                html += `
-                    <div class="badge badge-primary mr-2 mb-2">
-                        ${pmo.name}${pmo.email ? ` (${pmo.email})` : ''}
-                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmoModal('${pmo.id}')">×</button>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-            hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
-        }
-
-        // ========================================
-        // User Search (shared for SROs and PMO modals)
-        // ========================================
-        function searchUsersModal(query, type, selectFirst = false) {
-            fetch(`/Users/Search?term=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (selectFirst && data.length > 0) {
-                        if (type === 'sro') {
-                            addSroModal({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
-                        } else if (type === 'pmo') {
-                            addPmoModal({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
-                        }
-                    } else {
-                        showUserResultsModal(data, type);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error searching users:', error);
+                let html = '<div class="mt-2"><strong>Selected SROs:</strong></div><div class="d-flex flex-wrap mt-2">';
+                selectedSrosModal.forEach(sro => {
+                    const escapedId = sro.id.replace(/'/g, "\\'");
+                    const escapedName = (sro.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const escapedEmail = (sro.email || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    html += `
+                        <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                            ${escapedName}${escapedEmail ? ` (${escapedEmail})` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSroModal('${escapedId}')" aria-label="Remove ${escapedName}">×</button>
+                        </div>
+                    `;
                 });
-        }
+                html += '</div>';
+                
+                container.innerHTML = html;
+                hiddenInput.value = selectedSrosModal.map(s => s.id).join(',');
+            }
 
-        function showUserResultsModal(users, type) {
-            const containerId = type === 'sro' ? 'sroResultsModal' : 'pmoResultsModal';
-            let container = document.getElementById(containerId);
-            const searchInput = type === 'sro' ? sroSearchInputModal : pmoSearchInputModal;
+            // Make removeSroModal available globally
+            window.removeSroModal = removeSroModal;
             
-            if (!container) {
-                container = document.createElement('div');
-                container.id = containerId;
-                container.className = 'list-group mt-2';
-                if (searchInput && searchInput.parentNode) {
-                    searchInput.parentNode.appendChild(container);
+            // Ensure hidden input is set before form submission
+            $('#editSrosModal form').on('submit', function(e) {
+                const hiddenInput = document.getElementById('selectedSroUserIdsModal');
+                if (hiddenInput) {
+                    hiddenInput.value = selectedSrosModal.map(s => s.id).join(',');
+                }
+            });
+
+            // ========================================
+            // PMO Contacts Modal
+            // ========================================
+            let selectedPmosModal = [];
+
+            // Handle user selection for PMO contacts
+            function handlePmoUserSelected(e, user) {
+                console.log('PMO userSelected event received:', e, user);
+                
+                // Extract user data - jQuery passes as second param, native event has detail
+                let userData = null;
+                if (user) {
+                    // jQuery event with user as second parameter
+                    userData = user;
+                } else if (e && e.detail) {
+                    // Native CustomEvent
+                    userData = e.detail;
+                } else if (e && e.originalEvent && e.originalEvent.detail) {
+                    // jQuery wrapped native event
+                    userData = e.originalEvent.detail;
+                }
+                
+                console.log('Extracted user data:', userData);
+                
+                if (userData && (userData.objectId || userData.id)) {
+                    const userId = userData.objectId || userData.id;
+                    console.log('Adding PMO with ID:', userId);
+                    addPmoModal({
+                        id: userId,
+                        name: userData.name || '',
+                        email: userData.email || ''
+                    });
+                    clearPmoPicker();
+                } else {
+                    console.error('No valid user data found in event:', e, user);
                 }
             }
+        
+            // Initialize with existing PMO contacts when modal opens
+            $('#editPmoContactsModal').on('shown.bs.modal', function() {
+                selectedPmosModal = [];
+                @if (Model.PmoContacts != null && Model.PmoContacts.Any())
+                {
+                    @foreach (var pmo in Model.PmoContacts)
+                    {
+                        @if (pmo.User != null && !string.IsNullOrEmpty(pmo.User.AzureObjectId))
+                        {
+                            <text>
+                            selectedPmosModal.push({
+                                id: '@pmo.User.AzureObjectId',
+                                name: '@Html.Raw(pmo.User.Name?.Replace("'", "\\'") ?? "")',
+                                email: '@Html.Raw(pmo.User.Email?.Replace("'", "\\'") ?? "")'
+                            });
+                            </text>
+                        }
+                    }
+                }
+                updateSelectedPmosModal();
+                clearPmoPicker();
+                
+                // Ensure user picker is initialized (it should auto-initialize on DOMContentLoaded)
+                // But we'll manually trigger initialization if needed for modals
+                const pmoPicker = document.getElementById('pmoUserPicker');
+                if (pmoPicker && pmoPicker.hasAttribute('data-user-picker') && !window.userPickerInstances) {
+                    window.userPickerInstances = window.userPickerInstances || {};
+                }
+                
+                // Attach event listeners - use both jQuery and native for maximum compatibility
+                const pmoInput = document.getElementById('pmoSearchModal');
+                if (pmoInput) {
+                    // Remove existing listeners to avoid duplicates
+                    $(pmoInput).off('userSelected');
+                    pmoInput.removeEventListener('userSelected', handlePmoUserSelected);
+                    
+                    // Attach new listeners - use capture phase for native events
+                    $(pmoInput).on('userSelected', handlePmoUserSelected);
+                    pmoInput.addEventListener('userSelected', handlePmoUserSelected, true);
+                    
+                    // Also listen on the picker container as fallback
+                    if (pmoPicker) {
+                        $(pmoPicker).off('userSelected');
+                        $(pmoPicker).on('userSelected', handlePmoUserSelected);
+                    }
+                }
+            });
+        
+            // Document-level delegation as fallback (capture phase to catch early)
+            document.addEventListener('userSelected', function(e) {
+                if (e.target && e.target.id === 'pmoSearchModal') {
+                    handlePmoUserSelected(e);
+                }
+            }, true);
             
-            container.innerHTML = '';
+            $(document).on('userSelected', '#pmoSearchModal', handlePmoUserSelected);
+
+            function clearPmoPicker() {
+                const picker = document.getElementById('pmoUserPicker');
+                if (picker) {
+                    const input = picker.querySelector('.js-user-picker-input');
+                    const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                    const nameInput = picker.querySelector('.js-user-picker-name');
+                    const emailInput = picker.querySelector('.js-user-picker-email');
+                    const summary = picker.querySelector('.js-user-picker-summary');
+                    const message = picker.querySelector('.js-user-picker-message');
+                    
+                    if (input) input.value = '';
+                    if (objectIdInput) objectIdInput.value = '';
+                    if (nameInput) nameInput.value = '';
+                    if (emailInput) emailInput.value = '';
+                    if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                    if (message) message.textContent = '';
+                }
+            }
+
+            function addPmoModal(user) {
+                console.log('addPmoModal called with:', user);
+                // Normalize the ID - use objectId if available, otherwise id
+                const userId = user.objectId || user.id;
+                if (!userId) {
+                    console.error('No user ID found:', user);
+                    return;
+                }
+                if (!selectedPmosModal.find(p => p.id === userId)) {
+                    selectedPmosModal.push({
+                        id: userId,
+                        name: user.name || '',
+                        email: user.email || ''
+                    });
+                    updateSelectedPmosModal();
+                } else {
+                    console.log('User already in list:', userId);
+                }
+            }
+
+            function removePmoModal(userId) {
+                selectedPmosModal = selectedPmosModal.filter(p => p.id !== userId);
+                updateSelectedPmosModal();
+            }
+
+            function updateSelectedPmosModal() {
+                const container = document.getElementById('selectedPmosModal');
+                const hiddenInput = document.getElementById('selectedPmoUserIdsModal');
+                
+                if (!container || !hiddenInput) return;
+                
+                if (selectedPmosModal.length === 0) {
+                    container.innerHTML = '';
+                    hiddenInput.value = '';
+                    return;
+                }
+                
+                let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div><div class="d-flex flex-wrap mt-2">';
+                selectedPmosModal.forEach(pmo => {
+                    const escapedId = pmo.id.replace(/'/g, "\\'");
+                    const escapedName = (pmo.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const escapedEmail = (pmo.email || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    html += `
+                        <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                            ${escapedName}${escapedEmail ? ` (${escapedEmail})` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmoModal('${escapedId}')" aria-label="Remove ${escapedName}">×</button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                container.innerHTML = html;
+                hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
+            }
+
+            // Make removePmoModal available globally
+            window.removePmoModal = removePmoModal;
             
-            if (users.length === 0) {
-                container.innerHTML = '<div class="list-group-item text-muted">No users found</div>';
-            } else {
-                users.forEach(user => {
-                    const item = document.createElement('div');
-                    item.className = 'list-group-item list-group-item-action';
-                    item.innerHTML = `<strong>${user.displayName || user.name}</strong>${user.email ? ` (${user.email})` : ''}`;
-                    item.addEventListener('click', () => {
-                        if (type === 'sro') {
-                            addSroModal({ id: user.id, name: user.displayName || user.name, email: user.email });
-                        } else if (type === 'pmo') {
-                            addPmoModal({ id: user.id, name: user.displayName || user.name, email: user.email });
+            // Ensure hidden input is set before form submission
+            $('#editPmoContactsModal form').on('submit', function(e) {
+                const hiddenInput = document.getElementById('selectedPmoUserIdsModal');
+                if (hiddenInput) {
+                    hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
+                }
+            });
+            
+            // Initialize governance table sorting
+            function initGovernanceTableSorting() {
+                var table = document.querySelector('.sortable-table.mb-0');
+                if (!table) {
+                    return;
+                }
+                
+                var currentSort = { column: null, direction: 'asc' };
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
                         }
                     });
-                    container.appendChild(item);
                 });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+                
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initGovernanceTableSorting);
+                } else {
+                    initGovernanceTableSorting();
+                }
             }
-            
-            container.style.display = 'block';
         }
-
-        function hideSroResultsModal() {
-            const container = document.getElementById('sroResultsModal');
-            if (container) container.style.display = 'none';
-        }
-
-        function hidePmoResultsModal() {
-            const container = document.getElementById('pmoResultsModal');
-            if (container) container.style.display = 'none';
+        
+        // Initialize when jQuery is ready
+        if (typeof jQuery !== 'undefined') {
+            jQuery(document).ready(initContactsAndGovernance);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof jQuery !== 'undefined') {
+                    jQuery(document).ready(initContactsAndGovernance);
+                }
+            });
         }
     })();
 </script>

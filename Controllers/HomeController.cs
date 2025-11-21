@@ -369,6 +369,11 @@ public class HomeController : Controller
             })
             .ToList();
 
+        // Get watched deliverables count
+        var watchedDeliverablesCount = await _context.ProjectWatchlists
+            .Where(w => w.UserId == currentUser.Id)
+            .CountAsync();
+
         var metrics = new DashboardMetrics
         {
             TasksDue = priorityTasks.Count,
@@ -377,7 +382,8 @@ public class HomeController : Controller
             ProductCount = myProducts.Count,
             UpcomingMilestones = milestonesDueThisWeek.Count,
             OpenIssues = openIssues.Count,
-            UnreviewedRisks = unmonitoredRisks.Count
+            UnreviewedRisks = unmonitoredRisks.Count,
+            WatchedDeliverables = watchedDeliverablesCount
         };
 
         var leadershipAssignments = await _context.UserBusinessAreaRoleAssignments
@@ -492,8 +498,15 @@ public class HomeController : Controller
                         .ToListAsync();
 
                     leadershipMetrics = BuildLeadershipMetrics(leadershipProjects);
+                    leadershipMetrics.WatchedDeliverables = watchedDeliverablesCount;
                 }
             }
+        }
+        
+        // Set watched deliverables count for leadership metrics if not already set
+        if (leadershipMetrics != null && leadershipMetrics.WatchedDeliverables == 0)
+        {
+            leadershipMetrics.WatchedDeliverables = watchedDeliverablesCount;
         }
 
         var sectionConfig = new DashboardSectionConfig

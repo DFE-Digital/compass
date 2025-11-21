@@ -8,6 +8,7 @@ namespace Compass.ViewModels
     {
         public IReadOnlyList<Project> Projects { get; set; } = Array.Empty<Project>();
         public IReadOnlyList<Project> UserProjects { get; set; } = Array.Empty<Project>();
+        public IReadOnlyList<Project> WatchedProjects { get; set; } = Array.Empty<Project>();
         public int PageNumber { get; set; } = 1;
         public int PageSize { get; set; } = 15;
         public int TotalCount { get; set; }

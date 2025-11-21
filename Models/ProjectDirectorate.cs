@@ -16,10 +16,10 @@ public class ProjectDirectorate
     public Project Project { get; set; } = null!;
 
     [Required]
-    public int BusinessAreaLookupId { get; set; }
+    public int DirectorateLookupId { get; set; }
 
-    [ForeignKey(nameof(BusinessAreaLookupId))]
-    public BusinessAreaLookup BusinessAreaLookup { get; set; } = null!;
+    [ForeignKey(nameof(DirectorateLookupId))]
+    public DirectorateLookup DirectorateLookup { get; set; } = null!;
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

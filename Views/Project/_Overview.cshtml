@@ -103,7 +103,7 @@
         <!-- Status Updates -->
         <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title">Status updates</h3>
+                <h3 class="card-title">Latest status updates</h3>
                 <div class="card-tools">
                     <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates">View all</a>
                 </div>
@@ -111,30 +111,24 @@
             <div class="card-body p-0">
                 @if (Model.StatusUpdates?.Any() == true)
                 {
-                    var recentUpdates = Model.StatusUpdates.OrderByDescending(su => su.CreatedAt).Take(2).ToList();
-                    @foreach (var update in recentUpdates)
+                    var latestUpdate = Model.StatusUpdates.OrderByDescending(su => su.CreatedAt).FirstOrDefault();
+                    @if (latestUpdate != null)
                     {
-                        <div class="p-3 @(update != recentUpdates.Last() ? "border-bottom" : "")">
-                            <div class="mb-2">
-                                <small class="text-muted">@update.CreatedAt.ToString("d MMMM yyyy 'at' HH:mm")</small>
-                                @if (update.CreatedByUser != null)
+                        <div class="p-3">
+                            <p class="mb-2">
+                                @if (latestUpdate.Narrative.Length > 200)
                                 {
-                                    <small class="text-muted"> by @update.CreatedByUser.Name</small>
-                                }
-                            </div>
-                            <p class="mb-0">
-                                @if (update.Narrative.Length > 200)
-                                {
-                                    @update.Narrative.Substring(0, 200)<text>…</text>
+                                    @latestUpdate.Narrative.Substring(0, 200)<text>…</text>
                                 }
                                 else
                                 {
-                                    @update.Narrative
+                                    @latestUpdate.Narrative
                                 }
                             </p>
+                            <small class="text-muted">@latestUpdate.CreatedAt.ToString("d MMMM yyyy")</small>
                         </div>
                     }
-                    @if (Model.StatusUpdates.Count > 2)
+                    @if (Model.StatusUpdates.Count > 1)
                     {
                         <div class="p-3 border-top">
                             <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates" class="btn btn-sm btn-outline-secondary">
@@ -147,7 +141,7 @@
                 {
                     <div class="p-3">
                         <p class="text-muted mb-0">No status updates recorded yet.</p>
-                        <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates" class="btn btn-sm btn-primary mt-2">
+                        <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="statusupdates" class="mt-2">
                             Add status update
                         </a>
                     </div>
@@ -177,18 +171,33 @@
                         <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })">Manage deliverables</a>
                     </div>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     @if (deliverableProjects.Any())
                     {
-                        <div class="table-responsive">
-                            <table class="table table-hover">
+                  
+                            <table class="table table-hover text-nowrap sortable-table">
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>RAG Status</th>
-                                        <th>Phase</th>
-                                        <th>Business Area</th>
-                                        <th>Milestones</th>
+                                        <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                            Name
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">
+                                            RAG Status
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">
+                                            Phase
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">
+                                            Business Area
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="Milestones" tabindex="0" role="button" aria-label="Sort by Milestones">
+                                            Milestones
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -239,14 +248,14 @@
                                     }
                                 </tbody>
                             </table>
-                        </div>
+                    
                     }
                     else
                     {
-                        <div class="text-center p-3">
+                        <div class="p-3">
                             <p class="text-muted mb-2">No deliverables have been added yet.</p>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })" class="btn btn-sm btn-primary">
-                                <i class="fas fa-plus"></i> Add Deliverables
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliverables" })">
+                                Add Deliverables
                             </a>
                         </div>
                     }
@@ -262,17 +271,32 @@
                     <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
                 </div>
             </div>
-            <div class="card-body ">
+            <div class="card-body p-0">
                 @if (activeMilestones.Any())
                 {
-                    <table class="table table-hover text-nowrap milestones-table table-responsive p-0">
+                    <table class="table table-hover text-nowrap sortable-table milestones-table">
                         <thead>
                             <tr>
-                                <th class="col-name">Name</th>
-                                <th class="col-status">Status</th>
-                                <th class="col-due">Due Date</th>
-                                <th class="col-actual">Actual Date</th>
-                                <th class="col-progress">Progress</th>
+                                <th class="col-name sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                    Name
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                                    Status
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="col-due sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">
+                                    Due Date
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="col-actual sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">
+                                    Actual Date
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="col-progress sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">
+                                    Progress
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -301,14 +325,22 @@
                                         }
                                     </td>
                                     <td>
-                                        @if (milestone.ProgressPercent.HasValue && milestone.ProgressPercent.Value > 0)
-                                        {
-                                            @milestone.ProgressPercent.Value<text>%</text>
+                                        @{
+                                            var progressValue = milestone.ProgressPercent ?? 0;
                                         }
-                                        else
-                                        {
-                                            <span class="text-muted">0%</span>
-                                        }
+                                        <div class="d-flex align-items-center">
+                                            <span class="mr-2">@progressValue%</span>
+                                            <div class="progress flex-grow-1" style="height: 4px; max-width: 100px;">
+                                                <div class="progress-bar milestone-progress @(progressValue >= 75 ? "bg-success" : progressValue >= 50 ? "bg-info" : progressValue >= 25 ? "bg-warning" : "bg-danger")"
+                                                     role="progressbar"
+                                                     data-progress="@progressValue"
+                                                     aria-valuenow="@progressValue"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100"
+                                                     aria-label="Milestone progress: @progressValue%">
+                                                </div>
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -317,10 +349,10 @@
                 }
                 else
                 {
-               
+                    <div class="p-3">
                         <p class="text-muted mb-2">No active milestones.</p>
-                        <a class="btn btn-success btn-sm" asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
-            
+                        <a asp-controller="Project" asp-action="CreateMilestone" asp-route-projectId="@Model.Id">Add milestone</a>
+                    </div>
                 }
             </div>
             @if (activeMilestones.Count > 5)
@@ -403,7 +435,7 @@
                                     <div>
                                 @if (!string.IsNullOrWhiteSpace(Model.PrimaryContactUser.Email))
                                 {
-                                    <a href="mailto:@Model.PrimaryContactUser.Email" class="font-weight-bold">
+                                    <a href="mailto:@Model.PrimaryContactUser.Email" class="">
                                         @Model.PrimaryContactUser.Name
                                     </a>
                                 }
@@ -455,6 +487,32 @@
                             </td>
                             <td class="text-right">
                                 <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="contactsandgovernance">View all</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label"><strong>Directorate(s)</strong></td>
+                            <td class="summary-value">
+                                @if (Model.Directorates?.Any() == true)
+                                {
+                                @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : "").Take(2))
+                                {
+                                    @if (directorate.DirectorateLookup != null)
+                                    {
+                                        <div>@directorate.DirectorateLookup.Name</div>
+                                    }
+                                }
+                                    @if (Model.Directorates.Count > 2)
+                                    {
+                                        <small class="text-muted">+ @(Model.Directorates.Count - 2) more</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not set</span>
+                                }
+                            </td>
+                            <td class="text-right">
+                                <a href="#" data-toggle="modal" data-target="#editDirectoratesModal">Change</a>
                             </td>
                         </tr>
                         <tr>
@@ -567,6 +625,7 @@
             <div class="card-header">
                 <h3 class="card-title">Team</h3>
                 <div class="card-tools">
+                    <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team">View team</a>
                     <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse Team section">
                         <i class="fas fa-minus" aria-hidden="true"></i>
                     </button>
@@ -575,11 +634,17 @@
             <div class="card-body p-0">
                 @if (Model.ProjectContacts.Any())
                 {
-                        <table class="table table-sm mb-0">
+                        <table class="table table-hover text-nowrap sortable-table table-sm mb-0">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Role</th>
+                                    <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                        Name
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Role" tabindex="0" role="button" aria-label="Sort by Role">
+                                        Role
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -611,11 +676,6 @@
                     </div>
                 }
             </div>
-            <div class="card-footer">
-                <a asp-action="Details" asp-route-id="@Model.Id" asp-route-tab="team" class="btn btn-sm btn-outline-secondary">
-                    View full team
-                </a>
-            </div>
         </div>
     </div>
 </div>
@@ -641,7 +701,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -711,7 +771,7 @@
                     <button type="button" class="btn btn-danger" id="deleteMilestoneFromViewBtn">Delete Milestone</button>
                     <div>
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="submit" class="btn btn-success">Save Changes</button>
                     </div>
                 </div>
             </form>
@@ -780,7 +840,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -823,7 +883,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -851,7 +911,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -916,7 +976,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -971,7 +1031,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1012,7 +1072,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1049,7 +1109,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -1077,7 +1137,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -1105,7 +1165,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -1138,7 +1198,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -1181,7 +1241,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1224,7 +1284,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1258,7 +1318,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1299,7 +1359,60 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Directorates Modal -->
+<div class="modal fade" id="editDirectoratesModal" tabindex="-1" role="dialog" aria-labelledby="editDirectoratesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editDirectoratesModalLabel">Edit Directorates</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateDirectorates" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="returnTab" value="overview" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Directorate(s)</label>
+                        <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                            @if (ViewBag.Directorates != null)
+                            {
+                                @foreach (var directorate in ViewBag.Directorates)
+                                {
+                                    var isSelected = Model.Directorates?.Any(d => d.DirectorateLookupId == directorate.Id) == true;
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" 
+                                               name="selectedDirectorateIds" value="@directorate.Id" 
+                                               id="directorateModal_@directorate.Id" @(isSelected ? "checked" : "") />
+                                        <label class="form-check-label" for="directorateModal_@directorate.Id">
+                                            @directorate.Name
+                                            @if (!string.IsNullOrEmpty(directorate.Description))
+                                            {
+                                                <small class="text-muted"> - @directorate.Description</small>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No directorates available.</p>
+                            }
+                        </div>
+                        <small class="form-text text-muted">Select one or more directorates</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
                 </div>
             </form>
         </div>
@@ -1355,6 +1468,14 @@
 <script nonce="@Context.Items["Nonce"]">
     (function() {
         function initOverviewPage() {
+            // Set progress bar width from data attribute
+            $('.milestone-progress').each(function() {
+                var progress = $(this).attr('data-progress');
+                if (progress) {
+                    $(this).css('width', progress + '%');
+                }
+            });
+
             // Handle delete milestone button from view modal
             $('#deleteMilestoneFromViewBtn').on('click', function() {
                 var milestoneId = $('#editMilestoneId').val();
@@ -1441,6 +1562,318 @@
                     $(this).append('<input type="hidden" name="isExternal" value="" />');
                 }
             });
+            
+            // Initialize sorting for Active milestones table
+            function initMilestonesTableSorting() {
+                var table = document.querySelector('.milestones-table');
+                if (!table) return;
+                
+                var currentSort = { column: null, direction: 'asc' };
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'Status') {
+                            var aBadge = aCell.querySelector('.badge');
+                            var bBadge = bCell.querySelector('.badge');
+                            aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                            bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                        } else if (column === 'Name') {
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        } else if (column === 'DueDate' || column === 'ActualDate') {
+                            var aDate = Date.parse(aCell.textContent.trim());
+                            var bDate = Date.parse(bCell.textContent.trim());
+                            aVal = isNaN(aDate) ? 0 : aDate;
+                            bVal = isNaN(bDate) ? 0 : bDate;
+                        } else if (column === 'Progress') {
+                            var aText = aCell.textContent.trim();
+                            var bText = bCell.textContent.trim();
+                            var aMatch = aText.match(/(\d+)%/);
+                            var bMatch = bText.match(/(\d+)%/);
+                            aVal = aMatch ? parseInt(aMatch[1]) : 0;
+                            bVal = bMatch ? parseInt(bMatch[1]) : 0;
+                        } else {
+                            aVal = aCell.textContent.trim().toLowerCase();
+                            bVal = bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+            }
+            
+            // Initialize sorting for Team table
+            function initTeamTableSorting() {
+                var table = document.querySelector('#team .sortable-table');
+                if (!table) return;
+                
+                var currentSort = { column: null, direction: 'asc' };
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'Name') {
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        } else {
+                            aVal = aCell.textContent.trim().toLowerCase();
+                            bVal = bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+            }
+            
+            // Initialize sorting for deliverables table
+            function initDeliverablesTableSorting() {
+                var table = document.querySelector('#deliverables .sortable-table');
+                if (!table) return;
+                
+                var currentSort = { column: null, direction: 'asc' };
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'Milestones') {
+                            var aText = aCell.textContent.trim();
+                            var bText = bCell.textContent.trim();
+                            var aMatch = aText.match(/(\d+)\s*\/\s*(\d+)/);
+                            var bMatch = bText.match(/(\d+)\s*\/\s*(\d+)/);
+                            aVal = aMatch ? parseInt(aMatch[1]) : 0;
+                            bVal = bMatch ? parseInt(bMatch[1]) : 0;
+                        } else if (column === 'RAGStatus') {
+                            var aBadge = aCell.querySelector('.badge');
+                            var bBadge = bCell.querySelector('.badge');
+                            aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                            bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                        } else if (column === 'Name') {
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        } else {
+                            aVal = aCell.textContent.trim().toLowerCase();
+                            bVal = bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+            }
+            
+            // Initialize all table sorting
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    initMilestonesTableSorting();
+                    initTeamTableSorting();
+                    initDeliverablesTableSorting();
+                });
+            } else {
+                initMilestonesTableSorting();
+                initTeamTableSorting();
+                initDeliverablesTableSorting();
+            }
         }
 
         if (typeof jQuery !== 'undefined') {

@@ -98,12 +98,14 @@
     </div>
     @if (!risks.Any())
     {
-        <div class="card-body">
-            <p class="text-muted mb-2">No risks recorded for this project.</p>
-            <p class="mb-0">
-                <a asp-controller="Project" asp-action="CreateRisk" asp-route-projectId="@Model.Id">Create a risk</a>
-                or <a asp-controller="Risk" asp-action="Index">open the risk register</a> to link existing entries.
-            </p>
+        <div class="card-body p-0">
+            <div class="p-3">
+                <p class="text-muted mb-2">No risks recorded for this project.</p>
+                <p class="mb-0">
+                    <a asp-controller="Project" asp-action="CreateRisk" asp-route-projectId="@Model.Id">Create a risk</a>
+                    or <a asp-controller="Risk" asp-action="Index">open the risk register</a> to link existing entries.
+                </p>
+            </div>
         </div>
     }
     else
@@ -114,27 +116,27 @@
                     <tr>
                         <th class="col-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
                             Title
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="col-tier sortable" data-column="Tier" tabindex="0" role="button" aria-label="Sort by Tier">
                             Tier
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="col-score sortable" data-column="Score" tabindex="0" role="button" aria-label="Sort by Score">
                             Score
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="col-owner sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner">
                             Owner
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="col-status sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
                             Status
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="col-review sortable" data-column="NextReview" tabindex="0" role="button" aria-label="Sort by Next review">
                             Next review
-                            <i class="fas fa-sort sort-icon" aria-hidden="true"></i>
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                         </th>
                         <th class="text-right">Actions</th>
                     </tr>
@@ -181,4 +183,131 @@
         </div>
     }
 </div>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        function initSorting(table) {
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            var currentSort = { column: null, direction: 'asc' };
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
+                    }
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Status') {
+                        // Sort by badge text
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                    } else if (column === 'Title') {
+                        // Sort by link text
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else if (column === 'Score') {
+                        // Sort by numeric value
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        var aNum = parseFloat(aText);
+                        var bNum = parseFloat(bText);
+                        aVal = isNaN(aNum) ? 0 : aNum;
+                        bVal = isNaN(bNum) ? 0 : bNum;
+                    } else if (column === 'NextReview') {
+                        // Use data-sort-value if available, otherwise parse date
+                        var aSortValue = aCell.getAttribute('data-sort-value');
+                        var bSortValue = bCell.getAttribute('data-sort-value');
+                        if (aSortValue && bSortValue) {
+                            aVal = parseInt(aSortValue);
+                            bVal = parseInt(bSortValue);
+                        } else {
+                            var aDate = Date.parse(aCell.textContent.trim());
+                            var bDate = Date.parse(bCell.textContent.trim());
+                            aVal = isNaN(aDate) ? 0 : aDate;
+                            bVal = isNaN(bDate) ? 0 : bDate;
+                        }
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = table.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+        }
+        
+        var table = document.querySelector('.risks-table');
+        if (table) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() { initSorting(table); });
+            } else {
+                initSorting(table);
+            }
+        }
+    })();
+</script>
 

@@ -7,10 +7,10 @@
             <div class="card-header">
                 <h3 class="card-title">Priority Outcomes</h3>
                 <div class="card-tools">
-                    <a href="#" data-toggle="modal" data-target="#manageObjectivesModal">Manage</a>
+                    <a asp-action="EditPriorityOutcomes" asp-route-projectId="@Model.Id">Manage</a>
                 </div>
             </div>
-            <div class="card-body table-responsive p-0">
+            <div class="card-body p-0">
                 @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
                 {
                     <div class="mb-3 p-3">
@@ -21,17 +21,23 @@
 
                 @if (Model.ProjectObjectives != null && Model.ProjectObjectives.Any())
                 {
-                    @if (!string.IsNullOrEmpty(Model.StrategicObjectives))
-                    {
-                        <hr class="my-0">
-                    }
+                  
                  
-                        <table class="table table-hover text-nowrap milestones-table">
+                        <table class="table table-hover text-nowrap sortable-table milestones-table">
                             <thead>
                                 <tr>
-                                    <th>Objective</th>
-                                    <th>Priority</th>
-                                    <th>Owner</th>
+                                    <th class="sortable" data-column="Objective" tabindex="0" role="button" aria-label="Sort by Objective">
+                                        Objective
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">
+                                        Priority
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Owner" tabindex="0" role="button" aria-label="Sort by Owner">
+                                        Owner
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -54,6 +60,11 @@
                         </table>
                 
                 }
+                else{
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No priority outcomes associated.</p>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -66,39 +77,65 @@
             <div class="card-header">
                 <h3 class="card-title">Mission Pillars</h3>
                 <div class="card-tools">
-                    <a href="#" data-toggle="modal" data-target="#manageMissionsModal">Manage</a>
+                    <a asp-action="EditMissionPillars" asp-route-projectId="@Model.Id">Manage</a>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 @if (!string.IsNullOrEmpty(Model.MissionPillars))
                 {
-                    <div class="mb-3">
+                    <div class="mb-3 p-3">
                         <strong>Narrative:</strong>
                         <div class="preserve-formatting mt-2">@Model.MissionPillars</div>
                     </div>
                 }
-                else
-                {
-                    <p class="text-muted">No mission pillars description provided.</p>
-                }
 
                 @if (Model.ProjectMissions != null && Model.ProjectMissions.Any())
                 {
-                    <hr>
-                    <strong>Linked Missions:</strong>
-                    <ul class="mt-2">
-                        @foreach (var projectMission in Model.ProjectMissions.OrderBy(pm => pm.Mission?.Title))
-                        {
-                            <li class="mb-2">
-                                <strong>@projectMission.Mission?.Title</strong>
-                                @if (!string.IsNullOrEmpty(projectMission.Mission?.Description))
-                                {
-                                    <br>
-                                    <small class="text-muted">@projectMission.Mission.Description</small>
-                                }
-                            </li>
-                        }
-                    </ul>
+                    <table class="table table-hover text-nowrap sortable-table milestones-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="Theme" tabindex="0" role="button" aria-label="Sort by Theme">
+                                    Theme
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="sortable" data-column="Mission" tabindex="0" role="button" aria-label="Sort by Mission">
+                                    Mission
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                                <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">
+                                    Description
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var projectMission in Model.ProjectMissions.OrderBy(pm => pm.Mission?.Theme ?? "Other").ThenBy(pm => pm.Mission?.Title))
+                            {
+                                <tr>
+                                    <td>@(projectMission.Mission?.Theme ?? "Other")</td>
+                                    <td>
+                                        <strong>@projectMission.Mission?.Title</strong>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(projectMission.Mission?.Description))
+                                        {
+                                            <small class="text-muted">@projectMission.Mission.Description</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No mission pillars associated.</p>
+                    </div>
                 }
             </div>
         </div>
@@ -115,18 +152,48 @@
                     <a href="#" data-toggle="modal" data-target="#manageFlagshipModal">Manage</a>
                 </div>
             </div>
-            <div class="card-body">
-                @if (Model.IsFlagship)
-                {
-                    <div class="alert alert-info mb-0">
-                        <i class="fas fa-flag"></i> <strong>This is a Flagship Project</strong>
-                        <p class="mb-0 mt-2">Flagship projects are high-priority initiatives that are reported separately in DDT reports and can contain multiple deliverables.</p>
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted">This is a standard project. Mark as flagship to enable deliverables management and DDT flagship reporting.</p>
-                }
+            <div class="card-body p-0">
+                <table class="table table-hover text-nowrap sortable-table milestones-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                                Status
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                            <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">
+                                Description
+                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                @if (Model.IsFlagship)
+                                {
+                                    <span class="badge badge-primary">Flagship Project</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Standard Project</span>
+                                }
+                            </td>
+                            <td>
+                                @if (Model.IsFlagship)
+                                {
+                                    <div>
+                                        <i class="fas fa-flag"></i> <strong>This is a Flagship Project</strong>
+                                        <p class="mb-0 mt-2">Flagship projects are high-priority initiatives that are reported separately in DDT reports and can contain multiple deliverables.</p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">This is a standard project. Mark as flagship to enable deliverables management and DDT flagship reporting.</span>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -142,11 +209,9 @@
                     <a href="#" data-toggle="modal" data-target="#manageDepartmentsModal">Manage</a>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 @if (Model.IsMultiDepartmentProject)
                 {
-                    <p><strong>This project is being delivered in cooperation with other government departments.</strong></p>
-                    
                     @if (!string.IsNullOrEmpty(Model.OtherDepartments))
                     {
                         var departmentIds = System.Text.Json.JsonSerializer.Deserialize<List<int>>(Model.OtherDepartments);
@@ -155,182 +220,64 @@
                         
                         @if (selectedDepartments != null && selectedDepartments.Any())
                         {
-                            <div class="mt-2">
-                                <strong>Partnering Departments:</strong>
-                                <ul class="mt-2">
+                            <table class="table table-hover text-nowrap sortable-table milestones-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
+                                            Department
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="Abbreviation" tabindex="0" role="button" aria-label="Sort by Abbreviation">
+                                            Abbreviation
+                                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                                     @foreach (var dept in selectedDepartments.OrderBy(d => d.Title))
                                     {
-                                        <li>
-                                            <strong>@dept.Title</strong>
-                                            @if (!string.IsNullOrEmpty(dept.Abbreviation))
-                                            {
-                                                <span class="text-muted">(@dept.Abbreviation)</span>
-                                            }
-                                        </li>
+                                        <tr>
+                                            <td><strong>@dept.Title</strong></td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(dept.Abbreviation))
+                                                {
+                                                    <span class="text-muted">@dept.Abbreviation</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
                                     }
-                                </ul>
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No partnering departments specified.</p>
                             </div>
                         }
                     }
                     else
                     {
-                        <p class="text-muted mt-2">No partnering departments specified.</p>
+                        <div class="p-3">
+                            <p class="text-muted mb-0">No partnering departments specified.</p>
+                        </div>
                     }
                 }
                 else
                 {
-                    <p class="text-muted">This is a single-department project (DfE only).</p>
+                    <div class="p-3">
+                        <p class="text-muted mb-0">This is a single-department project (DfE only).</p>
+                    </div>
                 }
             </div>
         </div>
     </div>
 </div>
 
-<!-- Manage Priority Outcomes Modal -->
-<div class="modal fade" id="manageObjectivesModal" tabindex="-1" role="dialog" aria-labelledby="manageObjectivesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="manageObjectivesModalLabel">Manage Priority Outcomes</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateStrategicObjectivesAndLinks" method="post">
-                <input type="hidden" name="id" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="strategicObjectivesText">Priority Outcomes Narrative</label>
-                        <textarea class="form-control preserve-formatting" id="strategicObjectivesText" name="strategicObjectivesText" rows="6" placeholder="Describe how this project aligns with priority outcomes...">@Model.StrategicObjectives</textarea>
-                        <small class="form-text text-muted">Provide a narrative description of how this project supports priority outcomes.</small>
-                    </div>
-
-                    <hr>
-
-                    <div class="form-group">
-                        <label>Link to specific priority outcomes</label>
-                        <p class="small text-muted">Select the priority outcomes this project directly supports.</p>
-                        
-                        @{
-                            var selectedObjectiveIds = Model.ProjectObjectives != null 
-                                ? Model.ProjectObjectives.Select(po => po.ObjectiveId).ToList() 
-                                : new List<int>();
-                            var objectives = ViewBag.Objectives as IEnumerable<Compass.Models.Objective>;
-                            
-                            if (objectives != null && objectives.Any())
-                            {
-                                var objectivesByTheme = objectives.GroupBy(o => o.Theme ?? "Other");
-                                
-                                foreach (var themeGroup in objectivesByTheme.OrderBy(g => g.Key))
-                                {
-                                    <div class="mb-3">
-                                        <h6 class="mb-2">@themeGroup.Key</h6>
-                                        @foreach (var objective in themeGroup.OrderBy(o => o.Title))
-                                        {
-                                            <div class="form-check">
-                                                <input type="checkbox" name="selectedObjectiveIds" value="@objective.Id" 
-                                                       class="form-check-input" id="obj_@objective.Id"
-                                                       @(selectedObjectiveIds.Contains(objective.Id) ? "checked" : "") />
-                                                <label class="form-check-label" for="obj_@objective.Id">
-                                                    @objective.Title
-                                                    @if (!string.IsNullOrEmpty(objective.Description))
-                                                    {
-                                                        <br><small class="text-muted">@objective.Description</small>
-                                                    }
-                                                </label>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <p class="text-muted">No priority outcomes available.</p>
-                            }
-                        }
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Manage Mission Pillars Modal -->
-<div class="modal fade" id="manageMissionsModal" tabindex="-1" role="dialog" aria-labelledby="manageMissionsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="manageMissionsModalLabel">Manage Mission Pillars</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateMissionPillarsAndLinks" method="post">
-                <input type="hidden" name="id" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="missionPillarsText">Mission Pillars Narrative</label>
-                        <textarea class="form-control preserve-formatting" id="missionPillarsText" name="missionPillarsText" rows="6" placeholder="Describe how this project aligns with mission pillars...">@Model.MissionPillars</textarea>
-                        <small class="form-text text-muted">Provide a narrative description of how this project supports mission pillars.</small>
-                    </div>
-
-                    <hr>
-
-                    <div class="form-group">
-                        <label>Link to Specific Missions</label>
-                        <p class="small text-muted">Select the missions this project directly supports.</p>
-                        
-                        @{
-                            var selectedMissionIds = Model.ProjectMissions != null 
-                                ? Model.ProjectMissions.Select(pm => pm.MissionId).ToList() 
-                                : new List<int>();
-                            var missions = ViewBag.Missions as IEnumerable<Compass.Models.Mission>;
-                            
-                            if (missions != null && missions.Any())
-                            {
-                                var missionsByTheme = missions.GroupBy(m => m.Theme ?? "Other");
-                                
-                                foreach (var themeGroup in missionsByTheme.OrderBy(g => g.Key))
-                                {
-                                    <div class="mb-3">
-                                        <h6 class="mb-2">@themeGroup.Key</h6>
-                                        @foreach (var mission in themeGroup.OrderBy(m => m.Title))
-                                        {
-                                            <div class="form-check">
-                                                <input type="checkbox" name="selectedMissionIds" value="@mission.Id" 
-                                                       class="form-check-input" id="mission_@mission.Id"
-                                                       @(selectedMissionIds.Contains(mission.Id) ? "checked" : "") />
-                                                <label class="form-check-label" for="mission_@mission.Id">
-                                                    @mission.Title
-                                                    @if (!string.IsNullOrEmpty(mission.Description))
-                                                    {
-                                                        <br><small class="text-muted">@mission.Description</small>
-                                                    }
-                                                </label>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <p class="text-muted">No missions available.</p>
-                            }
-                        }
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <!-- Manage Multi-Department Cooperation Modal -->
 <div class="modal fade" id="manageDepartmentsModal" tabindex="-1" role="dialog" aria-labelledby="manageDepartmentsModalLabel" aria-hidden="true">
@@ -372,7 +319,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -409,7 +356,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
                 </div>
             </form>
         </div>

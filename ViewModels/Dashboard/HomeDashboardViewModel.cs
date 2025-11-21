@@ -84,6 +84,7 @@ public class DashboardMetrics
     public int UpcomingMilestones { get; set; }
     public int OpenIssues { get; set; }
     public int UnreviewedRisks { get; set; }
+    public int WatchedDeliverables { get; set; }
 }
 
 public class DashboardTaskItem
