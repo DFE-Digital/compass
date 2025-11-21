@@ -23,5 +23,10 @@ public class ProjectOutcomeInputModel
 
     public string? ConfidenceExplanation { get; set; }
 
+    [MaxLength(20)]
+    public string? AchievementStatus { get; set; } = "In progress";
+
+    public string? AchievementNotes { get; set; }
+
     public int SortOrder { get; set; }
 }

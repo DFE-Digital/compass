@@ -1,0 +1,121 @@
+@model Compass.ViewModels.MissionPillarsFormViewModel
+
+@{
+    ViewData["Title"] = $"Edit mission pillars – {Model.ProjectTitle}";
+    var returnUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "strategicalignment" });
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Delivery reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Input.ProjectId" asp-route-tab="strategicalignment" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.ProjectTitle</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit mission pillars</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@returnUrl" aria-label="Back to project">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                </a>
+                <h1 class="m-0">Edit mission pillars</h1>
+                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <form asp-action="UpdateMissionPillarsAndLinks" method="post" novalidate>
+            @Html.AntiForgeryToken()
+            <input asp-for="Input.ProjectId" type="hidden" />
+
+            <div class="row">
+                <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                    <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
+                </aside>
+                <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Mission pillars narrative</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="Input.MissionPillars">Mission pillars narrative</label>
+                                <small class="form-text text-muted">Provide a narrative description of how this project supports mission pillars.</small>
+                                <textarea asp-for="Input.MissionPillars" class="form-control preserve-formatting" rows="6" placeholder="Describe how this project aligns with mission pillars..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Link to specific missions</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Select the missions this project directly supports.</p>
+                            
+                            @if (Model.MissionOptions.Any())
+                            {
+                                var missions = ViewBag.Missions as IEnumerable<Compass.Models.Mission> ?? Enumerable.Empty<Compass.Models.Mission>();
+                                var missionsByTheme = missions.GroupBy(m => m.Theme ?? "Other").OrderBy(g => g.Key);
+                                
+                                @foreach (var themeGroup in missionsByTheme)
+                                {
+                                    <div class="mb-3">
+                                        <h6 class="mb-2">@themeGroup.Key</h6>
+                                        @foreach (var mission in themeGroup.OrderBy(m => m.Title))
+                                        {
+                                            <div class="form-check">
+                                                <input type="checkbox" 
+                                                       name="Input.SelectedMissionIds" 
+                                                       value="@mission.Id" 
+                                                       class="form-check-input" 
+                                                       id="mission_@mission.Id"
+                                                       @(Model.Input.SelectedMissionIds.Contains(mission.Id) ? "checked" : "") />
+                                                <label class="form-check-label" for="mission_@mission.Id">
+                                                    @mission.Title
+                                                    @if (!string.IsNullOrEmpty(mission.Description))
+                                                    {
+                                                        <br><small class="text-muted">@mission.Description</small>
+                                                    }
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No missions available.</p>
+                            }
+                        </div>
+                        <div class="card-footer d-flex align-items-center">
+                            <button type="submit" class="btn btn-success mr-3">Save changes</button>
+                            <a class="btn btn-outline-secondary" href="@returnUrl">Cancel</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+

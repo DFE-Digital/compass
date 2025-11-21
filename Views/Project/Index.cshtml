@@ -32,9 +32,6 @@
             {
                 <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
                     <a asp-action="Create" class="btn btn-success">Create entry</a>
-                    <a asp-action="Import" class="btn btn-info ml-2">
-                        <i class="fas fa-upload"></i> Import from CSV
-                    </a>
                 </div>
             }
         </div>
@@ -323,231 +320,69 @@
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                 @if (Model.UserProjects.Any())
                 {
-                    <!-- Your Projects Section -->
+                    <!-- Your Deliverables Section -->
                     <div class="card mb-4">
                         <div class="card-header">
-                            <h3 class="card-title">Your Projects</h3>
+                            <h3 class="card-title">Your deliverables</h3>
                         </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap sortable-table user-projects-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in Model.UserProjects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
-                                                <div class="project-meta text-muted small mt-1">
-                                                    <span class="d-block"><span class="text-monospace">@GetDeliveryCode(project)</span></span>
-                                                </div>
-                                            </td>
-                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
-                                            <td>
-                                                @if (project.DeliveryPriority != null)
-                                                {
-                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                {
-                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">Not set</span>
-                                                }
-                                            </td>
-                                            <td>@project.Phase</td>
-                                            <td>
-                                                @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
-                                                {
-                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No end date</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-primary">Yes</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">No</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                        @{
+                            ViewData["TableId"] = "user-projects-table";
+                            ViewData["TableClass"] = "user-projects-table";
+                            ViewData["ShowPagination"] = false;
+                            ViewData["PaginationIdPrefix"] = "userProjects";
+                        }
+                        <partial name="_ProjectTable" model="Model.UserProjects" view-data="ViewData" />
+                    </div>
+                }
+
+                @if (Model.WatchedProjects.Any())
+                {
+                    <!-- Watched Deliverables Section -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Watched deliverables</h3>
                         </div>
+                        @{
+                            ViewData["TableId"] = "watched-projects-table";
+                            ViewData["TableClass"] = "watched-projects-table";
+                            ViewData["ShowPagination"] = false;
+                            ViewData["PaginationIdPrefix"] = "watchedProjects";
+                        }
+                        <partial name="_ProjectTable" model="Model.WatchedProjects" view-data="ViewData" />
                     </div>
                 }
                 
 
-                <!-- All Projects Section -->
+                <!-- All Deliverables Section -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <h3 class="card-title">
-                            @{
-                                var startIndex = (Model.PageNumber - 1) * Model.PageSize + 1;
-                                var endIndex = Math.Min(Model.PageNumber * Model.PageSize, Model.TotalCount);
-                                if (Model.TotalCount > 0)
-                                {
-                                    <text>@startIndex to @endIndex of @Model.TotalCount @(Model.TotalCount == 1 ? "deliverable" : "deliverables")</text>
-                                }
-                                else
-                                {
-                                    <text>0 deliverables</text>
-                                }
-                            }
+                            All deliverables
                         </h3>
                          <div class="card-tools">
-                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse All Projects section"><i class="fas fa-minus" aria-hidden="true"></i>
+                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse All Deliverables section"><i class="fas fa-minus" aria-hidden="true"></i>
                   </button>
                 </div>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        @if (Model.Projects.Any())
-                        {
-                            <table class="table table-hover text-nowrap sortable-table projects-index-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in Model.Projects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
-                                                <div class="project-meta text-muted small mt-1">
-                                                    <span class="d-block"><span class="text-monospace">@GetDeliveryCode(project)</span></span>
-                                                </div>
-                                            </td>
-                                            <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
-                                            <td>
-                                                @if (project.DeliveryPriority != null)
-                                                {
-                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not set</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                {
-                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">Not set</span>
-                                                }
-                                            </td>
-                                            <td>@project.Phase</td>
-                                            <td>
-                                                @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
-                                                {
-                                                    @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">No end date</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (project.IsFlagship)
-                                                {
-                                                    <span class="badge badge-primary">Yes</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge badge-secondary">No</span>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        }
-                        else
-                        {
-                            <div class="p-4">
+                    @if (Model.Projects.Any())
+                    {
+                        ViewData["TableId"] = "all-projects-table";
+                        ViewData["TableClass"] = "projects-index-table";
+                        ViewData["ShowPagination"] = true;
+                        ViewData["TotalCount"] = Model.TotalCount;
+                        ViewData["PageNumber"] = Model.PageNumber;
+                        ViewData["PageSize"] = Model.PageSize;
+                        ViewData["TotalPages"] = Model.TotalPages;
+                        ViewData["HasPreviousPage"] = Model.HasPreviousPage;
+                        ViewData["HasNextPage"] = Model.HasNextPage;
+                        <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
+                    }
+                    else
+                    {
+                        <div class="card-body p-0">
+                            <div class="p-3">
                                 <p class="text-muted mb-0">No projects recorded.</p>
                             </div>
-                        }
-                    </div>
-                    @if (Model.TotalPages > 1)
-                    {
-                        <div class="card-footer">
-                            <nav aria-label="All projects pagination">
-                                <ul class="pagination justify-content-start mb-0">
-                                    <li class="page-item @(Model.HasPreviousPage ? string.Empty : "disabled")">
-                                        <a class="page-link"
-                                           asp-action="Index"
-                                           asp-route-page="@(Model.PageNumber > 1 ? Model.PageNumber - 1 : 1)"
-                                           asp-route-search="@ViewBag.CurrentSearch"
-                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                           asp-route-phase="@ViewBag.CurrentPhase"
-                                           asp-route-flagship="@ViewBag.CurrentFlagship"
-                                           asp-route-priority="@ViewBag.CurrentPriority"
-                                           rel="prev">Previous</a>
-                                    </li>
-                                    @for (var i = 1; i <= Model.TotalPages; i++)
-                                    {
-                                        <li class="page-item @(i == Model.PageNumber ? "active" : string.Empty)">
-                                            <a class="page-link"
-                                               asp-action="Index"
-                                               asp-route-page="@i"
-                                               asp-route-search="@ViewBag.CurrentSearch"
-                                               asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                               asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                               asp-route-phase="@ViewBag.CurrentPhase"
-                                               asp-route-flagship="@ViewBag.CurrentFlagship"
-                                               asp-route-priority="@ViewBag.CurrentPriority">@i</a>
-                                        </li>
-                                    }
-                                    <li class="page-item @(Model.HasNextPage ? string.Empty : "disabled")">
-                                        <a class="page-link"
-                                           asp-action="Index"
-                                           asp-route-page="@(Model.PageNumber < Model.TotalPages ? Model.PageNumber + 1 : Model.TotalPages)"
-                                           asp-route-search="@ViewBag.CurrentSearch"
-                                           asp-route-ragStatus="@ViewBag.CurrentRagStatus"
-                                           asp-route-businessArea="@ViewBag.CurrentBusinessArea"
-                                           asp-route-phase="@ViewBag.CurrentPhase"
-                                           asp-route-flagship="@ViewBag.CurrentFlagship"
-                                           asp-route-priority="@ViewBag.CurrentPriority"
-                                           rel="next">Next</a>
-                                    </li>
-                                </ul>
-                            </nav>
                         </div>
                     }
                 </div>
@@ -556,54 +391,264 @@
     </div>
 </section>
 
-@functions {
-    string GetDeliveryCode(Compass.Models.Project project)
-    {
-        return $"DEL-DDT-{project.Id}";
-    }
-
-    string GetRagBadgeClass(string ragStatus)
-    {
-        return ragStatus switch
-        {
-            "Green" => "badge badge-green",
-            "Amber-Green" => "badge badge-amber-green",
-            "Amber" => "badge badge-amber",
-            "Amber-Red" => "badge badge-amber-red",
-            "Red" => "badge badge-red",
-            _ => "badge badge-secondary"
-        };
-    }
-
-    string GetPriorityBadgeClass(string priorityName)
-    {
-        if (string.IsNullOrWhiteSpace(priorityName))
-        {
-            return "badge badge-secondary";
-        }
-
-        var normalized = priorityName.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "high" => "badge badge-red",
-            "medium" => "badge badge-amber",
-            "low" => "badge badge-green",
-            _ => "badge badge-secondary"
-        };
-    }
-}
-
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            var pageSize = 10;
+            
+            // ========================================
+            // Pagination for Your Projects
+            // ========================================
+            var userProjectsCurrentPage = 1;
+            var userProjectsAllRows = [];
+            var userProjectsCount = @Model.UserProjects.Count;
+            
+            function initUserProjectsPagination() {
+                var table = document.getElementById('user-projects-table');
+                if (!table) return;
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                userProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (userProjectsCount > 10) {
+                    paginateUserProjects();
+                } else {
+                    userProjectsAllRows.forEach(function(row) {
+                        row.style.display = '';
+                    });
+                }
+            }
+            
+            function paginateUserProjects() {
+                var totalProjects = userProjectsAllRows.length;
+                var totalPages = Math.ceil(totalProjects / pageSize);
+                
+                if (userProjectsCurrentPage > totalPages && totalPages > 0) {
+                    userProjectsCurrentPage = 1;
+                }
+                
+                userProjectsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                var startIndex = (userProjectsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalProjects);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    userProjectsAllRows[i].style.display = '';
+                }
+                
+                var showingStart = document.getElementById('userProjectsShowingStart');
+                var showingEnd = document.getElementById('userProjectsShowingEnd');
+                if (showingStart) showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
+                if (showingEnd) showingEnd.textContent = endIndex;
+                
+                if (totalProjects > 10) {
+                    generateUserProjectsPagination(totalPages, totalProjects);
+                }
+            }
+            
+            function generateUserProjectsPagination(totalPages, totalProjects) {
+                var paginationControls = document.getElementById('userProjectsPaginationControls');
+                if (!paginationControls || totalPages <= 1) {
+                    if (paginationControls) paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                paginationHtml += '<li class="page-item ' + (userProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userProjectsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                var startPage = Math.max(1, userProjectsCurrentPage - 2);
+                var endPage = Math.min(totalPages, userProjectsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === userProjectsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                paginationHtml += '<li class="page-item ' + (userProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (userProjectsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            userProjectsCurrentPage = page;
+                            paginateUserProjects();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            // ========================================
+            // Pagination for Watched Projects
+            // ========================================
+            var watchedProjectsCurrentPage = 1;
+            var watchedProjectsAllRows = [];
+            var watchedProjectsCount = @Model.WatchedProjects.Count;
+            
+            function initWatchedProjectsPagination() {
+                var table = document.getElementById('watched-projects-table');
+                if (!table) return;
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                watchedProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (watchedProjectsCount > 10) {
+                    paginateWatchedProjects();
+                } else {
+                    watchedProjectsAllRows.forEach(function(row) {
+                        row.style.display = '';
+                    });
+                }
+            }
+            
+            function paginateWatchedProjects() {
+                var totalProjects = watchedProjectsAllRows.length;
+                var totalPages = Math.ceil(totalProjects / pageSize);
+                
+                if (watchedProjectsCurrentPage > totalPages && totalPages > 0) {
+                    watchedProjectsCurrentPage = 1;
+                }
+                
+                watchedProjectsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                var startIndex = (watchedProjectsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalProjects);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    watchedProjectsAllRows[i].style.display = '';
+                }
+                
+                var showingStart = document.getElementById('watchedProjectsShowingStart');
+                var showingEnd = document.getElementById('watchedProjectsShowingEnd');
+                if (showingStart) showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
+                if (showingEnd) showingEnd.textContent = endIndex;
+                
+                if (totalProjects > 10) {
+                    generateWatchedProjectsPagination(totalPages, totalProjects);
+                }
+            }
+            
+            function generateWatchedProjectsPagination(totalPages, totalProjects) {
+                var paginationControls = document.getElementById('watchedProjectsPaginationControls');
+                if (!paginationControls || totalPages <= 1) {
+                    if (paginationControls) paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                paginationHtml += '<li class="page-item ' + (watchedProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (watchedProjectsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                var startPage = Math.max(1, watchedProjectsCurrentPage - 2);
+                var endPage = Math.min(totalPages, watchedProjectsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === watchedProjectsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                paginationHtml += '<li class="page-item ' + (watchedProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (watchedProjectsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            watchedProjectsCurrentPage = page;
+                            paginateWatchedProjects();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            // ========================================
+            // Sorting (updated to work with pagination)
+            // ========================================
         $(document).ready(function() {
             // Initialize sortable tables
             $('.sortable-table').each(function() {
                 initializeSortableTable($(this));
             });
+                
+                // Initialize pagination
+                if (userProjectsCount > 0) {
+                    initUserProjectsPagination();
+                }
+                if (watchedProjectsCount > 0) {
+                    initWatchedProjectsPagination();
+                }
         });
 
         function initializeSortableTable(table) {
             var currentSort = { column: null, direction: 'asc' };
+                var tableId = table.attr('id');
 
             table.find('.sortable').on('click keypress', function(e) {
                 if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
@@ -617,11 +662,11 @@
                     direction = 'desc';
                 }
                 
-                sortTable(table, column, direction);
+                    sortTable(table, column, direction, tableId);
                 currentSort = { column: column, direction: direction };
             });
 
-            function sortTable(table, column, direction) {
+                function sortTable(table, column, direction, tableId) {
                 var tbody = table.find('tbody');
                 var rows = tbody.find('tr').toArray();
                 
@@ -655,6 +700,17 @@
                 });
                 
                 updateSortIcons(table, column, direction);
+                    
+                    // Re-initialize pagination after sorting
+                    if (tableId === 'user-projects-table' && userProjectsCount > 10) {
+                        userProjectsAllRows = Array.from(tbody.find('tr'));
+                        userProjectsCurrentPage = 1;
+                        paginateUserProjects();
+                    } else if (tableId === 'watched-projects-table' && watchedProjectsCount > 10) {
+                        watchedProjectsAllRows = Array.from(tbody.find('tr'));
+                        watchedProjectsCurrentPage = 1;
+                        paginateWatchedProjects();
+                    }
             }
 
             function updateSortIcons(table, column, direction) {
@@ -664,5 +720,6 @@
                 header.find('i').removeClass('fa-sort').addClass(iconClass);
             }
         }
+        })();
     </script>
 }

@@ -1,0 +1,184 @@
+@model Compass.Models.Project
+
+@{
+    var artefacts = Model.Artefacts?
+        .Where(a => !a.IsDeleted)
+        .OrderByDescending(a => a.CreatedAt)
+        .ToList() ?? new List<Compass.Models.ProjectArtefact>();
+    var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+}
+
+<!-- Artefacts Card -->
+<div class="card mb-4" id="artefacts">
+    <div class="card-header">
+        <h3 class="card-title">Artefacts and resources</h3>
+        <div class="card-tools">
+            <a asp-controller="Project" asp-action="CreateArtefact" asp-route-projectId="@Model.Id">Add artefact</a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        @if (artefacts.Any())
+        {
+            <table class="table table-hover sortable-table artefacts-table">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;" class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">
+                            Title
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th style="width: 40%;" class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description">
+                            Description
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th style="width: 20%;" class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date">
+                            Added
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th style="width: 10%;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var artefact in artefacts)
+                    {
+                        <tr>
+                            <td>
+                                <a asp-controller="Project" asp-action="ArtefactDetails" asp-route-projectId="@Model.Id" asp-route-artefactId="@artefact.Id">
+                                    <strong>@artefact.Title</strong>
+                                </a>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(artefact.Description))
+                                {
+                                    var truncatedDescription = artefact.Description.Length > 100 
+                                        ? artefact.Description.Substring(0, 100) + "..." 
+                                        : artefact.Description;
+                                    <span class="text-muted">@truncatedDescription</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                <strong>@artefact.CreatedAt.ToString("d MMMM yyyy")</strong><br />
+                                @if (!string.IsNullOrWhiteSpace(artefact.CreatedByName))
+                                {
+                                    <small class="text-muted">@artefact.CreatedByName</small>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(artefact.CreatedByEmail))
+                                {
+                                    <small class="text-muted">@artefact.CreatedByEmail</small>
+                                }
+                                else if (artefact.CreatedByUser != null)
+                                {
+                                    <small class="text-muted">@artefact.CreatedByUser.Name</small>
+                                }
+                                else
+                                {
+                                    <small class="text-muted">Unknown</small>
+                                }
+                            </td>
+                            <td>
+                                <a href="@artefact.Url" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Open link">
+                                    <i class="fas fa-external-link-alt"></i> Open link
+                                    <span class="sr-only"> for @artefact.Title</span>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="p-3">
+                <p class="text-muted mb-2">No artefacts or resources recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateArtefact" asp-route-projectId="@Model.Id" class="btn btn-success btn-sm">Add artefact</a>
+            </div>
+        }
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+    function initArtefactsSorting() {
+        if (typeof jQuery === 'undefined') {
+            return;
+        }
+
+        jQuery(document).ready(function($) {
+            const $table = $('.artefacts-table');
+            if ($table.length === 0) return;
+
+            let currentSort = { column: 'CreatedAt', direction: 'desc' };
+
+            function sortTable(column, direction) {
+                const $tbody = $table.find('tbody');
+                const $rows = $tbody.find('tr').toArray();
+
+                $rows.sort((a, b) => {
+                    let aVal, bVal;
+
+                    switch(column) {
+                        case 'Title':
+                            aVal = $(a).find('td:eq(0)').text().trim();
+                            bVal = $(b).find('td:eq(0)').text().trim();
+                            break;
+                        case 'Description':
+                            aVal = $(a).find('td:eq(1)').text().trim();
+                            bVal = $(b).find('td:eq(1)').text().trim();
+                            break;
+                        case 'CreatedAt':
+                            aVal = new Date($(a).find('td:eq(2) strong').text().trim());
+                            bVal = new Date($(b).find('td:eq(2) strong').text().trim());
+                            break;
+                        default:
+                            return 0;
+                    }
+
+                    if (column === 'CreatedAt') {
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    } else {
+                        const comparison = aVal.localeCompare(bVal);
+                        return direction === 'asc' ? comparison : -comparison;
+                    }
+                });
+
+                $tbody.empty().append($rows);
+            }
+
+            function updateSortIcons(column, direction) {
+                $table.find('th.sortable i').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort').css('opacity', '0.3');
+                const $header = $table.find(`th[data-column="${column}"]`);
+                $header.find('i')
+                    .removeClass('fa-sort')
+                    .addClass(direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down')
+                    .css('opacity', '1');
+            }
+
+            $table.find('th.sortable').on('click', function() {
+                const column = $(this).data('column');
+                const newDirection = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+                currentSort = { column, direction: newDirection };
+                sortTable(column, newDirection);
+                updateSortIcons(column, newDirection);
+            });
+
+            // Initialize with default sort
+            sortTable(currentSort.column, currentSort.direction);
+            updateSortIcons(currentSort.column, currentSort.direction);
+        });
+    }
+
+    if (typeof jQuery !== 'undefined') {
+        jQuery(document).ready(initArtefactsSorting);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof jQuery !== 'undefined') {
+                jQuery(document).ready(initArtefactsSorting);
+            }
+        });
+    }
+})();
+</script>
+

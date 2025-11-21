@@ -379,7 +379,8 @@ public class ProjectImportService : IProjectImportService
                 Aim = csvRow.PurposeBenefits,
                 RagStatus = csvRow.CurrentRAG,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                CreationMethod = "Bulk"
             };
 
             // Parse Internal/External
@@ -560,38 +561,37 @@ public class ProjectImportService : IProjectImportService
 
     private async Task AddDirectoratesAsync(Project project, string directorateValue, CancellationToken cancellationToken)
     {
-        // Directorates are now Business Areas
         var directorateNames = directorateValue.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.Trim())
             .ToList();
 
         foreach (var directorateName in directorateNames)
         {
-            var businessArea = await FindBusinessAreaAsync(directorateName, cancellationToken);
+            var directorate = await FindDirectorateAsync(directorateName, cancellationToken);
 
-            if (businessArea != null)
+            if (directorate != null)
             {
                 // Check if relationship already exists in database
                 var existsInDb = await _context.ProjectDirectorates
-                    .AnyAsync(pd => pd.ProjectId == project.Id && pd.BusinessAreaLookupId == businessArea.Id, cancellationToken);
+                    .AnyAsync(pd => pd.ProjectId == project.Id && pd.DirectorateLookupId == directorate.Id, cancellationToken);
 
                 // Also check if it's already being added in this transaction (change tracker)
                 var existsInContext = _context.ChangeTracker.Entries<ProjectDirectorate>()
-                    .Any(e => e.Entity.ProjectId == project.Id && e.Entity.BusinessAreaLookupId == businessArea.Id && e.State == Microsoft.EntityFrameworkCore.EntityState.Added);
+                    .Any(e => e.Entity.ProjectId == project.Id && e.Entity.DirectorateLookupId == directorate.Id && e.State == Microsoft.EntityFrameworkCore.EntityState.Added);
 
                 if (!existsInDb && !existsInContext)
                 {
                     _context.ProjectDirectorates.Add(new ProjectDirectorate
                     {
                         ProjectId = project.Id,
-                        BusinessAreaLookupId = businessArea.Id,
+                        DirectorateLookupId = directorate.Id,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
             }
             else
             {
-                _logger.LogWarning("Could not find Business Area match for '{DirectorateName}' in row {RowNumber}", directorateName, project.Id);
+                _logger.LogWarning("Could not find Directorate match for '{DirectorateName}' in row {RowNumber}", directorateName, project.Id);
             }
         }
     }
@@ -631,6 +631,65 @@ public class ProjectImportService : IProjectImportService
                 _logger.LogWarning("Could not find Business Area match for '{BudgetOwnerName}' in row {RowNumber}", budgetOwnerName, project.Id);
             }
         }
+    }
+
+    private async Task<DirectorateLookup?> FindDirectorateAsync(string searchValue, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchValue))
+        {
+            return null;
+        }
+
+        var normalizedSearch = searchValue.Trim();
+
+        // Get all active directorates
+        var allDirectorates = await _context.DirectorateLookups
+            .Where(d => d.IsActive)
+            .ToListAsync(cancellationToken);
+
+        // Try exact match (case-sensitive)
+        var exactMatch = allDirectorates.FirstOrDefault(d => d.Name == normalizedSearch);
+        if (exactMatch != null)
+        {
+            return exactMatch;
+        }
+
+        // Try case-insensitive exact match
+        var caseInsensitiveMatch = allDirectorates.FirstOrDefault(d => 
+            d.Name.Equals(normalizedSearch, StringComparison.OrdinalIgnoreCase));
+        if (caseInsensitiveMatch != null)
+        {
+            return caseInsensitiveMatch;
+        }
+
+        // Try contains match (case-insensitive)
+        var containsMatch = allDirectorates.FirstOrDefault(d => 
+            d.Name.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase) ||
+            normalizedSearch.Contains(d.Name, StringComparison.OrdinalIgnoreCase));
+        if (containsMatch != null)
+        {
+            return containsMatch;
+        }
+
+        // Try removing common prefixes/suffixes and matching
+        var normalizedWithoutPrefixes = normalizedSearch
+            .Replace("Directorate", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Division", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Group", "", StringComparison.OrdinalIgnoreCase)
+            .Trim();
+
+        if (!string.IsNullOrWhiteSpace(normalizedWithoutPrefixes) && normalizedWithoutPrefixes != normalizedSearch)
+        {
+            var prefixMatch = allDirectorates.FirstOrDefault(d => 
+                d.Name.Contains(normalizedWithoutPrefixes, StringComparison.OrdinalIgnoreCase) ||
+                normalizedWithoutPrefixes.Contains(d.Name, StringComparison.OrdinalIgnoreCase));
+            if (prefixMatch != null)
+            {
+                return prefixMatch;
+            }
+        }
+
+        return null;
     }
 
     private async Task<BusinessAreaLookup?> FindBusinessAreaAsync(string searchValue, CancellationToken cancellationToken)

@@ -13,6 +13,24 @@
             color: #003078 !important;
             text-decoration: underline !important;
         }
+        .btn-watchlist-remove {
+            background-color: #ffc107;
+            color: #000000;
+            border: none;
+        }
+        .btn-watchlist-remove:hover {
+            background-color: #e0a800;
+            color: #000000;
+        }
+        .btn-watchlist-add {
+            background-color: #005ea5;
+            color: #ffffff;
+            border: none;
+        }
+        .btn-watchlist-add:hover {
+            background-color: #004a87;
+            color: #ffffff;
+        }
     </style>
     <nav aria-label="Breadcrumb">
         <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
@@ -33,6 +51,24 @@
             <div class="col-sm-12 col-md-8">
                 <h1 class="m-0">@Model.Title</h1>
                 <p class="text-muted mb-0">@deliveryCode</p>
+            </div>
+            <div class="col-sm-12 col-md-4 text-md-right">
+                @{
+                    var isInWatchlist = ViewBag.IsInWatchlist as bool? ?? false;
+                    var isInUserProjects = ViewBag.IsInUserProjects as bool? ?? false;
+                }
+                @if (isInWatchlist)
+                {
+                    <button type="button" class="btn btn-watchlist-remove" data-toggle="modal" data-target="#removeFromWatchlistModal">
+                        <i class="fas fa-star"></i> Remove from watchlist
+                    </button>
+                }
+                else if (!isInUserProjects)
+                {
+                    <button type="button" class="btn btn-watchlist-add" data-toggle="modal" data-target="#addToWatchlistModal">
+                        <i class="far fa-star"></i> Add to watchlist
+                    </button>
+                }
             </div>
         </div>
     </div>
@@ -71,6 +107,8 @@
                                 var successesCount = Model.Successes?.Count ?? 0;
                                 var teamCount = Model.ProjectContacts?.Count ?? 0;
                                 var statusUpdateCount = Model.StatusUpdates?.Count ?? 0;
+                                var hasDigitalDirectorate = Model.Directorates?.Any(d => d.DirectorateLookup != null && 
+                                    d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
                             }
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "overview" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "overview" ? "active" : "")">
@@ -90,10 +128,13 @@
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "rag" ? "active" : "")">
                                 RAG Tracking
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliveryphases" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "deliveryphases" ? "active" : "")">
-                                Delivery phases
-                            </a>
+                            @if (hasDigitalDirectorate)
+                            {
+                                <a href="@Url.Action("Details", new { id = Model.Id, tab = "deliveryphases" })"
+                                   class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "deliveryphases" ? "active" : "")">
+                                    Delivery phases
+                                </a>
+                            }
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "team" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "team" ? "active" : "")">
                                 Team
@@ -115,6 +156,11 @@
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "dependencies" ? "active" : "")">
                                 Dependencies
                                 <span class="badge badge-light float-right">@dependencyCount</span>
+                            </a>
+                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "artefacts" })"
+                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "artefacts" ? "active" : "")">
+                                Artefacts and resources
+                                <span class="badge badge-light float-right">@(Model.Artefacts?.Count(a => !a.IsDeleted) ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "products" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "products" ? "active" : "")">
@@ -212,7 +258,16 @@
                         @await Html.PartialAsync("_RagTracking", Model)
                         break;
                     case "deliveryphases":
-                        @await Html.PartialAsync("_DeliveryPhases", Model)
+                        if (hasDigitalDirectorate)
+                        {
+                            @await Html.PartialAsync("_DeliveryPhases", Model)
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <strong>Access Denied:</strong> Delivery phases can only be viewed for projects with a Digital directorate.
+                            </div>
+                        }
                         break;
                     case "team":
                         @await Html.PartialAsync("_Team", Model)
@@ -240,6 +295,9 @@
                         break;
                     case "dependencies":
                         @await Html.PartialAsync("_Dependencies", Model)
+                        break;
+                    case "artefacts":
+                        @await Html.PartialAsync("_Artefacts", Model)
                         break;
                     case "settings":
                         @await Html.PartialAsync("_Settings", Model)
@@ -447,5 +505,90 @@
         }
     }
 </script>
+
+<!-- Add to Watchlist Modal -->
+<div class="modal fade" id="addToWatchlistModal" tabindex="-1" role="dialog" aria-labelledby="addToWatchlistModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addToWatchlistModalLabel">Add to watchlist</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to add <strong>@Model.Title</strong> to your watchlist?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form asp-action="AddToWatchlist" method="post" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <button type="submit" class="btn btn-primary">Add to watchlist</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove from Watchlist Modal -->
+<div class="modal fade" id="removeFromWatchlistModal" tabindex="-1" role="dialog" aria-labelledby="removeFromWatchlistModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="removeFromWatchlistModalLabel">Remove from watchlist</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong>@Model.Title</strong> from your watchlist?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form asp-action="RemoveFromWatchlist" method="post" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <button type="submit" class="btn btn-warning">Remove from watchlist</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    // Handle watchlist form submissions via AJAX
+    $(document).ready(function() {
+        $('#addToWatchlistModal form, #removeFromWatchlistModal form').on('submit', function(e) {
+            e.preventDefault();
+            var form = $(this);
+            var action = form.attr('action');
+            var projectId = form.find('input[name="projectId"]').val();
+            
+            $.ajax({
+                url: action,
+                type: 'POST',
+                data: {
+                    projectId: projectId,
+                    __RequestVerificationToken: form.find('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Close modal
+                        $('.modal').modal('hide');
+                        // Reload page to update button state
+                        location.reload();
+                    } else {
+                        alert(response.message || 'An error occurred.');
+                    }
+                },
+                error: function() {
+                    alert('An error occurred while updating your watchlist.');
+                }
+            });
+        });
+    });
+</script>
+
     <script src="~/js/user-picker.js" asp-append-version="true"></script>
 }

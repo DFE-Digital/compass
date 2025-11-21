@@ -16,6 +16,8 @@ public class ProjectOutcomeDetailsViewModel
 
     public string? ConfidenceExplanation { get; set; }
 
+    public string? AchievementStatus { get; set; }
+
     public int SortOrder { get; set; }
 
     public string? CreatedByEmail { get; set; }
