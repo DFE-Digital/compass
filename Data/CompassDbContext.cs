@@ -173,8 +173,10 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
     public DbSet<ProjectSeniorResponsibleOfficer> ProjectSeniorResponsibleOfficers { get; set; }
     public DbSet<ProjectDirectorate> ProjectDirectorates { get; set; }
+    public DbSet<ProjectArtefact> ProjectArtefacts { get; set; }
     public DbSet<ProjectBudgetOwner> ProjectBudgetOwners { get; set; }
     public DbSet<ProjectPmoContact> ProjectPmoContacts { get; set; }
+    public DbSet<ProjectWatchlist> ProjectWatchlists { get; set; }
     
     // RAID Junction Tables
     public DbSet<RiskAction> RiskActions { get; set; }
@@ -1566,6 +1568,39 @@ public partial class CompassDbContext : DbContext
             .Property(psu => psu.Narrative)
             .HasColumnType("nvarchar(max)");
 
+        // ProjectArtefact configuration
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasOne(pa => pa.Project)
+            .WithMany(p => p.Artefacts)
+            .HasForeignKey(pa => pa.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasOne(pa => pa.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(pa => pa.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasOne(pa => pa.UpdatedByUser)
+            .WithMany()
+            .HasForeignKey(pa => pa.UpdatedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasIndex(pa => pa.ProjectId);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasIndex(pa => pa.CreatedAt);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .HasIndex(pa => pa.IsDeleted);
+
+        modelBuilder.Entity<ProjectArtefact>()
+            .Property(pa => pa.Description)
+            .HasColumnType("nvarchar(max)");
+
         // ProjectSeniorResponsibleOfficer configuration
         modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
             .HasOne(psro => psro.Project)
@@ -1594,16 +1629,16 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ProjectDirectorate>()
-            .HasOne(pd => pd.BusinessAreaLookup)
+            .HasOne(pd => pd.DirectorateLookup)
             .WithMany()
-            .HasForeignKey(pd => pd.BusinessAreaLookupId)
+            .HasForeignKey(pd => pd.DirectorateLookupId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<ProjectDirectorate>()
             .HasIndex(pd => pd.ProjectId);
 
         modelBuilder.Entity<ProjectDirectorate>()
-            .HasIndex(pd => new { pd.ProjectId, pd.BusinessAreaLookupId })
+            .HasIndex(pd => new { pd.ProjectId, pd.DirectorateLookupId })
             .IsUnique();
 
         // ProjectBudgetOwner configuration

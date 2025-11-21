@@ -11,39 +11,53 @@
 }
 
 <!-- Status Updates Card -->
-<div class="card" id="statusupdates">
+<div class="card mb-4" id="statusupdates">
     <div class="card-header">
         <h3 class="card-title">Status updates</h3>
         <div class="card-tools">
-            <a href="#" data-toggle="modal" data-target="#addStatusUpdateModal">Add status update</a>
+            <a asp-controller="Project" asp-action="CreateStatusUpdate" asp-route-projectId="@Model.Id">Add status update</a>
         </div>
     </div>
-    <div class="card-body">
+    <div class="card-body table-responsive p-0">
         @if (statusUpdates.Any())
         {
-           
-                <table class="table table-hover sortable-table status-updates-table">
-                    <thead>
+            <table class="table table-hover sortable-table status-updates-table">
+                <thead>
+                    <tr>
+                        <th style="width: 60%;" class="sortable" data-column="Narrative" tabindex="0" role="button" aria-label="Sort by Update">
+                            Update
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th style="width: 20%;" class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date">
+                            Created
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                        <th style="width: 20%;" class="sortable" data-column="UpdatedAt" tabindex="0" role="button" aria-label="Sort by Last Edited">
+                            Last edited
+                            <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var update in statusUpdates)
+                    {
                         <tr>
-                            <th class="col-created sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date">Created</th>
-                            <th class="col-update sortable" data-column="Narrative" tabindex="0" role="button" aria-label="Sort by Update">Update</th>
-                            <th class="col-last-edited sortable" data-column="UpdatedAt" tabindex="0" role="button" aria-label="Sort by Last Edited">Last edited</th>
-                            <th class="col-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var update in statusUpdates)
-                        {
-                            <tr>
-                                <td>
-                                    @if (update.IsBulkImport)
-                                    {
-                                        <strong>Bulk import</strong><br />
+                            <td>
+                                <a asp-controller="Project" asp-action="StatusUpdateDetails" asp-route-projectId="@Model.Id" asp-route-statusUpdateId="@update.Id">
+                                    @{
+                                        var truncatedNarrative = TruncateStatusUpdate(update.Narrative);
                                     }
-                                    else
-                                    {
-                                        <strong>@update.CreatedAt.ToString("dd MMM yyyy")</strong><br />
-                                    }
+                                    @Html.Raw(truncatedNarrative)
+                                </a>
+                            </td>
+                            <td>
+                                @if (update.IsBulkImport)
+                                {
+                                    <strong>Bulk import</strong>
+                                }
+                                else
+                                {
+                                    <strong>@update.CreatedAt.ToString("dd MMM yyyy")</strong><br />
                                     @if (!string.IsNullOrWhiteSpace(update.CreatedByName))
                                     {
                                         <small class="text-muted">@update.CreatedByName</small>
@@ -60,62 +74,32 @@
                                     {
                                         <small class="text-muted">Unknown</small>
                                     }
-                                </td>
-                                <td>
-                                    <div class="status-update-text" id="update-text-@update.Id">
-                                        @{
-                                            var truncatedNarrative = TruncateStatusUpdate(update.Narrative);
-                                        }
-                                        @Html.Raw(truncatedNarrative)
-                                    </div>
-                                </td>
-                                <td>
-                                    @if (update.UpdatedAt.HasValue && update.UpdatedByUser != null)
-                                    {
-                                        <small class="text-muted">
-                                            @update.UpdatedAt.Value.ToString("dd MMM yyyy")<br />
-                                            by @update.UpdatedByUser.Name
-                                        </small>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">-</span>
-                                    }
-                                </td>
-                                <td>
-                                    <a href="#" 
-                                       onclick="editStatusUpdate(@update.Id, this); return false;" 
-                                       data-narrative="@Html.Raw(update.Narrative.Replace("\"", "&quot;").Replace("'", "&#39;"))"
-                                       data-created-at="@update.CreatedAt.ToString("yyyy-MM-dd")"
-                                       data-created-by-entra-id="@(update.CreatedByEntraId ?? "")"
-                                       data-created-by-name="@(update.CreatedByName ?? update.CreatedByUser?.Name ?? "")"
-                                       data-created-by-email="@(update.CreatedByEmail ?? "")"
-                                       data-is-bulk-import="@update.IsBulkImport.ToString().ToLower()"
-                                       title="Edit status update">
-                                        Edit
-                                    </a>
-                                    @if (isAdmin)
-                                    {
-                                        <span class="text-muted">|</span>
-                                        <a href="#" 
-                                           onclick="showDeleteStatusUpdateModal(@update.Id, @Model.Id); return false;" 
-                                           class="text-danger" 
-                                           style="text-decoration: underline;" 
-                                           title="Delete">
-                                            Delete
-                                        </a>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-         
+                                }
+                            </td>
+                            <td>
+                                @if (update.UpdatedAt.HasValue && update.UpdatedByUser != null)
+                                {
+                                    <small class="text-muted">
+                                        @update.UpdatedAt.Value.ToString("dd MMM yyyy")<br />
+                                        by @update.UpdatedByUser.Name
+                                    </small>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         }
         else
         {
-            <p class="text-muted mb-2">No status updates recorded yet.</p>
-            <a href="#" data-toggle="modal" data-target="#addStatusUpdateModal">Add the first status update</a>
+            <div class="p-3">
+                <p class="text-muted mb-2">No status updates recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateStatusUpdate" asp-route-projectId="@Model.Id" class="text-block-link">Add an update</a>
+            </div>
         }
     </div>
 </div>
@@ -128,7 +112,7 @@
             <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id">Add success</a>
         </div>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         @if (successes.Any())
         {
                 <table class="table table-hover text-nowrap sortable-table successes-table">
@@ -179,121 +163,11 @@
         }
         else
         {
-            <p class="text-muted mb-2">No successes recorded yet.</p>
-            <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id">Add the first success</a>
+            <div class="p-3">
+                <p class="text-muted mb-2">No successes recorded yet.</p>
+                <a asp-controller="Project" asp-action="CreateSuccess" asp-route-projectId="@Model.Id" class="text-block-link">Add a success</a>
+            </div>
         }
-    </div>
-</div>
-
-<!-- Add Status Update Modal -->
-<div class="modal fade" id="addStatusUpdateModal" tabindex="-1" role="dialog" aria-labelledby="addStatusUpdateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addStatusUpdateModalLabel">Add Status Update</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="AddStatusUpdate" asp-route-projectId="@Model.Id" method="post">
-                @Html.AntiForgeryToken()
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="narrative" class="control-label">Status Update <span class="text-danger">*</span></label>
-                        <textarea id="narrative" name="narrative" class="form-control" rows="6" required placeholder="Enter the status update narrative..."></textarea>
-                        <small class="form-text text-muted">Provide a narrative update on the project's current status</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="createdAt" class="control-label">Date</label>
-                        <input type="date" id="createdAt" name="createdAt" class="form-control" />
-                        <small class="form-text text-muted">Optional: Override the creation date (defaults to today)</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Update</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Edit Status Update Modal -->
-<div class="modal fade" id="editStatusUpdateModal" tabindex="-1" role="dialog" aria-labelledby="editStatusUpdateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editStatusUpdateModalLabel">Edit Status Update</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="EditStatusUpdate" asp-route-projectId="@Model.Id" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" id="editStatusUpdateId" name="statusUpdateId" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="editNarrative" class="control-label">Status Update <span class="text-danger">*</span></label>
-                        <textarea id="editNarrative" name="narrative" class="form-control" rows="6" required placeholder="Enter the status update narrative..."></textarea>
-                        <small class="form-text text-muted">Update the narrative for this status update</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="editCreatedAt" class="control-label">Date</label>
-                        <input type="date" id="editCreatedAt" name="createdAt" class="form-control" />
-                        <small class="form-text text-muted">Date of the status update</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="editStatusUpdateCreatorSearch" class="control-label">Created by</label>
-                        <div class="user-picker"
-                             data-user-picker
-                             data-search-url="/api/users/search"
-                             data-select-url="/api/users/select">
-                            <div class="position-relative">
-                                <input type="text"
-                                       class="form-control js-user-picker-input"
-                                       id="editStatusUpdateCreatorSearch"
-                                       autocomplete="off"
-                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
-                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
-                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
-                            </div>
-                            <input type="hidden" id="editCreatedByEntraId" name="createdByEntraId" class="js-user-picker-objectid" />
-                            <input type="hidden" id="editCreatedByEmail" name="createdByEmail" class="js-user-picker-email" />
-                            <input type="hidden" id="editCreatedByName" name="createdByName" class="js-user-picker-name" />
-                            <p class="form-text text-muted js-user-picker-message">Search for a colleague in Entra ID</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Status Update Confirmation Modal -->
-<div class="modal fade" id="deleteStatusUpdateModal" tabindex="-1" role="dialog" aria-labelledby="deleteStatusUpdateModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteStatusUpdateModalLabel">Delete Status Update</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete this status update? This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form id="deleteStatusUpdateForm" method="post" style="display: inline;">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn btn-danger">Delete</button>
-                </form>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -339,203 +213,109 @@
     }
 }
 
-@section Scripts {
-<script nonce="@Context.Items["Nonce"]">
-function editStatusUpdate(id, link) {
-    const narrative = link.getAttribute('data-narrative');
-    const createdAt = link.getAttribute('data-created-at');
-    const createdByEntraId = link.getAttribute('data-created-by-entra-id');
-    const createdByName = link.getAttribute('data-created-by-name');
-    const createdByEmail = link.getAttribute('data-created-by-email');
-    const isBulkImport = link.getAttribute('data-is-bulk-import') === 'true';
-    
-    // Decode HTML entities
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = narrative;
-    const decodedNarrative = textarea.value;
-    
-    $('#editStatusUpdateId').val(id);
-    $('#editNarrative').val(decodedNarrative);
-    $('#editCreatedAt').val(createdAt || '');
-    
-    // Set EntraUser fields
-    $('#editCreatedByEntraId').val(createdByEntraId || '');
-    $('#editCreatedByEmail').val(createdByEmail || '');
-    $('#editCreatedByName').val(createdByName || '');
-    
-    // Display the name/email in the search input for visual feedback
-    const displayName = createdByName || createdByEmail || '';
-    $('#editStatusUpdateCreatorSearch').val(displayName);
-    
-    // Clear any previous selection in user picker
-    const pickerRoot = $('#editStatusUpdateCreatorSearch').closest('.user-picker')[0];
-    if (pickerRoot) {
-        const summary = pickerRoot.querySelector('.js-user-picker-summary');
-        if (summary) {
-            if (displayName) {
-                summary.innerHTML = '<span>' + displayName + '</span>';
-            } else {
-                summary.innerHTML = '<span class="text-muted">No user selected.</span>';
-            }
-        }
-    }
-    
-    $('#editStatusUpdateModal').modal('show');
-}
-
-// Reset user picker when modal is closed
-$('#addStatusUpdateModal').on('hidden.bs.modal', function() {
-    $('#createdAt').val('');
-    $('#narrative').val('');
-});
-
-// Reset edit modal when closed
-$('#editStatusUpdateModal').on('hidden.bs.modal', function() {
-    $('#editStatusUpdateCreatorSearch').val('');
-    $('#editCreatedByEntraId').val('');
-    $('#editCreatedByEmail').val('');
-    $('#editCreatedByName').val('');
-    $('#editCreatedAt').val('');
-    $('#editNarrative').val('');
-    $('#editStatusUpdateId').val('');
-    
-    // Reset user picker summary
-    const pickerRoot = $('#editStatusUpdateCreatorSearch').closest('.user-picker')[0];
-    if (pickerRoot) {
-        const summary = pickerRoot.querySelector('.js-user-picker-summary');
-        if (summary) {
-            summary.innerHTML = '<span class="text-muted">No user selected.</span>';
-        }
-    }
-});
-
-// User picker for edit status update creator - update EntraUser fields
-$(document).on('userSelected', '#editStatusUpdateCreatorSearch', function(e, user) {
-    $('#editCreatedByEntraId').val(user.objectId || '');
-    $('#editCreatedByEmail').val(user.email || '');
-    $('#editCreatedByName').val(user.name || '');
-});
-
-// Delete status update modal
-function showDeleteStatusUpdateModal(statusUpdateId, projectId) {
-    var form = $('#deleteStatusUpdateForm');
-    var baseUrl = '@Url.Action("DeleteStatusUpdate", "Project")';
-    form.attr('action', baseUrl + '?projectId=' + projectId + '&statusUpdateId=' + statusUpdateId);
-    $('#deleteStatusUpdateModal').modal('show');
-}
-
-// Initialize sorting for status updates table
-(function() {
-    var statusTable = document.querySelector('.status-updates-table');
-    if (statusTable) {
-        initializeSorting(statusTable);
-    }
-    
-    var successesTable = document.querySelector('.successes-table');
-    if (successesTable) {
-        initializeSorting(successesTable);
-    }
-    
-    function initializeSorting(table) {
-        var sortableHeaders = table.querySelectorAll('.sortable');
-        var currentSort = { column: null, direction: 'asc' };
-        
-        // Add sort icons to headers
-        sortableHeaders.forEach(function(header) {
-            header.style.cursor = 'pointer';
-            var icon = document.createElement('i');
-            icon.className = 'fas fa-sort float-right';
-            icon.style.opacity = '0.3';
-            icon.setAttribute('aria-hidden', 'true');
-            header.appendChild(icon);
-            
-            header.addEventListener('click', function(e) {
-                handleSort(e, header);
-            });
-            
-            header.addEventListener('keypress', function(e) {
-                if (e.which === 13 || e.which === 32) {
-                    e.preventDefault();
-                    handleSort(e, header);
-                }
-            });
-        });
-        
-        function handleSort(e, header) {
-            var column = header.getAttribute('data-column');
-            var direction = 'asc';
-            
-            if (currentSort.column === column && currentSort.direction === 'asc') {
-                direction = 'desc';
-            }
-            
-            sortTable(column, direction);
-            currentSort = { column: column, direction: direction };
-        }
-        
-        function sortTable(column, direction) {
-            var tbody = table.querySelector('tbody');
-            var rows = Array.from(tbody.querySelectorAll('tr'));
-            var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
-                return th.getAttribute('data-column') === column;
-            });
-            
-            rows.sort(function(a, b) {
-                var aVal, bVal;
-                var aCell = a.querySelectorAll('td')[colIndex];
-                var bCell = b.querySelectorAll('td')[colIndex];
+@if (statusUpdates.Any())
+{
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            function initSorting(table) {
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                // Set initial sort to CreatedAt descending (newest first)
+                var currentSort = { column: 'CreatedAt', direction: 'desc' };
                 
-                if (column === 'CreatedAt' || column === 'UpdatedAt' || column === 'RecordedAt') {
-                    // Extract date from text (format: "dd MMM yyyy")
-                    var aText = aCell.textContent.trim();
-                    var bText = bCell.textContent.trim();
-                    var aDate = new Date(aText.split('\n')[0]);
-                    var bDate = new Date(bText.split('\n')[0]);
-                    aVal = aDate;
-                    bVal = bDate;
-                } else if (column === 'IsReportedToSlt') {
-                    var aBadge = aCell.querySelector('.badge');
-                    var bBadge = bCell.querySelector('.badge');
-                    aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
-                    bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
-                } else {
-                    aVal = aCell.textContent.trim().toLowerCase();
-                    bVal = bCell.textContent.trim().toLowerCase();
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
                 }
                 
-                if (direction === 'asc') {
-                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                } else {
-                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'CreatedAt' || column === 'UpdatedAt') {
+                            var aText = aCell.textContent.trim();
+                            var bText = bCell.textContent.trim();
+                            var aDate = new Date(aText.split('\n')[0]);
+                            var bDate = new Date(bText.split('\n')[0]);
+                            aVal = aDate;
+                            bVal = bDate;
+                        } else {
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
                 }
-            });
-            
-            tbody.innerHTML = '';
-            rows.forEach(function(row) {
-                tbody.appendChild(row);
-            });
-            
-            updateSortIcons(column, direction);
-        }
-        
-        function updateSortIcons(column, direction) {
-            var allHeaders = table.querySelectorAll('.sortable i');
-            
-            allHeaders.forEach(function(icon) {
-                icon.className = 'fas fa-sort float-right';
-                icon.style.opacity = '0.3';
-            });
-            
-            var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
-            if (activeHeader) {
-                var icon = activeHeader.querySelector('i');
-                if (icon) {
-                    icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
-                    icon.style.opacity = '1';
+                
+                // Apply initial sort (newest first)
+                sortTable('CreatedAt', 'desc');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
                 }
             }
-        }
-    }
-})();
-</script>
+            
+            var statusTable = document.querySelector('.status-updates-table');
+            if (statusTable) {
+                initSorting(statusTable);
+            }
+        })();
+    </script>
 }

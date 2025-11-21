@@ -1,0 +1,206 @@
+@model IEnumerable<Compass.Models.Project>
+@{
+    var tableId = ViewData["TableId"] as string ?? "projects-table";
+    var tableClass = ViewData["TableClass"] as string ?? "projects-table";
+    var showPagination = ViewData["ShowPagination"] as bool? ?? false;
+    var totalCount = ViewData["TotalCount"] as int? ?? Model.Count();
+    var pageNumber = ViewData["PageNumber"] as int? ?? 1;
+    var pageSize = ViewData["PageSize"] as int? ?? 10;
+    var totalPages = ViewData["TotalPages"] as int? ?? (int)Math.Ceiling((double)totalCount / pageSize);
+    var hasPreviousPage = ViewData["HasPreviousPage"] as bool? ?? false;
+    var hasNextPage = ViewData["HasNextPage"] as bool? ?? false;
+    var paginationIdPrefix = ViewData["PaginationIdPrefix"] as string ?? tableId.Replace("-", "");
+}
+
+@functions {
+    string GetDeliveryCode(Compass.Models.Project project)
+    {
+        return $"DEL-DDT-{project.Id}";
+    }
+
+    string GetRagBadgeClass(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Green" => "badge badge-green",
+            "Amber-Green" => "badge badge-amber-green",
+            "Amber" => "badge badge-amber",
+            "Amber-Red" => "badge badge-amber-red",
+            "Red" => "badge badge-red",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string GetPriorityBadgeClass(string priorityName)
+    {
+        if (string.IsNullOrWhiteSpace(priorityName))
+        {
+            return "badge badge-secondary";
+        }
+
+        var normalized = priorityName.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "high" => "badge badge-red",
+            "medium" => "badge badge-amber",
+            "low" => "badge badge-green",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        return ragStatus switch
+        {
+            "Amber-Green" => "Amber / Green",
+            "Amber-Red" => "Amber / Red",
+            _ => ragStatus
+        };
+    }
+}
+
+<div class="card-body table-responsive p-0">
+    <table class="table table-hover text-nowrap sortable-table @tableClass" id="@tableId">
+        <thead>
+            <tr>
+                <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status">RAG Status <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase">Phase <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date <i class="fas fa-sort sort-icon"></i></th>
+                <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship <i class="fas fa-sort sort-icon"></i></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in Model)
+            {
+                <tr>
+                    <td>
+                        <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
+                        <div class="project-meta text-muted small mt-1">
+                            <span class="d-block"><span class="text-monospace">@GetDeliveryCode(project)</span></span>
+                        </div>
+                    </td>
+                    <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
+                    <td>
+                        @if (project.DeliveryPriority != null)
+                        {
+                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Not set</span>
+                        }
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                        {
+                            <span class="@GetRagBadgeClass(project.RagStatus)">@FormatRagStatusText(project.RagStatus)</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Not set</span>
+                        }
+                    </td>
+                    <td>@project.Phase</td>
+                    <td>
+                        @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
+                        {
+                            @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
+                        }
+                        else
+                        {
+                            <span class="text-muted">No end date</span>
+                        }
+                    </td>
+                    <td>
+                        @if (project.IsFlagship)
+                        {
+                            <span class="badge badge-primary">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">No</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (showPagination && totalPages > 1)
+    {
+        <div class="p-3 border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    @{
+                        var startIndex = (pageNumber - 1) * pageSize + 1;
+                        var endIndex = Math.Min(pageNumber * pageSize, totalCount);
+                    }
+                    Showing <strong>@startIndex</strong> to <strong>@endIndex</strong> of <strong>@totalCount</strong> @(totalCount == 1 ? "deliverable" : "deliverables")
+                </div>
+                <nav aria-label="Projects pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(hasPreviousPage ? string.Empty : "disabled")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-page="@(pageNumber > 1 ? pageNumber - 1 : 1)"
+                               asp-route-search="@ViewBag.CurrentSearch"
+                               asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                               asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                               asp-route-phase="@ViewBag.CurrentPhase"
+                               asp-route-flagship="@ViewBag.CurrentFlagship"
+                               asp-route-priority="@ViewBag.CurrentPriority"
+                               rel="prev">Previous</a>
+                        </li>
+                        @for (var i = 1; i <= totalPages; i++)
+                        {
+                            <li class="page-item @(i == pageNumber ? "active" : string.Empty)">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-page="@i"
+                                   asp-route-search="@ViewBag.CurrentSearch"
+                                   asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                   asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                   asp-route-phase="@ViewBag.CurrentPhase"
+                                   asp-route-flagship="@ViewBag.CurrentFlagship"
+                                   asp-route-priority="@ViewBag.CurrentPriority">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(hasNextPage ? string.Empty : "disabled")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-page="@(pageNumber < totalPages ? pageNumber + 1 : totalPages)"
+                               asp-route-search="@ViewBag.CurrentSearch"
+                               asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                               asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                               asp-route-phase="@ViewBag.CurrentPhase"
+                               asp-route-flagship="@ViewBag.CurrentFlagship"
+                               asp-route-priority="@ViewBag.CurrentPriority"
+                               rel="next">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    }
+    else if (!showPagination && Model.Count() > 10)
+    {
+        <div class="p-3 border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    Showing <span id="@(paginationIdPrefix)ShowingStart">1</span> to <span id="@(paginationIdPrefix)ShowingEnd">@Math.Min(10, Model.Count())</span> of <strong id="@(paginationIdPrefix)TotalCount">@Model.Count()</strong> deliverables
+                </div>
+                <ul class="pagination pagination-sm m-0" id="@(paginationIdPrefix)PaginationControls">
+                    <!-- Pagination buttons will be generated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    }
+</div>
+

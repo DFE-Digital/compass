@@ -3101,7 +3101,7 @@ public class AdminController : Controller
             var directorate = await _context.DirectorateLookups.FindAsync(id);
             if (directorate != null)
             {
-                var projectCount = await _context.ProjectDirectorates.CountAsync(pd => pd.BusinessAreaLookupId == id);
+                var projectCount = await _context.ProjectDirectorates.CountAsync(pd => pd.DirectorateLookupId == id);
                 if (projectCount > 0)
                 {
                     TempData["ErrorMessage"] = $"Cannot delete directorate '{directorate.Name}' as it is being used by {projectCount} project(s).";

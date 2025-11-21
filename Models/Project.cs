@@ -88,6 +88,9 @@ public class Project
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    [MaxLength(20)]
+    public string? CreationMethod { get; set; } // Manual, Bulk
+
     // Navigation properties
     public ICollection<ProjectSuccess> Successes { get; set; } = new List<ProjectSuccess>();
     public ICollection<ProjectRagHistory> RagHistory { get; set; } = new List<ProjectRagHistory>();
@@ -121,6 +124,7 @@ public class Project
     public ICollection<ProjectDirectorate> Directorates { get; set; } = new List<ProjectDirectorate>();
     public ICollection<ProjectBudgetOwner> BudgetOwners { get; set; } = new List<ProjectBudgetOwner>();
     public ICollection<ProjectPmoContact> PmoContacts { get; set; } = new List<ProjectPmoContact>();
+    public ICollection<ProjectArtefact> Artefacts { get; set; } = new List<ProjectArtefact>();
 
     // Activity Type
     public int? ActivityTypeLookupId { get; set; }
