@@ -54,7 +54,7 @@
             <div class="col-md-6">
                 @{
                     var ragCardClass = GetRagCardClass(Model.RagStatus);
-                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? Model.RagStatus : "Not set";
+                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? FormatRagStatusText(Model.RagStatus) : "Not set";
                     var ragSupportingTextClass = !string.IsNullOrEmpty(ragCardClass) && ragCardClass.Contains("amber", StringComparison.OrdinalIgnoreCase)
                         ? "rag-card__support--dark"
                         : "rag-card__support--light";
@@ -1422,7 +1422,19 @@
 @functions {
     string GetRagBadgeClass(string ragStatus)
     {
-        return ragStatus switch
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return "badge badge-secondary";
+        }
+        
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        return normalized switch
         {
             "Green" => "badge badge-green",
             "Amber-Green" => "badge badge-amber-green",
@@ -1435,7 +1447,19 @@
 
     string GetRagCardClass(string ragStatus)
     {
-        return ragStatus switch
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return "rag-card-default";
+        }
+        
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        return normalized switch
         {
             "Green" => "rag-card-green",
             "Amber-Green" => "rag-card-amber-green",
@@ -1443,6 +1467,21 @@
             "Amber-Red" => "rag-card-amber-red",
             "Red" => "rag-card-red",
             _ => "rag-card-default"
+        };
+    }
+
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        return ragStatus switch
+        {
+            "Amber-Green" => "Amber / Green",
+            "Amber-Red" => "Amber / Red",
+            _ => ragStatus
         };
     }
 
