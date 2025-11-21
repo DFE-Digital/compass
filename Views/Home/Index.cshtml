@@ -282,9 +282,10 @@
         {
             <!-- Business area leadership view for Deputy Director/SRO and Portfolio Lead/G6 -->
             <div class="card shadow-sm mb-4 dashboard-static">
-                <div class="card-body">
+                <div class="card-body"> <span class="text-muted">@highestRoleLabel</span>
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2 class="h4 mb-0">@highestRoleLabel overview</h2>
+                   
+                        <h1 class="h2 mb-0">Overview</h1>
                         @if (Model.LeadershipBusinessAreas.Any())
                         {
                             <div class="leadership-panel">
@@ -326,8 +327,8 @@
                         </div>
                         <div class="col-sm-6 col-lg-3 mb-3">
                             <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.ProjectHealthIssues</strong>
-                                <span>At risk projects</span>
+                                <strong>@Model.LeadershipMetrics.WatchedDeliverables</strong>
+                                <span>Watched deliverables</span>
                             </div>
                         </div>
                     </div>
@@ -343,70 +344,118 @@
                     {
                         <div class="row">
                             <div class="col-12">
-                                <h3 class="h6 text-uppercase text-muted mb-3">Projects in your business areas</h3>
-                                <div class="table-responsive">
-                                    <table class="table table-sm static-table">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Project</th>
-                                                <th scope="col">Priority</th>
-                                                <th scope="col">RAG</th>
-                                                <th scope="col">Business area</th>
-                                                <th scope="col">Open issues</th>
-                                                <th scope="col">Open risks</th>
-                                                <th scope="col">Open actions</th>
-                                                <th scope="col">Upcoming milestones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var project in Model.OversightProjects.Take(15))
-                                            {
-                                                var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
-                                                var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
-                                                var openActions = project.Actions?.Count(a => !a.IsDeleted && IsOpenStatus(a.Status)) ?? 0;
-                                                var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                                
-                                                <tr>
-                                                    <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
-                                                    <td>
-                                                        @if (project.DeliveryPriority != null)
+                                <div class="card mb-4 collapsed-card" id="oversight-projects-panel">
+                                    <div class="card-header">
+                                        <h3 class="card-title mb-0">@Model.OversightProjects.Count @(Model.OversightProjects.Count == 1 ? "deliverable" : "deliverables") in your business areas</h3>
+                                        <div class="card-tools">
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                                <span class="sr-only">Toggle deliverables</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm static-table sortable-table mb-0" id="oversight-projects-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width: 24%;" class="sortable" data-column="Project" tabindex="0" role="button" aria-label="Sort by Project">
+                                                                Project
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 11%;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">
+                                                                Priority
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 9%;" class="sortable" data-column="RAG" tabindex="0" role="button" aria-label="Sort by RAG">
+                                                                RAG
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 14%;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business area">
+                                                                Business area
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenIssues" tabindex="0" role="button" aria-label="Sort by Open issues">
+                                                                Open issues
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenRisks" tabindex="0" role="button" aria-label="Sort by Open risks">
+                                                                Open risks
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenActions" tabindex="0" role="button" aria-label="Sort by Open actions">
+                                                                Open actions
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                            <th style="width: 12%;" class="sortable text-right" data-column="UpcomingMilestones" tabindex="0" role="button" aria-label="Sort by Milestones">
+                                                                Milestones
+                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var project in Model.OversightProjects)
                                                         {
-                                                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                                            var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
+                                                            var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
+                                                            var openActions = project.Actions?.Count(a => !a.IsDeleted && IsOpenStatus(a.Status)) ?? 0;
+                                                            var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                                            
+                                                            <tr data-project-title="@project.Title" 
+                                                                data-priority="@(project.DeliveryPriority?.Name ?? "Not set")"
+                                                                data-rag="@(project.RagStatus ?? "Not set")"
+                                                                data-business-area="@(project.BusinessArea ?? "")"
+                                                                data-open-issues="@openIssues"
+                                                                data-open-risks="@openRisks"
+                                                                data-open-actions="@openActions"
+                                                                data-upcoming-milestones="@upcomingMilestones">
+                                                                <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
+                                                                <td>
+                                                                    @if (project.DeliveryPriority != null)
+                                                                    {
+                                                                        <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="text-muted">Not set</span>
+                                                                    }
+                                                                </td>
+                                                                <td>
+                                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                                    {
+                                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge badge-secondary">Not set</span>
+                                                                    }
+                                                                </td>
+                                                                <td>@project.BusinessArea</td>
+                                                                <td class="text-right">@openIssues</td>
+                                                                <td class="text-right">@openRisks</td>
+                                                                <td class="text-right">@openActions</td>
+                                                                <td class="text-right">@upcomingMilestones</td>
+                                                            </tr>
                                                         }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">Not set</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                        {
-                                                            <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Not set</span>
-                                                        }
-                                                    </td>
-                                                    <td>@project.BusinessArea</td>
-                                                    <td>@openIssues</td>
-                                                    <td>@openRisks</td>
-                                                    <td>@openActions</td>
-                                                    <td>@upcomingMilestones</td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
+                                                    </tbody>
+                                                </table>
+                                        </div>
+                                        @if (Model.OversightProjects.Count > 10)
+                                        {
+                                            <div class="p-3 border-top">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        Showing <span id="oversightProjectsShowingStart">1</span> to <span id="oversightProjectsShowingEnd">@Math.Min(10, Model.OversightProjects.Count)</span> of <strong id="oversightProjectsTotalCount">@Model.OversightProjects.Count</strong> deliverables
+                                                    </div>
+                                                    <ul class="pagination pagination-sm m-0" id="oversightProjectsPaginationControls">
+                                                        <!-- Pagination buttons will be generated by JavaScript -->
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
-                                @if (Model.OversightProjects.Count > 15)
-                                {
-                                    <p class="text-muted mt-2">
-                                        <small>Showing 15 of @Model.OversightProjects.Count projects. 
-                                        <a href="@Url.Action("Index", "Project")">View all projects</a></small>
-                                    </p>
-                                }
                             </div>
-                        </div>
 
                         @if (atRiskProjects.Any())
                         {
@@ -446,6 +495,7 @@
                                 </div>
                             </div>
                         }
+                        </div>
                     }
                     else
                     {
@@ -554,3 +604,298 @@
         </div>
     </div>
 </section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            // ========================================
+            // Table Sorting and Pagination
+            // ========================================
+            var pageSize = 10;
+            var oversightProjectsCurrentPage = 1;
+            var oversightProjectsAllRows = [];
+            var currentSort = { column: null, direction: 'asc' };
+            var oversightProjectsCount = @Model.OversightProjects.Count;
+            
+            function initOversightProjectsTable() {
+                var table = document.getElementById('oversight-projects-table');
+                if (!table) {
+                    return;
+                }
+                
+                var tbody = table.querySelector('tbody');
+                if (!tbody) {
+                    return;
+                }
+                
+                oversightProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (oversightProjectsAllRows.length === 0) {
+                    return;
+                }
+                
+                initSorting(table);
+                
+                // Only paginate if we have more than 10 projects
+                if (oversightProjectsCount > 10) {
+                    paginateOversightProjects();
+                } else {
+                    // Show all rows if 10 or fewer
+                    oversightProjectsAllRows.forEach(function(row) {
+                        row.style.display = '';
+                    });
+                }
+            }
+            
+            function initSorting(table) {
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+            }
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function updateSortIcons(column, direction) {
+                var table = document.getElementById('oversight-projects-table');
+                var allHeaders = table.querySelectorAll('.sortable i');
+                
+                // Reset all icons
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                // Update active column icon
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+            
+            function paginateOversightProjects() {
+                var totalProjects = oversightProjectsAllRows.length;
+                var totalPages = Math.ceil(totalProjects / pageSize);
+                
+                // Reset to page 1 if current page is beyond total pages
+                if (oversightProjectsCurrentPage > totalPages && totalPages > 0) {
+                    oversightProjectsCurrentPage = 1;
+                }
+                
+                // Hide all rows first
+                oversightProjectsAllRows.forEach(function(row) {
+                    row.style.display = 'none';
+                });
+                
+                // Show only rows for current page
+                var startIndex = (oversightProjectsCurrentPage - 1) * pageSize;
+                var endIndex = Math.min(startIndex + pageSize, totalProjects);
+                
+                for (var i = startIndex; i < endIndex; i++) {
+                    oversightProjectsAllRows[i].style.display = '';
+                }
+                
+                // Update pagination info
+                var showingStart = document.getElementById('oversightProjectsShowingStart');
+                var showingEnd = document.getElementById('oversightProjectsShowingEnd');
+                if (showingStart) {
+                    showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
+                }
+                if (showingEnd) {
+                    showingEnd.textContent = endIndex;
+                }
+                
+                // Always generate pagination controls if we have more than 10 projects
+                if (totalProjects > 10) {
+                    generateOversightProjectsPagination(totalPages, totalProjects);
+                }
+            }
+            
+            function generateOversightProjectsPagination(totalPages, totalProjects) {
+                var paginationControls = document.getElementById('oversightProjectsPaginationControls');
+                if (!paginationControls) {
+                    console.error('Pagination controls element not found');
+                    return;
+                }
+                
+                // Only generate pagination if we have more than one page
+                if (totalPages <= 1) {
+                    paginationControls.innerHTML = '';
+                    return;
+                }
+                
+                var paginationHtml = '';
+                
+                // Previous button
+                paginationHtml += '<li class="page-item ' + (oversightProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (oversightProjectsCurrentPage - 1) + '">Previous</a>';
+                paginationHtml += '</li>';
+                
+                // Page numbers
+                var startPage = Math.max(1, oversightProjectsCurrentPage - 2);
+                var endPage = Math.min(totalPages, oversightProjectsCurrentPage + 2);
+                
+                if (startPage > 1) {
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                    if (startPage > 2) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                }
+                
+                for (var i = startPage; i <= endPage; i++) {
+                    paginationHtml += '<li class="page-item ' + (i === oversightProjectsCurrentPage ? 'active' : '') + '">';
+                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+                    paginationHtml += '</li>';
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
+                }
+                
+                // Next button
+                paginationHtml += '<li class="page-item ' + (oversightProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
+                paginationHtml += '<a class="page-link" href="#" data-page="' + (oversightProjectsCurrentPage + 1) + '">Next</a>';
+                paginationHtml += '</li>';
+                
+                paginationControls.innerHTML = paginationHtml;
+                
+                // Bind click events using event delegation (remove old listener first)
+                var oldHandler = paginationControls._paginationHandler;
+                if (oldHandler) {
+                    paginationControls.removeEventListener('click', oldHandler);
+                }
+                
+                var clickHandler = function(e) {
+                    var link = e.target.closest('.page-link');
+                    if (link && !link.closest('.disabled')) {
+                        e.preventDefault();
+                        var page = parseInt(link.getAttribute('data-page'));
+                        var totalPages = Math.ceil(oversightProjectsAllRows.length / pageSize);
+                        if (!isNaN(page) && page > 0 && page <= totalPages) {
+                            oversightProjectsCurrentPage = page;
+                            paginateOversightProjects();
+                        }
+                    }
+                };
+                
+                paginationControls._paginationHandler = clickHandler;
+                paginationControls.addEventListener('click', clickHandler);
+            }
+            
+            function sortTable(column, direction) {
+                var table = document.getElementById('oversight-projects-table');
+                var tbody = table.querySelector('tbody');
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                oversightProjectsAllRows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    // Get values from data attributes for numeric columns
+                    if (column === 'OpenIssues') {
+                        aVal = parseInt(a.getAttribute('data-open-issues')) || 0;
+                        bVal = parseInt(b.getAttribute('data-open-issues')) || 0;
+                    } else if (column === 'OpenRisks') {
+                        aVal = parseInt(a.getAttribute('data-open-risks')) || 0;
+                        bVal = parseInt(b.getAttribute('data-open-risks')) || 0;
+                    } else if (column === 'OpenActions') {
+                        aVal = parseInt(a.getAttribute('data-open-actions')) || 0;
+                        bVal = parseInt(b.getAttribute('data-open-actions')) || 0;
+                    } else if (column === 'UpcomingMilestones') {
+                        aVal = parseInt(a.getAttribute('data-upcoming-milestones')) || 0;
+                        bVal = parseInt(b.getAttribute('data-upcoming-milestones')) || 0;
+                    } else if (column === 'Project') {
+                        // Sort by link text
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else if (column === 'Priority') {
+                        // Sort by data attribute or badge text
+                        aVal = a.getAttribute('data-priority') || aCell.textContent.trim();
+                        bVal = b.getAttribute('data-priority') || bCell.textContent.trim();
+                        aVal = aVal.toLowerCase();
+                        bVal = bVal.toLowerCase();
+                    } else if (column === 'RAG') {
+                        // Sort by data attribute or badge text
+                        aVal = a.getAttribute('data-rag') || aCell.textContent.trim();
+                        bVal = b.getAttribute('data-rag') || bCell.textContent.trim();
+                        aVal = aVal.toLowerCase();
+                        bVal = bVal.toLowerCase();
+                    } else if (column === 'BusinessArea') {
+                        // Sort by data attribute or cell text
+                        aVal = a.getAttribute('data-business-area') || aCell.textContent.trim();
+                        bVal = b.getAttribute('data-business-area') || bCell.textContent.trim();
+                        aVal = (aVal || '').toLowerCase();
+                        bVal = (bVal || '').toLowerCase();
+                    } else {
+                        // Sort by cell text
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                // Rebuild tbody with sorted rows
+                tbody.innerHTML = '';
+                oversightProjectsAllRows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                // Update sort icons
+                updateSortIcons(column, direction);
+                
+                // Re-paginate if needed
+                if (oversightProjectsCount > 10) {
+                    oversightProjectsCurrentPage = 1;
+                    paginateOversightProjects();
+                }
+            }
+            
+            // Initialize table when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initOversightProjectsTable);
+            } else {
+                // DOM is already ready
+                setTimeout(initOversightProjectsTable, 100);
+            }
+        })();
+    </script>
+}

@@ -56,4 +56,64 @@
     <textarea asp-for="Input.ConfidenceExplanation" class="form-control @(hasError("ConfidenceExplanation") ? "form-control--error" : string.Empty)" rows="3"></textarea>
 </div>
 
+<div class="form-group @(hasError("AchievementStatus") ? "form-group--error" : string.Empty)">
+    <label asp-for="Input.AchievementStatus" class="font-weight-bold">Achievement status</label>
+    <small class="form-text text-muted">Indicate whether this outcome has been achieved.</small>
+    <span asp-validation-for="Input.AchievementStatus" class="form-error-message"></span>
+    <select asp-for="Input.AchievementStatus" class="form-control @(hasError("AchievementStatus") ? "form-control--error" : string.Empty)" id="achievementStatus">
+        <option value="In progress" selected="@(Model.Input.AchievementStatus == "In progress" || string.IsNullOrEmpty(Model.Input.AchievementStatus))">In progress</option>
+        <option value="Yes" selected="@(Model.Input.AchievementStatus == "Yes")">Yes</option>
+        <option value="No" selected="@(Model.Input.AchievementStatus == "No")">No</option>
+    </select>
+</div>
+
+<div class="form-group @(hasError("AchievementNotes") ? "form-group--error" : string.Empty)" id="achievementNotesGroup" style="display: none;">
+    <label asp-for="Input.AchievementNotes" class="font-weight-bold">Achievement notes <span class="text-danger">*</span></label>
+    <small class="form-text text-muted">Provide notes explaining the change in achievement status.</small>
+    <span asp-validation-for="Input.AchievementNotes" class="form-error-message"></span>
+    <textarea asp-for="Input.AchievementNotes" class="form-control @(hasError("AchievementNotes") ? "form-control--error" : string.Empty)" rows="3" id="achievementNotes"></textarea>
+</div>
+
 <input asp-for="Input.SortOrder" type="hidden" />
+<input type="hidden" id="originalAchievementStatus" value="@(Model.Input.AchievementStatus ?? "In progress")" />
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        var achievementStatusSelect = document.getElementById('achievementStatus');
+        var achievementNotesGroup = document.getElementById('achievementNotesGroup');
+        var achievementNotes = document.getElementById('achievementNotes');
+        var originalStatus = document.getElementById('originalAchievementStatus').value;
+        
+        function checkIfNotesRequired() {
+            var currentStatus = achievementStatusSelect.value;
+            var statusChanged = originalStatus !== currentStatus;
+            
+            // Show notes field if:
+            // 1. Status changed from "In progress" to "Yes" or "No"
+            // 2. Status changed between "Yes" and "No"
+            var requiresNotes = statusChanged && (
+                (originalStatus === "In progress" && (currentStatus === "Yes" || currentStatus === "No")) ||
+                ((originalStatus === "Yes" || originalStatus === "No") && (currentStatus === "Yes" || currentStatus === "No"))
+            );
+            
+            if (requiresNotes) {
+                achievementNotesGroup.style.display = 'block';
+                achievementNotes.setAttribute('required', 'required');
+            } else {
+                achievementNotesGroup.style.display = 'none';
+                achievementNotes.removeAttribute('required');
+                if (!statusChanged) {
+                    achievementNotes.value = '';
+                }
+            }
+        }
+        
+        // Check on page load
+        checkIfNotesRequired();
+        
+        // Check when status changes
+        if (achievementStatusSelect) {
+            achievementStatusSelect.addEventListener('change', checkIfNotesRequired);
+        }
+    })();
+</script>

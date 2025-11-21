@@ -1,0 +1,167 @@
+@model Compass.ViewModels.ProjectArtefactFormViewModel
+
+@{
+    ViewData["Title"] = $"Add artefact – {Model.ProjectTitle}";
+    var returnUrl = Url.Action("Details", "Project", new { id = Model.Input.ProjectId, tab = "artefacts" });
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Delivery reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Input.ProjectId" asp-route-tab="artefacts" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.ProjectTitle</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Add artefact</li>
+        </ol>
+    </nav>
+}
+
+@{
+    Func<string, string> normaliseKey = key =>
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = key;
+        var bracketIndex = trimmed.IndexOf('[');
+        if (bracketIndex >= 0)
+        {
+            trimmed = trimmed.Substring(0, bracketIndex);
+        }
+
+        var segments = trimmed.Split('.', System.StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : trimmed;
+    };
+
+    var fieldIdLookup = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+    {
+        ["Title"] = Html.IdFor(m => m.Input.Title),
+        ["Url"] = Html.IdFor(m => m.Input.Url)
+    };
+
+    var modelErrors = ViewData.ModelState
+        .Where(kvp => kvp.Value?.Errors?.Any() == true)
+        .Select(kvp => new
+        {
+            Key = normaliseKey(kvp.Key),
+            Errors = kvp.Value!.Errors
+                .Select(error => error.ErrorMessage)
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .ToList()
+        })
+        .Where(entry => entry.Errors.Any())
+        .ToList();
+
+    var hasModelErrors = modelErrors.Any();
+    var errorSummaryClasses = hasModelErrors ? "card error-summary mb-3" : "card error-summary d-none mb-3";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a class="btn btn-link px-0 mb-2" href="@returnUrl" aria-label="Back to project">
+                    <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i>Back to project
+                </a>
+                <h1 class="mb-1">Add artefact</h1>
+                <p class="text-muted mb-0">Project: @Model.ProjectTitle</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                <partial name="_ProjectSummarySidebar" model="Model.ProjectSummary" />
+            </aside>
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <form asp-action="AddArtefact" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <input asp-for="Input.ProjectId" type="hidden" />
+
+                    <div id="artefact-create-error-summary"
+                         class="@errorSummaryClasses"
+                         role="alert"
+                         aria-labelledby="artefact-create-error-summary-title"
+                         @(hasModelErrors ? "tabindex=\"-1\" aria-hidden=\"false\"" : "aria-hidden=\"true\"")
+                         data-module="error-summary">
+                        <div class="card-body">
+                            <h2 id="artefact-create-error-summary-title" class="error-summary__title">There is a problem</h2>
+                            <ul class="error-summary__list">
+                                @if (hasModelErrors)
+                                {
+                                    foreach (var entry in modelErrors)
+                                    {
+                                        string fieldId = string.Empty;
+                                        var hasLink = !string.IsNullOrWhiteSpace(entry.Key) && fieldIdLookup.TryGetValue(entry.Key, out fieldId);
+
+                                        foreach (var message in entry.Errors)
+                                        {
+                                            if (hasLink)
+                                            {
+                                                <li><a href="#@fieldId">@message</a></li>
+                                            }
+                                            else
+                                            {
+                                                <li>@message</li>
+                                            }
+                                        }
+                                    }
+                                }
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Artefact details</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group @(ViewData.ModelState["Input.Title"]?.Errors?.Any() == true ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Title" class="font-weight-bold">Title <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">Provide a descriptive title for the artefact or resource.</small>
+                                <span asp-validation-for="Input.Title" class="form-error-message"></span>
+                                <input asp-for="Input.Title" class="form-control @(ViewData.ModelState["Input.Title"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" required maxlength="200" />
+                            </div>
+
+                            <div class="form-group @(ViewData.ModelState["Input.Description"]?.Errors?.Any() == true ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Description" class="font-weight-bold">Description</label>
+                                <small class="form-text text-muted">Optional: Provide additional context about the artefact or resource.</small>
+                                <span asp-validation-for="Input.Description" class="form-error-message"></span>
+                                <textarea asp-for="Input.Description" class="form-control @(ViewData.ModelState["Input.Description"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" rows="4"></textarea>
+                            </div>
+
+                            <div class="form-group @(ViewData.ModelState["Input.Url"]?.Errors?.Any() == true ? "form-group--error" : string.Empty)">
+                                <label asp-for="Input.Url" class="font-weight-bold">URL <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">The web address where the artefact or resource can be accessed.</small>
+                                <span asp-validation-for="Input.Url" class="form-error-message"></span>
+                                <input asp-for="Input.Url" type="url" class="form-control @(ViewData.ModelState["Input.Url"]?.Errors?.Any() == true ? "form-control--error" : string.Empty)" required maxlength="1000" placeholder="https://example.com/resource" />
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex align-items-center">
+                            <button type="submit" class="btn btn-success mr-3">Save artefact</button>
+                            <a class="btn btn-outline-secondary" href="@returnUrl">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
