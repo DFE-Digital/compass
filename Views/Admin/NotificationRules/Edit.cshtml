@@ -1,0 +1,172 @@
+@model Compass.Models.NotificationRule
+@{
+    ViewData["Title"] = "Edit Notification Rule";
+    var templates = ViewBag.Templates as List<Compass.Models.NotificationTemplate> ?? new List<Compass.Models.NotificationTemplate>();
+    var triggerCodes = ViewBag.TriggerCodes as List<string> ?? new List<string>();
+    var recipientTypes = ViewBag.RecipientTypes as List<string> ?? new List<string>();
+    var ragStatuses = ViewBag.RagStatuses as List<string> ?? new List<string>();
+    var selectedRecipients = ViewBag.SelectedRecipients as List<string> ?? new List<string>();
+    var specificEmails = ViewBag.SpecificEmails as List<string> ?? new List<string>();
+    var selectedRagStatuses = ViewBag.SelectedRagStatuses as List<string> ?? new List<string>();
+    var selectedProjectStatuses = ViewBag.SelectedProjectStatuses as List<string> ?? new List<string>();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Admin" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="NotificationRules" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Notification Rules</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Edit Rule</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Edit Notification Rule</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Rule Details</h3>
+                    </div>
+                    <form asp-action="Edit" asp-controller="NotificationRules" method="post" asp-route-id="@Model.Id">
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                            
+                            <div class="form-group">
+                                <label class="control-label">Name *</label>
+                                <input name="name" class="form-control" value="@Model.Name" required />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Description</label>
+                                <textarea name="description" class="form-control" rows="2">@Model.Description</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Template *</label>
+                                <select name="notificationTemplateId" class="form-control" required>
+                                    @foreach (var template in templates)
+                                    {
+                                        <option value="@template.Id" selected="@(template.Id == Model.NotificationTemplateId)">@template.Name (@template.TriggerCode)</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The email template to use for this rule</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Trigger Code *</label>
+                                <select name="triggerCode" class="form-control" required>
+                                    @foreach (var triggerCode in triggerCodes)
+                                    {
+                                        <option value="@triggerCode" selected="@(triggerCode == Model.TriggerCode)">@triggerCode</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The event that triggers this notification</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input name="isEnabled" class="form-check-input" type="checkbox" checked="@Model.IsEnabled" />
+                                    <label class="form-check-label">
+                                        Enabled
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <h5>Recipients</h5>
+                            <div class="form-group">
+                                <label class="control-label">Recipient Types</label>
+                                <select name="recipientTypes" class="form-control" multiple size="5">
+                                    @foreach (var recipientType in recipientTypes)
+                                    {
+                                        <option value="@recipientType" selected="@(selectedRecipients.Contains(recipientType))">@recipientType</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Specific Email Addresses</label>
+                                <textarea name="specificEmails" class="form-control" rows="3" placeholder="Enter email addresses, one per line">@string.Join("\n", specificEmails)</textarea>
+                                <small class="form-text text-muted">Optional: Enter specific email addresses to always include (one per line)</small>
+                            </div>
+
+                            <hr />
+
+                            <h5>Conditions</h5>
+                            <div class="form-group">
+                                <label class="control-label">RAG Statuses (optional)</label>
+                                <select name="ragStatuses" class="form-control" multiple size="5">
+                                    @foreach (var ragStatus in ragStatuses)
+                                    {
+                                        <option value="@ragStatus" selected="@(selectedRagStatuses.Contains(ragStatus))">@ragStatus</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Project Statuses (optional)</label>
+                                <input name="projectStatuses" class="form-control" value="@string.Join(", ", selectedProjectStatuses)" placeholder="e.g., Active, In Progress (comma-separated)" />
+                                <small class="form-text text-muted">Optional: Comma-separated list of project statuses</small>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save mr-1"></i> Update Rule
+                            </button>
+                            <a href="@Url.Action("Index", "NotificationRules")" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Rule Information</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt>Created At</dt>
+                            <dd>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Created By</dt>
+                            <dd>@(Model.CreatedBy ?? "Unknown")</dd>
+                            <dt>Last Updated</dt>
+                            <dd>@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Updated By</dt>
+                            <dd>@(Model.UpdatedBy ?? "Unknown")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

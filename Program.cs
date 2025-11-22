@@ -256,6 +256,8 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
@@ -412,6 +414,11 @@ app.UseRateLimiter();
 
 // Map controllers with attribute routing (must be called to enable attribute routing)
 app.MapControllers();
+
+// Area routes (must come before default routes)
+app.MapControllerRoute(
+    name: "areas",
+    pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
 
 // API routes (conventional routing for non-attribute controllers)
 app.MapControllerRoute(

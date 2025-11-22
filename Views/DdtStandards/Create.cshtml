@@ -1,0 +1,2203 @@
+@{
+    ViewData["Title"] = ViewBag.Standard != null ? "Edit DDT Standard" : "Create DDT Standard";
+    var categories = ViewBag.Categories as List<Compass.Models.StandardCategory> ?? new List<Compass.Models.StandardCategory>();
+    var phases = ViewBag.Phases as List<Compass.Models.PhaseLookup> ?? new List<Compass.Models.PhaseLookup>();
+    var standard = ViewBag.Standard as Compass.Models.DdtStandard;
+    var selectedPhaseIds = ViewBag.SelectedPhaseIds as List<int> ?? new List<int>();
+    var selectedCategoryIds = ViewBag.SelectedCategoryIds as List<int> ?? new List<int>();
+    var selectedSubCategoryIds = ViewBag.SelectedSubCategoryIds as List<int> ?? new List<int>();
+    var selectedOwnerIds = ViewBag.SelectedOwnerIds as List<int> ?? new List<int>();
+    var selectedContactIds = ViewBag.SelectedContactIds as List<int> ?? new List<int>();
+    var comments = ViewBag.Comments as List<Compass.Models.DdtStandardComment> ?? new List<Compass.Models.DdtStandardComment>();
+    var commentsCount = ViewBag.CommentsCount as int? ?? 0;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "DdtStandards")" style="color: #005ea5; text-decoration: none;">Manage Standards</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">@(standard != null ? "Edit Standard" : "Create Standard")</li>
+        </ol>
+    </nav>
+}
+
+@section Styles {
+    <style>
+        .standard-form-section {
+            display: none;
+        }
+        .standard-form-section.active {
+            display: block;
+        }
+        .nav-pills .nav-link {
+            border-radius: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #005ea5;
+        }
+        .helper-content {
+            background-color: #f8f9fa;
+            border-left: 3px solid #005ea5;
+            padding: 1rem;
+            border-radius: 0.25rem;
+        }
+        .markdown-textarea {
+            min-height: 300px;
+            font-family: 'Courier New', monospace;
+        }
+        .user-picker-selected {
+            margin-top: 0.5rem;
+        }
+        .user-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background-color: #e7f3ff;
+            border: 1px solid #005ea5;
+            border-radius: 0.25rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .user-badge .btn-link {
+            margin-left: 0.5rem;
+        }
+        .list-group-item {
+            cursor: pointer;
+        }
+        .list-group-item.active {
+            background-color: #005ea5;
+            border-color: #005ea5;
+        }
+        .list-group-item-action {
+            display: block !important;
+        }
+        .list-group-item i {
+            margin-right: 0.5rem;
+        }
+    </style>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h1 class="mb-0">@(standard != null ? "Edit DDT Standard" : "Create DDT Standard")</h1>
+                    <div class="d-flex align-items-center">
+                        <span id="autosaveIndicator" class="badge mr-2" style="display: none;"></span>
+                        @if (standard != null)
+                        {
+                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })" target="_blank" class="btn btn-secondary" id="previewBtn">
+                                <i class="fas fa-eye mr-2"></i>Preview
+                            </a>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary" id="previewBtn" disabled title="Save the draft first to preview">
+                                <i class="fas fa-eye mr-2"></i>Preview
+                            </button>
+                        }
+                        <button type="submit" form="createStandardForm" class="btn btn-primary ml-2">
+                            <i class="fas fa-save mr-2"></i>Save Draft
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <form asp-action="Create" method="post" id="createStandardForm">
+            @Html.AntiForgeryToken()
+            @if (standard != null)
+            {
+                <input type="hidden" name="id" value="@standard.Id" />
+            }
+
+            <div class="row">
+                <!-- Left Column: Navigation -->
+                <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Navigation</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="#section-basic" class="list-group-item list-group-item-action active" data-section="basic">
+                                    <i class="fas fa-info-circle mr-2"></i><span>Basic details</span>
+                                </a>
+                                <a href="#section-purpose" class="list-group-item list-group-item-action" data-section="purpose">
+                                    <i class="fas fa-bullseye mr-2"></i><span>Purpose</span>
+                                </a>
+                                <a href="#section-criteria" class="list-group-item list-group-item-action" data-section="criteria">
+                                    <i class="fas fa-list-check mr-2"></i><span>Criteria</span>
+                                </a>
+                                <a href="#section-howToMeet" class="list-group-item list-group-item-action" data-section="howToMeet">
+                                    <i class="fas fa-check-circle mr-2"></i><span>How to meet</span>
+                                </a>
+                                <a href="#section-application" class="list-group-item list-group-item-action" data-section="application">
+                                    <i class="fas fa-cogs mr-2"></i><span>Application</span>
+                                </a>
+                                <a href="#section-categorisation" class="list-group-item list-group-item-action" data-section="categorisation">
+                                    <i class="fas fa-tags mr-2"></i><span>Categorisation</span>
+                                </a>
+                                <a href="#section-compliance" class="list-group-item list-group-item-action" data-section="compliance">
+                                    <i class="fas fa-shield-alt mr-2"></i><span>Compliance</span>
+                                </a>
+                                <a href="#section-owners" class="list-group-item list-group-item-action" data-section="owners">
+                                    <i class="fas fa-users mr-2"></i><span>Owners & Contacts</span>
+                                </a>
+                                <a href="#section-products" class="list-group-item list-group-item-action" data-section="products">
+                                    <i class="fas fa-box mr-2"></i><span>Products</span>
+                                </a>
+                                <a href="#section-exemptions" class="list-group-item list-group-item-action" data-section="exemptions">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i><span>Exemptions</span>
+                                </a>
+                                <a href="#section-submission" class="list-group-item list-group-item-action" data-section="submission">
+                                    <i class="fas fa-paper-plane mr-2"></i><span>Submission</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Middle Column: Form Inputs -->
+                <div class="col-xxl-7 col-xl-7 col-lg-6 col-md-8 col-sm-12 col-12">
+                    <!-- Basic Details Section -->
+                    <div class="card standard-form-section active" id="section-basic">
+                        <div class="card-header">
+                            <h3 class="card-title">Basic Details</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="title">Title <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted d-block mb-1">The title of the standard (required, unique)</small>
+                                <input type="text" class="form-control" id="title" name="title" required maxlength="500" data-help="title" value="@(standard?.Title ?? "")" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="summary">Summary</label>
+                                <small class="form-text text-muted d-block mb-1">Brief summary of the standard</small>
+                                <textarea class="form-control" id="summary" name="summary" rows="3" maxlength="2000" data-help="summary">@(standard?.Summary ?? "")</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Purpose Section -->
+                    <div class="card standard-form-section" id="section-purpose">
+                        <div class="card-header">
+                            <h3 class="card-title">Purpose</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="purpose">Purpose and Rationale</label>
+                                <small class="form-text text-muted d-block mb-1">Purpose and rationale for this standard (markdown supported)</small>
+                                <textarea class="form-control markdown-textarea" id="purpose" name="purpose" rows="12" data-help="purpose">@(standard?.Purpose ?? "")</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Criteria Section -->
+                    <div class="card standard-form-section" id="section-criteria">
+                        <div class="card-header">
+                            <h3 class="card-title">Criteria</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>You meet this standard when all the following are achieved:</label>
+                                <small class="form-text text-muted d-block mb-1">Add criteria that must be met to satisfy this standard</small>
+                                
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="criteriaInput" placeholder="Enter a criterion..." />
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-primary" id="addCriteriaBtn">
+                                                <i class="fas fa-plus mr-2"></i>Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="criteriaList">
+                                    <!-- Criteria items will be added here -->
+                                </div>
+                                
+                                <input type="hidden" id="criteria" name="criteria" value="@(standard?.Criteria ?? "")" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- How to Meet Section -->
+                    <div class="card standard-form-section" id="section-howToMeet">
+                        <div class="card-header">
+                            <h3 class="card-title">How to Meet</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="howToMeet">How to Meet Requirements</label>
+                                <small class="form-text text-muted d-block mb-1">Guidance on how to meet the standard requirements (markdown supported)</small>
+                                <textarea class="form-control markdown-textarea" id="howToMeet" name="howToMeet" rows="12" data-help="howToMeet">@(standard?.HowToMeet ?? "")</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Application Section -->
+                    <div class="card standard-form-section" id="section-application">
+                        <div class="card-header">
+                            <h3 class="card-title">Application of Standard</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group" data-help="phases">
+                                <label>Phases</label>
+                                <small class="form-text text-muted d-block mb-1">Select phases this standard applies to</small>
+                                <div class="form-check-group">
+                                    @foreach (var phase in phases)
+                                    {
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input phase-checkbox" name="phaseIds" value="@phase.Id" id="phase-@phase.Id" @(selectedPhaseIds.Contains(phase.Id) ? "checked" : "") />
+                                            <label class="form-check-label" for="phase-@phase.Id">@phase.Name</label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Categorisation Section -->
+                    <div class="card standard-form-section" id="section-categorisation">
+                        <div class="card-header">
+                            <h3 class="card-title">Categorisation</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group" data-help="categorisation">
+                                <label>Categories</label>
+                                <small class="form-text text-muted d-block mb-1">Select categories and sub-categories for this standard</small>
+                                @foreach (var category in categories)
+                                {
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input category-checkbox" name="categoryIds" value="@category.Id" id="category-@category.Id" data-category-id="@category.Id" @(selectedCategoryIds.Contains(category.Id) ? "checked" : "") />
+                                        <label class="form-check-label" for="category-@category.Id">
+                                            <strong>@category.Name</strong>
+                                            @if (!string.IsNullOrWhiteSpace(category.Description))
+                                            {
+                                                <br />
+                                                <small class="text-muted">@category.Description</small>
+                                            }
+                                        </label>
+                                    </div>
+                                    @if (category.SubCategories.Any())
+                                    {
+                                        <div class="ml-4 mb-3">
+                                            <small class="text-muted d-block mb-2">Sub-categories:</small>
+                                            @foreach (var subCategory in category.SubCategories)
+                                            {
+                                                <div class="form-check">
+                                                    <input type="checkbox" class="form-check-input subcategory-checkbox" name="subCategoryIds" value="@subCategory.Id" id="subcategory-@subCategory.Id" data-category-id="@category.Id" />
+                                                    <label class="form-check-label" for="subcategory-@subCategory.Id">
+                                                        @subCategory.Name
+                                                        @if (!string.IsNullOrWhiteSpace(subCategory.Description))
+                                                        {
+                                                            <small class="text-muted"> - @subCategory.Description</small>
+                                                        }
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compliance Section -->
+                    <div class="card standard-form-section" id="section-compliance">
+                        <div class="card-header">
+                            <h3 class="card-title">Compliance and Governance</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="governance">Governance</label>
+                                <small class="form-text text-muted d-block mb-1">Governance information (markdown supported)</small>
+                                <textarea class="form-control markdown-textarea" id="governance" name="governance" rows="8" data-help="governance"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="legalStandard" name="legalStandard" value="true" data-help="legalStandard" @(standard?.LegalStandard == true ? "checked" : "") />
+                                    <label class="form-check-label" for="legalStandard">This is a legal requirement</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="legalBasis">Legal Basis</label>
+                                <small class="form-text text-muted d-block mb-1">Legal basis for the standard</small>
+                                <input type="text" class="form-control" id="legalBasis" name="legalBasis" maxlength="1000" data-help="legalBasis" value="@(standard?.LegalBasis ?? "")" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="validityPeriod">Validity Period (months)</label>
+                                <small class="form-text text-muted d-block mb-1">Validity period in months</small>
+                                <input type="number" class="form-control" id="validityPeriod" name="validityPeriod" min="1" data-help="validityPeriod" value="@(standard?.ValidityPeriod?.ToString() ?? "")" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="relatedGuidance">Related Guidance</label>
+                                <small class="form-text text-muted d-block mb-1">Related guidance links/information (markdown supported)</small>
+                                <textarea class="form-control markdown-textarea" id="relatedGuidance" name="relatedGuidance" rows="6" data-help="relatedGuidance">@(standard?.RelatedGuidance ?? "")</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Owners & Contacts Section -->
+                    <div class="card standard-form-section" id="section-owners">
+                        <div class="card-header">
+                            <h3 class="card-title">Owners and Contacts</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group" data-help="owners">
+                                <label>Standard Owners</label>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard owners. You can add multiple owners.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="ownersPicker">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control js-user-picker-input" id="ownersSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                    </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" class="js-user-picker-objectid" />
+                                    <input type="hidden" class="js-user-picker-name" />
+                                    <input type="hidden" class="js-user-picker-email" />
+                                </div>
+                                <div id="selectedOwners" class="mt-3"></div>
+                                <input type="hidden" name="ownerObjectIds" id="ownerObjectIds" />
+                            </div>
+
+                            <div class="form-group" data-help="contacts">
+                                <label>Standard Contacts</label>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard contacts. You can add multiple contacts.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="contactsPicker">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control js-user-picker-input" id="contactsSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                    </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" class="js-user-picker-objectid" />
+                                    <input type="hidden" class="js-user-picker-name" />
+                                    <input type="hidden" class="js-user-picker-email" />
+                                </div>
+                                <div id="selectedContacts" class="mt-3"></div>
+                                <input type="hidden" name="contactObjectIds" id="contactObjectIds" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Products Section -->
+                    <div class="card standard-form-section" id="section-products">
+                        <div class="card-header">
+                            <h3 class="card-title">Approved and Tolerated Products</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Approved Products</label>
+                                <div id="approvedProductsContainer">
+                                    <p class="text-muted">Product management will be added in a future update.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Tolerated Products</label>
+                                <div id="toleratedProductsContainer">
+                                    <p class="text-muted">Product management will be added in a future update.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Exemptions Section -->
+                    <div class="card standard-form-section" id="section-exemptions">
+                        <div class="card-header">
+                            <h3 class="card-title">Exemptions</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Exceptions</label>
+                                <div id="exemptionsContainer">
+                                    <p class="text-muted">Exception management will be added in a future update.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submission Section -->
+                    <div class="card standard-form-section" id="section-submission">
+                        <div class="card-header">
+                            <h3 class="card-title">Submission</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>Ready to submit?</strong> Once you've completed all sections, you can submit this standard for review. 
+                                The standard will remain in draft until submitted.
+                            </div>
+                            <button type="button" class="btn btn-warning" id="submitForReviewBtn" disabled>
+                                <i class="fas fa-paper-plane mr-2"></i>Submit for Review
+                            </button>
+                            <small class="form-text text-muted d-block mt-2">Submit this standard to the standards forum for review and approval.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Helper Content and Comments -->
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-12 col-sm-12 col-12">
+                    <div class="sticky-top" style="top: 20px;">
+                        <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem;">
+                            <!-- Tab Navigation -->
+                            <ul class="nav nav-pills mb-3" role="tablist" style="border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">
+                                <li class="nav-item">
+                                    <a class="nav-link active" id="guidance-tab" data-toggle="tab" href="#guidance-pane" role="tab" aria-controls="guidance-pane" aria-selected="true">
+                                        Guidance
+                                    </a>
+                                </li>
+                                <li class="nav-item ml-2">
+                                    <a class="nav-link" id="comments-tab" data-toggle="tab" href="#comments-pane" role="tab" aria-controls="comments-pane" aria-selected="false">
+                                        Comments
+                                        @if (standard != null && commentsCount > 0)
+                                        {
+                                            <span class="badge badge-secondary ml-1" id="commentsBadge">@commentsCount</span>
+                                        }
+                                    </a>
+                                </li>
+                            </ul>
+                            
+                            <!-- Tab Content -->
+                            <div class="tab-content" style="min-height: 400px;">
+                                <!-- Guidance Tab -->
+                                <div class="tab-pane fade show active" id="guidance-pane" role="tabpanel" aria-labelledby="guidance-tab">
+                                    <div id="helpContent" class="p-3" style="background-color: #f8f9fa; border-radius: 0.375rem; min-height: 300px;">
+                                        <p class="text-muted">Click on a field or section to see guidance</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Comments Tab -->
+                                <div class="tab-pane fade" id="comments-pane" role="tabpanel" aria-labelledby="comments-tab">
+                                    @if (standard != null)
+                                    {
+                                        <div id="commentsContainer">
+                                            <!-- Add Comment Card (Collapsible) -->
+                                            <div class="card mb-3">
+                                                <div class="card-header" style="cursor: pointer;" data-toggle="collapse" data-target="#addCommentCollapse" aria-expanded="false" aria-controls="addCommentCollapse">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <h6 class="mb-0">
+                                                            <i class="fas fa-comment mr-2"></i>Add Comment
+                                                        </h6>
+                                                        <i class="fas fa-chevron-down"></i>
+                                                    </div>
+                                                </div>
+                                                <div class="collapse" id="addCommentCollapse">
+                                                    <div class="card-body">
+                                                        <div class="form-group">
+                                                            <label for="commentField" class="small font-weight-bold">About field</label>
+                                                            <select class="form-control form-control-sm" id="commentField">
+                                                                <option value="">General</option>
+                                                                <option value="title">Title</option>
+                                                                <option value="summary">Summary</option>
+                                                                <option value="purpose">Purpose</option>
+                                                                <option value="howToMeet">How to meet</option>
+                                                                <option value="phases">Phases</option>
+                                                                <option value="categorisation">Categorisation</option>
+                                                                <option value="governance">Governance</option>
+                                                                <option value="legalStandard">Legal standard</option>
+                                                                <option value="legalBasis">Legal basis</option>
+                                                                <option value="validityPeriod">Validity period</option>
+                                                                <option value="relatedGuidance">Related guidance</option>
+                                                                <option value="owners">Owners</option>
+                                                                <option value="contacts">Contacts</option>
+                                                                <option value="products">Products</option>
+                                                                <option value="exemptions">Exemptions</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label for="commentText" class="small font-weight-bold">Comment</label>
+                                                            <textarea class="form-control form-control-sm" id="commentText" rows="4" placeholder="Enter your comment or feedback..."></textarea>
+                                                        </div>
+                                                        <button type="button" class="btn btn-primary btn-sm btn-block" id="addCommentBtn">
+                                                            <i class="fas fa-paper-plane mr-2"></i>Add Comment
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="commentsList">
+                                                <p class="text-muted">Loading comments...</p>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-3" style="background-color: #f8f9fa; border-radius: 0.375rem;">
+                                            <p class="text-muted">Comments are available once you save the draft.</p>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        // Help content definitions
+        const helpContent = {
+            title: {
+                title: 'Title',
+                content: '<p>The title should be clear and descriptive. It will be used to generate a URL-friendly slug automatically.</p><p><strong>Tips:</strong></p><ul><li>Use clear, concise language</li><li>Avoid abbreviations unless widely known</li><li>Keep it under 100 characters for best display</li></ul>'
+            },
+            summary: {
+                title: 'Summary',
+                content: '<p>The summary provides a brief overview that appears in lists and search results.</p><p><strong>Tips:</strong></p><ul><li>Keep it to 1-2 sentences</li><li>Focus on what the standard does</li><li>Make it searchable with relevant keywords</li></ul>'
+            },
+            purpose: {
+                title: 'Purpose and Rationale',
+                content: '<p>Explain why this standard exists and what problem it solves. Use markdown for formatting:</p><ul><li><code># Heading</code> for main headings</li><li><code>## Subheading</code> for subheadings</li><li><code>**bold**</code> for bold text</li><li><code>[link text](url)</code> for links</li><li><code>- item</code> for bullet lists</li><li><code>1. item</code> for numbered lists</li></ul><p><strong>Best practices:</strong></p><ul><li>Start with the problem or need</li><li>Explain the benefit</li><li>Provide context and background</li></ul>'
+            },
+            criteria: {
+                title: 'Criteria',
+                content: '<p>Define the specific criteria that must be achieved to meet this standard. All criteria must be satisfied.</p><p><strong>Tips:</strong></p><ul><li>Be specific and measurable</li><li>Use clear, actionable language</li><li>Each criterion should be a distinct requirement</li><li>You can add, edit, or remove criteria as needed</li></ul><p><strong>Example criteria:</strong></p><ul><li>"All user data is encrypted in transit"</li><li>"Access logs are retained for 12 months"</li><li>"Third-party dependencies are reviewed quarterly"</li></ul>'
+            },
+            howToMeet: {
+                title: 'How to Meet',
+                content: '<p>Provide practical guidance on meeting the standard requirements. Use markdown formatting for structure and clarity.</p><p><strong>Include:</strong></p><ul><li>Step-by-step instructions</li><li>Examples and use cases</li><li>Links to relevant resources</li><li>Common pitfalls to avoid</li></ul><p><strong>Markdown tips:</strong></p><ul><li>Use headings to structure content</li><li>Use code blocks for technical examples</li><li>Link to external documentation</li></ul>'
+            },
+            phases: {
+                title: 'Application Phases',
+                content: '<p>Select the project phases where this standard applies. Standards can apply to multiple phases.</p><p><strong>Common phases:</strong></p><ul><li><strong>Discovery:</strong> Understanding user needs and constraints</li><li><strong>Alpha:</strong> Testing hypotheses with prototypes</li><li><strong>Beta:</strong> Building and testing with real users</li><li><strong>Live:</strong> Operating the service</li></ul><p>Select all phases where the standard is relevant.</p>'
+            },
+            categorisation: {
+                title: 'Categorisation',
+                content: '<p>Categories and sub-categories help organise standards and make them easier to find.</p><p><strong>Guidance:</strong></p><ul><li>Select at least one category</li><li>Sub-categories provide more granular classification</li><li>You can select multiple categories if the standard spans areas</li></ul><p>Categories are managed in <a href="@Url.Action("Index", "StandardsConfig", new { area = "Admin" })" target="_blank">Admin > Standards Config</a>.</p>'
+            },
+            governance: {
+                title: 'Governance',
+                content: '<p>Governance information explains who is responsible for this standard and how it\'s managed.</p><p><strong>Include:</strong></p><ul><li>Who owns the standard</li><li>How it\'s reviewed and updated</li><li>Governance processes</li><li>Escalation procedures</li></ul><p>Use markdown formatting for structure.</p>'
+            },
+            legalStandard: {
+                title: 'Legal Requirement',
+                content: '<p>Check this box if this standard is a legal or regulatory requirement.</p><p><strong>Examples:</strong></p><ul><li>GDPR compliance requirements</li><li>Accessibility regulations</li><li>Data protection laws</li><li>Public sector equality duties</li></ul><p>If checked, you must provide the legal basis below.</p>'
+            },
+            legalBasis: {
+                title: 'Legal Basis',
+                content: '<p>Provide the specific legal or regulatory basis for this standard.</p><p><strong>Include:</strong></p><ul><li>Act or regulation name</li><li>Relevant sections or articles</li><li>Links to official sources</li></ul><p><strong>Example:</strong> "Data Protection Act 2018, Section 35"</p>'
+            },
+            validityPeriod: {
+                title: 'Validity Period',
+                content: '<p>The validity period indicates how long the standard remains valid before review.</p><p><strong>Guidance:</strong></p><ul><li>Enter the number of months</li><li>Standards should be reviewed before expiry</li><li>Leave blank if no fixed validity period</li></ul><p><strong>Common periods:</strong></p><ul><li>12 months for technical standards</li><li>24 months for process standards</li><li>36+ months for policy standards</li></ul>'
+            },
+            relatedGuidance: {
+                title: 'Related Guidance',
+                content: '<p>Provide links and references to related guidance, documentation, or resources.</p><p><strong>Use markdown links:</strong></p><ul><li><code>[Link text](https://example.com)</code></li><li>Link to official documentation</li><li>Reference related standards</li><li>Include training materials</li></ul>'
+            },
+            owners: {
+                title: 'Standard Owners',
+                content: '<p>Standard owners are responsible for maintaining and updating the standard.</p><p><strong>Responsibilities:</strong></p><ul><li>Keeping the standard up to date</li><li>Responding to questions</li><li>Reviewing and approving changes</li><li>Communicating updates</li></ul><p>Search using names or email addresses from Entra ID. You can select multiple owners.</p>'
+            },
+            contacts: {
+                title: 'Standard Contacts',
+                content: '<p>Contacts are people who can provide information about the standard.</p><p><strong>When to add contacts:</strong></p><ul><li>Subject matter experts</li><li>People who can answer questions</li><li>Implementation support</li></ul><p>Search using names or email addresses from Entra ID. You can select multiple contacts.</p>'
+            },
+            products: {
+                title: 'Products',
+                content: '<p><strong>Approved products</strong> are tools or services that meet this standard.</p><p><strong>Tolerated products</strong> are those that don\'t fully meet the standard but are acceptable under certain conditions.</p><p>Product management will be added in a future update.</p>'
+            },
+            exemptions: {
+                title: 'Exemptions',
+                content: '<p>Document any exceptions or exemptions to this standard.</p><p><strong>Include:</strong></p><ul><li>When exemptions may be granted</li><li>Who can grant exemptions</li><li>Process for requesting exemptions</li><li>Conditions for exemptions</li></ul>'
+            },
+            submission: {
+                title: 'Submission',
+                content: '<p>Once submitted, the standard moves to "Under Review" status.</p><p><strong>Review process:</strong></p><ul><li>Administrators will review the standard</li><li>They may request changes or clarification</li><li>Standards can be approved or rejected</li></ul><p>You can continue editing the standard while it\'s in draft. After submission, you may need to wait for review before making changes.</p>'
+            }
+        };
+
+        // Section navigation
+        document.querySelectorAll('.list-group-item[data-section]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.dataset.section;
+                showSection(section);
+            });
+        });
+
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.standard-form-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Show selected section
+            const section = document.getElementById(`section-${sectionName}`);
+            if (section) {
+                section.classList.add('active');
+                // Scroll to section
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Re-attach field help listeners for this section
+                setTimeout(() => {
+                    attachFieldHelpListeners();
+                }, 200);
+            }
+
+            // Update nav active state
+            document.querySelectorAll('.list-group-item[data-section]').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === sectionName) {
+                    link.classList.add('active');
+                }
+            });
+
+            // Show section-level help
+            showHelp(sectionName);
+        }
+
+        // Field-level help - attach listeners after DOM is ready
+        function attachFieldHelpListeners() {
+            document.querySelectorAll('[data-help]').forEach(element => {
+                const helpKey = element.dataset.help;
+                if (helpKey && !element.hasAttribute('data-help-bound')) {
+                    element.setAttribute('data-help-bound', 'true');
+                    
+                    // Add focus listener
+                    element.addEventListener('focus', function() {
+                        showHelp(helpKey);
+                    }, { once: false });
+                    
+                    // Add click listener for inputs
+                    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+                        element.addEventListener('click', function() {
+                            showHelp(helpKey);
+                        }, { once: false });
+                    }
+                    
+                    // Also add listener to label if it exists
+                    const formGroup = element.closest('.form-group');
+                    if (formGroup) {
+                        const label = formGroup.querySelector('label[for="' + element.id + '"]');
+                        if (label && !label.hasAttribute('data-help-bound')) {
+                            label.setAttribute('data-help-bound', 'true');
+                            label.addEventListener('click', function() {
+                                showHelp(helpKey);
+                            }, { once: false });
+                        }
+                    }
+                }
+            });
+        }
+
+        // Attach listeners when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', attachFieldHelpListeners);
+        } else {
+            attachFieldHelpListeners();
+        }
+
+        function showHelp(helpKey) {
+            const helpDiv = document.getElementById('helpContent');
+            if (!helpDiv) {
+                console.error('Help content div not found');
+                return;
+            }
+            
+            if (helpContent[helpKey]) {
+                const help = helpContent[helpKey];
+                helpDiv.innerHTML = `
+                    <div class="helper-content">
+                        <h5>${help.title}</h5>
+                        ${help.content}
+                    </div>
+                `;
+            } else {
+                // Fallback to section help
+                const sectionHelp = {
+                    basic: helpContent.title,
+                    purpose: helpContent.purpose,
+                    howToMeet: helpContent.howToMeet,
+                    application: helpContent.phases,
+                    categorisation: helpContent.categorisation,
+                    compliance: helpContent.governance,
+                    owners: helpContent.owners,
+                    products: helpContent.products,
+                    exemptions: helpContent.exemptions,
+                    submission: helpContent.submission
+                };
+                if (sectionHelp[helpKey]) {
+                    const help = sectionHelp[helpKey];
+                    helpDiv.innerHTML = `
+                        <div class="helper-content">
+                            <h5>${help.title}</h5>
+                            ${help.content}
+                        </div>
+                    `;
+                } else {
+                    helpDiv.innerHTML = '<p class="text-muted">Click on a field or section to see guidance</p>';
+                }
+            }
+        }
+
+        // Initialize with first section help
+        showHelp('basic');
+
+        // User picker for owners and contacts
+        let selectedOwners = [];
+        let selectedContacts = [];
+
+        // Helper function to escape HTML
+        function escapeHtml(value) {
+            if (typeof value !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = value;
+            return div.innerHTML;
+        }
+
+        // Handle owner user selection
+        function handleOwnerUserSelected(e, user) {
+            // Extract user data - jQuery passes as second param, native event has detail
+            let userData = null;
+            if (user) {
+                userData = user;
+            } else if (e && e.detail) {
+                userData = e.detail;
+            } else if (e && e.originalEvent && e.originalEvent.detail) {
+                userData = e.originalEvent.detail;
+            }
+            
+            if (userData && (userData.objectId || userData.id)) {
+                const userId = userData.objectId || userData.id;
+                addOwner({
+                    id: userId,
+                    name: userData.name || '',
+                    email: userData.email || ''
+                });
+                clearOwnerPicker();
+            }
+        }
+
+        // Handle contact user selection
+        function handleContactUserSelected(e, user) {
+            // Extract user data - jQuery passes as second param, native event has detail
+            let userData = null;
+            if (user) {
+                userData = user;
+            } else if (e && e.detail) {
+                userData = e.detail;
+            } else if (e && e.originalEvent && e.originalEvent.detail) {
+                userData = e.originalEvent.detail;
+            }
+            
+            if (userData && (userData.objectId || userData.id)) {
+                const userId = userData.objectId || userData.id;
+                addContact({
+                    id: userId,
+                    name: userData.name || '',
+                    email: userData.email || ''
+                });
+                clearContactPicker();
+            }
+        }
+
+        // Initialize user picker event listeners
+        function initializeUserPickers() {
+            // Wait for user-picker.js to initialize, then attach our listeners
+            setTimeout(function() {
+                const ownersInput = document.getElementById('ownersSearch');
+                const contactsInput = document.getElementById('contactsSearch');
+                const ownersPicker = document.getElementById('ownersPicker');
+                const contactsPicker = document.getElementById('contactsPicker');
+                
+                // Owners picker - use both jQuery and native events
+                if (ownersInput) {
+                    // Remove existing listeners to avoid duplicates
+                    if (typeof jQuery !== 'undefined') {
+                        $(ownersInput).off('userSelected');
+                    }
+                    ownersInput.removeEventListener('userSelected', handleOwnerUserSelected);
+                    
+                    // Attach new listeners - use capture phase for native events
+                    if (typeof jQuery !== 'undefined') {
+                        $(ownersInput).on('userSelected', handleOwnerUserSelected);
+                    }
+                    ownersInput.addEventListener('userSelected', handleOwnerUserSelected, true);
+                    
+                    // Also listen on the picker container as fallback
+                    if (ownersPicker && typeof jQuery !== 'undefined') {
+                        $(ownersPicker).off('userSelected');
+                        $(ownersPicker).on('userSelected', handleOwnerUserSelected);
+                    }
+                }
+                
+                // Contacts picker - use both jQuery and native events
+                if (contactsInput) {
+                    // Remove existing listeners to avoid duplicates
+                    if (typeof jQuery !== 'undefined') {
+                        $(contactsInput).off('userSelected');
+                    }
+                    contactsInput.removeEventListener('userSelected', handleContactUserSelected);
+                    
+                    // Attach new listeners - use capture phase for native events
+                    if (typeof jQuery !== 'undefined') {
+                        $(contactsInput).on('userSelected', handleContactUserSelected);
+                    }
+                    contactsInput.addEventListener('userSelected', handleContactUserSelected, true);
+                    
+                    // Also listen on the picker container as fallback
+                    if (contactsPicker && typeof jQuery !== 'undefined') {
+                        $(contactsPicker).off('userSelected');
+                        $(contactsPicker).on('userSelected', handleContactUserSelected);
+                    }
+                }
+                
+                // Document-level delegation as fallback (capture phase to catch early)
+                document.addEventListener('userSelected', function(e) {
+                    if (e.target && e.target.id === 'ownersSearch') {
+                        handleOwnerUserSelected(e);
+                    } else if (e.target && e.target.id === 'contactsSearch') {
+                        handleContactUserSelected(e);
+                    }
+                }, true);
+                
+                // jQuery document-level delegation as fallback
+                if (typeof jQuery !== 'undefined') {
+                    $(document).on('userSelected', '#ownersSearch', handleOwnerUserSelected);
+                    $(document).on('userSelected', '#contactsSearch', handleContactUserSelected);
+                }
+            }, 500); // Wait 500ms for user-picker.js to initialize
+        }
+
+        function clearOwnerPicker() {
+            const picker = document.getElementById('ownersPicker');
+            if (picker) {
+                const input = picker.querySelector('.js-user-picker-input');
+                const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                const nameInput = picker.querySelector('.js-user-picker-name');
+                const emailInput = picker.querySelector('.js-user-picker-email');
+                const summary = picker.querySelector('.js-user-picker-summary');
+                const message = picker.querySelector('.js-user-picker-message');
+                
+                if (input) input.value = '';
+                if (objectIdInput) objectIdInput.value = '';
+                if (nameInput) nameInput.value = '';
+                if (emailInput) emailInput.value = '';
+                if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                if (message) message.textContent = '';
+            }
+        }
+
+        function clearContactPicker() {
+            const picker = document.getElementById('contactsPicker');
+            if (picker) {
+                const input = picker.querySelector('.js-user-picker-input');
+                const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                const nameInput = picker.querySelector('.js-user-picker-name');
+                const emailInput = picker.querySelector('.js-user-picker-email');
+                const summary = picker.querySelector('.js-user-picker-summary');
+                const message = picker.querySelector('.js-user-picker-message');
+                
+                if (input) input.value = '';
+                if (objectIdInput) objectIdInput.value = '';
+                if (nameInput) nameInput.value = '';
+                if (emailInput) emailInput.value = '';
+                if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                if (message) message.textContent = '';
+            }
+        }
+
+        function addOwner(user) {
+            const userId = user.objectId || user.id;
+            if (!userId) {
+                console.error('No user ID found:', user);
+                return;
+            }
+            if (!selectedOwners.find(u => u.id === userId)) {
+                selectedOwners.push({
+                    id: userId,
+                    name: user.name || '',
+                    email: user.email || ''
+                });
+                updateOwnersDisplay();
+            }
+        }
+
+        function removeOwner(userId) {
+            selectedOwners = selectedOwners.filter(u => u.id !== userId);
+            updateOwnersDisplay();
+        }
+
+        function addContact(user) {
+            const userId = user.objectId || user.id;
+            if (!userId) {
+                console.error('No user ID found:', user);
+                return;
+            }
+            if (!selectedContacts.find(u => u.id === userId)) {
+                selectedContacts.push({
+                    id: userId,
+                    name: user.name || '',
+                    email: user.email || ''
+                });
+                updateContactsDisplay();
+            }
+        }
+
+        function removeContact(userId) {
+            selectedContacts = selectedContacts.filter(u => u.id !== userId);
+            updateContactsDisplay();
+        }
+
+        function updateOwnersDisplay() {
+            const container = document.getElementById('selectedOwners');
+            const hiddenInput = document.getElementById('ownerObjectIds');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedOwners.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected Owners:</strong></div><div class="d-flex flex-wrap mt-2" id="ownersList">';
+            selectedOwners.forEach(owner => {
+                const escapedId = owner.id.replace(/'/g, "\\'");
+                const escapedName = (owner.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center" data-owner-id="${escapedId}">
+                        <span>${escapeHtml(owner.name)}${owner.email ? ` (${escapeHtml(owner.email)})` : ''}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-owner-btn" data-owner-id="${escapedId}" aria-label="Remove ${escapedName}">×</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedOwners.map(u => u.id).join(',');
+            
+            // Trigger autosave when owners change
+            if (typeof window.saveToLocalStorage === 'function') {
+                window.saveToLocalStorage();
+            }
+            
+            // Attach event listeners to remove buttons using event delegation
+            const ownersList = document.getElementById('ownersList');
+            if (ownersList) {
+                ownersList.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('remove-owner-btn')) {
+                        const ownerId = e.target.getAttribute('data-owner-id');
+                        if (ownerId) {
+                            removeOwner(ownerId);
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateContactsDisplay() {
+            const container = document.getElementById('selectedContacts');
+            const hiddenInput = document.getElementById('contactObjectIds');
+            
+            if (!container || !hiddenInput) return;
+            
+            if (selectedContacts.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
+                return;
+            }
+            
+            let html = '<div class="mt-2"><strong>Selected Contacts:</strong></div><div class="d-flex flex-wrap mt-2" id="contactsList">';
+            selectedContacts.forEach(contact => {
+                const escapedId = contact.id.replace(/'/g, "\\'");
+                const escapedName = (contact.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center" data-contact-id="${escapedId}">
+                        <span>${escapeHtml(contact.name)}${contact.email ? ` (${escapeHtml(contact.email)})` : ''}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-contact-btn" data-contact-id="${escapedId}" aria-label="Remove ${escapedName}">×</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedContacts.map(u => u.id).join(',');
+            
+            // Trigger autosave when contacts change
+            if (typeof window.saveToLocalStorage === 'function') {
+                window.saveToLocalStorage();
+            }
+            
+            // Attach event listeners to remove buttons using event delegation
+            const contactsList = document.getElementById('contactsList');
+            if (contactsList) {
+                contactsList.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('remove-contact-btn')) {
+                        const contactId = e.target.getAttribute('data-contact-id');
+                        if (contactId) {
+                            removeContact(contactId);
+                        }
+                    }
+                });
+            }
+        }
+
+        // Make remove functions available globally
+        window.removeOwner = removeOwner;
+        window.removeContact = removeContact;
+
+        // Attach event listeners for buttons
+        function attachButtonListeners() {
+            // Preview button is now a link, no click handler needed
+            
+            // Submit for review button
+            const submitForReviewBtn = document.getElementById('submitForReviewBtn');
+            if (submitForReviewBtn) {
+                submitForReviewBtn.addEventListener('click', submitForReview);
+            }
+        }
+        
+        // Update preview button when standard is saved
+        function updatePreviewButton(standardId) {
+            const previewBtn = document.getElementById('previewBtn');
+            if (!previewBtn || !standardId) return;
+            
+            // If it's a disabled button, convert to link
+            if (previewBtn.tagName === 'BUTTON' && previewBtn.disabled) {
+                const link = document.createElement('a');
+                link.href = '@Url.Action("Details", "DdtStandards")/' + standardId;
+                link.target = '_blank';
+                link.className = 'btn btn-secondary';
+                link.innerHTML = '<i class="fas fa-eye mr-2"></i>Preview';
+                link.id = 'previewBtn';
+                previewBtn.parentNode.replaceChild(link, previewBtn);
+            } else if (previewBtn.tagName === 'A') {
+                // Update existing link href
+                previewBtn.href = '@Url.Action("Details", "DdtStandards")/' + standardId;
+                previewBtn.removeAttribute('disabled');
+                previewBtn.removeAttribute('title');
+            }
+        }
+
+        // Initialize user pickers when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initializeUserPickers, 100);
+                attachButtonListeners();
+            });
+        } else {
+            setTimeout(initializeUserPickers, 100);
+            attachButtonListeners();
+        }
+
+        // Autosave functionality
+        (function() {
+            const AUTOSAVE_INTERVAL = 30000; // 30 seconds
+            const STORAGE_KEY = 'ddtStandardDraft';
+            let autosaveTimer = null;
+            let debounceTimer = null; // Shared debounce timer
+
+            function getFormData() {
+                // Get owner/contact IDs from arrays if available, otherwise from hidden inputs
+                let ownerIds = '';
+                let contactIds = '';
+                
+                if (typeof selectedOwners !== 'undefined' && selectedOwners.length > 0) {
+                    ownerIds = selectedOwners.map(u => u.id).join(',');
+                } else {
+                    ownerIds = document.getElementById('ownerObjectIds')?.value || '';
+                }
+                
+                if (typeof selectedContacts !== 'undefined' && selectedContacts.length > 0) {
+                    contactIds = selectedContacts.map(u => u.id).join(',');
+                } else {
+                    contactIds = document.getElementById('contactObjectIds')?.value || '';
+                }
+                
+                return {
+                    title: document.getElementById('title')?.value || '',
+                    summary: document.getElementById('summary')?.value || '',
+                    purpose: document.getElementById('purpose')?.value || '',
+                    criteria: document.getElementById('criteria')?.value || '[]',
+                    howToMeet: document.getElementById('howToMeet')?.value || '',
+                    governance: document.getElementById('governance')?.value || '',
+                    legalBasis: document.getElementById('legalBasis')?.value || '',
+                    legalStandard: document.getElementById('legalStandard')?.checked || false,
+                    validityPeriod: document.getElementById('validityPeriod')?.value || '',
+                    relatedGuidance: document.getElementById('relatedGuidance')?.value || '',
+                    categoryIds: Array.from(document.querySelectorAll('input[name="categoryIds"]:checked')).map(cb => cb.value),
+                    subCategoryIds: Array.from(document.querySelectorAll('input[name="subCategoryIds"]:checked')).map(cb => cb.value),
+                    phaseIds: Array.from(document.querySelectorAll('input[name="phaseIds"]:checked')).map(cb => cb.value),
+                    ownerObjectIds: ownerIds,
+                    contactObjectIds: contactIds,
+                    timestamp: new Date().toISOString()
+                };
+            }
+
+            function saveToLocalStorage() {
+                // Clear any pending debounced saves
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = null;
+                }
+                
+                // Show "Saving..." indicator (only if not already showing)
+                const indicator = document.getElementById('autosaveIndicator');
+                if (indicator && indicator.textContent !== 'Saving...') {
+                    updateAutosaveIndicator('saving');
+                }
+                
+                try {
+                    const formData = getFormData();
+                    const dataString = JSON.stringify(formData);
+                    localStorage.setItem(STORAGE_KEY, dataString);
+                    localStorage.setItem(STORAGE_KEY + '_timestamp', new Date().toISOString());
+                    
+                    // Also save to server via AJAX
+                    saveToServer(formData);
+                } catch (e) {
+                    console.error('Autosave failed:', e);
+                    updateAutosaveIndicator('failed');
+                }
+            }
+            
+            function saveToServer(formData) {
+                // Only save to server if there's at least a title
+                if (!formData.title || formData.title.trim() === '') {
+                    return;
+                }
+                
+                const form = document.getElementById('createStandardForm');
+                if (!form) return;
+                
+                // Get the anti-forgery token
+                const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) return;
+                
+                // Build FormData for server
+                const serverFormData = new FormData();
+                serverFormData.append('__RequestVerificationToken', token);
+                
+                // Get the standard ID if editing
+                const idInput = form.querySelector('input[name="id"]');
+                if (idInput && idInput.value) {
+                    serverFormData.append('id', idInput.value);
+                }
+                
+                // Add all form fields
+                serverFormData.append('title', formData.title || '');
+                if (formData.summary) serverFormData.append('summary', formData.summary);
+                if (formData.purpose) serverFormData.append('purpose', formData.purpose);
+                if (formData.criteria) serverFormData.append('criteria', formData.criteria);
+                if (formData.howToMeet) serverFormData.append('howToMeet', formData.howToMeet);
+                if (formData.governance) serverFormData.append('governance', formData.governance);
+                if (formData.legalBasis) serverFormData.append('legalBasis', formData.legalBasis);
+                serverFormData.append('legalStandard', formData.legalStandard || false);
+                if (formData.validityPeriod) serverFormData.append('validityPeriod', formData.validityPeriod);
+                if (formData.relatedGuidance) serverFormData.append('relatedGuidance', formData.relatedGuidance);
+                
+                // Add arrays
+                if (formData.categoryIds && formData.categoryIds.length > 0) {
+                    formData.categoryIds.forEach(id => serverFormData.append('categoryIds', id));
+                }
+                if (formData.subCategoryIds && formData.subCategoryIds.length > 0) {
+                    formData.subCategoryIds.forEach(id => serverFormData.append('subCategoryIds', id));
+                }
+                if (formData.phaseIds && formData.phaseIds.length > 0) {
+                    formData.phaseIds.forEach(id => serverFormData.append('phaseIds', id));
+                }
+                if (formData.ownerObjectIds) serverFormData.append('ownerObjectIds', formData.ownerObjectIds);
+                if (formData.contactObjectIds) serverFormData.append('contactObjectIds', formData.contactObjectIds);
+                
+                // Send AJAX request
+                fetch('@Url.Action("Autosave", "DdtStandards")', {
+                    method: 'POST',
+                    body: serverFormData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the hidden id input if this was a new draft
+                        if (!idInput || !idInput.value) {
+                            const newIdInput = document.createElement('input');
+                            newIdInput.type = 'hidden';
+                            newIdInput.name = 'id';
+                            newIdInput.value = data.id;
+                            newIdInput.id = 'standardId';
+                            form.appendChild(newIdInput);
+                            
+                            // Update the URL without reloading
+                            const newUrl = new URL(window.location.href);
+                            newUrl.searchParams.set('id', data.id);
+                            window.history.replaceState({}, '', newUrl);
+                            
+                            // Enable preview button
+                            updatePreviewButton(data.id);
+                        }
+                        
+                        updateAutosaveIndicator('saved');
+                    } else {
+                        console.error('Autosave failed:', data.message);
+                        updateAutosaveIndicator('failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Autosave error:', error);
+                    updateAutosaveIndicator('failed');
+                });
+            }
+
+            function loadFromLocalStorage() {
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    if (saved) {
+                        const formData = JSON.parse(saved);
+                        
+                        // Only restore if form is empty (no title)
+                        const title = document.getElementById('title')?.value || '';
+                        if (!title && formData.title) {
+                            if (confirm('Found a previously saved draft. Would you like to restore it?')) {
+                                restoreFormData(formData);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load autosaved data:', e);
+                }
+            }
+
+            function restoreFormData(data) {
+                if (data.title) document.getElementById('title').value = data.title;
+                if (data.summary) document.getElementById('summary').value = data.summary;
+                if (data.purpose) document.getElementById('purpose').value = data.purpose;
+                if (data.criteria) {
+                    try {
+                        const criteriaArray = JSON.parse(data.criteria);
+                        const criteriaList = document.getElementById('criteriaList');
+                        if (criteriaList && typeof window.addCriteriaToList === 'function') {
+                            criteriaList.innerHTML = '';
+                            criteriaArray.forEach(criterion => {
+                                if (criterion) window.addCriteriaToList(criterion, false);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error parsing criteria:', e);
+                    }
+                }
+                if (data.howToMeet) document.getElementById('howToMeet').value = data.howToMeet;
+                if (data.governance) document.getElementById('governance').value = data.governance;
+                if (data.legalBasis) document.getElementById('legalBasis').value = data.legalBasis;
+                if (data.validityPeriod) document.getElementById('validityPeriod').value = data.validityPeriod;
+                if (data.relatedGuidance) document.getElementById('relatedGuidance').value = data.relatedGuidance;
+                
+                const legalStandardCheckbox = document.getElementById('legalStandard');
+                if (legalStandardCheckbox) {
+                    legalStandardCheckbox.checked = data.legalStandard || false;
+                }
+                
+                // Restore checkboxes
+                if (data.categoryIds) {
+                    data.categoryIds.forEach(id => {
+                        const cb = document.getElementById(`category-${id}`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+                if (data.subCategoryIds) {
+                    data.subCategoryIds.forEach(id => {
+                        const cb = document.getElementById(`subcategory-${id}`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+                if (data.phaseIds) {
+                    data.phaseIds.forEach(id => {
+                        const cb = document.getElementById(`phase-${id}`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+                
+                // Restore owners and contacts (restore hidden inputs - arrays would need more complex restoration)
+                if (data.ownerObjectIds) {
+                    const ownerInput = document.getElementById('ownerObjectIds');
+                    if (ownerInput) ownerInput.value = data.ownerObjectIds;
+                }
+                if (data.contactObjectIds) {
+                    const contactInput = document.getElementById('contactObjectIds');
+                    if (contactInput) contactInput.value = data.contactObjectIds;
+                }
+            }
+
+            function updateAutosaveIndicator(status) {
+                const indicator = document.getElementById('autosaveIndicator');
+                if (!indicator) return;
+                
+                // Remove all badge classes
+                indicator.classList.remove('badge-warning', 'badge-success', 'badge-danger');
+                
+                if (status === 'saving') {
+                    indicator.textContent = 'Saving...';
+                    indicator.className = 'badge badge-warning mr-2';
+                    indicator.style.display = 'inline-block';
+                } else if (status === 'saved') {
+                    indicator.textContent = 'Saved';
+                    indicator.className = 'badge badge-success mr-2';
+                    indicator.style.display = 'inline-block';
+                    // Hide after 2 seconds (reduced from 3)
+                    setTimeout(() => {
+                        if (indicator && indicator.textContent === 'Saved') {
+                            indicator.style.display = 'none';
+                        }
+                    }, 2000);
+                } else if (status === 'failed') {
+                    indicator.textContent = 'Save failed';
+                    indicator.className = 'badge badge-danger mr-2';
+                    indicator.style.display = 'inline-block';
+                    // Hide after 5 seconds
+                    setTimeout(() => {
+                        if (indicator.textContent === 'Save failed') {
+                            indicator.style.display = 'none';
+                        }
+                    }, 5000);
+                } else {
+                    indicator.style.display = 'none';
+                }
+            }
+            
+            // Debounced version for form changes
+            function debouncedSave() {
+                // Show "Saving..." immediately when user makes a change
+                updateAutosaveIndicator('saving');
+                
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+                debounceTimer = setTimeout(saveToLocalStorage, 2000); // Save 2 seconds after last change
+            }
+            
+            function startAutosave() {
+                if (autosaveTimer) {
+                    clearInterval(autosaveTimer);
+                }
+                
+                // Don't save immediately on first load - wait for user input
+                // This prevents the "Saved" badge from showing on page load
+                
+                // Then save every 30 seconds
+                autosaveTimer = setInterval(saveToLocalStorage, AUTOSAVE_INTERVAL);
+                
+                // Also save on form changes (debounced)
+                const form = document.getElementById('createStandardForm');
+                if (form) {
+                    form.addEventListener('input', debouncedSave);
+                    form.addEventListener('change', debouncedSave);
+                }
+                
+                // Make debouncedSave available globally so it can be called from updateOwnersDisplay/updateContactsDisplay
+                window.saveToLocalStorage = debouncedSave;
+            }
+
+            function clearAutosave() {
+                localStorage.removeItem(STORAGE_KEY);
+                if (autosaveTimer) {
+                    clearInterval(autosaveTimer);
+                }
+            }
+
+            // Update h1 with title when title changes
+            function updatePageTitle() {
+                const titleInput = document.getElementById('title');
+                const h1 = document.querySelector('h1.mb-0');
+                if (titleInput && h1) {
+                    const title = titleInput.value.trim();
+                    if (title) {
+                        h1.textContent = title;
+                    } else {
+                        h1.textContent = '@(standard != null ? "Edit DDT Standard" : "Create DDT Standard")';
+                    }
+                }
+            }
+            
+            // Watch for title changes
+            const titleInput = document.getElementById('title');
+            if (titleInput) {
+                titleInput.addEventListener('input', updatePageTitle);
+                titleInput.addEventListener('change', updatePageTitle);
+            }
+            
+            // Initialize autosave when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    initializeEditingData();
+                    loadFromLocalStorage();
+                    startAutosave();
+                    updatePageTitle(); // Update title on load if editing
+                });
+            } else {
+                initializeEditingData();
+                loadFromLocalStorage();
+                startAutosave();
+                updatePageTitle(); // Update title on load if editing
+            }
+            
+            // Initialize owners and contacts if editing
+            function initializeEditingData() {
+                @if (standard != null)
+                {
+                    <text>
+                    // Initialize owners
+                    @if (ViewBag.SelectedOwners != null)
+                    {
+                        @foreach (var owner in ViewBag.SelectedOwners)
+                        {
+                            <text>
+                            selectedOwners.push({
+                                id: '@owner.ObjectId',
+                                name: '@Html.Raw(owner.Name.Replace("'", "\\'"))',
+                                email: '@(owner.Email?.Replace("'", "\\'") ?? "")'
+                            });
+                            </text>
+                        }
+                        <text>
+                        updateOwnersDisplay();
+                        </text>
+                    }
+                    
+                    // Initialize contacts
+                    @if (ViewBag.SelectedContacts != null)
+                    {
+                        @foreach (var contact in ViewBag.SelectedContacts)
+                        {
+                            <text>
+                            selectedContacts.push({
+                                id: '@contact.ObjectId',
+                                name: '@Html.Raw(contact.Name.Replace("'", "\\'"))',
+                                email: '@(contact.Email?.Replace("'", "\\'") ?? "")'
+                            });
+                            </text>
+                        }
+                        <text>
+                        updateContactsDisplay();
+                        </text>
+                    }
+                    </text>
+                }
+            }
+
+            // Clear autosave on successful form submission
+            const form = document.getElementById('createStandardForm');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    clearAutosave();
+                });
+            }
+
+            // Expose clear function for manual clearing if needed
+            window.clearDraftAutosave = clearAutosave;
+        })();
+
+        // Comments functionality
+        @if (standard != null)
+        {
+            <text>
+            const standardId = @standard.Id;
+            
+            // Load comments
+            function loadComments() {
+                if (!standardId) return;
+                
+                fetch('@Url.Action("GetComments", "DdtStandards")?id=' + standardId)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('HTTP error! status: ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success && data.comments) {
+                            displayComments(data.comments);
+                            updateCommentsBadge(data.comments.length);
+                        } else {
+                            document.getElementById('commentsList').innerHTML = '<p class="text-muted">No comments yet. Be the first to add feedback!</p>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading comments:', error);
+                        document.getElementById('commentsList').innerHTML = '<p class="text-danger">Error loading comments. Please refresh the page.</p>';
+                    });
+            }
+            
+            // Display comments
+            function displayComments(comments) {
+                const container = document.getElementById('commentsList');
+                if (!container) return;
+                
+                if (comments.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No comments yet. Be the first to add feedback!</p>';
+                    return;
+                }
+                
+                let html = '';
+                comments.forEach(comment => {
+                    const resolvedClass = comment.isResolved ? 'border-success bg-light' : '';
+                    
+                    // Determine status icon
+                    let statusIcon = '';
+                    if (comment.isResolved) {
+                        statusIcon = '<i class="fas fa-check-circle text-success mr-2" title="Resolved"></i>';
+                    } else if (!comment.replies || comment.replies.length === 0) {
+                        statusIcon = '<i class="fas fa-exclamation-circle text-warning mr-2" title="No replies"></i>';
+                    }
+                    
+                    const hasReplies = comment.replies && comment.replies.length > 0;
+                    
+                    // Get field section ID for linking
+                    const fieldSectionMap = {
+                        'title': 'section-basic',
+                        'summary': 'section-basic',
+                        'purpose': 'section-purpose',
+                        'howToMeet': 'section-howToMeet',
+                        'phases': 'section-application',
+                        'categorisation': 'section-categorisation',
+                        'governance': 'section-governance',
+                        'legalStandard': 'section-governance',
+                        'legalBasis': 'section-governance',
+                        'validityPeriod': 'section-governance',
+                        'relatedGuidance': 'section-governance',
+                        'owners': 'section-owners',
+                        'contacts': 'section-contacts',
+                        'products': 'section-products',
+                        'exemptions': 'section-exemptions',
+                        '': 'section-basic'
+                    };
+                    const fieldSectionId = fieldSectionMap[comment.field || ''] || 'section-basic';
+                    const fieldDisplayName = getFieldDisplayName(comment.field || '');
+                    const fieldLink = fieldDisplayName ? `<a href="#${fieldSectionId}" class="text-primary font-weight-bold" onclick="document.getElementById('${fieldSectionId}').scrollIntoView({ behavior: 'smooth', block: 'start' }); return false;">${fieldDisplayName}</a>` : '<span class="font-weight-bold">General</span>';
+                    
+                    const formattedDate = new Date(comment.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                    
+                    html += `
+                        <div class="card mb-3 ${resolvedClass}" data-comment-id="${comment.id}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div class="flex-grow-1">
+                                        <div class="mb-2">
+                                            ${statusIcon}
+                                            <h6 class="mb-1" style="display: inline;">${fieldLink}</h6>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted">
+                                                <strong>${escapeHtml(comment.userName || 'Unknown')}</strong> on ${formattedDate} said:
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-muted" type="button" id="commentActions-${comment.id}" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="padding: 0.25rem 0.5rem;">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-right" aria-labelledby="commentActions-${comment.id}">
+                                            ${comment.isResolved ? `
+                                                <a class="dropdown-item unresolve-comment-btn" href="#" data-comment-id="${comment.id}">
+                                                    <i class="fas fa-undo mr-2"></i>Reopen
+                                                </a>
+                                            ` : `
+                                                <a class="dropdown-item resolve-comment-btn" href="#" data-comment-id="${comment.id}">
+                                                    <i class="fas fa-check mr-2"></i>Resolve
+                                                </a>
+                                            `}
+                                            <a class="dropdown-item reply-comment-btn" href="#" data-comment-id="${comment.id}">
+                                                <i class="fas fa-reply mr-2"></i>Reply
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <p class="mb-0">${escapeHtml(comment.comments || '').replace(/\n/g, '<br>')}</p>
+                                </div>
+                                
+                                ${hasReplies ? `
+                                    <div class="mt-3 pt-3 border-top">
+                                        <strong class="small mb-2 d-block">Replies (${comment.replies.length})</strong>
+                                        ${comment.replies.map(reply => {
+                                            const replyDate = new Date(reply.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                                            return `
+                                                <div class="mb-3 pb-2" style="border-bottom: 1px solid #e9ecef;">
+                                                    <small class="text-muted d-block mb-1">
+                                                        <strong>${escapeHtml(reply.userName || 'Unknown')}</strong> on ${replyDate} said:
+                                                    </small>
+                                                    <p class="mb-0 small">${escapeHtml(reply.comments || '').replace(/\n/g, '<br>')}</p>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                ` : ''}
+                                
+                                <!-- Reply Form (hidden by default) -->
+                                <div class="reply-form-container mt-3" id="reply-form-${comment.id}" style="display: none;">
+                                    <div class="p-2" style="background-color: #f8f9fa; border-radius: 0.375rem;">
+                                        <div class="form-group mb-2">
+                                            <textarea class="form-control form-control-sm" id="reply-text-${comment.id}" rows="3" placeholder="Write a reply..."></textarea>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-sm btn-secondary cancel-reply-btn mr-2" data-comment-id="${comment.id}">Cancel</button>
+                                            <button type="button" class="btn btn-sm btn-primary submit-reply-btn" data-comment-id="${comment.id}">
+                                                <i class="fas fa-paper-plane mr-1"></i>Reply
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+                // Attach resolve button handlers (dropdown items)
+                document.querySelectorAll('.resolve-comment-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const commentId = this.getAttribute('data-comment-id');
+                        resolveComment(commentId);
+                        // Close dropdown
+                        const dropdown = this.closest('.dropdown');
+                        if (dropdown) {
+                            $(dropdown).find('[data-toggle="dropdown"]').dropdown('hide');
+                        }
+                    });
+                });
+                
+                // Attach unresolve button handlers (dropdown items)
+                document.querySelectorAll('.unresolve-comment-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const commentId = this.getAttribute('data-comment-id');
+                        unresolveComment(commentId);
+                        // Close dropdown
+                        const dropdown = this.closest('.dropdown');
+                        if (dropdown) {
+                            $(dropdown).find('[data-toggle="dropdown"]').dropdown('hide');
+                        }
+                    });
+                });
+                
+                // Attach reply button handlers (dropdown items)
+                document.querySelectorAll('.reply-comment-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const commentId = this.getAttribute('data-comment-id');
+                        showReplyForm(commentId);
+                        // Close dropdown
+                        const dropdown = this.closest('.dropdown');
+                        if (dropdown) {
+                            $(dropdown).find('[data-toggle="dropdown"]').dropdown('hide');
+                        }
+                    });
+                });
+                
+                // Attach cancel reply button handlers
+                document.querySelectorAll('.cancel-reply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const commentId = this.getAttribute('data-comment-id');
+                        hideReplyForm(commentId);
+                    });
+                });
+                
+                // Attach submit reply button handlers
+                document.querySelectorAll('.submit-reply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const commentId = this.getAttribute('data-comment-id');
+                        submitReply(commentId);
+                    });
+                });
+            }
+            
+            // Show reply form
+            function showReplyForm(commentId) {
+                const replyForm = document.getElementById('reply-form-' + commentId);
+                if (replyForm) {
+                    replyForm.style.display = 'block';
+                    const textarea = document.getElementById('reply-text-' + commentId);
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                }
+            }
+            
+            // Hide reply form
+            function hideReplyForm(commentId) {
+                const replyForm = document.getElementById('reply-form-' + commentId);
+                if (replyForm) {
+                    replyForm.style.display = 'none';
+                    const textarea = document.getElementById('reply-text-' + commentId);
+                    if (textarea) {
+                        textarea.value = '';
+                    }
+                }
+            }
+            
+            // Submit reply
+            function submitReply(commentId) {
+                const textarea = document.getElementById('reply-text-' + commentId);
+                if (!textarea) return;
+                
+                const replyText = textarea.value.trim();
+                if (!replyText) {
+                    alert('Please enter a reply.');
+                    return;
+                }
+                
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert('Unable to verify request. Please refresh the page.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('id', standardId);
+                formData.append('title', 'Reply'); // Replies don't need a title, but it's required
+                formData.append('comments', replyText);
+                formData.append('parentCommentId', commentId);
+                formData.append('__RequestVerificationToken', token);
+                
+                fetch('@Url.Action("AddComment", "DdtStandards")', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Clear and hide reply form
+                        textarea.value = '';
+                        hideReplyForm(commentId);
+                        
+                        // Reload comments to show the new reply
+                        loadComments();
+                    } else {
+                        alert('Error adding reply: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error adding reply:', error);
+                    alert('Error adding reply. Please try again.');
+                });
+            }
+            
+            // Unresolve comment
+            function unresolveComment(commentId) {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert('Unable to verify request. Please refresh the page.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('id', standardId);
+                formData.append('commentId', commentId);
+                formData.append('__RequestVerificationToken', token);
+                
+                fetch('@Url.Action("UnresolveComment", "DdtStandards")', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadComments();
+                    } else {
+                        alert('Error reopening comment: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error reopening comment:', error);
+                    alert('Error reopening comment. Please try again.');
+                });
+            }
+            
+            // Get field display name
+            function getFieldDisplayName(field) {
+                const fieldNames = {
+                    'title': 'Title',
+                    'summary': 'Summary',
+                    'purpose': 'Purpose',
+                    'howToMeet': 'How to meet',
+                    'phases': 'Phases',
+                    'categorisation': 'Categorisation',
+                    'governance': 'Governance',
+                    'legalStandard': 'Legal standard',
+                    'legalBasis': 'Legal basis',
+                    'validityPeriod': 'Validity period',
+                    'relatedGuidance': 'Related guidance',
+                    'owners': 'Owners',
+                    'contacts': 'Contacts',
+                    'products': 'Products',
+                    'exemptions': 'Exemptions',
+                    '': 'General'
+                };
+                return fieldNames[field] || field || 'General';
+            }
+            
+            // Add comment
+            function addComment() {
+                const commentInput = document.getElementById('commentText');
+                const fieldSelect = document.getElementById('commentField');
+                
+                if (!commentInput || !fieldSelect) return;
+                
+                const comment = commentInput.value.trim();
+                const field = fieldSelect.value || '';
+                
+                if (!comment) {
+                    alert('Please enter a comment.');
+                    return;
+                }
+                
+                // Generate title from field name or use default
+                const fieldName = getFieldDisplayName(field);
+                const title = fieldName ? `Comment on ${fieldName}` : 'Comment';
+                
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert('Unable to verify request. Please refresh the page.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('id', standardId);
+                formData.append('title', title);
+                formData.append('comments', comment);
+                formData.append('field', field);
+                formData.append('__RequestVerificationToken', token);
+                
+                fetch('@Url.Action("AddComment", "DdtStandards")', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Clear form
+                        commentInput.value = '';
+                        fieldSelect.value = '';
+                        
+                        // Reload comments
+                        loadComments();
+                    } else {
+                        alert('Error adding comment: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error adding comment:', error);
+                    alert('Error adding comment. Please try again.');
+                });
+            }
+            
+            // Resolve comment
+            function resolveComment(commentId) {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert('Unable to verify request. Please refresh the page.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('id', standardId);
+                formData.append('commentId', commentId);
+                formData.append('__RequestVerificationToken', token);
+                
+                fetch('@Url.Action("ResolveComment", "DdtStandards")', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadComments();
+                    } else {
+                        alert('Error resolving comment: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error resolving comment:', error);
+                    alert('Error resolving comment. Please try again.');
+                });
+            }
+            
+            // Update comments badge
+            function updateCommentsBadge(count) {
+                const badge = document.getElementById('commentsBadge');
+                if (badge) {
+                    badge.textContent = count;
+                    badge.style.display = count > 0 ? 'inline-block' : 'none';
+                }
+            }
+            
+            // Helper to escape HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Attach add comment button handler
+            const addCommentBtn = document.getElementById('addCommentBtn');
+            if (addCommentBtn) {
+                addCommentBtn.addEventListener('click', addComment);
+            }
+            
+            // Load comments when comments tab is shown
+            const commentsTab = document.getElementById('comments-tab');
+            if (commentsTab) {
+                commentsTab.addEventListener('shown.bs.tab', function() {
+                    loadComments();
+                });
+            }
+            
+            // Also load on page load if editing
+            if (standardId) {
+                // Load comments after a short delay to ensure DOM is ready
+                setTimeout(loadComments, 500);
+            }
+            </text>
+        }
+
+        // Form submission is handled normally - object IDs are passed as comma-separated strings
+        // The server-side controller will convert them to COMPASS User IDs
+
+
+        function submitForReview() {
+            if (confirm('Are you sure you want to submit this standard for review? It will move to "Under Review" status.')) {
+                // Create a hidden form to submit for review
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("SubmitForReview", "DdtStandards")';
+                
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token;
+                form.appendChild(tokenInput);
+                
+                const idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'id';
+                idInput.value = '@(Model?.Id ?? 0)';
+                form.appendChild(idInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        // Criteria Management
+        (function() {
+            // Load criteria from hidden input on page load
+            function loadCriteria() {
+                const criteriaInput = document.getElementById('criteria');
+                if (criteriaInput && criteriaInput.value) {
+                    try {
+                        const criteriaArray = JSON.parse(criteriaInput.value);
+                        const criteriaList = document.getElementById('criteriaList');
+                        if (criteriaList) {
+                            criteriaArray.forEach((item) => {
+                                if (item) addCriteriaToList(item, false);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error loading criteria:', e);
+                    }
+                }
+            }
+
+            // Add criteria to list
+            function addCriteriaToList(text, updateHidden = true) {
+                if (!text || !text.trim()) return;
+
+                const criteriaList = document.getElementById('criteriaList');
+                if (!criteriaList) return;
+
+                const itemId = 'criteria-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'criteria-item mb-2 p-2 border rounded';
+                itemDiv.id = itemId;
+                itemDiv.setAttribute('data-criterion', text.trim());
+
+                itemDiv.innerHTML = `
+                    <div class="d-flex align-items-start">
+                        <div class="flex-grow-1 criteria-text-container">
+                            <span class="criteria-text">${escapeHtml(text.trim())}</span>
+                            <input type="text" class="form-control form-control-sm criteria-edit-input" value="${escapeHtml(text.trim())}" style="display: none;" />
+                        </div>
+                        <div class="ml-2">
+                            <button type="button" class="btn btn-sm btn-link text-primary criteria-edit-btn" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link text-danger criteria-remove-btn" title="Remove">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                criteriaList.appendChild(itemDiv);
+
+                // Attach event listeners
+                const editBtn = itemDiv.querySelector('.criteria-edit-btn');
+                const removeBtn = itemDiv.querySelector('.criteria-remove-btn');
+                const editInput = itemDiv.querySelector('.criteria-edit-input');
+                const textSpan = itemDiv.querySelector('.criteria-text');
+
+                editBtn.addEventListener('click', function() {
+                    if (textSpan.style.display !== 'none') {
+                        // Switch to edit mode
+                        textSpan.style.display = 'none';
+                        editInput.style.display = 'block';
+                        editInput.focus();
+                        editInput.select();
+                        editBtn.innerHTML = '<i class="fas fa-check"></i>';
+                        editBtn.classList.remove('text-primary');
+                        editBtn.classList.add('text-success');
+                    } else {
+                        // Save edit
+                        const newText = editInput.value.trim();
+                        if (newText) {
+                            textSpan.textContent = newText;
+                            itemDiv.setAttribute('data-criterion', newText);
+                            updateCriteriaHidden();
+                        }
+                        textSpan.style.display = '';
+                        editInput.style.display = 'none';
+                        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                        editBtn.classList.remove('text-success');
+                        editBtn.classList.add('text-primary');
+                    }
+                });
+
+                editInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        editBtn.click();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        editInput.value = textSpan.textContent;
+                        textSpan.style.display = '';
+                        editInput.style.display = 'none';
+                        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                        editBtn.classList.remove('text-success');
+                        editBtn.classList.add('text-primary');
+                    }
+                });
+
+                removeBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to remove this criterion?')) {
+                        itemDiv.remove();
+                        updateCriteriaHidden();
+                    }
+                });
+
+                if (updateHidden) {
+                    updateCriteriaHidden();
+                }
+            }
+
+            // Update hidden input with current criteria
+            function updateCriteriaHidden() {
+                const criteriaList = document.getElementById('criteriaList');
+                const criteriaInput = document.getElementById('criteria');
+                if (!criteriaList || !criteriaInput) return;
+
+                const items = Array.from(criteriaList.querySelectorAll('.criteria-item')).map(item => {
+                    return item.getAttribute('data-criterion') || '';
+                }).filter(text => text.length > 0);
+
+                criteriaInput.value = JSON.stringify(items);
+                
+                // Trigger autosave if available
+                if (typeof debouncedSave === 'function') {
+                    debouncedSave();
+                } else if (typeof window.saveToLocalStorage === 'function') {
+                    window.saveToLocalStorage();
+                }
+            }
+
+            // Helper to escape HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Add button handler
+            const addBtn = document.getElementById('addCriteriaBtn');
+            const criteriaInput = document.getElementById('criteriaInput');
+
+            if (addBtn && criteriaInput) {
+                addBtn.addEventListener('click', function() {
+                    const text = criteriaInput.value.trim();
+                    if (text) {
+                        addCriteriaToList(text);
+                        criteriaInput.value = '';
+                        criteriaInput.focus();
+                    }
+                });
+
+                criteriaInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addBtn.click();
+                    }
+                });
+            }
+
+            // Load criteria on page load
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadCriteria);
+            } else {
+                loadCriteria();
+            }
+
+            // Make function available globally for restoreFormData
+            window.addCriteriaToList = addCriteriaToList;
+        })();
+    </script>
+}
