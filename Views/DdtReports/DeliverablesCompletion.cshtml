@@ -510,8 +510,6 @@
                                             <a asp-controller="Project" asp-action="Details" asp-route-id="@project.ProjectId" class="font-weight-bold">
                                                 @project.ProjectTitle
                                             </a>
-                                            <br>
-                                            <small class="text-muted">DEL-DDT-@project.ProjectId</small>
                                         </td>
                                         <td class="text-center">
                                             @{
@@ -632,16 +630,26 @@
                                             }
                                         </td>
                                         <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-info view-details-btn" data-project-id="@project.ProjectId" title="View details">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <div class="btn-group ml-1">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary view-details-btn" data-project-id="@project.ProjectId" title="View details">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
                                                 <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                                     <i class="fas fa-cog"></i>
                                                 </button>
                                                 <div class="dropdown-menu dropdown-menu-right">
                                                     <a class="dropdown-item" href="#" data-action="change-title" data-project-id="@project.ProjectId" data-project-title="@project.ProjectTitle">
                                                         <i class="fas fa-edit mr-2"></i> Change Title
+                                                    </a>
+                                                    <div class="dropdown-divider"></div>
+                                                    <a class="dropdown-item" href="#" data-action="set-sro" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-user-tie mr-2"></i> Set SRO
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-pmo-contact" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-user-friends mr-2"></i> Set PMO Contact
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-directorate" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-sitemap mr-2"></i> Set Directorate
                                                     </a>
                                                     <div class="dropdown-divider"></div>
                                                     <a class="dropdown-item" href="#" data-action="set-rag-status" data-project-id="@project.ProjectId">
@@ -667,9 +675,9 @@
                                         </td>
                                     </tr>
                                     <!-- Expandable Details Row -->
-                                    <tr class="detail-row" id="detail-row-@project.ProjectId" style="display: none;">
-                                        <td colspan="14" class="bg-light">
-                                            <div class="p-3">
+                                    <tr class="detail-row" id="detail-row-@project.ProjectId">
+                                        <td colspan="14" class="bg-light p-0">
+                                            <div class="collapse p-3" id="detail-content-@project.ProjectId">
                                                 <div class="row">
                                                     <div class="col-md-6">
                                                         <h6 class="font-weight-bold mb-3">Deliverable Information</h6>
@@ -677,10 +685,6 @@
                                                             <tr>
                                                                 <td class="font-weight-bold" style="width: 150px;">Title:</td>
                                                                 <td>@project.ProjectTitle</td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td class="font-weight-bold">Code:</td>
-                                                                <td>DEL-DDT-@project.ProjectId</td>
                                                             </tr>
                                                             <tr>
                                                                 <td class="font-weight-bold">Phase:</td>
@@ -871,6 +875,142 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
                     <button type="submit" class="btn btn-primary">Save Business Area</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update SRO Modal -->
+<div class="modal fade" id="updateSroModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update SRO</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectSro" method="post">
+                <input type="hidden" name="projectId" id="sroProjectId" />
+                <input type="hidden" name="clearSro" id="clearSro" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the SRO. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="sroSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="sroSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="sroObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="sroEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="sroName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No SRO selected.">
+                                <span class="text-muted">No SRO selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearSroBtn">Clear SRO</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save SRO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update PMO Contact Modal -->
+<div class="modal fade" id="updatePmoContactModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update PMO Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPmoContact" method="post">
+                <input type="hidden" name="projectId" id="pmoContactProjectId" />
+                <input type="hidden" name="clearPmoContact" id="clearPmoContact" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the PMO Contact. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="pmoContactSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="pmoContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="pmoContactObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="pmoContactEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="pmoContactName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No PMO contact selected.">
+                                <span class="text-muted">No PMO contact selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearPmoContactBtn">Clear PMO Contact</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save PMO Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Directorate Modal -->
+<div class="modal fade" id="updateDirectorateModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Directorate</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectDirectorate" method="post">
+                <input type="hidden" name="projectId" id="directorateProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Directorate for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="directorateLookupId" class="form-label">Directorate</label>
+                        <select class="form-control" id="directorateLookupId" name="directorateLookupId">
+                            <option value="">-- Clear Directorate --</option>
+                            @if (ViewBag.DirectorateLookups != null)
+                            {
+                                @foreach (var directorate in (List<Compass.Models.DirectorateLookup>)ViewBag.DirectorateLookups)
+                                {
+                                    <option value="@directorate.Id">@directorate.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Directorate</button>
                 </div>
             </form>
         </div>
@@ -1147,8 +1287,69 @@
                 return false;
             });
 
+            $(document).on('click', '[data-action="set-sro"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#sroProjectId').val(projectId);
+                $('#clearSro').val('false');
+                var $picker = $('#updateSroModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No SRO selected.</span>');
+                $('#updateSroModal').modal('show');
+                setTimeout(function() {
+                    $('#sroSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearSroBtn').on('click', function() {
+                $('#clearSro').val('true');
+                $('#updateSroModal form').submit();
+            });
+
+            $(document).on('click', '[data-action="set-pmo-contact"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#pmoContactProjectId').val(projectId);
+                $('#clearPmoContact').val('false');
+                var $picker = $('#updatePmoContactModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No PMO contact selected.</span>');
+                $('#updatePmoContactModal').modal('show');
+                setTimeout(function() {
+                    $('#pmoContactSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearPmoContactBtn').on('click', function() {
+                $('#clearPmoContact').val('true');
+                $('#updatePmoContactModal form').submit();
+            });
+
+            $(document).on('click', '[data-action="set-directorate"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#directorateProjectId').val(projectId);
+                $('#directorateLookupId').val('');
+                $('#updateDirectorateModal').modal('show');
+                return false;
+            });
+
             // Setup AJAX forms
             setupAjaxForm('#updateTitleModal form', handleProjectUpdate);
+            setupAjaxForm('#updateSroModal form', handleProjectUpdate);
+            setupAjaxForm('#updatePmoContactModal form', handleProjectUpdate);
+            setupAjaxForm('#updateDirectorateModal form', handleProjectUpdate);
             setupAjaxForm('#updateRagStatusModal form', handleProjectUpdate);
             setupAjaxForm('#updatePriorityModal form', handleProjectUpdate);
             setupAjaxForm('#updateBusinessAreaModal form', handleProjectUpdate);
@@ -1161,17 +1362,24 @@
                 e.preventDefault();
                 e.stopPropagation();
                 var projectId = $(this).data('project-id');
-                var $detailRow = $('#detail-row-' + projectId);
-                var $btn = $(this);
+                var $detailContent = $('#detail-content-' + projectId);
+                var $icon = $(this).find('i');
                 
-                if ($detailRow.is(':visible')) {
-                    $detailRow.slideUp();
-                    $btn.find('i').removeClass('fa-eye-slash').addClass('fa-eye');
-                } else {
-                    $detailRow.slideDown();
-                    $btn.find('i').removeClass('fa-eye').addClass('fa-eye-slash');
-                }
+                $detailContent.collapse('toggle');
                 return false;
+            });
+            
+            // Handle Bootstrap collapse events to update chevron
+            $(document).on('shown.bs.collapse', '.detail-row .collapse', function() {
+                var projectId = $(this).attr('id').replace('detail-content-', '');
+                $('.view-details-btn[data-project-id="' + projectId + '"] i')
+                    .removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            });
+            
+            $(document).on('hidden.bs.collapse', '.detail-row .collapse', function() {
+                var projectId = $(this).attr('id').replace('detail-content-', '');
+                $('.view-details-btn[data-project-id="' + projectId + '"] i')
+                    .removeClass('fa-chevron-up').addClass('fa-chevron-down');
             });
 
             filterTable();
@@ -1299,6 +1507,42 @@
                     } else {
                         phaseCell.html('<span class="text-muted">-</span>');
                     }
+                }
+
+                // Update SRO (4th column)
+                if (project.seniorResponsibleOfficerNames !== undefined) {
+                    var hasSro = project.seniorResponsibleOfficerNames && project.seniorResponsibleOfficerNames.length > 0;
+                    $row.attr('data-has-sro', hasSro ? 'true' : 'false');
+                    var sroNames = hasSro ? project.seniorResponsibleOfficerNames.join(', ') : '';
+                    $row.attr('data-sro-names', sroNames);
+                    var sroHtml = hasSro
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(sroNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="SRO missing"></i>';
+                    $row.find('td').eq(3).html(sroHtml); // 4th column (0-indexed)
+                }
+
+                // Update PMO Contact (5th column)
+                if (project.pmoContactNames !== undefined) {
+                    var hasPmo = project.pmoContactNames && project.pmoContactNames.length > 0;
+                    $row.attr('data-has-pmo', hasPmo ? 'true' : 'false');
+                    var pmoNames = hasPmo ? project.pmoContactNames.join(', ') : '';
+                    $row.attr('data-pmo-names', pmoNames);
+                    var pmoHtml = hasPmo
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(pmoNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="PMO Contact missing"></i>';
+                    $row.find('td').eq(4).html(pmoHtml); // 5th column (0-indexed)
+                }
+
+                // Update Directorate (6th column)
+                if (project.directorateNames !== undefined) {
+                    var hasDirectorate = project.directorateNames && project.directorateNames.length > 0;
+                    $row.attr('data-has-directorate', hasDirectorate ? 'true' : 'false');
+                    var directorateNames = hasDirectorate ? project.directorateNames.join(', ') : '';
+                    $row.attr('data-directorate-names', directorateNames);
+                    var directorateHtml = hasDirectorate
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(directorateNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Directorate missing"></i>';
+                    $row.find('td').eq(5).html(directorateHtml); // 6th column (0-indexed)
                 }
 
                 if (project.ragStatus !== undefined) {

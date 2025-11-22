@@ -1,0 +1,196 @@
+@model Compass.Models.NotificationRule
+@{
+    ViewData["Title"] = "Notification Rule Details";
+    var recipientConfig = !string.IsNullOrWhiteSpace(Model.RecipientConfiguration) 
+        ? System.Text.Json.JsonDocument.Parse(Model.RecipientConfiguration) 
+        : null;
+    var conditions = !string.IsNullOrWhiteSpace(Model.Conditions) 
+        ? System.Text.Json.JsonDocument.Parse(Model.Conditions) 
+        : null;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Admin" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="NotificationRules" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500;">Notification Rules</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@Model.Name</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Name</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <a href="@Url.Action("Edit", "NotificationRules", new { id = Model.Id })" class="btn btn-primary">
+                        <i class="fas fa-edit mr-1"></i> Edit
+                    </a>
+                    <a href="@Url.Action("Index", "NotificationRules")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left mr-1"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Rule Details</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Name</dt>
+                            <dd class="col-sm-9"><strong>@Model.Name</strong></dd>
+
+                            <dt class="col-sm-3">Description</dt>
+                            <dd class="col-sm-9">@(Model.Description ?? "N/A")</dd>
+
+                            <dt class="col-sm-3">Trigger Code</dt>
+                            <dd class="col-sm-9"><span class="badge badge-secondary">@Model.TriggerCode</span></dd>
+
+                            <dt class="col-sm-3">Template</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.NotificationTemplate != null)
+                                {
+                                    <a href="@Url.Action("Details", "NotificationTemplates", new { id = Model.NotificationTemplateId })">
+                                        @Model.NotificationTemplate.Name
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Template not found</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">Status</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.IsEnabled)
+                                {
+                                    <span class="badge badge-success">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Disabled</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Recipient Configuration</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (recipientConfig != null)
+                        {
+                            @if (recipientConfig.RootElement.TryGetProperty("recipients", out var recipients))
+                            {
+                                <dl class="row mb-2">
+                                    <dt class="col-sm-3">Recipient Types</dt>
+                                    <dd class="col-sm-9">
+                                        @foreach (var recipient in recipients.EnumerateArray())
+                                        {
+                                            <span class="badge badge-info mr-1">@recipient.GetString()</span>
+                                        }
+                                    </dd>
+                                </dl>
+                            }
+                            @if (recipientConfig.RootElement.TryGetProperty("specific_emails", out var emails))
+                            {
+                                <dl class="row">
+                                    <dt class="col-sm-3">Specific Emails</dt>
+                                    <dd class="col-sm-9">
+                                        <ul class="mb-0">
+                                            @foreach (var email in emails.EnumerateArray())
+                                            {
+                                                <li>@email.GetString()</li>
+                                            }
+                                        </ul>
+                                    </dd>
+                                </dl>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">No recipient configuration. Will use default recipients.</p>
+                        }
+                    </div>
+                </div>
+
+                @if (conditions != null)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Conditions</h3>
+                        </div>
+                        <div class="card-body">
+                            @if (conditions.RootElement.TryGetProperty("rag_statuses", out var ragStatuses))
+                            {
+                                <dl class="row mb-2">
+                                    <dt class="col-sm-3">RAG Statuses</dt>
+                                    <dd class="col-sm-9">
+                                        @foreach (var status in ragStatuses.EnumerateArray())
+                                        {
+                                            <span class="badge badge-warning mr-1">@status.GetString()</span>
+                                        }
+                                    </dd>
+                                </dl>
+                            }
+                            @if (conditions.RootElement.TryGetProperty("project_statuses", out var projectStatuses))
+                            {
+                                <dl class="row">
+                                    <dt class="col-sm-3">Project Statuses</dt>
+                                    <dd class="col-sm-9">
+                                        @foreach (var status in projectStatuses.EnumerateArray())
+                                        {
+                                            <span class="badge badge-secondary mr-1">@status.GetString()</span>
+                                        }
+                                    </dd>
+                                </dl>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Metadata</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt>Created At</dt>
+                            <dd>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Created By</dt>
+                            <dd>@(Model.CreatedBy ?? "Unknown")</dd>
+                            <dt>Last Updated</dt>
+                            <dd>@Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            <dt>Updated By</dt>
+                            <dd>@(Model.UpdatedBy ?? "Unknown")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
