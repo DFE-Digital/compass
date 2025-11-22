@@ -103,6 +103,102 @@ namespace Compass.Controllers
         {
             return View();
         }
+
+        /// <summary>
+        /// User stories documentation - comprehensive user stories for all COMPASS features
+        /// </summary>
+        public IActionResult UserStories()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Enterprise reporting documentation - enterprise metrics and functional standards
+        /// </summary>
+        public IActionResult EnterpriseReporting()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Demand management documentation - demand request management and triage
+        /// </summary>
+        public IActionResult DemandManagement()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Accessibility management documentation - accessibility statements, issues, and audits
+        /// </summary>
+        public IActionResult Accessibility()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// DDT standards documentation - standards creation, management, and approval workflow
+        /// </summary>
+        public IActionResult DdtStandards()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// User satisfaction surveys documentation - survey management and analytics
+        /// </summary>
+        public IActionResult UserSatisfactionSurveys()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Staff role returns documentation - annual GDD role reporting
+        /// </summary>
+        public IActionResult StaffRoleReturns()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// DDT reports documentation - report generation and analytics
+        /// </summary>
+        public IActionResult DdtReports()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Business reporting documentation - business reporting dashboard and metrics
+        /// </summary>
+        public IActionResult BusinessReporting()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// User leadership documentation - leadership role assignment and permissions
+        /// </summary>
+        public IActionResult UserLeadership()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Organizational management documentation - organisational structure management
+        /// </summary>
+        public IActionResult OrganizationalManagement()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Government departments documentation - government department management
+        /// </summary>
+        public IActionResult GovernmentDepartments()
+        {
+            return View();
+        }
     }
 }
 

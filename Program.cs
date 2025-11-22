@@ -413,6 +413,11 @@ app.UseRateLimiter();
 // Map controllers with attribute routing (must be called to enable attribute routing)
 app.MapControllers();
 
+// Area routes (must come before default routes)
+app.MapControllerRoute(
+    name: "areas",
+    pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
+
 // API routes (conventional routing for non-attribute controllers)
 app.MapControllerRoute(
     name: "api",

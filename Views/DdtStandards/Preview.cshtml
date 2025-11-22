@@ -1,0 +1,126 @@
+@model Compass.Models.DdtStandard
+
+@{
+    ViewData["Title"] = $"Preview: {Model.Title}";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/custom.css" />
+    <style>
+        body {
+            padding: 2rem;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .preview-header {
+            border-bottom: 2px solid #005ea5;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        .markdown-content h1 { font-size: 2rem; margin-top: 2rem; margin-bottom: 1rem; }
+        .markdown-content h2 { font-size: 1.5rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .markdown-content h3 { font-size: 1.25rem; margin-top: 1.25rem; margin-bottom: 0.5rem; }
+        .markdown-content ul, .markdown-content ol { margin-left: 1.5rem; }
+        .markdown-content p { margin-bottom: 1rem; }
+        .markdown-content a { color: #005ea5; }
+    </style>
+</head>
+<body>
+    <div class="preview-header">
+        <h1>@Model.Title</h1>
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge badge-@(Model.Stage switch {
+                "Published" => "success",
+                "Approved" => "info",
+                "Under Review" => "warning",
+                "Rejected" => "danger",
+                "Draft" => "secondary",
+                _ => "secondary"
+            })">@Model.Stage</span>
+            <span class="text-muted">Version @Model.Version</span>
+            @if (Model.IsPublished && Model.PublishedAt.HasValue)
+            {
+                <span class="text-muted">Published @Model.PublishedAt.Value.ToString("dd MMM yyyy")</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Summary))
+    {
+        <div class="alert alert-info">
+            <strong>Summary:</strong> @Model.Summary
+        </div>
+    }
+
+    <div class="markdown-content">
+        @if (!string.IsNullOrWhiteSpace(Model.Purpose))
+        {
+            <div class="mb-4">
+                <h2>Purpose</h2>
+                @Html.Raw(MarkdownHelper.ToHtml(Model.Purpose))
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.HowToMeet))
+        {
+            <div class="mb-4">
+                <h2>How to Meet</h2>
+                @Html.Raw(MarkdownHelper.ToHtml(Model.HowToMeet))
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.Governance))
+        {
+            <div class="mb-4">
+                <h2>Governance</h2>
+                @Html.Raw(MarkdownHelper.ToHtml(Model.Governance))
+            </div>
+        }
+    </div>
+
+    <div class="mt-4 pt-4 border-top">
+        <h3>Metadata</h3>
+        <dl class="row">
+            @if (Model.Categories.Any())
+            {
+                <dt class="col-sm-3">Categories</dt>
+                <dd class="col-sm-9">
+                    @foreach (var cat in Model.Categories)
+                    {
+                        <span class="badge badge-light mr-2">@cat.Category.Name</span>
+                    }
+                </dd>
+            }
+
+            @if (Model.Phases.Any(p => p.Enabled))
+            {
+                <dt class="col-sm-3">Phases</dt>
+                <dd class="col-sm-9">
+                    @foreach (var phase in Model.Phases.Where(p => p.Enabled))
+                    {
+                        <span class="badge badge-primary mr-2">@phase.PhaseLookup.Name</span>
+                    }
+                </dd>
+            }
+
+            @if (Model.LegalStandard)
+            {
+                <dt class="col-sm-3">Legal Requirement</dt>
+                <dd class="col-sm-9">Yes</dd>
+                @if (!string.IsNullOrWhiteSpace(Model.LegalBasis))
+                {
+                    <dt class="col-sm-3">Legal Basis</dt>
+                    <dd class="col-sm-9">@Model.LegalBasis</dd>
+                }
+            }
+        </dl>
+    </div>
+</body>
+</html>
+

@@ -614,6 +614,216 @@ public class DdtReportsController : Controller
         }
     }
 
+    // GET: DdtReports/DeliverablesCompletion
+    public async Task<IActionResult> DeliverablesCompletion()
+    {
+        try
+        {
+            var projects = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .Where(p => !p.IsDeleted && p.Status == "Active")
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
+            var completionItems = projects
+                .Select(CreateProjectCompletionItem)
+                .ToList();
+
+            var averageCompletion = completionItems.Any()
+                ? completionItems.Average(p => p.CompletionPercentage)
+                : 0;
+
+            var businessAreaCompletions = completionItems
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
+                .Select(g => new BusinessAreaCompletion
+                {
+                    BusinessArea = g.Key,
+                    ProductCount = g.Count(),
+                    AverageCompletionPercentage = g.Average(p => p.CompletionPercentage)
+                })
+                .OrderByDescending(ba => ba.AverageCompletionPercentage)
+                .ToList();
+
+            var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
+            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+
+            var viewModel = new ProjectCompletionViewModel
+            {
+                Projects = completionItems,
+                AverageCompletionPercentage = averageCompletion,
+                BusinessAreaCompletions = businessAreaCompletions,
+                ZeroCompletionCount = zeroCompletionCount,
+                FullCompletionCount = fullCompletionCount,
+                CompletedSroCount = completionItems.Count(p => p.HasSro),
+                CompletedPmoContactCount = completionItems.Count(p => p.HasPmoContact),
+                CompletedDirectorateCount = completionItems.Count(p => p.HasDirectorate),
+                CompletedBudgetOwnerCount = completionItems.Count(p => p.HasBudgetOwner),
+                CompletedRagStatusCount = completionItems.Count(p => p.HasRagStatus),
+                CompletedPriorityCount = completionItems.Count(p => p.HasPriority),
+                CompletedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea),
+                CompletedPrimaryContactCount = completionItems.Count(p => p.HasPrimaryContact),
+                CompletedActivityTypeCount = completionItems.Count(p => p.HasActivityType),
+                CompletedSpendControlCount = completionItems.Count(p => p.HasSpendControl)
+            };
+
+            // Load lookup data for dropdowns
+            ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
+                .Where(dp => dp.IsActive)
+                .OrderBy(dp => dp.SortOrder)
+                .ThenBy(dp => dp.Name)
+                .ToListAsync();
+            
+            ViewBag.BusinessAreaLookups = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.Name)
+                .ToListAsync();
+            
+            ViewBag.DirectorateLookups = await _context.DirectorateLookups
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+            
+            ViewBag.ActivityTypeLookups = await _context.ActivityTypeLookups
+                .Where(at => at.IsActive)
+                .OrderBy(at => at.Name)
+                .ToListAsync();
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Deliverables completion report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new ProjectCompletionViewModel());
+        }
+    }
+
+    private ProjectCompletionItem CreateProjectCompletionItem(Project project)
+    {
+        if (project == null)
+        {
+            return new ProjectCompletionItem();
+        }
+
+        // Check completion criteria
+        var hasSro = project.SeniorResponsibleOfficers != null && project.SeniorResponsibleOfficers.Any();
+        var hasPmoContact = project.PmoContacts != null && project.PmoContacts.Any();
+        var hasDirectorate = project.Directorates != null && project.Directorates.Any();
+        var hasBudgetOwner = project.BudgetOwners != null && project.BudgetOwners.Any();
+        var hasRagStatus = !string.IsNullOrWhiteSpace(project.RagStatus);
+        var hasPriority = project.DeliveryPriorityId.HasValue;
+        var hasBusinessArea = !string.IsNullOrWhiteSpace(project.BusinessArea);
+        var hasPrimaryContact = project.PrimaryContactUserId.HasValue;
+        var hasActivityType = project.ActivityTypeLookupId.HasValue;
+        var hasSpendControl = project.IsSubjectToSpendControl.HasValue;
+
+        // Calculate completion percentage (10 fields total)
+        var completedCriteria = 0;
+        if (hasSro) completedCriteria++;
+        if (hasPmoContact) completedCriteria++;
+        if (hasDirectorate) completedCriteria++;
+        if (hasBudgetOwner) completedCriteria++;
+        if (hasRagStatus) completedCriteria++;
+        if (hasPriority) completedCriteria++;
+        if (hasBusinessArea) completedCriteria++;
+        if (hasPrimaryContact) completedCriteria++;
+        if (hasActivityType) completedCriteria++;
+        if (hasSpendControl) completedCriteria++;
+
+        var completionPercentage = (completedCriteria / 10.0) * 100;
+
+        // Extract names for collections
+        var sroNames = project.SeniorResponsibleOfficers?
+            .Where(sro => sro.User != null)
+            .Select(sro => sro.User.Name ?? sro.User.Email ?? "")
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList() ?? new List<string>();
+        
+        var sroUserIds = project.SeniorResponsibleOfficers?
+            .Where(sro => sro.User != null)
+            .Select(sro => sro.User.Id)
+            .ToList() ?? new List<int>();
+
+        var pmoNames = project.PmoContacts?
+            .Where(pmo => pmo.User != null)
+            .Select(pmo => pmo.User.Name ?? pmo.User.Email ?? "")
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList() ?? new List<string>();
+        
+        var pmoUserIds = project.PmoContacts?
+            .Where(pmo => pmo.User != null)
+            .Select(pmo => pmo.User.Id)
+            .ToList() ?? new List<int>();
+
+        var directorateNames = project.Directorates?
+            .Where(d => d.DirectorateLookup != null)
+            .Select(d => d.DirectorateLookup.Name ?? "")
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList() ?? new List<string>();
+        
+        var directorateLookupIds = project.Directorates?
+            .Where(d => d.DirectorateLookup != null)
+            .Select(d => d.DirectorateLookup.Id)
+            .ToList() ?? new List<int>();
+
+        var budgetOwnerNames = project.BudgetOwners?
+            .Where(bo => bo.BusinessAreaLookup != null)
+            .Select(bo => bo.BusinessAreaLookup.Name ?? "")
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList() ?? new List<string>();
+        
+        var budgetOwnerBusinessAreaLookupIds = project.BudgetOwners?
+            .Where(bo => bo.BusinessAreaLookup != null)
+            .Select(bo => bo.BusinessAreaLookup.Id)
+            .ToList() ?? new List<int>();
+
+        return new ProjectCompletionItem
+        {
+            ProjectId = project.Id,
+            ProjectCode = project.ProjectCode ?? "",
+            ProjectTitle = project.Title,
+            Phase = project.Phase,
+            BusinessArea = project.BusinessArea,
+            RagStatus = project.RagStatus,
+            PriorityName = project.DeliveryPriority?.Name,
+            PriorityId = project.DeliveryPriorityId,
+            PrimaryContactName = project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email,
+            PrimaryContactUserId = project.PrimaryContactUserId,
+            ActivityTypeName = project.ActivityTypeLookup?.Name,
+            ActivityTypeLookupId = project.ActivityTypeLookupId,
+            IsSubjectToSpendControl = project.IsSubjectToSpendControl,
+            SeniorResponsibleOfficerNames = sroNames,
+            SeniorResponsibleOfficerUserIds = sroUserIds,
+            PmoContactNames = pmoNames,
+            PmoContactUserIds = pmoUserIds,
+            DirectorateNames = directorateNames,
+            DirectorateLookupIds = directorateLookupIds,
+            BudgetOwnerNames = budgetOwnerNames,
+            BudgetOwnerBusinessAreaLookupIds = budgetOwnerBusinessAreaLookupIds,
+            HasSro = hasSro,
+            HasPmoContact = hasPmoContact,
+            HasDirectorate = hasDirectorate,
+            HasBudgetOwner = hasBudgetOwner,
+            HasRagStatus = hasRagStatus,
+            HasPriority = hasPriority,
+            HasBusinessArea = hasBusinessArea,
+            HasPrimaryContact = hasPrimaryContact,
+            HasActivityType = hasActivityType,
+            HasSpendControl = hasSpendControl,
+            CompletionPercentage = completionPercentage
+        };
+    }
+
     [HttpGet]
     public async Task<IActionResult> ExportFipsCompletion(bool includeAll = false)
     {
@@ -2573,11 +2783,23 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProjectPrimaryContact
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProjectPrimaryContact(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearContact = false)
+    public async Task<IActionResult> UpdateProjectPrimaryContact(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearContact = false, string? returnUrl = null)
     {
         try
         {
-            var project = await _context.Projects.FindAsync(projectId);
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null || project.IsDeleted)
             {
                 return Json(new { success = false, message = "Project not found." });
@@ -2618,15 +2840,20 @@ public class DdtReportsController : Controller
 
             if (IsAjaxRequest())
             {
+                var completionItem = CreateProjectCompletionItem(project);
                 return Json(new { 
                     success = true, 
                     message = successMessage,
-                    project = new { id = project.Id, primaryContactName = user?.Name ?? "", primaryContactEmail = user?.Email ?? "" }
+                    project = completionItem
                 });
             }
 
             TempData["SuccessMessage"] = successMessage;
-            return RedirectToAction("ManageProjectsData");
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
         }
         catch (Exception ex)
         {
@@ -2648,7 +2875,19 @@ public class DdtReportsController : Controller
     {
         try
         {
-            var project = await _context.Projects.FindAsync(projectId);
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null || project.IsDeleted)
             {
                 return Json(new { success = false, message = "Project not found." });
@@ -2683,10 +2922,11 @@ public class DdtReportsController : Controller
 
             if (IsAjaxRequest())
             {
+                var completionItem = CreateProjectCompletionItem(project);
                 return Json(new { 
                     success = true, 
                     message = successMessage,
-                    project = new { id = project.Id, businessArea = businessAreaName ?? "" }
+                    project = completionItem
                 });
             }
 
@@ -2695,7 +2935,7 @@ public class DdtReportsController : Controller
             {
                 return Redirect(returnUrl);
             }
-            return RedirectToAction("ManageProjectsData");
+            return RedirectToAction("DeliverablesCompletion");
         }
         catch (Exception ex)
         {
@@ -2760,6 +3000,216 @@ public class DdtReportsController : Controller
         }
     }
 
+    // POST: DdtReports/UpdateProjectRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectRagStatus(int projectId, string? ragStatus, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            project.RagStatus = ragStatus;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var ragStatusName = ragStatus ?? "None";
+            var successMessage = $"<strong>{projectTitle}</strong> - RAG status updated to <strong>{ragStatusName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project RAG status for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project RAG status.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectPriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectPriority(int projectId, int? deliveryPriorityId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            string? priorityName = null;
+            if (deliveryPriorityId.HasValue)
+            {
+                var priority = await _context.DeliveryPriorities.FindAsync(deliveryPriorityId.Value);
+                if (priority != null && priority.IsActive)
+                {
+                    project.DeliveryPriorityId = deliveryPriorityId.Value;
+                    priorityName = priority.Name;
+                }
+                else
+                {
+                    project.DeliveryPriorityId = null;
+                }
+            }
+            else
+            {
+                project.DeliveryPriorityId = null;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = priorityName != null
+                ? $"<strong>{projectTitle}</strong> - Priority updated to <strong>{priorityName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Priority cleared.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project priority for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project priority.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectSpendControl
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectSpendControl(int projectId, bool? isSubjectToSpendControl, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            project.IsSubjectToSpendControl = isSubjectToSpendControl;
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var spendControlText = isSubjectToSpendControl.HasValue 
+                ? (isSubjectToSpendControl.Value ? "Yes" : "No")
+                : "Not set";
+            var successMessage = $"<strong>{projectTitle}</strong> - Spend control updated to <strong>{spendControlText}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project spend control for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project spend control.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
     // POST: DdtReports/UpdateProjectActivityType
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -2767,7 +3217,19 @@ public class DdtReportsController : Controller
     {
         try
         {
-            var project = await _context.Projects.FindAsync(projectId);
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null || project.IsDeleted)
             {
                 return Json(new { success = false, message = "Project not found." });
@@ -2802,10 +3264,11 @@ public class DdtReportsController : Controller
 
             if (IsAjaxRequest())
             {
+                var completionItem = CreateProjectCompletionItem(project);
                 return Json(new { 
                     success = true, 
                     message = successMessage,
-                    project = new { id = project.Id, activityTypeName = activityTypeName ?? "" }
+                    project = completionItem
                 });
             }
 
@@ -2814,7 +3277,7 @@ public class DdtReportsController : Controller
             {
                 return Redirect(returnUrl);
             }
-            return RedirectToAction("ManageProjectsData");
+            return RedirectToAction("DeliverablesCompletion");
         }
         catch (Exception ex)
         {
@@ -2895,6 +3358,97 @@ public class DdtReportsController : Controller
             }
             TempData["ErrorMessage"] = errorMessage;
             return RedirectToAction("ManageProjectsData");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectTitle
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectTitle(int projectId, string title, string? returnUrl = null)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                var errorMessage = "Title is required.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+                return RedirectToAction("DeliverablesCompletion");
+            }
+
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                var errorMessage = "Project not found.";
+                if (IsAjaxRequest())
+                {
+                    return Json(new { success = false, message = errorMessage });
+                }
+                TempData["ErrorMessage"] = errorMessage;
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+                return RedirectToAction("DeliverablesCompletion");
+            }
+
+            var oldTitle = project.Title;
+            project.Title = title.Trim();
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var successMessage = $"<strong>{oldTitle}</strong> - Title updated to <strong>{project.Title}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project title for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project title.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
         }
     }
 }
