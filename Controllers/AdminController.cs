@@ -69,6 +69,25 @@ public class AdminController : Controller
         return View("~/Views/Admin/Index.cshtml");
     }
 
+    // GET: Admin/ChatbotConversations
+    public async Task<IActionResult> ChatbotConversations(int page = 1, int pageSize = 50)
+    {
+        var totalCount = await _context.ChatConversations.CountAsync();
+        var conversations = await _context.ChatConversations
+            .Include(c => c.User)
+            .OrderByDescending(c => c.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        ViewBag.TotalCount = totalCount;
+        ViewBag.Page = page;
+        ViewBag.PageSize = pageSize;
+        ViewBag.TotalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+
+        return View(conversations);
+    }
+
     // ==================== RAID SETTINGS ====================
 
     public async Task<IActionResult> RaidSettings(string? lookupKey = null, int? editId = null)
