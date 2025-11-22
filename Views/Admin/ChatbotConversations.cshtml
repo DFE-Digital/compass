@@ -1,0 +1,346 @@
+@model IEnumerable<Compass.Models.ChatConversation>
+@using System.Text.Json
+@using Compass.Models
+@{
+    ViewData["Title"] = "Chatbot Conversations";
+    var totalCount = ViewBag.TotalCount as int? ?? 0;
+    var page = ViewBag.Page as int? ?? 1;
+    var pageSize = ViewBag.PageSize as int? ?? 50;
+    var totalPages = ViewBag.TotalPages as int? ?? 1;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Admin")" style="color: #005ea5; text-decoration: none;">Administration</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Chatbot Conversations</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Chatbot Conversations</h1>
+                <p class="text-muted mb-0">View questions asked and help improve responses</p>
+            </div>
+            <div class="col-sm-6 text-right">
+                <span class="badge badge-info">Total: @totalCount conversations</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Conversations</h3>
+                <div class="card-tools">
+                    <form method="get" class="form-inline">
+                        <label class="mr-2">Page size:</label>
+                        <select name="pageSize" class="form-control form-control-sm mr-2" onchange="this.form.submit()">
+                            <option value="25" selected="@(pageSize == 25)">25</option>
+                            <option value="50" selected="@(pageSize == 50)">50</option>
+                            <option value="100" selected="@(pageSize == 100)">100</option>
+                        </select>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Started</th>
+                                <th>Ended</th>
+                                <th>Messages</th>
+                                <th>Questions Asked</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var conversation in Model)
+                            {
+                                var messages = new List<JsonElement>();
+                                var questions = new List<string>();
+                                try
+                                {
+                                    if (!string.IsNullOrEmpty(conversation.Messages))
+                                    {
+                                        var jsonDoc = JsonDocument.Parse(conversation.Messages);
+                                        if (jsonDoc.RootElement.ValueKind == JsonValueKind.Array)
+                                        {
+                                            messages = jsonDoc.RootElement.EnumerateArray().ToList();
+                                            questions = messages
+                                                .Where(m => m.TryGetProperty("type", out var type) && type.GetString() == "user")
+                                                .Select(m => m.TryGetProperty("content", out var content) ? content.GetString() ?? "" : "")
+                                                .Where(c => !string.IsNullOrWhiteSpace(c))
+                                                .ToList();
+                                        }
+                                    }
+                                }
+                                catch
+                                {
+                                    // Ignore deserialization errors
+                                }
+                                
+                                <tr>
+                                    <td>
+                                        <div>
+                                            @if (conversation.User != null)
+                                            {
+                                                <strong>@conversation.User.Name</strong>
+                                                <br><small class="text-muted">@conversation.User.Email</small>
+                                                @if (conversation.User.Role != UserRole.Visitor)
+                                                {
+                                                    <br><span class="badge badge-info">@conversation.User.Role</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <strong>@(conversation.UserName ?? conversation.UserEmail ?? "Unknown user")</strong>
+                                                @if (!string.IsNullOrEmpty(conversation.UserEmail))
+                                                {
+                                                    <br><small class="text-muted">@conversation.UserEmail</small>
+                                                }
+                                                @if (!string.IsNullOrEmpty(conversation.UserAzureObjectId))
+                                                {
+                                                    <br><small class="text-muted">Object ID: @conversation.UserAzureObjectId</small>
+                                                }
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <small>@conversation.StartedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                    </td>
+                                    <td>
+                                        @if (conversation.EndedAt.HasValue)
+                                        {
+                                            <small>@conversation.EndedAt.Value.ToString("dd MMM yyyy HH:mm")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warning">Active</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-info">@messages.Count messages</span>
+                                    </td>
+                                    <td>
+                                        @if (questions.Any())
+                                        {
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var question in questions.Take(3))
+                                                {
+                                                    <li class="mb-1">
+                                                        <small>"@(question.Length > 60 ? question.Substring(0, 60) + "..." : question)"</small>
+                                                    </li>
+                                                }
+                                                @if (questions.Count > 3)
+                                                {
+                                                    <li><small class="text-muted">+@(questions.Count - 3) more</small></li>
+                                                }
+                                            </ul>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No questions</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-primary" data-toggle="modal" data-target="#conversationModal@(conversation.Id)">
+                                            View details
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Conversation Detail Modal -->
+                                <div class="modal fade" id="conversationModal@(conversation.Id)" tabindex="-1" role="dialog">
+                                    <div class="modal-dialog modal-lg" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Conversation Details</h5>
+                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <dl class="row mb-3">
+                                                    @if (conversation.User != null)
+                                                    {
+                                                        <dt class="col-sm-3">User:</dt>
+                                                        <dd class="col-sm-9">
+                                                            <strong>@conversation.User.Name</strong>
+                                                            @if (conversation.User.Role != UserRole.Visitor)
+                                                            {
+                                                                <span class="badge badge-info ml-2">@conversation.User.Role</span>
+                                                            }
+                                                        </dd>
+                                                        
+                                                        <dt class="col-sm-3">Email:</dt>
+                                                        <dd class="col-sm-9">@conversation.User.Email</dd>
+                                                        
+                                                        <dt class="col-sm-3">User ID:</dt>
+                                                        <dd class="col-sm-9">@conversation.User.Id</dd>
+                                                        
+                                                        @if (!string.IsNullOrEmpty(conversation.User.AzureObjectId))
+                                                        {
+                                                            <dt class="col-sm-3">Azure Object ID:</dt>
+                                                            <dd class="col-sm-9">@conversation.User.AzureObjectId</dd>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <dt class="col-sm-3">User:</dt>
+                                                        <dd class="col-sm-9">@(conversation.UserName ?? conversation.UserEmail ?? "Unknown")</dd>
+                                                        
+                                                        <dt class="col-sm-3">Email:</dt>
+                                                        <dd class="col-sm-9">@(conversation.UserEmail ?? "Not provided")</dd>
+                                                        
+                                                        @if (!string.IsNullOrEmpty(conversation.UserAzureObjectId))
+                                                        {
+                                                            <dt class="col-sm-3">Azure Object ID:</dt>
+                                                            <dd class="col-sm-9">@conversation.UserAzureObjectId</dd>
+                                                        }
+                                                    }
+                                                    
+                                                    <dt class="col-sm-3">Started:</dt>
+                                                    <dd class="col-sm-9">@conversation.StartedAt.ToString("dd MMM yyyy HH:mm:ss")</dd>
+                                                    
+                                                    <dt class="col-sm-3">Ended:</dt>
+                                                    <dd class="col-sm-9">
+                                                        @if (conversation.EndedAt.HasValue)
+                                                        {
+                                                            @conversation.EndedAt.Value.ToString("dd MMM yyyy HH:mm:ss")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-warning">Still active</span>
+                                                        }
+                                                    </dd>
+                                                    
+                                                    <dt class="col-sm-3">Duration:</dt>
+                                                    <dd class="col-sm-9">
+                                                        @{
+                                                            var endTime = conversation.EndedAt ?? DateTime.UtcNow;
+                                                            var duration = endTime - conversation.StartedAt;
+                                                        }
+                                                        @if (duration.TotalMinutes < 1)
+                                                        {
+                                                            <text>@((int)duration.TotalSeconds) seconds</text>
+                                                        }
+                                                        else if (duration.TotalHours < 1)
+                                                        {
+                                                            <text>@((int)duration.TotalMinutes) minutes</text>
+                                                        }
+                                                        else
+                                                        {
+                                                            <text>@((int)duration.TotalHours)h @((int)duration.Minutes)m</text>
+                                                        }
+                                                    </dd>
+                                                </dl>
+
+                                                <h6>Conversation:</h6>
+                                                <div class="border rounded p-3" style="max-height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+                                                    @foreach (var msg in messages)
+                                                    {
+                                                        var msgType = msg.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                                                        var msgTitle = msg.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null;
+                                                        var msgContent = msg.TryGetProperty("content", out var contentProp) ? contentProp.GetString() ?? "" : "";
+                                                        var msgTimestamp = msg.TryGetProperty("timestamp", out var tsProp) ? tsProp.GetString() : null;
+                                                        
+                                                        <div class="mb-3 @(msgType == "user" ? "text-right" : "")">
+                                                            <div class="d-inline-block p-2 rounded @(msgType == "user" ? "bg-primary text-white" : "bg-white border")" style="max-width: 80%;">
+                                                                @if (msgType == "bot" && !string.IsNullOrEmpty(msgTitle))
+                                                                {
+                                                                    <strong>@msgTitle</strong>
+                                                                }
+                                                                <div>@Html.Raw(msgContent)</div>
+                                                                @if (!string.IsNullOrEmpty(msgTimestamp))
+                                                                {
+                                                                    <small class="text-muted d-block mt-1">
+                                                                        @try
+                                                                        {
+                                                                            @DateTime.Parse(msgTimestamp).ToString("HH:mm:ss")
+                                                                        }
+                                                                        catch
+                                                                        {
+                                                                            @msgTimestamp
+                                                                        }
+                                                                    </small>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                @if (questions.Any())
+                                                {
+                                                    <div class="mt-3">
+                                                        <h6>Questions Asked:</h6>
+                                                        <ul>
+                                                            @foreach (var question in questions)
+                                                            {
+                                                                <li>"@question"</li>
+                                                            }
+                                                        </ul>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-3 text-center text-muted">
+                        <p>No conversations found.</p>
+                    </div>
+                }
+            </div>
+            @if (totalPages > 1)
+            {
+                <div class="card-footer">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center mb-0">
+                            @if (page > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=@(page - 1)&pageSize=@pageSize">Previous</a>
+                                </li>
+                            }
+                            @for (int i = Math.Max(1, page - 2); i <= Math.Min(totalPages, page + 2); i++)
+                            {
+                                <li class="page-item @(i == page ? "active" : "")">
+                                    <a class="page-link" href="?page=@i&pageSize=@pageSize">@i</a>
+                                </li>
+                            }
+                            @if (page < totalPages)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=@(page + 1)&pageSize=@pageSize">Next</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+

@@ -165,6 +165,9 @@ public partial class CompassDbContext : DbContext
     public DbSet<RiskTier> RiskTiers { get; set; }
     public DbSet<ActionSource> ActionSources { get; set; }
     
+    // Help Chatbot
+    public DbSet<ChatConversation> ChatConversations { get; set; }
+    
     // Project Lookups
     public DbSet<BusinessAreaLookup> BusinessAreaLookups { get; set; }
     public DbSet<PhaseLookup> PhaseLookups { get; set; }
