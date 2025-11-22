@@ -1,5 +1,6 @@
 @model HomeDashboardViewModel
 @using Compass.Models
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 
 @{
     ViewData["Title"] = "COMPASS Dashboard";
@@ -146,6 +147,47 @@
             <div class="alert alert-danger alert-dismissible fade show">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
                 @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (Context.RequestServices.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().IsDevelopment())
+        {
+            var currentTestRole = Context.Request.Cookies["TestDashboardRole"];
+            var currentTestUserId = Context.Request.Cookies["TestDashboardUserId"];
+            var isTestMode = !string.IsNullOrEmpty(currentTestRole) || !string.IsNullOrEmpty(currentTestUserId);
+            <div class="alert alert-info alert-dismissible fade show mb-4" style="background-color: #e7f3ff; border-color: #b3d9ff;">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div class="flex-grow-1 mb-2 mb-md-0">
+                        <strong>🧪 Test mode:</strong> View dashboard as different user roles or users
+                        @if (isTestMode)
+                        {
+                            <span class="badge badge-warning ml-2">
+                                @if (!string.IsNullOrEmpty(currentTestRole))
+                                {
+                                    <span>Role: @currentTestRole</span>
+                                }
+                                @if (!string.IsNullOrEmpty(currentTestUserId))
+                                {
+                                    <span class="ml-1">User: @Model.CurrentUser.Name (@Model.CurrentUser.Email)</span>
+                                }
+                            </span>
+                        }
+                    </div>
+                    <form method="get" action="@Url.Action("Index", "Home")" class="d-inline-flex align-items-center flex-wrap ml-3">
+                        <select name="testRole" class="form-control form-control-sm mr-2 mb-2 mb-md-0" onchange="this.form.submit()" style="min-width: 200px;">
+                            <option value="clear" selected="@(string.IsNullOrEmpty(currentTestRole))">Normal view (no role)</option>
+                            <option value="PortfolioLead" selected="@(currentTestRole == "PortfolioLead")">Portfolio Lead / G6</option>
+                            <option value="HeadOfProfession" selected="@(currentTestRole == "HeadOfProfession")">Head of Profession</option>
+                            <option value="DeputyDirectorOrSro" selected="@(currentTestRole == "DeputyDirectorOrSro")">Deputy Director / SRO</option>
+                            <option value="CLevel" selected="@(currentTestRole == "CLevel")">C-Level</option>
+                            <option value="DirectorGeneral" selected="@(currentTestRole == "DirectorGeneral")">Director General</option>
+                            <option value="PermanentSecretary" selected="@(currentTestRole == "PermanentSecretary")">Permanent Secretary</option>
+                        </select>
+                        <select name="testUserId" id="testUserSelect" class="form-control form-control-sm" onchange="this.form.submit()" style="min-width: 250px;">
+                            <option value="0" selected="@(string.IsNullOrEmpty(currentTestUserId))">View as logged-in user</option>
+                        </select>
+                    </form>
+                </div>
             </div>
         }
 
@@ -907,6 +949,64 @@
             } else {
                 // DOM is already ready
                 setTimeout(initOversightProjectsTable, 100);
+            }
+
+            // ========================================
+            // Test User Selector (Development Only)
+            // ========================================
+            function loadTestUsers() {
+                var testUserSelect = document.getElementById('testUserSelect');
+                if (!testUserSelect) {
+                    return;
+                }
+
+                fetch('@Url.Action("GetTestUsers", "Home")')
+                    .then(function(response) {
+                        if (!response.ok) {
+                            // If the endpoint fails, just log and continue
+                            console.warn('Test users endpoint returned status:', response.status);
+                            return [];
+                        }
+                        return response.json();
+                    })
+                    .then(function(users) {
+                        if (!users || users.length === 0) {
+                            // If no users returned, add a disabled option
+                            var option = document.createElement('option');
+                            option.value = '0';
+                            option.textContent = 'No users available';
+                            option.disabled = true;
+                            testUserSelect.appendChild(option);
+                            return;
+                        }
+
+                        var currentTestUserId = '@(Context.Request.Cookies["TestDashboardUserId"])';
+                        users.forEach(function(user) {
+                            var option = document.createElement('option');
+                            option.value = user.id;
+                            option.textContent = user.name + ' (' + user.email + ')';
+                            if (currentTestUserId && currentTestUserId === user.id.toString()) {
+                                option.selected = true;
+                            }
+                            testUserSelect.appendChild(option);
+                        });
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading test users:', error);
+                        // Add a disabled option to indicate the error
+                        var option = document.createElement('option');
+                        option.value = '0';
+                        option.textContent = 'Unable to load users';
+                        option.disabled = true;
+                        testUserSelect.appendChild(option);
+                    });
+            }
+
+            // Load users when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadTestUsers);
+            } else {
+                loadTestUsers();
             }
         })();
     </script>

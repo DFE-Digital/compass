@@ -101,6 +101,11 @@ public partial class CompassDbContext : DbContext
     public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
     public DbSet<StatementTemplate> StatementTemplates { get; set; }
     
+    // Notifications
+    public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+    public DbSet<NotificationRule> NotificationRules { get; set; }
+    public DbSet<NotificationLog> NotificationLogs { get; set; }
+    
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
     public DbSet<EnterpriseReturn> EnterpriseReturns { get; set; }
@@ -200,6 +205,23 @@ public partial class CompassDbContext : DbContext
     public DbSet<DemandRequestSectionCompletion> DemandRequestSectionCompletions { get; set; }
     public DbSet<DemandRequestRiskType> DemandRequestRiskTypes { get; set; }
     public DbSet<TriageMeeting> TriageMeetings { get; set; }
+    
+    // DDT Standards Management
+    public DbSet<DdtStandard> DdtStandards { get; set; }
+    public DbSet<DdtStandardOwner> DdtStandardOwners { get; set; }
+    public DbSet<DdtStandardContact> DdtStandardContacts { get; set; }
+    public DbSet<DdtStandardPhase> DdtStandardPhases { get; set; }
+    public DbSet<DdtStandardValidationRule> DdtStandardValidationRules { get; set; }
+    public DbSet<DdtStandardVersion> DdtStandardVersions { get; set; }
+    public DbSet<DdtStandardCategory> DdtStandardCategories { get; set; }
+    public DbSet<DdtStandardSubCategory> DdtStandardSubCategories { get; set; }
+    public DbSet<DdtStandardComment> DdtStandardComments { get; set; }
+    public DbSet<DdtStandardProduct> DdtStandardProducts { get; set; }
+    
+    // Standards Configuration
+    public DbSet<StandardCategory> StandardCategories { get; set; }
+    public DbSet<StandardSubCategory> StandardSubCategories { get; set; }
+    public DbSet<StandardProduct> StandardProducts { get; set; }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
