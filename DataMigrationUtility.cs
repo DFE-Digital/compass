@@ -209,10 +209,16 @@ public class DataMigrationUtility
             using var transaction = await targetDb.Database.BeginTransactionAsync();
             try
             {
+                // Table names are from code, not user input, so safe to use ExecuteSqlRawAsync
+                // Suppressing EF1002 warning as table names cannot be parameterized
+                #pragma warning disable EF1002
                 await targetDb.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] ON");
+                #pragma warning restore EF1002
                 await targetSet.AddRangeAsync(items);
                 await targetDb.SaveChangesAsync();
+                #pragma warning disable EF1002
                 await targetDb.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] OFF");
+                #pragma warning restore EF1002
                 await transaction.CommitAsync();
             }
             catch
@@ -267,12 +273,20 @@ public class DataMigrationUtility
     
     private static async Task EnableIdentityInsert(CompassDbContext context, string tableName)
     {
+        // Table names are from code, not user input, so safe to use ExecuteSqlRawAsync
+        // Suppressing EF1002 warning as table names cannot be parameterized
+        #pragma warning disable EF1002
         await context.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] ON");
+        #pragma warning restore EF1002
     }
     
     private static async Task DisableIdentityInsert(CompassDbContext context, string tableName)
     {
+        // Table names are from code, not user input, so safe to use ExecuteSqlRawAsync
+        // Suppressing EF1002 warning as table names cannot be parameterized
+        #pragma warning disable EF1002
         await context.Database.ExecuteSqlRawAsync($"SET IDENTITY_INSERT [dbo].[{tableName}] OFF");
+        #pragma warning restore EF1002
     }
 }
 
