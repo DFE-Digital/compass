@@ -101,6 +101,11 @@ public partial class CompassDbContext : DbContext
     public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
     public DbSet<StatementTemplate> StatementTemplates { get; set; }
     
+    // Notifications
+    public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+    public DbSet<NotificationRule> NotificationRules { get; set; }
+    public DbSet<NotificationLog> NotificationLogs { get; set; }
+    
     // Enterprise reporting - Enterprise Metrics
     public DbSet<EnterpriseMetric> EnterpriseMetrics { get; set; }
     public DbSet<EnterpriseReturn> EnterpriseReturns { get; set; }

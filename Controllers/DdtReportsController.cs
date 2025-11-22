@@ -17,6 +17,7 @@ public class DdtReportsController : Controller
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
     private readonly IUserDirectoryService _userDirectoryService;
+    private readonly INotificationRuleService _notificationRuleService;
     private static readonly string[] UserGroupCategoryTypeNames =
     {
         "User group", "User Group", "User groups", "User Groups",
@@ -29,13 +30,14 @@ public class DdtReportsController : Controller
     private static readonly string[] DeliveryManagerRoleKeywords =
         { "delivery manager", "delivery_manager", "delivery-manager", "delivery lead", "delivery_lead", "delivery owner", "delivery_owner", "dm" };
 
-    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService)
+    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService, INotificationRuleService notificationRuleService)
     {
         _context = context;
         _logger = logger;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
         _userDirectoryService = userDirectoryService;
+        _notificationRuleService = notificationRuleService;
     }
 
     // GET: DdtReports/Index - Landing page
@@ -2828,9 +2830,35 @@ public class DdtReportsController : Controller
                 }
             }
 
+            var oldPrimaryContactUserId = project.PrimaryContactUserId;
             project.PrimaryContactUserId = clearContact ? null : user?.Id;
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
+            // Trigger notification for primary contact assignment
+            if (!clearContact && user != null && user.Id != oldPrimaryContactUserId)
+            {
+                try
+                {
+                    var templateVariables = new Dictionary<string, object>
+                    {
+                        { "project_title", project.Title },
+                        { "project_code", project.ProjectCode ?? string.Empty },
+                        { "contact_name", user.Name },
+                        { "contact_email", user.Email }
+                    };
+
+                    await _notificationRuleService.ProcessNotificationTriggerAsync(
+                        "primary_contact_assigned",
+                        projectId: projectId,
+                        userId: user.Id,
+                        templateVariables: templateVariables);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send primary contact assigned notification");
+                }
+            }
 
             var projectTitle = project.Title;
             var contactName = user != null ? $"{user.Name} ({user.Email})" : "None";
@@ -3025,9 +3053,35 @@ public class DdtReportsController : Controller
                 return Json(new { success = false, message = "Project not found." });
             }
 
+            var oldRagStatus = project.RagStatus;
             project.RagStatus = ragStatus;
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
+            // Trigger notification for RAG status change
+            if (oldRagStatus != ragStatus)
+            {
+                try
+                {
+                    var templateVariables = new Dictionary<string, object>
+                    {
+                        { "project_title", project.Title },
+                        { "project_code", project.ProjectCode ?? string.Empty },
+                        { "old_rag_status", oldRagStatus ?? "None" },
+                        { "new_rag_status", ragStatus ?? "None" }
+                    };
+
+                    await _notificationRuleService.ProcessNotificationTriggerAsync(
+                        "rag_status_changed",
+                        projectId: projectId,
+                        ragStatus: ragStatus,
+                        templateVariables: templateVariables);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send RAG status changed notification");
+                }
+            }
 
             var projectTitle = project.Title;
             var ragStatusName = ragStatus ?? "None";
@@ -3439,6 +3493,312 @@ public class DdtReportsController : Controller
         {
             _logger.LogError(ex, "Error updating project title for ProjectId {ProjectId}", projectId);
             var errorMessage = "An error occurred while updating the project title.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectSro
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectSro(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearSro = false, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            // Remove all existing SROs (user wants just 1)
+            var existingSros = project.SeniorResponsibleOfficers.ToList();
+            foreach (var sro in existingSros)
+            {
+                _context.ProjectSeniorResponsibleOfficers.Remove(sro);
+            }
+
+            User? user = null;
+            if (!clearSro && !string.IsNullOrWhiteSpace(entraUserObjectId))
+            {
+                // Try to parse as Guid and use EnsureUserAsync
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    try
+                    {
+                        user = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}, trying email lookup", entraUserObjectId);
+                    }
+                }
+                
+                // Fallback to email lookup if EnsureUserAsync failed or objectId wasn't a valid Guid
+                if (user == null && !string.IsNullOrWhiteSpace(entraUserEmail))
+                {
+                    user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == entraUserEmail.ToLower());
+                }
+                
+                if (user != null)
+                {
+                    project.SeniorResponsibleOfficers.Add(new ProjectSeniorResponsibleOfficer
+                    {
+                        ProjectId = project.Id,
+                        UserId = user.Id,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var sroName = clearSro ? "None" : (user?.Name ?? "Unknown");
+            var successMessage = clearSro
+                ? $"<strong>{projectTitle}</strong> - SRO cleared."
+                : $"<strong>{projectTitle}</strong> - SRO updated to <strong>{sroName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project SRO for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project SRO.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectPmoContact
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectPmoContact(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearPmoContact = false, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            // Remove all existing PMO contacts (user wants just 1)
+            var existingPmoContacts = project.PmoContacts.ToList();
+            foreach (var pmoContact in existingPmoContacts)
+            {
+                _context.ProjectPmoContacts.Remove(pmoContact);
+            }
+
+            User? user = null;
+            if (!clearPmoContact && !string.IsNullOrWhiteSpace(entraUserObjectId))
+            {
+                // Try to parse as Guid and use EnsureUserAsync
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    try
+                    {
+                        user = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}, trying email lookup", entraUserObjectId);
+                    }
+                }
+                
+                // Fallback to email lookup if EnsureUserAsync failed or objectId wasn't a valid Guid
+                if (user == null && !string.IsNullOrWhiteSpace(entraUserEmail))
+                {
+                    user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == entraUserEmail.ToLower());
+                }
+                
+                if (user != null)
+                {
+                    project.PmoContacts.Add(new ProjectPmoContact
+                    {
+                        ProjectId = project.Id,
+                        UserId = user.Id,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var pmoName = clearPmoContact ? "None" : (user?.Name ?? "Unknown");
+            var successMessage = clearPmoContact
+                ? $"<strong>{projectTitle}</strong> - PMO Contact cleared."
+                : $"<strong>{projectTitle}</strong> - PMO Contact updated to <strong>{pmoName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project PMO Contact for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project PMO Contact.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectDirectorate
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectDirectorate(int projectId, int? directorateLookupId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            // Remove all existing Directorates (user wants just 1)
+            var existingDirectorates = project.Directorates.ToList();
+            foreach (var directorate in existingDirectorates)
+            {
+                _context.ProjectDirectorates.Remove(directorate);
+            }
+
+            string? directorateName = null;
+            if (directorateLookupId.HasValue)
+            {
+                var directorate = await _context.DirectorateLookups.FindAsync(directorateLookupId.Value);
+                if (directorate != null && directorate.IsActive)
+                {
+                    project.Directorates.Add(new ProjectDirectorate
+                    {
+                        ProjectId = project.Id,
+                        DirectorateLookupId = directorateLookupId.Value,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    directorateName = directorate.Name;
+                }
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = directorateName != null
+                ? $"<strong>{projectTitle}</strong> - Directorate updated to <strong>{directorateName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Directorate cleared.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project Directorate for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project Directorate.";
             if (IsAjaxRequest())
             {
                 return Json(new { success = false, message = errorMessage });

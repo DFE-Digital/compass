@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using System.Collections.Generic;
 using System.Linq;
-using System.Globalization;
 using Compass.ViewModels;
 using Microsoft.Extensions.Configuration;
 
@@ -24,6 +23,7 @@ namespace Compass.Controllers
         private readonly IProductsApiService _productsApiService;
         private readonly IConfiguration _configuration;
         private readonly IProjectImportService _projectImportService;
+        private readonly INotificationRuleService _notificationRuleService;
         private const string OtherOptionValue = "__other__";
 
         private static readonly (string Value, string Label)[] MilestoneStatuses = new[]
@@ -88,13 +88,14 @@ namespace Compass.Controllers
             "High"
         };
 
-        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService, IConfiguration configuration, IProjectImportService projectImportService)
+        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService, IConfiguration configuration, IProjectImportService projectImportService, INotificationRuleService notificationRuleService)
         {
             _context = context;
             _logger = logger;
             _productsApiService = productsApiService;
             _configuration = configuration;
             _projectImportService = projectImportService;
+            _notificationRuleService = notificationRuleService;
         }
 
         // GET: Project
@@ -1134,6 +1135,29 @@ namespace Compass.Controllers
 
                 _context.ProjectContacts.Add(teamMember);
                 await _context.SaveChangesAsync();
+
+                // Trigger notification for team member added
+                try
+                {
+                    var templateVariables = new Dictionary<string, object>
+                    {
+                        { "project_title", project.Title },
+                        { "project_code", project.ProjectCode ?? string.Empty },
+                        { "user_name", normalizedName },
+                        { "user_email", contactEmail },
+                        { "role", input.Role.Trim() }
+                    };
+
+                    await _notificationRuleService.ProcessNotificationTriggerAsync(
+                        "team_member_added",
+                        projectId: input.ProjectId,
+                        userId: user.Id,
+                        templateVariables: templateVariables);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send team member added notification");
+                }
 
                 TempData["SuccessMessage"] = "Team member added successfully.";
                 return RedirectToAction(nameof(Details), controllerName: null, routeValues: new { id = input.ProjectId, tab = "team" }, fragment: "team");
@@ -2923,11 +2947,44 @@ namespace Compass.Controllers
                 }
 
                 // Update current project status
+                var oldRagStatus = project.RagStatus;
                 project.RagStatus = ragStatus;
                 project.RagJustification = ragJustification;
                 project.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
+
+                // Trigger notification for RAG status change
+                if (oldRagStatus != ragStatus)
+                {
+                    try
+                    {
+                        var projectWithContacts = await _context.Projects
+                            .Include(p => p.SeniorResponsibleOfficers)
+                                .ThenInclude(sro => sro.User)
+                            .Include(p => p.PrimaryContactUser)
+                            .FirstOrDefaultAsync(p => p.Id == projectId);
+
+                        var templateVariables = new Dictionary<string, object>
+                        {
+                            { "project_title", project.Title },
+                            { "project_code", project.ProjectCode ?? string.Empty },
+                            { "old_rag_status", oldRagStatus ?? "None" },
+                            { "new_rag_status", ragStatus },
+                            { "rag_justification", ragJustification ?? string.Empty }
+                        };
+
+                        await _notificationRuleService.ProcessNotificationTriggerAsync(
+                            "rag_status_changed",
+                            projectId: projectId,
+                            ragStatus: ragStatus,
+                            templateVariables: templateVariables);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send RAG status changed notification");
+                    }
+                }
 
                 TempData["SuccessMessage"] = "RAG status updated successfully.";
             }
@@ -3486,9 +3543,39 @@ namespace Compass.Controllers
                     }
                 }
 
+                var oldPrimaryContactUserId = project.PrimaryContactUserId;
                 project.PrimaryContactUserId = primaryContactUserId;
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
+
+                // Trigger notification for primary contact assignment
+                if (primaryContactUserId.HasValue && primaryContactUserId.Value != oldPrimaryContactUserId)
+                {
+                    try
+                    {
+                        var contact = await _context.Users.FindAsync(primaryContactUserId.Value);
+                        if (contact != null)
+                        {
+                            var templateVariables = new Dictionary<string, object>
+                            {
+                                { "project_title", project.Title },
+                                { "project_code", project.ProjectCode ?? string.Empty },
+                                { "contact_name", contact.Name },
+                                { "contact_email", contact.Email }
+                            };
+
+                            await _notificationRuleService.ProcessNotificationTriggerAsync(
+                                "primary_contact_assigned",
+                                projectId: id,
+                                userId: contact.Id,
+                                templateVariables: templateVariables);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send primary contact assigned notification");
+                    }
+                }
 
                 TempData["SuccessMessage"] = primaryContactUserId.HasValue
                     ? "Primary contact updated successfully."
@@ -4728,6 +4815,40 @@ namespace Compass.Controllers
 
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
+
+                // Trigger notification for SRO assignment
+                try
+                {
+                    var newlyAddedSros = await _context.ProjectSeniorResponsibleOfficers
+                        .Include(psro => psro.User)
+                        .Where(psro => psro.ProjectId == id && 
+                                      psro.CreatedAt >= DateTime.UtcNow.AddSeconds(-5))
+                        .ToListAsync();
+
+                    foreach (var sro in newlyAddedSros)
+                    {
+                        if (sro.User != null)
+                        {
+                            var templateVariables = new Dictionary<string, object>
+                            {
+                                { "project_title", project.Title },
+                                { "project_code", project.ProjectCode ?? string.Empty },
+                                { "sro_name", sro.User.Name },
+                                { "sro_email", sro.User.Email }
+                            };
+
+                            await _notificationRuleService.ProcessNotificationTriggerAsync(
+                                "sro_assigned",
+                                projectId: id,
+                                userId: sro.User.Id,
+                                templateVariables: templateVariables);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send SRO assigned notification");
+                }
 
                 TempData["SuccessMessage"] = "Senior Responsible Officers updated successfully.";
             }
