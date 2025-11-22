@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251122223817_FixChatConversationMessagesColumn")]
+    partial class FixChatConversationMessagesColumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1312,16 +1315,11 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
                     b.Property<string>("UserName")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("ChatConversations");
                 });
@@ -8604,15 +8602,6 @@ namespace Compass.Migrations
                     b.HasOne("Compass.Models.DdtStandard", null)
                         .WithMany("AuditLogs")
                         .HasForeignKey("DdtStandardId");
-                });
-
-            modelBuilder.Entity("Compass.Models.ChatConversation", b =>
-                {
-                    b.HasOne("Compass.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Compass.Models.Comment", b =>
