@@ -9,6 +9,7 @@ using Compass.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Hosting;
 
 namespace Compass.Controllers;
 
@@ -20,22 +21,25 @@ public class HomeController : Controller
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
     private readonly CompassDbContext _context;
+    private readonly IWebHostEnvironment _environment;
 
     public HomeController(
         ILogger<HomeController> logger, 
         ICmsApiService cmsApiService,
         IProductsApiService productsApiService,
         IReturnStatusService returnStatusService,
-        CompassDbContext context)
+        CompassDbContext context,
+        IWebHostEnvironment environment)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
         _context = context;
+        _environment = environment;
     }
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? testRole = null, int? testUserId = null)
     {
         try
         {
@@ -58,9 +62,77 @@ public class HomeController : Controller
                 return View(new HomeDashboardViewModel());
             }
 
-            var preference = await GetOrCreateDashboardPreference(currentUser);
+            // Handle test role switching (development only)
+            if (!string.IsNullOrEmpty(testRole) && _environment.IsDevelopment())
+            {
+                if (testRole == "clear")
+                {
+                    Response.Cookies.Delete("TestDashboardRole");
+                }
+                else
+                {
+                    Response.Cookies.Append("TestDashboardRole", testRole, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = false,
+                        SameSite = SameSiteMode.Lax,
+                        Expires = DateTimeOffset.UtcNow.AddDays(1)
+                    });
+                }
+                return RedirectToAction(nameof(Index));
+            }
 
-            var viewModel = await BuildDashboardViewModel(currentUser, userEmail, preference);
+            // Handle test user switching (development only)
+            if (testUserId.HasValue && _environment.IsDevelopment())
+            {
+                if (testUserId.Value == 0)
+                {
+                    // Clear test user
+                    Response.Cookies.Delete("TestDashboardUserId");
+                }
+                else
+                {
+                    // Verify the test user exists
+                    var testUser = await _context.Users.FindAsync(testUserId.Value);
+                    if (testUser != null)
+                    {
+                        Response.Cookies.Append("TestDashboardUserId", testUserId.Value.ToString(), new CookieOptions
+                        {
+                            HttpOnly = true,
+                            Secure = false,
+                            SameSite = SameSiteMode.Lax,
+                            Expires = DateTimeOffset.UtcNow.AddDays(1)
+                        });
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Test user not found.";
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Check for test user override (development only)
+            User? effectiveUser = currentUser;
+            string effectiveUserEmail = userEmail;
+            if (_environment.IsDevelopment() && Request.Cookies.TryGetValue("TestDashboardUserId", out var testUserIdValue))
+            {
+                if (int.TryParse(testUserIdValue, out var testUserIdInt) && testUserIdInt > 0)
+                {
+                    var testUser = await _context.Users.FindAsync(testUserIdInt);
+                    if (testUser != null)
+                    {
+                        effectiveUser = testUser;
+                        effectiveUserEmail = testUser.Email;
+                        _logger.LogInformation("Using test user: {TestUserEmail} (ID: {TestUserId}) instead of {ActualUserEmail}", 
+                            testUser.Email, testUserIdInt, userEmail);
+                    }
+                }
+            }
+
+            var preference = await GetOrCreateDashboardPreference(effectiveUser);
+
+            var viewModel = await BuildDashboardViewModel(effectiveUser, effectiveUserEmail, preference);
             return View(viewModel);
         }
         catch (Exception ex)
@@ -386,6 +458,16 @@ public class HomeController : Controller
             WatchedDeliverables = watchedDeliverablesCount
         };
 
+        // Check for test role override (development only)
+        LeadershipRoleTier? testRoleOverride = null;
+        if (_environment.IsDevelopment() && Request.Cookies.TryGetValue("TestDashboardRole", out var testRoleValue))
+        {
+            if (Enum.TryParse<LeadershipRoleTier>(testRoleValue, true, out var parsedRole))
+            {
+                testRoleOverride = parsedRole;
+            }
+        }
+
         var leadershipAssignments = await _context.UserBusinessAreaRoleAssignments
             .Where(a => a.UserId == currentUser.Id)
             .OrderByDescending(a => a.Role)
@@ -398,9 +480,28 @@ public class HomeController : Controller
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var highestRole = leadershipAssignments.Any()
+        // Use test role override if available, otherwise use actual role
+        var highestRole = testRoleOverride ?? (leadershipAssignments.Any()
             ? leadershipAssignments.Max(a => a.Role)
-            : (LeadershipRoleTier?)null;
+            : (LeadershipRoleTier?)null);
+        
+        // If test role is set, override business areas for business area leader roles
+        if (testRoleOverride.HasValue && 
+            (testRoleOverride == LeadershipRoleTier.DeputyDirectorOrSro || 
+             testRoleOverride == LeadershipRoleTier.HeadOfProfession ||
+             testRoleOverride == LeadershipRoleTier.PortfolioLead))
+        {
+            // For testing, use all business areas if none are assigned
+            if (!leadershipBusinessAreas.Any())
+            {
+                leadershipBusinessAreas = await _context.Projects
+                    .Where(p => !p.IsDeleted && !string.IsNullOrWhiteSpace(p.BusinessArea))
+                    .Select(p => p.BusinessArea!)
+                    .Distinct()
+                    .Take(3)
+                    .ToListAsync();
+            }
+        }
 
         var leadershipProjects = new List<Project>();
         var leadershipMetrics = new DashboardMetrics();
@@ -1063,6 +1164,33 @@ public class HomeController : Controller
     public IActionResult Roadmap()
     {
         return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetTestUsers()
+    {
+        // Only allow in development
+        if (!_environment.IsDevelopment())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var users = await _context.Users
+                .OrderBy(u => u.Name)
+                .Select(u => new { u.Id, u.Name, u.Email })
+                .Take(100) // Limit to first 100 users for performance
+                .ToListAsync();
+
+            return Json(users);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load test users - database may be unavailable");
+            // Return empty array instead of failing
+            return Json(Array.Empty<object>());
+        }
     }
 }
 

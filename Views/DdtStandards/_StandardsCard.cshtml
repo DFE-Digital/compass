@@ -1,0 +1,198 @@
+@model dynamic
+
+@{
+    var title = Model.Title as string ?? "Standards";
+    var standards = Model.Standards as IEnumerable<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
+    var showCreatedBy = Model.ShowCreatedBy as bool? ?? false;
+    var tableId = "standardsTable-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">@title (<span id="@(tableId)-count">@standards.Count()</span>)</h3>
+    </div>
+    <div class="card-body p-0">
+        @if (standards.Any())
+        {
+            <div class="table-responsive">
+                <table id="@tableId" class="table table-hover mb-0" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Title</th>
+                            @if (showCreatedBy)
+                            {
+                                <th style="width: 12%;">Created by</th>
+                            }
+                            <th style="width: 8%;">Version</th>
+                            <th style="width: 12%;">Categories</th>
+                            <th style="width: 12%;">Owners</th>
+                            <th style="width: 12%;">Contacts</th>
+                            <th style="width: 8%;">Updated</th>
+                            <th style="width: 8%;" class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var standard in standards)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>
+                                        @if (standard.Stage == "Draft")
+                                        {
+                                            <a href="@Url.Action("Create", "DdtStandards", new { id = standard.Id })">@standard.Title</a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })">@standard.Title</a>
+                                        }
+                                    </strong>
+                                    @if (!string.IsNullOrWhiteSpace(standard.Summary))
+                                    {
+                                        <br />
+                                        <small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
+                                    }
+                                </td>
+                                @if (showCreatedBy)
+                                {
+                                    <td>
+                                        @(standard.CreatorUser?.Name ?? "Unknown")
+                                    </td>
+                                }
+                                <td>@standard.Version</td>
+                                <td>
+                                    @if (standard.Categories.Any())
+                                    {
+                                        @foreach (var cat in standard.Categories.Take(2))
+                                        {
+                                            <span class="badge badge-light">@cat.Category.Name</span>
+                                        }
+                                        @if (standard.Categories.Count > 2)
+                                        {
+                                            <span class="badge badge-light">+@(standard.Categories.Count - 2)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (standard.Owners.Any())
+                                    {
+                                        @foreach (var owner in standard.Owners.Take(2))
+                                        {
+                                            <div>@owner.User.Name</div>
+                                        }
+                                        @if (standard.Owners.Count > 2)
+                                        {
+                                            <small class="text-muted">+@(standard.Owners.Count - 2) more</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (standard.Contacts.Any())
+                                    {
+                                        @foreach (var contact in standard.Contacts.Take(2))
+                                        {
+                                            <div>@contact.User.Name</div>
+                                        }
+                                        @if (standard.Contacts.Count > 2)
+                                        {
+                                            <small class="text-muted">+@(standard.Contacts.Count - 2) more</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <small>@standard.UpdatedAt.ToString("dd MMM yyyy")</small>
+                                </td>
+                                <td class="text-right">
+                                    @if (standard.Stage == "Draft")
+                                    {
+                                        <button type="button" class="btn btn-danger btn-sm" title="Delete" data-toggle="modal" data-target="#deleteModal-@standard.Id">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                            
+                            @if (standard.Stage == "Draft")
+                            {
+                                <!-- Delete Confirmation Modal -->
+                                <div class="modal fade" id="deleteModal-@standard.Id" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel-@standard.Id" aria-hidden="true">
+                                    <div class="modal-dialog" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="deleteModalLabel-@standard.Id">Delete Draft Standard</h5>
+                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to delete <strong>@standard.Title</strong>?</p>
+                                                <p class="text-danger">This action cannot be undone. The standard will be permanently deleted.</p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                <form asp-action="Delete" asp-controller="DdtStandards" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@standard.Id" />
+                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="p-4 text-center">
+                <p class="text-muted">No standards found.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@if (standards.Any())
+{
+    <script>
+        $(document).ready(function() {
+            $('#@tableId').DataTable({
+                "order": [[@(showCreatedBy ? 6 : 5), "desc"]], // Sort by Updated column (descending)
+                "pageLength": 25,
+                "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                "columnDefs": [
+                    { "orderable": true, "targets": "_all" },
+                    { "orderable": false, "targets": @(showCreatedBy ? 7 : 6) } // Actions column
+                ],
+                "language": {
+                    "search": "Search:",
+                    "lengthMenu": "Show _MENU_ entries",
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                    "infoEmpty": "Showing 0 to 0 of 0 entries",
+                    "infoFiltered": "(filtered from _MAX_ total entries)",
+                    "zeroRecords": "No matching records found"
+                },
+                "drawCallback": function(settings) {
+                    // Update count after filtering
+                    var api = this.api();
+                    var count = api.page.info().recordsDisplay;
+                    $('#@(tableId)-count').text(count);
+                }
+            });
+        });
+    </script>
+}
+
