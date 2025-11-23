@@ -1,0 +1,669 @@
+@{
+    ViewData["Title"] = "Delivery Analysis";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Analysis")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Analysis</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Delivery Analysis</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Delivery Analysis</h1>
+                <p class="text-muted mb-0">Identify risky delivery items, potential risks, and issues across all active projects</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Risky Projects</div>
+                        <div class="summary-value">@ViewBag.RiskyProjects.Count</div>
+                        <div class="summary-subtext">Projects with multiple risk factors</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">High-Risk Items</div>
+                        <div class="summary-value">@ViewBag.HighRisks.Count</div>
+                        <div class="summary-subtext">Risks with score ≥ 12</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Critical Issues</div>
+                        <div class="summary-value">@ViewBag.CriticalIssues.Count</div>
+                        <div class="summary-subtext">High or critical severity issues</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Overdue Milestones</div>
+                        <div class="summary-value">@ViewBag.OverdueMilestones.Count</div>
+                        <div class="summary-subtext">Milestones past due date</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .summary-card {
+                border: 1px solid #edf2f7;
+            }
+
+            .summary-card .card-body {
+                padding: 1.25rem;
+            }
+
+            .summary-label {
+                font-size: 0.9rem;
+                color: #475467;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+                margin-bottom: .25rem;
+            }
+
+            .summary-value {
+                font-size: 2rem;
+                font-weight: 600;
+                color: #0c1d3e;
+                line-height: 1.1;
+            }
+
+            .summary-subtext {
+                margin-top: .25rem;
+                color: #98a2b3;
+                font-size: 0.85rem;
+            }
+        </style>
+
+        <!-- Risky Projects -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Risky Projects</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.RiskyProjects != null && ViewBag.RiskyProjects.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>RAG Status</th>
+                                            <th>Delivery Date</th>
+                                            <th>Risk Factors</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in ViewBag.RiskyProjects)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@item.Project.Title</strong><br>
+                                                    <small class="text-muted">DFE-DDT-@item.Project.Id</small>
+                                                </td>
+                                                <td>
+                                                    @if (item.Project.RagStatus == "Red")
+                                                    {
+                                                        <span class="badge badge-danger">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber-Red")
+                                                    {
+                                                        <span class="badge badge-warning">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber")
+                                                    {
+                                                        <span class="badge badge-warning">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber-Green")
+                                                    {
+                                                        <span class="badge badge-info">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Green")
+                                                    {
+                                                        <span class="badge badge-success">@item.Project.RagStatus</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">@item.Project.RagStatus</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @try
+                                                    {
+                                                        var targetDate = item.TargetDeliveryDate;
+                                                        if (targetDate != null)
+                                                        {
+                                                            DateTime? dateValue = null;
+                                                            if (targetDate is DateTime dt)
+                                                            {
+                                                                if (dt != default(DateTime))
+                                                                {
+                                                                    dateValue = dt;
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                var nullableDt = targetDate as DateTime?;
+                                                                if (nullableDt.HasValue)
+                                                                {
+                                                                    dateValue = nullableDt;
+                                                                }
+                                                            }
+                                                            
+                                                            if (dateValue.HasValue)
+                                                            {
+                                                                @dateValue.Value.ToString("dd MMM yyyy")
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">Not set</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not set</span>
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <ul class="mb-0 pl-3">
+                                                        @foreach (var factor in item.RiskFactors)
+                                                        {
+                                                            <li>@factor</li>
+                                                        }
+                                                    </ul>
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = item.Project.Id })" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye mr-1"></i> View
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted p-3 mb-0">No risky projects identified.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- High-Risk Items -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">High-Risk Items</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.HighRisks != null && ViewBag.HighRisks.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Risk</th>
+                                            <th>Project</th>
+                                            <th>Risk Score</th>
+                                            <th>Impact</th>
+                                            <th>Likelihood</th>
+                                            <th>Owner</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var risk in ViewBag.HighRisks)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@risk.Title</strong>
+                                                    @if (!string.IsNullOrEmpty(risk.Description))
+                                                    {
+                                                        <br><small class="text-muted">@(risk.Description.Length > 100 ? risk.Description.Substring(0, 100) + "..." : risk.Description)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (risk.Project != null)
+                                                    {
+                                                        <a href="@Url.Action("Details", "Project", new { id = risk.Project.Id })">@risk.Project.Title</a><br>
+                                                        <small class="text-muted">DFE-DDT-@risk.Project.Id</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No project</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(risk.RiskScore >= 20 ? "danger" : "warning")">@risk.RiskScore</span>
+                                                </td>
+                                                <td>
+                                                    @{
+                                                        var impactBadgeClass = risk.ImpactRating switch
+                                                        {
+                                                            1 => "badge-success",
+                                                            2 => "badge-info",
+                                                            3 => "badge-warning",
+                                                            4 => "badge-warning",
+                                                            5 => "badge-danger",
+                                                            _ => "badge-secondary"
+                                                        };
+                                                    }
+                                                    <span class="badge @impactBadgeClass">@risk.ImpactRating</span>
+                                                </td>
+                                                <td>
+                                                    @{
+                                                        var likelihoodBadgeClass = risk.LikelihoodRating switch
+                                                        {
+                                                            1 => "badge-success",
+                                                            2 => "badge-info",
+                                                            3 => "badge-warning",
+                                                            4 => "badge-warning",
+                                                            5 => "badge-danger",
+                                                            _ => "badge-secondary"
+                                                        };
+                                                    }
+                                                    <span class="badge @likelihoodBadgeClass">@risk.LikelihoodRating</span>
+                                                </td>
+                                                <td>
+                                                    @if (risk.OwnerUser != null)
+                                                    {
+                                                        @risk.OwnerUser.Name
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(risk.OwnerEmail))
+                                                    {
+                                                        @risk.OwnerEmail
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Unassigned</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@risk.Status</span>
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Risk", new { id = risk.Id })" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye mr-1"></i> View
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted p-3 mb-0">No high-risk items found.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Critical Issues -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Critical Issues</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.CriticalIssues != null && ViewBag.CriticalIssues.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Issue</th>
+                                            <th>Project</th>
+                                            <th>Severity</th>
+                                            <th>Priority</th>
+                                            <th>Detected</th>
+                                            <th>Target Resolution</th>
+                                            <th>Owner</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var issue in ViewBag.CriticalIssues)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@issue.Title</strong>
+                                                    @if (!string.IsNullOrEmpty(issue.Description))
+                                                    {
+                                                        <br><small class="text-muted">@(issue.Description.Length > 100 ? issue.Description.Substring(0, 100) + "..." : issue.Description)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.Project != null)
+                                                    {
+                                                        <a href="@Url.Action("Details", "Project", new { id = issue.Project.Id })">@issue.Project.Title</a><br>
+                                                        <small class="text-muted">DFE-DDT-@issue.Project.Id</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No project</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.Severity == "critical")
+                                                    {
+                                                        <span class="badge badge-danger">Critical</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-warning">High</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(issue.Priority))
+                                                    {
+                                                        <span class="badge badge-info">@issue.Priority</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>@issue.DetectedDate.ToString("dd MMM yyyy")</td>
+                                                <td>
+                                                    @try
+                                                    {
+                                                        var targetResDate = issue.TargetResolutionDate;
+                                                        if (targetResDate != null)
+                                                        {
+                                                            var dateValue = targetResDate is DateTime? ? ((DateTime?)targetResDate).Value : (DateTime)targetResDate;
+                                                            @dateValue.ToString("dd MMM yyyy")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not set</span>
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.OwnerUser != null)
+                                                    {
+                                                        @issue.OwnerUser.Name
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(issue.OwnerEmail))
+                                                    {
+                                                        @issue.OwnerEmail
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Unassigned</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@issue.Status</span>
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Issue", new { id = issue.Id })" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye mr-1"></i> View
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted p-3 mb-0">No critical issues found.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overdue Milestones -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Overdue Milestones</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.OverdueMilestones != null && ViewBag.OverdueMilestones.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Due Date</th>
+                                            <th>Days Overdue</th>
+                                            <th>Status</th>
+                                            <th>Progress</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var milestone in ViewBag.OverdueMilestones)
+                                        {
+                                            var daysOverdue = (DateTime.Today - milestone.DueDate).Days;
+                                            <tr>
+                                                <td>
+                                                    <strong><a href="/api/Project/MilestoneDetails/@milestone.Id">@milestone.Name</a></strong>
+                                                    @if (!string.IsNullOrEmpty(milestone.Description))
+                                                    {
+                                                        <br><small class="text-muted">@(milestone.Description.Length > 100 ? milestone.Description.Substring(0, 100) + "..." : milestone.Description)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (milestone.Project != null)
+                                                    {
+                                                        <a href="@Url.Action("Details", "Project", new { id = milestone.Project.Id })">@milestone.Project.Title</a><br>
+                                                        <small class="text-muted">DFE-DDT-@milestone.Project.Id</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No project</span>
+                                                    }
+                                                </td>
+                                                <td>@milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                                <td>
+                                                    <span class="badge badge-danger">@daysOverdue days</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@milestone.Status</span>
+                                                </td>
+                                                <td>
+                                                    @{
+                                                        var progress = milestone.ProgressPercent;
+                                                    }
+                                                    @if (progress != null)
+                                                    {
+                                                        <div class="progress" style="height: 20px;">
+                                                            <div class="progress-bar" role="progressbar" style="width: @progress%" aria-valuenow="@progress" aria-valuemin="0" aria-valuemax="100">
+                                                                @progress%
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted p-3 mb-0">No overdue milestones found.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Potential Risks -->
+        @if (ViewBag.PotentialRisks != null && ViewBag.PotentialRisks.Count > 0)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Potential Risks</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>RAG Status</th>
+                                            <th>Delivery Date</th>
+                                            <th>Risk Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in ViewBag.PotentialRisks)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong><a href="@Url.Action("Details", "Project", new { id = item.Project.Id })">@item.Project.Title</a></strong><br>
+                                                    <small class="text-muted">DFE-DDT-@item.Project.Id</small>
+                                                </td>
+                                                <td>
+                                                    @if (item.Project.RagStatus == "Red")
+                                                    {
+                                                        <span class="badge badge-danger">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber-Red")
+                                                    {
+                                                        <span class="badge badge-warning">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber")
+                                                    {
+                                                        <span class="badge badge-warning">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Amber-Green")
+                                                    {
+                                                        <span class="badge badge-info">@item.Project.RagStatus</span>
+                                                    }
+                                                    else if (item.Project.RagStatus == "Green")
+                                                    {
+                                                        <span class="badge badge-success">@item.Project.RagStatus</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">@item.Project.RagStatus</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @try
+                                                    {
+                                                        var targetDate = item.TargetDeliveryDate;
+                                                        if (targetDate != null)
+                                                        {
+                                                            DateTime? dateValue = null;
+                                                            if (targetDate is DateTime dt)
+                                                            {
+                                                                if (dt != default(DateTime))
+                                                                {
+                                                                    dateValue = dt;
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                var nullableDt = targetDate as DateTime?;
+                                                                if (nullableDt.HasValue)
+                                                                {
+                                                                    dateValue = nullableDt;
+                                                                }
+                                                            }
+                                                            
+                                                            if (dateValue.HasValue)
+                                                            {
+                                                                @dateValue.Value.ToString("dd MMM yyyy")
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">Not set</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not set</span>
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        <span class="text-muted">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>@item.RiskReason</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

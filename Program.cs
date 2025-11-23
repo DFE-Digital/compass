@@ -246,6 +246,26 @@ builder.Services.AddHttpClient<IProductsApiService, ProductsApiService>(client =
 // Register HttpClient for GovernmentDepartmentController
 builder.Services.AddHttpClient<Compass.Controllers.GovernmentDepartmentController>();
 
+// Register Service Assessment API service
+builder.Services.AddHttpClient<IServiceAssessmentApiService, ServiceAssessmentApiService>((client, sp) =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var logger = sp.GetRequiredService<ILogger<ServiceAssessmentApiService>>();
+    var baseUrl = configuration["ServiceAssessments:ApiUrl"] ?? "https://service-assessments.education.gov.uk/api/";
+    
+    // Ensure base URL ends with /
+    if (!baseUrl.EndsWith("/"))
+    {
+        baseUrl += "/";
+    }
+    
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("User-Agent", "COMPASS-Analysis/1.0");
+    
+    return new ServiceAssessmentApiService(client, configuration, logger);
+});
+
 // Register services
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
 builder.Services.AddScoped<IPerformanceReportingEligibilityService, PerformanceReportingEligibilityService>();
