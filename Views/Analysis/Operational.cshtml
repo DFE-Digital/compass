@@ -1,0 +1,344 @@
+@{
+    ViewData["Title"] = "Operational Analysis";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Analysis")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Analysis</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Operational Analysis</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Operational Analysis</h1>
+                <p class="text-muted mb-0">Identify product standards compliance issues and performance statistics problems</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Compliance Issues</div>
+                        <div class="summary-value">@ViewBag.ComplianceIssues.Count</div>
+                        <div class="summary-subtext">Products with standards issues</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Performance Issues</div>
+                        <div class="summary-value">@ViewBag.PerformanceIssues.Count</div>
+                        <div class="summary-subtext">Missing or incomplete returns</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
+                        <div class="summary-label">Products Tracked</div>
+                        <div class="summary-value">@ViewBag.PerformanceTrends.Count</div>
+                        <div class="summary-subtext">Products with performance data</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .summary-card {
+                border: 1px solid #edf2f7;
+            }
+
+            .summary-card .card-body {
+                padding: 1.25rem;
+            }
+
+            .summary-label {
+                font-size: 0.9rem;
+                color: #475467;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+                margin-bottom: .25rem;
+            }
+
+            .summary-value {
+                font-size: 2rem;
+                font-weight: 600;
+                color: #0c1d3e;
+                line-height: 1.1;
+            }
+
+            .summary-subtext {
+                margin-top: .25rem;
+                color: #98a2b3;
+                font-size: 0.85rem;
+            }
+        </style>
+
+        <!-- Standards Compliance Issues -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Standards Compliance Issues</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.ComplianceIssues != null && ViewBag.ComplianceIssues.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Issue</th>
+                                            <th>Standards Affected</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic issue in ViewBag.ComplianceIssues)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@issue.ProductTitle</strong><br>
+                                                    <small class="text-muted">ID: @issue.ProductId</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-warning">@issue.Issue</span>
+                                                </td>
+                                                <td>
+                                                    @if (issue.Standards != null)
+                                                    {
+                                                        <ul class="mb-0">
+                                                            @foreach (string standard in issue.Standards)
+                                                            {
+                                                                <li>@standard</li>
+                                                            }
+                                                        </ul>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Not specified</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Index", "Products")" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye mr-1"></i> View Product
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No standards compliance issues identified.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Statistics Issues -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Performance Statistics Issues</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.PerformanceIssues != null && ViewBag.PerformanceIssues.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Issue</th>
+                                            <th>Reporting Period</th>
+                                            <th>Details</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic issue in ViewBag.PerformanceIssues)
+                                        {
+                                            var fipsId = issue.ProductId?.ToString() ?? "";
+                                            var productUrl = !string.IsNullOrEmpty(fipsId) ? $"/product/{fipsId}" : "#";
+                                            
+                                            <tr>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(fipsId))
+                                                    {
+                                                        <a href="@productUrl" target="_blank" rel="noopener noreferrer" style="color: #005ea5; text-decoration: none;">
+                                                            <strong>@issue.ProductTitle</strong>
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <strong>@issue.ProductTitle</strong>
+                                                    }
+                                                    <br>
+                                                    <small class="text-muted">@fipsId</small>
+                                                </td>
+                                                <td>
+                                                    @if (issue.Issue.ToString() == "No recent performance returns")
+                                                    {
+                                                        <span class="badge badge-danger">Missing Returns</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-warning">Incomplete Return</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.ReportingPeriod != null)
+                                                    {
+                                                        @issue.ReportingPeriod
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">N/A</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @try
+                                                    {
+                                                        var incompleteMetrics = issue.IncompleteMetrics;
+                                                        if (incompleteMetrics != null)
+                                                        {
+                                                            <span>@incompleteMetrics incomplete metric(s)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">No recent returns</span>
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        <span class="text-muted">No recent returns</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (issue.Status != null)
+                                                    {
+                                                        @if (issue.Status.ToString() == "Missing")
+                                                        {
+                                                            <span class="badge badge-danger">Missing</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-warning">@issue.Status</span>
+                                                        }
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No performance statistics issues identified.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Trends -->
+        @if (ViewBag.PerformanceTrends != null && ViewBag.PerformanceTrends.Count > 0)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Performance Trends</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <p class="text-muted p-3 mb-0">Products with performance data tracked over time</p>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Returns Count</th>
+                                            <th>Latest Period</th>
+                                            <th>Trend</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic trend in ViewBag.PerformanceTrends)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@trend.ProductTitle</strong><br>
+                                                    <small class="text-muted">ID: @trend.ProductId</small>
+                                                </td>
+                                                <td>@trend.Returns.Count</td>
+                                                <td>
+                                                    @if (trend.Returns.Count > 0)
+                                                    {
+                                                        var latest = trend.Returns[0];
+                                                        @($"{latest.Year}-{latest.Month:D2}")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">N/A</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-info">@trend.Trend</span>
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Index", "Products")" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye mr-1"></i> View Product
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

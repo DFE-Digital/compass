@@ -2122,6 +2122,7 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<TriageMeeting>()
             .Property(tm => tm.Title)
             .HasMaxLength(150);
+
     }
 }
 
