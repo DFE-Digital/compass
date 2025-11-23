@@ -73,7 +73,7 @@ namespace Compass.Migrations
                     b.HasIndex("Purpose", "EmailAddress")
                         .IsUnique();
 
-                    b.ToTable("AccessibilityEmailConfigurations");
+                    b.ToTable("AccessibilityEmailConfigurations", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AccessibilityIssue", b =>
@@ -167,7 +167,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProductAccessibilityId");
 
-                    b.ToTable("AccessibilityIssues");
+                    b.ToTable("AccessibilityIssues", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AccessibilityRetestRequest", b =>
@@ -238,7 +238,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RequestedAt");
 
-                    b.ToTable("AccessibilityRetestRequests");
+                    b.ToTable("AccessibilityRetestRequests", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Action", b =>
@@ -505,7 +505,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("Status", "Priority");
 
-                    b.ToTable("Actions");
+                    b.ToTable("Actions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionCategory", b =>
@@ -544,7 +544,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionCategories");
+                    b.ToTable("ActionCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionDecision", b =>
@@ -559,7 +559,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DecisionId");
 
-                    b.ToTable("ActionDecisions");
+                    b.ToTable("ActionDecisions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionEscalationThreshold", b =>
@@ -598,7 +598,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionEscalationThresholds");
+                    b.ToTable("ActionEscalationThresholds", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionImpactLevel", b =>
@@ -637,7 +637,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionImpactLevels");
+                    b.ToTable("ActionImpactLevels", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionPriority", b =>
@@ -676,7 +676,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionPriorities");
+                    b.ToTable("ActionPriorities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionReminderFrequency", b =>
@@ -715,7 +715,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionReminderFrequencies");
+                    b.ToTable("ActionReminderFrequencies", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionSource", b =>
@@ -765,7 +765,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("ActionSources");
+                    b.ToTable("ActionSources", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionStatus", b =>
@@ -804,7 +804,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionStatuses");
+                    b.ToTable("ActionStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionTag", b =>
@@ -827,7 +827,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ActionId");
 
-                    b.ToTable("ActionTags");
+                    b.ToTable("ActionTags", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActionType", b =>
@@ -866,7 +866,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ActionTypes");
+                    b.ToTable("ActionTypes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ActivityTypeLookup", b =>
@@ -905,7 +905,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("ActivityTypeLookups");
+                    b.ToTable("ActivityTypeLookups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ApiRequestLog", b =>
@@ -973,7 +973,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RequestTimestamp");
 
-                    b.ToTable("ApiRequestLogs");
+                    b.ToTable("ApiRequestLogs", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ApiToken", b =>
@@ -1026,7 +1026,7 @@ namespace Compass.Migrations
                     b.HasIndex("Token")
                         .IsUnique();
 
-                    b.ToTable("ApiTokens");
+                    b.ToTable("ApiTokens", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ApiTokenPermission", b =>
@@ -1062,7 +1062,7 @@ namespace Compass.Migrations
                     b.HasIndex("ApiTokenId", "Resource")
                         .IsUnique();
 
-                    b.ToTable("ApiTokenPermissions");
+                    b.ToTable("ApiTokenPermissions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AssessmentCriteriaResponse", b =>
@@ -1110,7 +1110,7 @@ namespace Compass.Migrations
                     b.HasIndex("AssessmentId", "FunctionalStandardId", "ThemeId", "PracticeAreaId", "CriteriaCode")
                         .IsUnique();
 
-                    b.ToTable("AssessmentCriteriaResponses");
+                    b.ToTable("AssessmentCriteriaResponses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AuditHistory", b =>
@@ -1169,7 +1169,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProductAccessibilityId");
 
-                    b.ToTable("AuditHistories");
+                    b.ToTable("AuditHistories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AuditLog", b =>
@@ -1235,7 +1235,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DdtStandardId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.BusinessAreaLookup", b =>
@@ -1276,7 +1276,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("BusinessAreaLookups");
+                    b.ToTable("BusinessAreaLookups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ChatConversation", b =>
@@ -1323,7 +1323,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ChatConversations");
+                    b.ToTable("ChatConversations", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Comment", b =>
@@ -1363,7 +1363,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Comments");
+                    b.ToTable("Comments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ContactMethod", b =>
@@ -1407,7 +1407,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProductAccessibilityId");
 
-                    b.ToTable("ContactMethods");
+                    b.ToTable("ContactMethods", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Criterion", b =>
@@ -1448,7 +1448,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Criteria");
+                    b.ToTable("Criteria", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandard", b =>
@@ -1563,7 +1563,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("CreatorUserId");
 
-                    b.ToTable("DdtStandards");
+                    b.ToTable("DdtStandards", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardCategory", b =>
@@ -1592,7 +1592,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DdtStandardId");
 
-                    b.ToTable("DdtStandardCategories");
+                    b.ToTable("DdtStandardCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardComment", b =>
@@ -1650,7 +1650,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DdtStandardComments");
+                    b.ToTable("DdtStandardComments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardContact", b =>
@@ -1679,7 +1679,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DdtStandardContacts");
+                    b.ToTable("DdtStandardContacts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardOwner", b =>
@@ -1712,7 +1712,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DdtStandardOwners");
+                    b.ToTable("DdtStandardOwners", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardPhase", b =>
@@ -1744,7 +1744,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("PhaseLookupId");
 
-                    b.ToTable("DdtStandardPhases");
+                    b.ToTable("DdtStandardPhases", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardProduct", b =>
@@ -1782,7 +1782,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("StandardProductId");
 
-                    b.ToTable("DdtStandardProducts");
+                    b.ToTable("DdtStandardProducts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardSubCategory", b =>
@@ -1811,7 +1811,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SubCategoryId");
 
-                    b.ToTable("DdtStandardSubCategories");
+                    b.ToTable("DdtStandardSubCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardValidationRule", b =>
@@ -1882,7 +1882,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DdtStandardId");
 
-                    b.ToTable("DdtStandardValidationRules");
+                    b.ToTable("DdtStandardValidationRules", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandardVersion", b =>
@@ -1949,7 +1949,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("PublishedByUserId");
 
-                    b.ToTable("DdtStandardVersions");
+                    b.ToTable("DdtStandardVersions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Decision", b =>
@@ -2168,7 +2168,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("VerifiedByUserId");
 
-                    b.ToTable("Decisions");
+                    b.ToTable("Decisions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DecisionImplementationStatus", b =>
@@ -2207,7 +2207,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DecisionImplementationStatuses");
+                    b.ToTable("DecisionImplementationStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DecisionOutcome", b =>
@@ -2246,7 +2246,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DecisionOutcomes");
+                    b.ToTable("DecisionOutcomes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DecisionPriority", b =>
@@ -2285,7 +2285,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DecisionPriorities");
+                    b.ToTable("DecisionPriorities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DecisionStatus", b =>
@@ -2324,7 +2324,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DecisionStatuses");
+                    b.ToTable("DecisionStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DecisionTag", b =>
@@ -2347,7 +2347,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DecisionId");
 
-                    b.ToTable("DecisionTags");
+                    b.ToTable("DecisionTags", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DeliveryPriority", b =>
@@ -2392,7 +2392,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("DeliveryPriorities");
+                    b.ToTable("DeliveryPriorities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequest", b =>
@@ -2649,7 +2649,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("TriageMeetingId");
 
-                    b.ToTable("DemandRequests");
+                    b.ToTable("DemandRequests", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestAssessment", b =>
@@ -2690,7 +2690,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DemandRequestId", "AssessmentType");
 
-                    b.ToTable("DemandRequestAssessments");
+                    b.ToTable("DemandRequestAssessments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestContact", b =>
@@ -2725,7 +2725,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DemandRequestId");
 
-                    b.ToTable("DemandRequestContacts");
+                    b.ToTable("DemandRequestContacts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestNote", b =>
@@ -2759,7 +2759,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DemandRequestId");
 
-                    b.ToTable("DemandRequestNotes");
+                    b.ToTable("DemandRequestNotes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestPrioritisation", b =>
@@ -2856,7 +2856,7 @@ namespace Compass.Migrations
                     b.HasIndex("TotalPriorityScore")
                         .IsDescending();
 
-                    b.ToTable("DemandRequestPrioritisations");
+                    b.ToTable("DemandRequestPrioritisations", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestRiskType", b =>
@@ -2876,7 +2876,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RiskTypeId");
 
-                    b.ToTable("DemandRequestRiskTypes");
+                    b.ToTable("DemandRequestRiskTypes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DemandRequestSectionCompletion", b =>
@@ -2930,7 +2930,7 @@ namespace Compass.Migrations
                     b.HasIndex("DemandRequestId", "SectionName")
                         .IsUnique();
 
-                    b.ToTable("DemandRequestSectionCompletions");
+                    b.ToTable("DemandRequestSectionCompletions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Dependency", b =>
@@ -2996,7 +2996,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("TargetEntityType", "TargetEntityId");
 
-                    b.ToTable("Dependencies");
+                    b.ToTable("Dependencies", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.DirectorateLookup", b =>
@@ -3035,7 +3035,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("DirectorateLookups");
+                    b.ToTable("DirectorateLookups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseMetric", b =>
@@ -3090,7 +3090,7 @@ namespace Compass.Migrations
                     b.HasIndex("Identifier")
                         .IsUnique();
 
-                    b.ToTable("EnterpriseMetrics");
+                    b.ToTable("EnterpriseMetrics", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseMetricValue", b =>
@@ -3127,7 +3127,7 @@ namespace Compass.Migrations
                     b.HasIndex("EnterpriseReturnId", "EnterpriseMetricId")
                         .IsUnique();
 
-                    b.ToTable("EnterpriseMetricValues");
+                    b.ToTable("EnterpriseMetricValues", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseReturn", b =>
@@ -3165,7 +3165,7 @@ namespace Compass.Migrations
                     b.HasIndex("Year", "Month")
                         .IsUnique();
 
-                    b.ToTable("EnterpriseReturns");
+                    b.ToTable("EnterpriseReturns", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Feature", b =>
@@ -3208,7 +3208,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("Name");
 
-                    b.ToTable("Features");
+                    b.ToTable("Features", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.FipsService", b =>
@@ -3242,7 +3242,7 @@ namespace Compass.Migrations
                     b.HasIndex("FipsId")
                         .IsUnique();
 
-                    b.ToTable("Service");
+                    b.ToTable("Service", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.FunctionalStandard", b =>
@@ -3271,7 +3271,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FunctionalStandards");
+                    b.ToTable("FunctionalStandards", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.FunctionalStandardAssessment", b =>
@@ -3315,7 +3315,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("FunctionalStandardId");
 
-                    b.ToTable("FunctionalStandardAssessments");
+                    b.ToTable("FunctionalStandardAssessments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.FunctionalStandardTheme", b =>
@@ -3353,7 +3353,7 @@ namespace Compass.Migrations
                     b.HasIndex("FunctionalStandardId", "ThemeId")
                         .IsUnique();
 
-                    b.ToTable("FunctionalStandardThemes");
+                    b.ToTable("FunctionalStandardThemes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.FundingSource", b =>
@@ -3399,7 +3399,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("FundingSources");
+                    b.ToTable("FundingSources", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.GddRole", b =>
@@ -3451,7 +3451,7 @@ namespace Compass.Migrations
                         .IsUnique()
                         .HasFilter("[RoleLevel] IS NOT NULL");
 
-                    b.ToTable("GddRoles");
+                    b.ToTable("GddRoles", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.GovernanceBoard", b =>
@@ -3490,7 +3490,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GovernanceBoards");
+                    b.ToTable("GovernanceBoards", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.GovernmentDepartment", b =>
@@ -3556,7 +3556,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ParentDepartmentId");
 
-                    b.ToTable("GovernmentDepartments");
+                    b.ToTable("GovernmentDepartments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Group", b =>
@@ -3605,7 +3605,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Groups");
+                    b.ToTable("Groups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.GroupFeaturePermission", b =>
@@ -3643,7 +3643,7 @@ namespace Compass.Migrations
                     b.HasIndex("GroupId", "FeatureId", "Permission")
                         .IsUnique();
 
-                    b.ToTable("GroupFeaturePermissions");
+                    b.ToTable("GroupFeaturePermissions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Issue", b =>
@@ -3832,7 +3832,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("Severity", "Priority");
 
-                    b.ToTable("Issues");
+                    b.ToTable("Issues", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueAction", b =>
@@ -3847,7 +3847,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ActionId");
 
-                    b.ToTable("IssueActions");
+                    b.ToTable("IssueActions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueCategory", b =>
@@ -3886,7 +3886,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IssueCategories");
+                    b.ToTable("IssueCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueComment", b =>
@@ -3931,7 +3931,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IssueId");
 
-                    b.ToTable("IssueComments");
+                    b.ToTable("IssueComments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueDecision", b =>
@@ -3946,7 +3946,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DecisionId");
 
-                    b.ToTable("IssueDecisions");
+                    b.ToTable("IssueDecisions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueHistory", b =>
@@ -3993,7 +3993,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IssueId");
 
-                    b.ToTable("IssueHistories");
+                    b.ToTable("IssueHistories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssuePriority", b =>
@@ -4032,7 +4032,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IssuePriorities");
+                    b.ToTable("IssuePriorities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueRisk", b =>
@@ -4047,7 +4047,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RiskId");
 
-                    b.ToTable("IssueRisks");
+                    b.ToTable("IssueRisks", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueSeverity", b =>
@@ -4086,7 +4086,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IssueSeverities");
+                    b.ToTable("IssueSeverities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueStatus", b =>
@@ -4125,7 +4125,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IssueStatuses");
+                    b.ToTable("IssueStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueTag", b =>
@@ -4148,7 +4148,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IssueId");
 
-                    b.ToTable("IssueTags");
+                    b.ToTable("IssueTags", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.IssueWcagCriterion", b =>
@@ -4179,7 +4179,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("WcagCriterionId");
 
-                    b.ToTable("IssueWcagCriteria");
+                    b.ToTable("IssueWcagCriteria", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.JourneyStep", b =>
@@ -4215,7 +4215,7 @@ namespace Compass.Migrations
                     b.HasIndex("SurveyTemplateId", "Ordinal")
                         .IsUnique();
 
-                    b.ToTable("JourneySteps");
+                    b.ToTable("JourneySteps", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Kpi", b =>
@@ -4332,7 +4332,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("AssignedToEntityId", "EntityType");
 
-                    b.ToTable("Kpis");
+                    b.ToTable("Kpis", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.KpiCategory", b =>
@@ -4378,7 +4378,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("KpiCategories");
+                    b.ToTable("KpiCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.KpiDataPoint", b =>
@@ -4434,7 +4434,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SubmittedByUserId");
 
-                    b.ToTable("KpiDataPoints");
+                    b.ToTable("KpiDataPoints", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Milestone", b =>
@@ -4523,7 +4523,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("Milestones");
+                    b.ToTable("Milestones", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.MilestoneAction", b =>
@@ -4538,7 +4538,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ActionId");
 
-                    b.ToTable("MilestoneActions");
+                    b.ToTable("MilestoneActions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.MilestoneIssue", b =>
@@ -4553,7 +4553,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IssueId");
 
-                    b.ToTable("MilestoneIssues");
+                    b.ToTable("MilestoneIssues", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.MilestoneRisk", b =>
@@ -4568,7 +4568,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RiskId");
 
-                    b.ToTable("MilestoneRisks");
+                    b.ToTable("MilestoneRisks", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.MilestoneUpdate", b =>
@@ -4617,7 +4617,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("MilestoneId");
 
-                    b.ToTable("MilestoneUpdates");
+                    b.ToTable("MilestoneUpdates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Mission", b =>
@@ -4669,7 +4669,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("Missions");
+                    b.ToTable("Missions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.NotificationLog", b =>
@@ -4734,7 +4734,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("NotificationTemplateId");
 
-                    b.ToTable("NotificationLogs");
+                    b.ToTable("NotificationLogs", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.NotificationRule", b =>
@@ -4791,7 +4791,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("NotificationTemplateId");
 
-                    b.ToTable("NotificationRules");
+                    b.ToTable("NotificationRules", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.NotificationTemplate", b =>
@@ -4845,7 +4845,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NotificationTemplates");
+                    b.ToTable("NotificationTemplates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Objective", b =>
@@ -4925,7 +4925,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ThemeSroUserId");
 
-                    b.ToTable("Objectives");
+                    b.ToTable("Objectives", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.OrganizationalGroup", b =>
@@ -4964,7 +4964,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ParentGroupId");
 
-                    b.ToTable("OrganizationalGroups");
+                    b.ToTable("OrganizationalGroups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.OrganizationalRole", b =>
@@ -5009,7 +5009,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("OrganizationalGroupId");
 
-                    b.ToTable("OrganizationalRoles");
+                    b.ToTable("OrganizationalRoles", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PerformanceMetric", b =>
@@ -5080,7 +5080,7 @@ namespace Compass.Migrations
                     b.HasIndex("Identifier")
                         .IsUnique();
 
-                    b.ToTable("PerformanceMetrics");
+                    b.ToTable("PerformanceMetrics", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PerformanceReportingBusinessAreaConfig", b =>
@@ -5135,7 +5135,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("PerformanceReportingBusinessAreaConfigs");
+                    b.ToTable("PerformanceReportingBusinessAreaConfigs", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PerformanceReportingDueDateOverride", b =>
@@ -5183,7 +5183,7 @@ namespace Compass.Migrations
                     b.HasIndex("ReportingYear", "ReportingMonth")
                         .IsUnique();
 
-                    b.ToTable("PerformanceReportingDueDateOverrides");
+                    b.ToTable("PerformanceReportingDueDateOverrides", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PerformanceReportingPeriodExclusion", b =>
@@ -5233,7 +5233,7 @@ namespace Compass.Migrations
                     b.HasIndex("Year", "Month")
                         .IsUnique();
 
-                    b.ToTable("PerformanceReportingPeriodExclusions");
+                    b.ToTable("PerformanceReportingPeriodExclusions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PerformanceReportingProductExclusion", b =>
@@ -5295,7 +5295,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("FipsId", "IsActive");
 
-                    b.ToTable("PerformanceReportingProductExclusions");
+                    b.ToTable("PerformanceReportingProductExclusions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PhaseLookup", b =>
@@ -5336,7 +5336,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("PhaseLookups");
+                    b.ToTable("PhaseLookups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.PracticeArea", b =>
@@ -5374,7 +5374,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PracticeAreas");
+                    b.ToTable("PracticeAreas", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProductAccessibility", b =>
@@ -5459,7 +5459,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ProductAccessibilities");
+                    b.ToTable("ProductAccessibilities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProductMetricValue", b =>
@@ -5507,7 +5507,7 @@ namespace Compass.Migrations
                     b.HasIndex("ProductReturnId", "PerformanceMetricId")
                         .IsUnique();
 
-                    b.ToTable("ProductMetricValues");
+                    b.ToTable("ProductMetricValues", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProductReturn", b =>
@@ -5550,7 +5550,7 @@ namespace Compass.Migrations
                     b.HasIndex("FipsId", "Year", "Month")
                         .IsUnique();
 
-                    b.ToTable("ProductReturns");
+                    b.ToTable("ProductReturns", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Project", b =>
@@ -5770,7 +5770,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("TargetDeliveryDate");
 
-                    b.ToTable("Projects");
+                    b.ToTable("Projects", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectArtefact", b =>
@@ -5837,7 +5837,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UpdatedByUserId");
 
-                    b.ToTable("ProjectArtefacts");
+                    b.ToTable("ProjectArtefacts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectBudgetOwner", b =>
@@ -5866,7 +5866,7 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId", "BusinessAreaLookupId")
                         .IsUnique();
 
-                    b.ToTable("ProjectBudgetOwners");
+                    b.ToTable("ProjectBudgetOwners", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectContact", b =>
@@ -5945,7 +5945,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ProjectContacts");
+                    b.ToTable("ProjectContacts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectDirectorate", b =>
@@ -5974,7 +5974,7 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId", "DirectorateLookupId")
                         .IsUnique();
 
-                    b.ToTable("ProjectDirectorates");
+                    b.ToTable("ProjectDirectorates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectDraft", b =>
@@ -6088,7 +6088,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserEmail");
 
-                    b.ToTable("ProjectDrafts");
+                    b.ToTable("ProjectDrafts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectFundingAllocation", b =>
@@ -6124,7 +6124,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectFundingAllocations");
+                    b.ToTable("ProjectFundingAllocations", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectMission", b =>
@@ -6150,7 +6150,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectMissions");
+                    b.ToTable("ProjectMissions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectNeed", b =>
@@ -6211,7 +6211,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectNeeds");
+                    b.ToTable("ProjectNeeds", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectObjective", b =>
@@ -6237,7 +6237,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectObjectives");
+                    b.ToTable("ProjectObjectives", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectOutcome", b =>
@@ -6303,7 +6303,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("ProjectOutcomes");
+                    b.ToTable("ProjectOutcomes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectPmoContact", b =>
@@ -6332,7 +6332,7 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("ProjectPmoContacts");
+                    b.ToTable("ProjectPmoContacts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectProblemStatement", b =>
@@ -6369,7 +6369,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectProblemStatements");
+                    b.ToTable("ProjectProblemStatements", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectProblemStatementHistory", b =>
@@ -6403,7 +6403,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectProblemStatementId");
 
-                    b.ToTable("ProjectProblemStatementHistories");
+                    b.ToTable("ProjectProblemStatementHistories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectProduct", b =>
@@ -6447,7 +6447,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectProducts");
+                    b.ToTable("ProjectProducts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectRagHistory", b =>
@@ -6492,7 +6492,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectRagHistories");
+                    b.ToTable("ProjectRagHistories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectResourceFunding", b =>
@@ -6531,7 +6531,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectResourceFundings");
+                    b.ToTable("ProjectResourceFundings", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectResourceFundingHistory", b =>
@@ -6579,7 +6579,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectResourceFundingHistories");
+                    b.ToTable("ProjectResourceFundingHistories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectSeniorResponsibleOfficer", b =>
@@ -6608,7 +6608,7 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("ProjectSeniorResponsibleOfficers");
+                    b.ToTable("ProjectSeniorResponsibleOfficers", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectStatusUpdate", b =>
@@ -6664,7 +6664,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UpdatedByUserId");
 
-                    b.ToTable("ProjectStatusUpdates");
+                    b.ToTable("ProjectStatusUpdates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectSuccess", b =>
@@ -6704,7 +6704,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RecordedAt");
 
-                    b.ToTable("ProjectSuccesses");
+                    b.ToTable("ProjectSuccesses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ProjectWatchlist", b =>
@@ -6730,7 +6730,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ProjectWatchlists");
+                    b.ToTable("ProjectWatchlists", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RaidEvidenceType", b =>
@@ -6769,7 +6769,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RaidEvidenceTypes");
+                    b.ToTable("RaidEvidenceTypes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
@@ -6801,7 +6801,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SurveyResponseId");
 
-                    b.ToTable("ResponseAnswers");
+                    b.ToTable("ResponseAnswers", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ResponseScale", b =>
@@ -6833,7 +6833,7 @@ namespace Compass.Migrations
 
                     b.HasKey("ResponseScaleId");
 
-                    b.ToTable("ResponseScales");
+                    b.ToTable("ResponseScales", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ResponseScaleOption", b =>
@@ -6865,7 +6865,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ResponseScaleId");
 
-                    b.ToTable("ResponseScaleOptions");
+                    b.ToTable("ResponseScaleOptions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Risk", b =>
@@ -7064,7 +7064,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("UpdatedByUserId");
 
-                    b.ToTable("Risks");
+                    b.ToTable("Risks", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskAction", b =>
@@ -7079,7 +7079,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ActionId");
 
-                    b.ToTable("RiskActions");
+                    b.ToTable("RiskActions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskAppetiteLookup", b =>
@@ -7118,7 +7118,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("RiskAppetiteLookups");
+                    b.ToTable("RiskAppetiteLookups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskCategory", b =>
@@ -7157,7 +7157,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskCategories");
+                    b.ToTable("RiskCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskDecision", b =>
@@ -7172,7 +7172,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("DecisionId");
 
-                    b.ToTable("RiskDecisions");
+                    b.ToTable("RiskDecisions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskImpactLevel", b =>
@@ -7211,7 +7211,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskImpactLevels");
+                    b.ToTable("RiskImpactLevels", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskLikelihood", b =>
@@ -7250,7 +7250,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskLikelihoods");
+                    b.ToTable("RiskLikelihoods", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskPriority", b =>
@@ -7289,7 +7289,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskPriorities");
+                    b.ToTable("RiskPriorities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskProximity", b =>
@@ -7328,7 +7328,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskProximities");
+                    b.ToTable("RiskProximities", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskRiskType", b =>
@@ -7346,7 +7346,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RiskTypeId");
 
-                    b.ToTable("RiskRiskTypes");
+                    b.ToTable("RiskRiskTypes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskStatus", b =>
@@ -7385,7 +7385,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RiskStatuses");
+                    b.ToTable("RiskStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskTag", b =>
@@ -7408,7 +7408,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("RiskId");
 
-                    b.ToTable("RiskTags");
+                    b.ToTable("RiskTags", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskTier", b =>
@@ -7458,7 +7458,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SortOrder");
 
-                    b.ToTable("RiskTiers");
+                    b.ToTable("RiskTiers", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.RiskType", b =>
@@ -7508,7 +7508,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("RiskTypes");
+                    b.ToTable("RiskTypes", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.ScoreSnapshot", b =>
@@ -7536,7 +7536,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ServiceId");
 
-                    b.ToTable("ScoreSnapshots");
+                    b.ToTable("ScoreSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.Skill", b =>
@@ -7577,7 +7577,7 @@ namespace Compass.Migrations
                     b.HasIndex("SkillName")
                         .IsUnique();
 
-                    b.ToTable("Skills");
+                    b.ToTable("Skills", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StaffRoleReturn", b =>
@@ -7629,7 +7629,7 @@ namespace Compass.Migrations
                     b.HasIndex("UserId", "Year")
                         .IsUnique();
 
-                    b.ToTable("StaffRoleReturns");
+                    b.ToTable("StaffRoleReturns", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StaffRoleReturnSkill", b =>
@@ -7659,7 +7659,7 @@ namespace Compass.Migrations
                     b.HasIndex("StaffRoleReturnId", "SkillId")
                         .IsUnique();
 
-                    b.ToTable("StaffRoleReturnSkills");
+                    b.ToTable("StaffRoleReturnSkills", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StandardCategory", b =>
@@ -7693,7 +7693,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StandardCategories");
+                    b.ToTable("StandardCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StandardProduct", b =>
@@ -7759,7 +7759,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("ReviewedByUserId");
 
-                    b.ToTable("StandardProducts");
+                    b.ToTable("StandardProducts", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StandardSubCategory", b =>
@@ -7798,7 +7798,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("StandardSubCategories");
+                    b.ToTable("StandardSubCategories", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.StatementTemplate", b =>
@@ -7857,7 +7857,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name", "Version")
                         .IsUnique();
 
-                    b.ToTable("StatementTemplates");
+                    b.ToTable("StatementTemplates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
@@ -7892,7 +7892,7 @@ namespace Compass.Migrations
                     b.HasIndex("ServiceId", "IsActive")
                         .HasFilter("[IsActive] = 1");
 
-                    b.ToTable("SurveyInstances");
+                    b.ToTable("SurveyInstances", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.SurveyOption", b =>
@@ -7927,7 +7927,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SurveyQuestionId");
 
-                    b.ToTable("SurveyOptions");
+                    b.ToTable("SurveyOptions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.SurveyQuestion", b =>
@@ -7978,7 +7978,7 @@ namespace Compass.Migrations
                     b.HasIndex("SurveyTemplateId", "Code")
                         .IsUnique();
 
-                    b.ToTable("SurveyQuestions");
+                    b.ToTable("SurveyQuestions", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.SurveyResponse", b =>
@@ -8020,7 +8020,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("SurveyInstanceId");
 
-                    b.ToTable("SurveyResponses");
+                    b.ToTable("SurveyResponses", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.SurveyTemplate", b =>
@@ -8048,7 +8048,7 @@ namespace Compass.Migrations
                     b.HasIndex("Name", "Version")
                         .IsUnique();
 
-                    b.ToTable("SurveyTemplates");
+                    b.ToTable("SurveyTemplates", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.TriageMeeting", b =>
@@ -8095,7 +8095,7 @@ namespace Compass.Migrations
 
                     b.HasIndex("StartAt");
 
-                    b.ToTable("TriageMeetings");
+                    b.ToTable("TriageMeetings", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.User", b =>
@@ -8160,7 +8160,7 @@ namespace Compass.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.UserBusinessAreaRoleAssignment", b =>
@@ -8198,7 +8198,7 @@ namespace Compass.Migrations
                     b.HasIndex("UserId", "BusinessAreaKey", "Role")
                         .IsUnique();
 
-                    b.ToTable("UserBusinessAreaRoleAssignments");
+                    b.ToTable("UserBusinessAreaRoleAssignments", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.UserGroup", b =>
@@ -8231,7 +8231,7 @@ namespace Compass.Migrations
                     b.HasIndex("UserId", "GroupId")
                         .IsUnique();
 
-                    b.ToTable("UserGroups");
+                    b.ToTable("UserGroups", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.UserPreference", b =>
@@ -8286,7 +8286,7 @@ namespace Compass.Migrations
 
                     b.HasKey("UserId");
 
-                    b.ToTable("UserPreferences");
+                    b.ToTable("UserPreferences", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.WcagCriterion", b =>
@@ -8339,7 +8339,7 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("WcagCriteria");
+                    b.ToTable("WcagCriteria", (string)null);
                 });
 
             modelBuilder.Entity("Compass.Models.AccessibilityIssue", b =>
