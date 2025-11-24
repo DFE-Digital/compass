@@ -171,6 +171,8 @@ namespace Compass.Controllers
             var query = _context.Projects
                 .Where(p => !p.IsDeleted)
                 .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
                 .Include(p => p.ProjectObjectives)
@@ -197,13 +199,13 @@ namespace Compass.Controllers
             // Apply Business Area filter
             if (!string.IsNullOrEmpty(businessArea))
             {
-                query = query.Where(p => p.BusinessArea == businessArea);
+                query = query.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
             }
 
             // Apply Phase filter
             if (!string.IsNullOrEmpty(phase))
             {
-                query = query.Where(p => p.Phase == phase);
+                query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
             }
 
             // Apply Flagship filter
@@ -1646,17 +1648,13 @@ namespace Compass.Controllers
                 return NotFound();
             }
 
-            // Log the Phase value received
-            _logger.LogInformation("Edit POST - Project ID: {ProjectId}, Phase received: {Phase}, Form Phase value: {FormPhase}", 
-                id, project?.Phase, Request.Form["Phase"].ToString());
-
-            // Get Phase directly from form if model binding didn't work
+            // Get Phase and BusinessArea from form
             var phaseFromForm = Request.Form["Phase"].ToString();
-            if (string.IsNullOrEmpty(project.Phase) && !string.IsNullOrEmpty(phaseFromForm))
-            {
-                project.Phase = phaseFromForm;
-                _logger.LogInformation("Phase value taken from form directly: {Phase}", phaseFromForm);
-            }
+            var businessAreaFromForm = Request.Form["BusinessArea"].ToString();
+
+            // Log the values received
+            _logger.LogInformation("Edit POST - Project ID: {ProjectId}, Phase: {Phase}, BusinessArea: {BusinessArea}", 
+                id, phaseFromForm, businessAreaFromForm);
 
             if (ModelState.IsValid)
             {
@@ -1667,6 +1665,8 @@ namespace Compass.Controllers
                         .Include(p => p.Directorates)
                         .Include(p => p.BudgetOwners)
                         .Include(p => p.PmoContacts)
+                        .Include(p => p.PhaseLookup)
+                        .Include(p => p.BusinessAreaLookup)
                         .FirstOrDefaultAsync(p => p.Id == id);
 
                     if (existingProject == null || existingProject.IsDeleted)
@@ -1674,15 +1674,37 @@ namespace Compass.Controllers
                         return NotFound();
                     }
 
-                    _logger.LogInformation("Updating project {ProjectId} - Old Phase: {OldPhase}, New Phase: {NewPhase}", 
-                        id, existingProject.Phase, project.Phase);
+                    _logger.LogInformation("Updating project {ProjectId} - Old Phase: {OldPhase}, New Phase: {NewPhase}, Old BusinessArea: {OldBusinessArea}, New BusinessArea: {NewBusinessArea}", 
+                        id, existingProject.PhaseLookup?.Name, phaseFromForm, existingProject.BusinessAreaLookup?.Name, businessAreaFromForm);
 
                     // Update basic fields
                     existingProject.Title = project.Title;
-                    existingProject.BusinessArea = project.BusinessArea;
                     existingProject.HistoricBuRTId = project.HistoricBuRTId;
                     existingProject.Aim = project.Aim;
-                    existingProject.Phase = project.Phase;
+                    
+                    // Update Phase - look up ID from name
+                    if (string.IsNullOrWhiteSpace(phaseFromForm))
+                    {
+                        existingProject.PhaseId = null;
+                    }
+                    else
+                    {
+                        var phaseLookup = await _context.PhaseLookups
+                            .FirstOrDefaultAsync(p => p.Name == phaseFromForm && p.IsActive);
+                        existingProject.PhaseId = phaseLookup?.Id;
+                    }
+                    
+                    // Update BusinessArea - look up ID from name
+                    if (string.IsNullOrWhiteSpace(businessAreaFromForm))
+                    {
+                        existingProject.BusinessAreaId = null;
+                    }
+                    else
+                    {
+                        var businessAreaLookup = await _context.BusinessAreaLookups
+                            .FirstOrDefaultAsync(ba => ba.Name == businessAreaFromForm && ba.IsActive);
+                        existingProject.BusinessAreaId = businessAreaLookup?.Id;
+                    }
                     existingProject.IsMultiDepartmentProject = project.IsMultiDepartmentProject;
                     existingProject.OtherDepartments = project.OtherDepartments;
                     
@@ -2608,6 +2630,21 @@ namespace Compass.Controllers
                     project.CreatedAt = DateTime.UtcNow;
                     project.UpdatedAt = DateTime.UtcNow;
                     project.CreationMethod = "Manual";
+
+                    // Convert Phase and BusinessArea strings to IDs
+                    if (!string.IsNullOrWhiteSpace(project.Phase))
+                    {
+                        var phaseLookup = await _context.PhaseLookups
+                            .FirstOrDefaultAsync(p => p.Name == project.Phase && p.IsActive);
+                        project.PhaseId = phaseLookup?.Id;
+                    }
+                    
+                    if (!string.IsNullOrWhiteSpace(project.BusinessArea))
+                    {
+                        var businessAreaLookup = await _context.BusinessAreaLookups
+                            .FirstOrDefaultAsync(ba => ba.Name == project.BusinessArea && ba.IsActive);
+                        project.BusinessAreaId = businessAreaLookup?.Id;
+                    }
 
                     _logger.LogInformation("Adding project to context with code: {ProjectCode}", project.ProjectCode);
                     _context.Projects.Add(project);
@@ -4436,7 +4473,17 @@ namespace Compass.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                project.BusinessArea = businessArea;
+                if (string.IsNullOrWhiteSpace(businessArea))
+                {
+                    project.BusinessAreaId = null;
+                }
+                else
+                {
+                    var businessAreaLookup = await _context.BusinessAreaLookups
+                        .FirstOrDefaultAsync(ba => ba.Name == businessArea && ba.IsActive);
+                    project.BusinessAreaId = businessAreaLookup?.Id;
+                }
+                
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
@@ -4465,7 +4512,17 @@ namespace Compass.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                project.Phase = phase;
+                if (string.IsNullOrWhiteSpace(phase))
+                {
+                    project.PhaseId = null;
+                }
+                else
+                {
+                    var phaseLookup = await _context.PhaseLookups
+                        .FirstOrDefaultAsync(p => p.Name == phase && p.IsActive);
+                    project.PhaseId = phaseLookup?.Id;
+                }
+                
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 

@@ -495,8 +495,8 @@ public class HomeController : Controller
             if (!leadershipBusinessAreas.Any())
             {
                 leadershipBusinessAreas = await _context.Projects
-                    .Where(p => !p.IsDeleted && !string.IsNullOrWhiteSpace(p.BusinessArea))
-                    .Select(p => p.BusinessArea!)
+                    .Where(p => !p.IsDeleted && p.BusinessAreaLookup != null && !string.IsNullOrWhiteSpace(p.BusinessAreaLookup.Name))
+                    .Select(p => p.BusinessAreaLookup!.Name)
                     .Distinct()
                     .Take(3)
                     .ToListAsync();
@@ -589,8 +589,10 @@ public class HomeController : Controller
 
                     leadershipProjects = await _context.Projects
                         .Where(p => !p.IsDeleted
-                                    && !string.IsNullOrWhiteSpace(p.BusinessArea)
-                                    && normalizedAreas.Contains(p.BusinessArea!.ToLower()))
+                                    && p.BusinessAreaLookup != null
+                                    && !string.IsNullOrWhiteSpace(p.BusinessAreaLookup.Name)
+                                    && normalizedAreas.Contains(p.BusinessAreaLookup.Name.ToLower()))
+                        .Include(p => p.BusinessAreaLookup)
                         .Include(p => p.Milestones.Where(m => !m.IsDeleted))
                         .Include(p => p.Issues.Where(i => !i.IsDeleted))
                         .Include(p => p.Risks.Where(r => !r.IsDeleted))

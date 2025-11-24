@@ -423,7 +423,16 @@ public class ProjectImportService : IProjectImportService
         {
             // Update existing project
             project.Title = csvRow.Deliverable ?? project.Title;
-            project.Phase = csvRow.CurrentDeliveryPhase ?? project.Phase;
+            
+            // Update Phase - convert string to ID if provided
+            if (!string.IsNullOrWhiteSpace(csvRow.CurrentDeliveryPhase))
+            {
+                var phaseLookup = await _context.PhaseLookups
+                    .FirstOrDefaultAsync(p => p.Name == csvRow.CurrentDeliveryPhase && p.IsActive, cancellationToken);
+                project.PhaseId = phaseLookup?.Id;
+            }
+            // If csvRow.CurrentDeliveryPhase is null/empty, keep existing PhaseId (don't change it)
+            
             project.ServiceUsers = csvRow.ServiceUsers ?? project.ServiceUsers;
             if (!string.IsNullOrWhiteSpace(csvRow.PurposeBenefits))
             {
