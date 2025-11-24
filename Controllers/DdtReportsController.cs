@@ -340,7 +340,8 @@ public class DdtReportsController : Controller
                     .Include(p => p.Successes)
                     .Include(p => p.Milestones)
                     .Include(p => p.RagHistory)
-                    .Where(p => !p.IsDeleted && p.Status == "Active" && p.BusinessArea == area)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Where(p => !p.IsDeleted && p.Status == "Active" && p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == area)
                     .OrderBy(p => p.Title)
                     .ToListAsync();
 
@@ -724,7 +725,7 @@ public class DdtReportsController : Controller
         var hasBudgetOwner = project.BudgetOwners != null && project.BudgetOwners.Any();
         var hasRagStatus = !string.IsNullOrWhiteSpace(project.RagStatus);
         var hasPriority = project.DeliveryPriorityId.HasValue;
-        var hasBusinessArea = !string.IsNullOrWhiteSpace(project.BusinessArea);
+        var hasBusinessArea = project.BusinessAreaId.HasValue;
         var hasPrimaryContact = project.PrimaryContactUserId.HasValue;
         var hasActivityType = project.ActivityTypeLookupId.HasValue;
         var hasSpendControl = project.IsSubjectToSpendControl.HasValue;
@@ -794,8 +795,8 @@ public class DdtReportsController : Controller
             ProjectId = project.Id,
             ProjectCode = project.ProjectCode ?? "",
             ProjectTitle = project.Title,
-            Phase = project.Phase,
-            BusinessArea = project.BusinessArea,
+            Phase = project.PhaseLookup?.Name,
+            BusinessArea = project.BusinessAreaLookup?.Name,
             RagStatus = project.RagStatus,
             PriorityName = project.DeliveryPriority?.Name,
             PriorityId = project.DeliveryPriorityId,
@@ -2927,17 +2928,17 @@ public class DdtReportsController : Controller
                 var businessArea = await _context.BusinessAreaLookups.FindAsync(businessAreaLookupId.Value);
                 if (businessArea != null && businessArea.IsActive)
                 {
-                    project.BusinessArea = businessArea.Name;
+                    project.BusinessAreaId = businessArea.Id;
                     businessAreaName = businessArea.Name;
                 }
                 else
                 {
-                    project.BusinessArea = null;
+                    project.BusinessAreaId = null;
                 }
             }
             else
             {
-                project.BusinessArea = null;
+                project.BusinessAreaId = null;
             }
 
             project.UpdatedAt = DateTime.UtcNow;
@@ -2991,7 +2992,18 @@ public class DdtReportsController : Controller
                 return Json(new { success = false, message = "Project not found." });
             }
 
-            project.Phase = phase;
+            // Update Phase - look up ID from name
+            if (string.IsNullOrWhiteSpace(phase))
+            {
+                project.PhaseId = null;
+            }
+            else
+            {
+                var phaseLookup = await _context.PhaseLookups
+                    .FirstOrDefaultAsync(p => p.Name == phase && p.IsActive);
+                project.PhaseId = phaseLookup?.Id;
+            }
+            
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
