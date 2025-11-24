@@ -41,11 +41,15 @@ public class Project
 
     public string? PathToGreen { get; set; }
 
-    [MaxLength(50)]
-    public string? Phase { get; set; } // Discovery, Alpha, Private beta, Public beta, Live
+    // Phase - using foreign key to PhaseLookup
+    public int? PhaseId { get; set; }
+    [ForeignKey(nameof(PhaseId))]
+    public PhaseLookup? PhaseLookup { get; set; }
 
-    [MaxLength(100)]
-    public string? BusinessArea { get; set; }
+    // BusinessArea - using foreign key to BusinessAreaLookup
+    public int? BusinessAreaId { get; set; }
+    [ForeignKey(nameof(BusinessAreaId))]
+    public BusinessAreaLookup? BusinessAreaLookup { get; set; }
 
     [MaxLength(100)]
     public string? HistoricBuRTId { get; set; }
@@ -168,4 +172,35 @@ public class Project
     public DateTime? PublicBetaStartDateActual { get; set; }
     public DateTime? PublicBetaEndDatePlanned { get; set; }
     public DateTime? PublicBetaEndDateActual { get; set; }
+
+    // Computed properties for backward compatibility (will be removed after migration)
+    [NotMapped]
+    public string? Phase
+    {
+        get => PhaseLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set PhaseId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                PhaseId = null;
+            }
+        }
+    }
+
+    [NotMapped]
+    public string? BusinessArea
+    {
+        get => BusinessAreaLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set BusinessAreaId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                BusinessAreaId = null;
+            }
+        }
+    }
 }
