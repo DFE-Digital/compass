@@ -18,6 +18,8 @@ public class AdminController : Controller
     private readonly CompassDbContext _context;
     private readonly ILogger<AdminController> _logger;
     private readonly IApiTokenService _apiTokenService;
+    private readonly IConfiguration _configuration;
+    private readonly IProductsApiService _productsApiService;
 
     private static readonly IReadOnlyList<RaidLookupDefinition> _raidLookupDefinitions = new List<RaidLookupDefinition>
     {
@@ -56,11 +58,13 @@ public class AdminController : Controller
             description);
 
 
-    public AdminController(CompassDbContext context, ILogger<AdminController> logger, IApiTokenService apiTokenService)
+    public AdminController(CompassDbContext context, ILogger<AdminController> logger, IApiTokenService apiTokenService, IConfiguration configuration, IProductsApiService productsApiService)
     {
         _context = context;
         _logger = logger;
         _apiTokenService = apiTokenService;
+        _configuration = configuration;
+        _productsApiService = productsApiService;
     }
 
     // GET: Admin/Index
@@ -2701,7 +2705,7 @@ public class AdminController : Controller
             if (businessArea != null)
             {
                 // Check if any projects are using this business area
-                var projectCount = await _context.Projects.CountAsync(p => p.BusinessArea == businessArea.Name && !p.IsDeleted);
+                var projectCount = await _context.Projects.CountAsync(p => p.BusinessAreaId == businessArea.Id && !p.IsDeleted);
                 if (projectCount > 0)
                 {
                     TempData["ErrorMessage"] = $"Cannot delete business area '{businessArea.Name}' as it is being used by {projectCount} project(s).";
@@ -2722,6 +2726,327 @@ public class AdminController : Controller
         }
 
         return RedirectToAction(nameof(BusinessAreas));
+    }
+
+    // GET: api/Admin/BusinessAreas/PreviewSync
+    [HttpGet]
+    [Route("api/Admin/BusinessAreas/PreviewSync")]
+    public async Task<IActionResult> PreviewBusinessAreasSync()
+    {
+        try
+        {
+            var cmsBusinessAreas = await GetBusinessAreasFromCmsAsync();
+            var existingBusinessAreas = await _context.BusinessAreaLookups.ToListAsync();
+            
+            var matches = new List<object>();
+            var newAreas = new List<object>();
+            var exactMatches = new List<object>();
+
+            foreach (var cmsBa in cmsBusinessAreas)
+            {
+                // Try to find a match by exact name first
+                var exactMatch = existingBusinessAreas.FirstOrDefault(ba => 
+                    ba.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (exactMatch != null)
+                {
+                    exactMatches.Add(new { cmsName = cmsBa.Name, existingName = exactMatch.Name });
+                    continue;
+                }
+
+                // Try to match by name variations (e.g., "CXD" -> "Customer Experience and Design")
+                var nameMatch = FindMatchingBusinessArea(cmsBa.Name, existingBusinessAreas);
+                
+                if (nameMatch != null)
+                {
+                    matches.Add(new { cmsName = cmsBa.Name, existingName = nameMatch.Name });
+                    continue;
+                }
+
+                // No match found, will be created
+                newAreas.Add(new { name = cmsBa.Name, description = cmsBa.Description });
+            }
+
+            return Json(new 
+            { 
+                success = true,
+                exactMatches = exactMatches,
+                matches = matches,
+                newAreas = newAreas
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing business areas sync");
+            return Json(new 
+            { 
+                success = false, 
+                message = "An error occurred while previewing sync. Please check the logs." 
+            });
+        }
+    }
+
+    // POST: api/Admin/BusinessAreas/SyncFromCms
+    [HttpPost]
+    [Route("api/Admin/BusinessAreas/SyncFromCms")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SyncBusinessAreasFromCms()
+    {
+        try
+        {
+            // Get confirmed matches from form data
+            List<ConfirmedMatch>? confirmedMatches = null;
+            
+            if (Request.Form.ContainsKey("confirmedMatches"))
+            {
+                var confirmedMatchesJson = Request.Form["confirmedMatches"].ToString();
+                _logger.LogInformation("Received confirmedMatches: {Json}", confirmedMatchesJson);
+                
+                if (!string.IsNullOrEmpty(confirmedMatchesJson) && confirmedMatchesJson != "[]")
+                {
+                    try
+                    {
+                        confirmedMatches = System.Text.Json.JsonSerializer.Deserialize<List<ConfirmedMatch>>(confirmedMatchesJson);
+                        _logger.LogInformation("Parsed {Count} confirmed matches from request", confirmedMatches?.Count ?? 0);
+                        if (confirmedMatches != null)
+                        {
+                            foreach (var match in confirmedMatches)
+                            {
+                                _logger.LogInformation("Confirmed match: '{ExistingName}' -> '{CmsName}'", 
+                                    match.ExistingName, match.CmsName);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If JSON parsing fails, continue without confirmed matches
+                        _logger.LogWarning(ex, "Failed to parse confirmedMatches JSON: {Json}", confirmedMatchesJson);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("confirmedMatches is empty or '[]'");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("No confirmedMatches key in request form");
+            }
+
+            var cmsBusinessAreas = await GetBusinessAreasFromCmsAsync();
+            var existingBusinessAreas = await _context.BusinessAreaLookups.ToListAsync();
+            
+            int created = 0;
+            int updated = 0;
+            int matched = 0;
+            var appliedMatches = new List<object>();
+
+            foreach (var cmsBa in cmsBusinessAreas)
+            {
+                // Try to find a match by exact name first
+                var exactMatch = existingBusinessAreas.FirstOrDefault(ba => 
+                    ba.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (exactMatch != null)
+                {
+                    // Update existing record with CMS data
+                    exactMatch.SortOrder = cmsBa.SortOrder;
+                    exactMatch.UpdatedAt = DateTime.UtcNow;
+                    // Keep existing description and IsActive status unless they're empty/null
+                    if (string.IsNullOrWhiteSpace(exactMatch.Description))
+                    {
+                        exactMatch.Description = cmsBa.Description;
+                    }
+                    updated++;
+                    matched++;
+                    continue;
+                }
+
+                // Try to match by name variations (e.g., "CXD" -> "Customer Experience and Design")
+                var nameMatch = FindMatchingBusinessArea(cmsBa.Name, existingBusinessAreas);
+                
+                if (nameMatch != null)
+                {
+                    // Check if this match was confirmed (if confirmation was required)
+                    var originalName = nameMatch.Name;
+                    var needsConfirmation = !nameMatch.Name.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase);
+                    
+                    if (needsConfirmation)
+                    {
+                        // This match needs confirmation - check if it was confirmed
+                        var isConfirmed = confirmedMatches != null && confirmedMatches.Any(cm => 
+                            cm.ExistingName.Equals(originalName, StringComparison.OrdinalIgnoreCase) &&
+                            cm.CmsName.Equals(cmsBa.Name, StringComparison.OrdinalIgnoreCase));
+                        
+                        _logger.LogInformation("Match found: '{OriginalName}' -> '{CmsName}', Confirmed: {IsConfirmed}", 
+                            originalName, cmsBa.Name, isConfirmed);
+                        
+                        if (!isConfirmed)
+                        {
+                            _logger.LogInformation("Skipping unconfirmed match: '{OriginalName}' -> '{CmsName}'", 
+                                originalName, cmsBa.Name);
+                            continue; // Skip unconfirmed matches
+                        }
+                    }
+                    
+                    // Update the matched record with CMS name and data
+                    _logger.LogInformation("Updating business area: '{OriginalName}' -> '{CmsName}'", 
+                        originalName, cmsBa.Name);
+                    nameMatch.Name = cmsBa.Name; // Update to CMS name
+                    nameMatch.SortOrder = cmsBa.SortOrder;
+                    nameMatch.UpdatedAt = DateTime.UtcNow;
+                    if (string.IsNullOrWhiteSpace(nameMatch.Description))
+                    {
+                        nameMatch.Description = cmsBa.Description;
+                    }
+                    // Explicitly mark as modified to ensure Entity Framework tracks the change
+                    _context.Entry(nameMatch).Property(x => x.Name).IsModified = true;
+                    _context.Entry(nameMatch).Property(x => x.SortOrder).IsModified = true;
+                    _context.Entry(nameMatch).Property(x => x.UpdatedAt).IsModified = true;
+                    if (!string.IsNullOrWhiteSpace(nameMatch.Description))
+                    {
+                        _context.Entry(nameMatch).Property(x => x.Description).IsModified = true;
+                    }
+                    updated++;
+                    matched++;
+                    
+                    if (needsConfirmation)
+                    {
+                        appliedMatches.Add(new { existingName = originalName, cmsName = cmsBa.Name });
+                    }
+                    continue;
+                }
+
+                // No match found, create new record
+                var newBusinessArea = new BusinessAreaLookup
+                {
+                    Name = cmsBa.Name,
+                    Description = cmsBa.Description,
+                    SortOrder = cmsBa.SortOrder,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                
+                _context.BusinessAreaLookups.Add(newBusinessArea);
+                created++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new 
+            { 
+                success = true, 
+                message = $"Sync completed: {created} created, {updated} updated, {matched} matched from CMS.",
+                created = created,
+                updated = updated,
+                matched = matched,
+                matches = appliedMatches
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing business areas from CMS");
+            return Json(new 
+            { 
+                success = false, 
+                message = "An error occurred while syncing business areas from CMS. Please check the logs." 
+            });
+        }
+    }
+
+    private class ConfirmedMatch
+    {
+        public string ExistingName { get; set; } = string.Empty;
+        public string CmsName { get; set; } = string.Empty;
+    }
+
+    private BusinessAreaLookup? FindMatchingBusinessArea(string cmsName, List<BusinessAreaLookup> existingAreas)
+    {
+        var normalizedCmsName = cmsName.Trim();
+        
+        foreach (var existing in existingAreas)
+        {
+            var existingName = existing.Name.Trim();
+            
+            // Check if names match exactly (case-insensitive)
+            if (normalizedCmsName.Equals(existingName, StringComparison.OrdinalIgnoreCase))
+            {
+                return existing;
+            }
+            
+            // Handle CXD -> Customer Experience and Design mapping
+            // If CMS has "Customer Experience and Design" and Compass has "CXD" (or contains "CXD")
+            if (normalizedCmsName.Equals("Customer Experience and Design", StringComparison.OrdinalIgnoreCase))
+            {
+                // Match with entries containing "CXD" (case-insensitive)
+                if (existingName.Contains("CXD", StringComparison.OrdinalIgnoreCase))
+                {
+                    return existing;
+                }
+            }
+            
+            // If CMS has something with "CXD" and Compass has "Customer Experience and Design"
+            if (normalizedCmsName.Contains("CXD", StringComparison.OrdinalIgnoreCase) &&
+                existingName.Contains("Customer Experience and Design", StringComparison.OrdinalIgnoreCase))
+            {
+                return existing;
+            }
+            
+            // Check if one name contains the other (for partial matches)
+            // This handles cases where names are similar but not exact
+            if (normalizedCmsName.Contains(existingName, StringComparison.OrdinalIgnoreCase) ||
+                existingName.Contains(normalizedCmsName, StringComparison.OrdinalIgnoreCase))
+            {
+                // Only match if the shorter name is at least 3 characters (to avoid false matches)
+                var shorterLength = Math.Min(normalizedCmsName.Length, existingName.Length);
+                if (shorterLength >= 3)
+                {
+                    return existing;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private async Task<List<CmsBusinessArea>> GetBusinessAreasFromCmsAsync()
+    {
+        var businessAreas = new List<CmsBusinessArea>();
+        
+        try
+        {
+            // Use the ProductsApiService which already has working CMS API integration
+            var categoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            
+            foreach (var cv in categoryValues)
+            {
+                if (!string.IsNullOrEmpty(cv.Name))
+                {
+                    businessAreas.Add(new CmsBusinessArea
+                    {
+                        Name = cv.Name,
+                        SortOrder = cv.SortOrder ?? 0,
+                        Description = null // Description not available in CategoryValueDto
+                    });
+                }
+            }
+            
+            _logger.LogInformation("Found {Count} business areas from CMS", businessAreas.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching business areas from CMS");
+        }
+        
+        return businessAreas;
+    }
+
+    private class CmsBusinessArea
+    {
+        public string Name { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+        public string? Description { get; set; }
     }
 
     // ========================================
@@ -2864,7 +3189,7 @@ public class AdminController : Controller
             if (phase != null)
             {
                 // Check if any projects are using this phase
-                var projectCount = await _context.Projects.CountAsync(p => p.Phase == phase.Name && !p.IsDeleted);
+                var projectCount = await _context.Projects.CountAsync(p => p.PhaseId == phase.Id && !p.IsDeleted);
                 if (projectCount > 0)
                 {
                     TempData["ErrorMessage"] = $"Cannot delete phase '{phase.Name}' as it is being used by {projectCount} project(s).";

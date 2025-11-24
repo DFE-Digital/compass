@@ -33,6 +33,10 @@
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
+                    <button type="button" class="btn btn-secondary mr-2" id="syncFromCmsBtn">
+                        <span id="syncBtnText">Sync from CMS</span>
+                        <span id="syncBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    </button>
                     <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createBusinessAreaModal">
                         Create new
                     </button>
@@ -138,7 +142,7 @@
                         <h3 class="card-title">Business areas</h3>
                     </div>
                     <div class="card-body">
-                        <p class="text-muted">Manage business area options for projects. These are separate from the CMS business areas and specific to Compass.</p>
+                        <p class="text-muted">Manage business area options for projects. Use the "Sync from CMS" button to update this list with business areas from the CMS. Existing business areas will be matched by name and updated, while new ones from CMS will be added. Business areas that exist only in Compass will be preserved.</p>
 
                         <div class="table-responsive">
                             <table class="table table-striped table-hover">
@@ -306,6 +310,186 @@ function editBusinessArea(id, name, description, sortOrder, isActive) {
     $('#editBaSortOrder').val(sortOrder);
     $('#editBaIsActive').prop('checked', isActive);
     $('#editBusinessAreaModal').modal('show');
+}
+
+// Attach event listener when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    var syncBtn = document.getElementById('syncFromCmsBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', syncFromCms);
+        console.log('Sync button event listener attached');
+    } else {
+        console.error('Sync button not found!');
+    }
+});
+
+function syncFromCms() {
+    console.log('syncFromCms called');
+    var btn = document.getElementById('syncFromCmsBtn');
+    var btnText = document.getElementById('syncBtnText');
+    var spinner = document.getElementById('syncBtnSpinner');
+    
+    if (!btn || !btnText || !spinner) {
+        console.error('Required elements not found');
+        alert('Error: Required elements not found. Please refresh the page.');
+        return;
+    }
+    
+    btn.disabled = true;
+    btnText.textContent = 'Loading...';
+    spinner.classList.remove('d-none');
+
+    console.log('Fetching preview from /api/Admin/BusinessAreas/PreviewSync');
+    // First, get preview of matches
+    fetch('/api/Admin/BusinessAreas/PreviewSync', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        console.log('Preview response status:', response.status);
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Preview failed:', response.status, text);
+                throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+            });
+        }
+        return response.json();
+    })
+    .then(previewData => {
+        console.log('Preview data received:', previewData);
+        if (!previewData.success) {
+            console.error('Preview failed:', previewData.message);
+            throw new Error(previewData.message || 'Failed to preview sync');
+        }
+
+        // Build confirmation message
+        var confirmMessage = 'This will sync business areas from the CMS.\n\n';
+        
+        var needsConfirmation = false;
+        if (previewData.matches && previewData.matches.length > 0) {
+            needsConfirmation = true;
+            confirmMessage += 'The following matches need confirmation:\n';
+            previewData.matches.forEach(function(match) {
+                confirmMessage += '\n• "' + match.existingName + '" → "' + match.cmsName + '"';
+            });
+            confirmMessage += '\n\n';
+        }
+        
+        if (previewData.exactMatches && previewData.exactMatches.length > 0) {
+            confirmMessage += 'Exact matches found: ' + previewData.exactMatches.length + '\n';
+        }
+        
+        if (previewData.newAreas && previewData.newAreas.length > 0) {
+            confirmMessage += 'New areas to be created: ' + previewData.newAreas.length + '\n';
+        }
+        
+        confirmMessage += '\nContinue with sync?';
+
+        if (!confirm(confirmMessage)) {
+            btn.disabled = false;
+            btnText.textContent = 'Sync from CMS';
+            spinner.classList.add('d-none');
+            return;
+        }
+
+        // If there are matches that need confirmation, show individual confirmations
+        var confirmedMatches = [];
+        if (previewData.matches && previewData.matches.length > 0) {
+            previewData.matches.forEach(function(match) {
+                var matchConfirm = confirm('Is "' + match.existingName + '" in our data the same as "' + match.cmsName + '" in the CMS?\n\nClick OK to match them, Cancel to skip this match.');
+                if (matchConfirm) {
+                    confirmedMatches.push({
+                        existingName: match.existingName,
+                        cmsName: match.cmsName
+                    });
+                }
+            });
+        }
+
+        // Now perform the actual sync
+        btnText.textContent = 'Syncing...';
+        
+        // Get anti-forgery token
+        var token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+        if (!token) {
+            var form = document.querySelector('form');
+            if (form) {
+                token = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
+            }
+        }
+
+        var formData = new FormData();
+        if (token) {
+            formData.append('__RequestVerificationToken', token);
+        }
+
+        // Add confirmed matches to request body
+        var requestBody = {
+            confirmedMatches: confirmedMatches
+        };
+        
+        // For FormData, we need to send as JSON in body or use a different approach
+        // Since we're using FormData for the token, let's use a different approach
+        var syncFormData = new FormData();
+        if (token) {
+            syncFormData.append('__RequestVerificationToken', token);
+        }
+        syncFormData.append('confirmedMatches', JSON.stringify(confirmedMatches));
+        
+        console.log('Sending sync request with', confirmedMatches.length, 'confirmed matches');
+        console.log('Confirmed matches:', JSON.stringify(confirmedMatches));
+
+        return fetch('/api/Admin/BusinessAreas/SyncFromCms', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: syncFormData,
+            credentials: 'same-origin'
+        });
+    })
+    .then(response => {
+        console.log('Sync response status:', response.status);
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Sync failed:', response.status, text);
+                throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Sync response data:', data);
+        btn.disabled = false;
+        btnText.textContent = 'Sync from CMS';
+        spinner.classList.add('d-none');
+        
+        if (data.success) {
+            var message = 'Sync completed successfully!\n\n' + data.message;
+            if (data.matches && data.matches.length > 0) {
+                message += '\n\nMatches applied:\n';
+                data.matches.forEach(function(match) {
+                    message += '- "' + match.existingName + '" matched with "' + match.cmsName + '"\n';
+                });
+            }
+            alert(message);
+            console.log('Reloading page...');
+            window.location.reload();
+        } else {
+            console.error('Sync failed:', data.message);
+            alert('Sync failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btnText.textContent = 'Sync from CMS';
+        spinner.classList.add('d-none');
+        console.error('Error in syncFromCms:', error);
+        alert('An error occurred while syncing: ' + error.message + '\n\nPlease check the browser console for details.');
+    });
 }
 </script>
 }
