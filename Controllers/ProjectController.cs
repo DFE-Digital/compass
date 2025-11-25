@@ -122,8 +122,9 @@ namespace Compass.Controllers
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
                         (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
                     ))
-                    .AsNoTracking()
                     .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Include(p => p.PhaseLookup)
                     .Include(p => p.PrimaryContactUser)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
@@ -134,6 +135,7 @@ namespace Compass.Controllers
                     .Include(p => p.Outcomes)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
+                    .AsNoTracking()
                     .OrderBy(p => p.Title)
                     .ToListAsync();
             }
@@ -151,8 +153,9 @@ namespace Compass.Controllers
                 {
                     watchedProjects = await _context.Projects
                         .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
-                        .AsNoTracking()
                         .Include(p => p.DeliveryPriority)
+                        .Include(p => p.BusinessAreaLookup)
+                        .Include(p => p.PhaseLookup)
                         .Include(p => p.PrimaryContactUser)
                         .Include(p => p.ProjectMissions)
                             .ThenInclude(pm => pm.Mission)
@@ -163,6 +166,7 @@ namespace Compass.Controllers
                         .Include(p => p.Outcomes)
                         .Include(p => p.ProjectContacts)
                             .ThenInclude(pc => pc.User)
+                        .AsNoTracking()
                         .OrderBy(p => p.Title)
                         .ToListAsync();
                 }
