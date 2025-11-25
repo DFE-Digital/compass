@@ -37,12 +37,34 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.Milestones)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.WeeklySuccessUpdates)
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
         {
             return NotFound();
         }
+
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
+        ViewBag.Project = project;
 
         var deliveryCode = $"DEL-DDT-{project.Id}";
         
@@ -130,12 +152,32 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         var project = await _context.Projects
             .Include(p => p.Milestones.Where(m => !m.IsDeleted))
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
         {
             return NotFound();
         }
+
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
@@ -153,12 +195,32 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         var project = await _context.Projects
             .Include(p => p.MonthlyUpdates)
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
         {
             return NotFound();
         }
+
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
@@ -178,12 +240,31 @@ public class MilestonesUpdatesSuccessesController : Controller
         var project = await _context.Projects
             .Include(p => p.WeeklySuccessUpdates)
             .Include(p => p.Successes)
+            .Include(p => p.Outcomes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
         {
             return NotFound();
         }
+
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;

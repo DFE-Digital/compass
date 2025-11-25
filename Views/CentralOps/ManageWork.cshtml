@@ -1,0 +1,386 @@
+@model IEnumerable<Compass.Models.Project>
+@{
+    ViewData["Title"] = "Manage Projects";
+    var search = ViewBag.Search as string;
+    var businessArea = ViewBag.BusinessArea as string;
+    var priority = ViewBag.Priority as string;
+    var rag = ViewBag.Rag as string;
+    var status = ViewBag.Status as string;
+    var totalCount = ViewBag.TotalCount as int? ?? 0;
+    var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+    var priorities = ViewBag.Priorities as string[] ?? new string[0];
+    var rags = ViewBag.Rags as string[] ?? new string[0];
+    var statuses = ViewBag.Statuses as string[] ?? new string[0];
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Manage Work</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Manage Projects</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @{
+            var modelCount = Model?.Count() ?? 0;
+        }
+        @if (Model == null)
+        {
+            <div class="alert alert-warning">
+                <strong>Debug:</strong> Model is null. Check controller logs.
+            </div>
+        }
+                else if (modelCount == 0)
+        {
+            <div class="alert alert-info">
+                <strong>Info:</strong> No projects found. Model count: @modelCount, ViewBag total: @totalCount. 
+                @if (totalCount == 0)
+                {
+                    <text>This might indicate there are no projects in the database, or all projects are deleted.</text>
+                }
+                else
+                {
+                    <text>ViewBag shows @totalCount items but Model is empty. This suggests a data passing issue.</text>
+                }
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-lg-3 col-md-4 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-filter mr-2"></i>Filters
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" action="@Url.Action("ManageWork", "CentralOps")" id="filterForm">
+                            <div class="form-group">
+                                <label for="search">Search</label>
+                                <input type="text" class="form-control form-control-sm" id="search" name="search" value="@search" placeholder="Search title, code, or aim...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="businessArea">Business Area</label>
+                                <select class="form-control form-control-sm" id="businessArea" name="businessArea">
+                                    <option value="">All</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        @if (businessArea == ba)
+                                        {
+                                            <option value="@ba" selected>@ba</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@ba">@ba</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="priority">Priority</label>
+                                <select class="form-control form-control-sm" id="priority" name="priority">
+                                    <option value="">All</option>
+                                    @foreach (var p in priorities)
+                                    {
+                                        @if (priority == p)
+                                        {
+                                            <option value="@p" selected>@p</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p">@p</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="rag">RAG Status</label>
+                                <select class="form-control form-control-sm" id="rag" name="rag">
+                                    <option value="">All</option>
+                                    @foreach (var r in rags)
+                                    {
+                                        @if (rag == r)
+                                        {
+                                            <option value="@r" selected>@r</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@r">@r</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="status">Status</label>
+                                <select class="form-control form-control-sm" id="status" name="status">
+                                    <option value="">All</option>
+                                    @foreach (var s in statuses)
+                                    {
+                                        @if (status == s)
+                                        {
+                                            <option value="@s" selected>@s</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">
+                                    <i class="fas fa-search"></i> Apply Filters
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(search) || !string.IsNullOrEmpty(businessArea) || !string.IsNullOrEmpty(priority) || !string.IsNullOrEmpty(rag) || !string.IsNullOrEmpty(status))
+                            {
+                                <div class="form-group">
+                                    <a href="@Url.Action("ManageWork", "CentralOps")" class="btn btn-secondary btn-sm btn-block">
+                                        <i class="fas fa-times"></i> Clear Filters
+                                    </a>
+                                </div>
+                            }
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Table -->
+            <div class="col-lg-9 col-md-8 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-list mr-2"></i>Projects
+                            <span class="badge badge-info ml-2">@totalCount</span>
+                        </h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover mb-0 sortable-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                                    <th style="width: 100px;" class="sortable" data-column="ProjectCode" tabindex="0" role="button" aria-label="Sort by Project Code">Code</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status</th>
+                                    <th style="width: 150px;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
+                                    <th style="width: 150px;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
+                                    <th style="width: 120px;" class="sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date">Target Date</th>
+                                    <th style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model != null && Model.Any())
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        var isOverdue = item.TargetDeliveryDate.HasValue && item.TargetDeliveryDate.Value < DateTime.UtcNow && item.Status == "Active";
+                                        <tr class="@(isOverdue ? "table-danger" : "")">
+                                            <td>
+                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Id">@item.Title</a>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.ProjectCode))
+                                                {
+                                                    <span class="text-muted small">@item.ProjectCode</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.DeliveryPriority != null)
+                                                {
+                                                    var priorityName = item.DeliveryPriority.Name.ToLower();
+                                                    var priorityClass = priorityName.Contains("critical") || priorityName.Contains("high") ? "badge-danger" :
+                                                                        priorityName.Contains("medium") ? "badge-warning" :
+                                                                        priorityName.Contains("low") ? "badge-secondary" : "badge-secondary";
+                                                    <span class="badge @priorityClass">@item.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.RagStatus))
+                                                {
+                                                    var ragClass = item.RagStatus switch {
+                                                        "Red" => "badge-danger",
+                                                        "Amber-Red" => "badge-warning",
+                                                        "Amber" => "badge-warning",
+                                                        "Amber-Green" => "badge-info",
+                                                        "Green" => "badge-success",
+                                                        _ => "badge-secondary"
+                                                    };
+                                                    <span class="badge @ragClass">@item.RagStatus</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (item.Status)
+                                                {
+                                                    case "Active":
+                                                        <span class="badge badge-primary">Active</span>
+                                                        break;
+                                                    case "Paused":
+                                                        <span class="badge badge-warning">Paused</span>
+                                                        break;
+                                                    case "Completed":
+                                                        <span class="badge badge-success">Completed</span>
+                                                        break;
+                                                    case "Cancelled":
+                                                        <span class="badge badge-dark">Cancelled</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@item.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@(item.BusinessAreaLookup?.Name ?? "-")</td>
+                                            <td>@(item.PrimaryContactUser?.Name ?? item.PrimaryContactUser?.Email ?? "-")</td>
+                                            <td>
+                                                @if (item.TargetDeliveryDate.HasValue)
+                                                {
+                                                    <span class="@(isOverdue ? "text-danger" : "")">
+                                                        @item.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a asp-controller="Project" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-edit"></i> Edit
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted py-3">No projects found</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'TargetDate' || column === 'DueDate') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = aDate === '-' ? new Date(9999, 11, 31) : new Date(aDate);
+                        bVal = bDate === '-' ? new Date(9999, 11, 31) : new Date(bDate);
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+    </script>
+}
+
