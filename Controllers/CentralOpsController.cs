@@ -50,6 +50,34 @@ public class CentralOpsController : Controller
         _logger = logger;
     }
 
+    private static string NormalizeRagStatus(string? ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return string.Empty;
+        }
+
+        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
+        // Convert to lowercase first for case-insensitive comparison, then capitalize
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        // Capitalize first letter of each word for consistency (e.g., "amber-red" -> "Amber-Red")
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        
+        return string.Join("-", parts);
+    }
+
     private string GetUserEmail()
     {
         return User.Identity?.Name 
@@ -108,7 +136,7 @@ public class CentralOpsController : Controller
             // Summary by RAG
             var ragSummary = allProjects
                 .Where(p => !string.IsNullOrEmpty(p.RagStatus))
-                .GroupBy(p => p.RagStatus ?? "Not set")
+                .GroupBy(p => NormalizeRagStatus(p.RagStatus) ?? "Not set")
                 .Select(g => new RagSummaryItem
                 {
                     Rag = g.Key,
@@ -117,14 +145,31 @@ public class CentralOpsController : Controller
                 .OrderByDescending(x => x.Rag == "Red" ? 4 : x.Rag == "Amber-Red" ? 3 : x.Rag == "Amber" ? 2 : x.Rag == "Amber-Green" ? 1 : x.Rag == "Green" ? 0 : -1)
                 .ToList();
 
-            // Most at risk projects (Red or Amber-Red RAG, or overdue target dates)
+            // Most at risk projects (Red, Amber-Red RAG, or High/Critical priority, or overdue target dates)
             var mostAtRisk = allProjects
                 .Where(p => 
-                    (p.RagStatus == "Red" || p.RagStatus == "Amber-Red") ||
-                    (p.TargetDeliveryDate.HasValue && p.TargetDeliveryDate.Value < DateTime.UtcNow && p.Status == "Active"))
-                .OrderByDescending(p => p.RagStatus == "Red" ? 4 : p.RagStatus == "Amber-Red" ? 3 : p.RagStatus == "Amber" ? 2 : 1)
+                    {
+                        var normalizedRag = NormalizeRagStatus(p.RagStatus);
+                        var isHighPriority = p.DeliveryPriority != null && 
+                            (p.DeliveryPriority.Name.ToLower().Contains("high") || 
+                             p.DeliveryPriority.Name.ToLower().Contains("critical"));
+                        return (normalizedRag == "Red" || normalizedRag == "Amber-Red") ||
+                               isHighPriority ||
+                               (p.TargetDeliveryDate.HasValue && p.TargetDeliveryDate.Value < DateTime.UtcNow && p.Status == "Active");
+                    })
+                .OrderByDescending(p => 
+                    {
+                        var normalizedRag = NormalizeRagStatus(p.RagStatus);
+                        var isHighPriority = p.DeliveryPriority != null && 
+                            (p.DeliveryPriority.Name.ToLower().Contains("high") || 
+                             p.DeliveryPriority.Name.ToLower().Contains("critical"));
+                        if (normalizedRag == "Red") return 5;
+                        if (normalizedRag == "Amber-Red") return 4;
+                        if (isHighPriority) return 3;
+                        if (normalizedRag == "Amber") return 2;
+                        return 1;
+                    })
                 .ThenBy(p => p.TargetDeliveryDate)
-                .Take(20)
                 .ToList();
 
             // Summary by Business Area
@@ -135,11 +180,11 @@ public class CentralOpsController : Controller
                 {
                     BusinessArea = g.Key,
                     Count = g.Count(),
-                    RedCount = g.Count(p => p.RagStatus == "Red"),
-                    AmberRedCount = g.Count(p => p.RagStatus == "Amber-Red"),
-                    AmberCount = g.Count(p => p.RagStatus == "Amber"),
-                    AmberGreenCount = g.Count(p => p.RagStatus == "Amber-Green"),
-                    GreenCount = g.Count(p => p.RagStatus == "Green"),
+                    RedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
+                    AmberRedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
+                    AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
+                    AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
+                    GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
                     HighPriorityCount = g.Count(p => p.DeliveryPriority != null && (p.DeliveryPriority.Name.ToLower().Contains("high") || p.DeliveryPriority.Name.ToLower().Contains("critical"))),
                     BlockedCount = 0 // Projects don't have a blocked status
                 })
@@ -189,6 +234,10 @@ public class CentralOpsController : Controller
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.Milestones)
                 .Where(p => !p.IsDeleted);
 
             // Apply filters
@@ -220,11 +269,9 @@ public class CentralOpsController : Controller
                 query = query.Where(p => p.Status == status);
             }
 
-            // Get all filtered results - DataTables will handle sorting and pagination client-side
+            // Get all filtered results - sorted alphabetically by title by default
             var workItems = await query
-                .OrderByDescending(p => p.RagStatus == "Red" ? 4 : p.RagStatus == "Amber-Red" ? 3 : p.RagStatus == "Amber" ? 2 : p.RagStatus == "Amber-Green" ? 1 : p.RagStatus == "Green" ? 0 : -1)
-                .ThenByDescending(p => p.TargetDeliveryDate.HasValue ? 1 : 0)
-                .ThenBy(p => p.TargetDeliveryDate)
+                .OrderBy(p => p.Title)
                 .ToListAsync();
 
             var totalCount = workItems.Count;
@@ -267,6 +314,85 @@ public class CentralOpsController : Controller
             TempData["ErrorMessage"] = "An error occurred while loading projects. Please try again.";
             return View(new List<Project>());
         }
+    }
+
+    // GET: CentralOps/WorkItemDetails/5
+    public async Task<IActionResult> WorkItemDetails(int? id)
+    {
+        if (!await IsCentralOpsAdminAsync())
+        {
+            return Forbid();
+        }
+
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var project = await _context.Projects
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.BusinessAreaLookup)
+            .Include(p => p.PhaseLookup)
+            .Include(p => p.ActivityTypeLookup)
+            .Include(p => p.RiskAppetiteLookup)
+            .Include(p => p.SeniorResponsibleOfficers)
+                .ThenInclude(sro => sro.User)
+            .Include(p => p.ServiceOwners)
+                .ThenInclude(so => so.User)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
+            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+
+        if (project == null)
+        {
+            return NotFound();
+        }
+
+        // Get priorities for dropdown
+        ViewBag.Priorities = await _context.DeliveryPriorities
+            .Where(dp => dp.IsActive)
+            .OrderBy(dp => dp.SortOrder)
+            .ThenBy(dp => dp.Name)
+            .ToListAsync();
+
+        return View(project);
+    }
+
+    // POST: CentralOps/UpdatePriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdatePriority(int id, int? priorityId)
+    {
+        if (!await IsCentralOpsAdminAsync())
+        {
+            return Forbid();
+        }
+
+        var project = await _context.Projects.FindAsync(id);
+        if (project == null || project.IsDeleted)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            project.DeliveryPriorityId = priorityId;
+            project.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync();
+            
+            TempData["SuccessMessage"] = "Priority updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating priority for project {ProjectId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the priority.";
+        }
+
+        return RedirectToAction(nameof(WorkItemDetails), new { id });
     }
 }
 

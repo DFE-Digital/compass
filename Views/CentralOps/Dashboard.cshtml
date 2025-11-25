@@ -1,8 +1,7 @@
 @using Compass.Controllers
 @{
     ViewData["Title"] = "Central Operations Dashboard";
-    var prioritySummary = ViewBag.PrioritySummary as List<PrioritySummaryItem> ?? new List<PrioritySummaryItem>();
-    var mostAtRisk = ViewBag.MostAtRisk as List<Compass.Models.Action> ?? new List<Compass.Models.Action>();
+    var mostAtRisk = ViewBag.MostAtRisk as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
     var businessAreaSummary = ViewBag.BusinessAreaSummary as List<BusinessAreaSummaryItem> ?? new List<BusinessAreaSummaryItem>();
     var activeWorkItems = ViewBag.ActiveWorkItems as int? ?? 0;
 }
@@ -70,63 +69,14 @@
             <div class="col-lg-4 col-6">
                 <div class="small-box bg-danger">
                     <div class="inner">
-                        <h3>@(mostAtRisk.Count(a => a.Rag == "red" || a.Rag == "amber-red"))</h3>
+                        <h3>@(mostAtRisk.Count(p => {
+                            var normalizedRag = p.RagStatus != null ? p.RagStatus.ToLower() : "";
+                            return normalizedRag.Contains("red");
+                        }))</h3>
                         <p>Red/Amber-Red Items</p>
                     </div>
                     <div class="icon">
                         <i class="fas fa-times-circle"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Priority Summary -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-flag mr-2"></i>Summary by Priority
-                        </h3>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 200px;">Priority</th>
-                                    <th style="width: 100px;">Count</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (prioritySummary != null && prioritySummary.Any())
-                                {
-                                    @foreach (var item in prioritySummary)
-                                    {
-                                        <tr>
-                                            <td>
-                                                @{
-                                                    var priorityClass = item.Priority switch {
-                                                        "critical" => "badge-danger",
-                                                        "high" => "badge-danger",
-                                                        "medium" => "badge-warning",
-                                                        "low" => "badge-secondary",
-                                                        _ => "badge-secondary"
-                                                    };
-                                                }
-                                                <span class="badge @priorityClass">@item.Priority</span>
-                                            </td>
-                                            <td>@item.Count</td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="2" class="text-center text-muted py-3">No priority data available</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -137,9 +87,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-exclamation-triangle mr-2"></i>Most at Risk Work Items
-                        </h3>
+                        <h3 class="card-title">Most at Risk Work Items</h3>
                     </div>
                     <div class="card-body table-responsive p-0">
                         <table class="table table-hover mb-0 sortable-table">
@@ -160,22 +108,22 @@
                                 {
                                     @foreach (var item in mostAtRisk)
                                     {
-                                        var isOverdue = item.DueDate.HasValue && item.DueDate.Value < DateTime.UtcNow && item.Status != "done" && item.Status != "cancelled";
+                                        var isOverdue = item.TargetDeliveryDate.HasValue && item.TargetDeliveryDate.Value < DateTime.UtcNow && item.Status == "Active";
                                         <tr class="@(isOverdue ? "table-danger" : "")">
                                             <td>
-                                                <a asp-controller="Action" asp-action="Details" asp-route-id="@item.Id">@item.Title</a>
+                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Id">@item.Title</a>
                                             </td>
                                             <td>
-                                                @if (!string.IsNullOrEmpty(item.Priority))
+                                                @if (item.DeliveryPriority != null && !string.IsNullOrEmpty(item.DeliveryPriority.Name))
                                                 {
-                                                    var priorityClass = item.Priority switch {
-                                                        "critical" => "badge-danger",
-                                                        "high" => "badge-danger",
-                                                        "medium" => "badge-warning",
-                                                        "low" => "badge-secondary",
+                                                    var priorityClass = item.DeliveryPriority.Name.ToLower() switch {
+                                                        var p when p.Contains("critical") => "badge-danger",
+                                                        var p when p.Contains("high") => "badge-danger",
+                                                        var p when p.Contains("medium") => "badge-warning",
+                                                        var p when p.Contains("low") => "badge-secondary",
                                                         _ => "badge-secondary"
                                                     };
-                                                    <span class="badge @priorityClass">@item.Priority</span>
+                                                    <span class="badge @priorityClass">@item.DeliveryPriority.Name</span>
                                                 }
                                                 else
                                                 {
@@ -183,16 +131,17 @@
                                                 }
                                             </td>
                                             <td>
-                                                @if (!string.IsNullOrEmpty(item.Rag))
+                                                @if (!string.IsNullOrEmpty(item.RagStatus))
                                                 {
-                                                    var ragClass = item.Rag switch {
-                                                        "red" => "badge-danger",
-                                                        "amber-red" => "badge-warning",
-                                                        "amber" => "badge-warning",
-                                                        "green" => "badge-success",
+                                                    var ragClass = item.RagStatus.ToLower() switch {
+                                                        var r when r.Contains("red") && !r.Contains("amber") => "badge-danger",
+                                                        var r when r.Contains("amber-red") => "badge-warning",
+                                                        var r when r == "amber" => "badge-warning",
+                                                        var r when r.Contains("amber-green") => "badge-info",
+                                                        var r when r.Contains("green") && !r.Contains("amber") => "badge-success",
                                                         _ => "badge-secondary"
                                                     };
-                                                    <span class="badge @ragClass">@item.Rag</span>
+                                                    <span class="badge @ragClass">@item.RagStatus</span>
                                                 }
                                                 else
                                                 {
@@ -200,35 +149,32 @@
                                                 }
                                             </td>
                                             <td>
-                                                @switch (item.Status)
+                                                @switch (item.Status?.ToLower())
                                                 {
-                                                    case "not_started":
-                                                        <span class="badge badge-secondary">Not started</span>
+                                                    case "active":
+                                                        <span class="badge badge-primary">Active</span>
                                                         break;
-                                                    case "in_progress":
-                                                        <span class="badge badge-primary">In progress</span>
+                                                    case "paused":
+                                                        <span class="badge badge-warning">Paused</span>
                                                         break;
-                                                    case "blocked":
-                                                        <span class="badge badge-danger">Blocked</span>
-                                                        break;
-                                                    case "done":
-                                                        <span class="badge badge-success">Done</span>
+                                                    case "completed":
+                                                        <span class="badge badge-success">Completed</span>
                                                         break;
                                                     case "cancelled":
                                                         <span class="badge badge-dark">Cancelled</span>
                                                         break;
                                                     default:
-                                                        <span class="badge badge-secondary">@item.Status</span>
+                                                        <span class="badge badge-secondary">@(item.Status ?? "-")</span>
                                                         break;
                                                 }
                                             </td>
-                                            <td>@(item.BusinessArea ?? "-")</td>
-                                            <td>@(item.AssignedToUser?.Name ?? item.AssignedToEmail ?? "-")</td>
+                                            <td>@(item.BusinessAreaLookup?.Name ?? "-")</td>
+                                            <td>@(item.PrimaryContactUser?.Name ?? item.PrimaryContactUser?.Email ?? "-")</td>
                                             <td>
-                                                @if (item.DueDate.HasValue)
+                                                @if (item.TargetDeliveryDate.HasValue)
                                                 {
                                                     <span class="@(isOverdue ? "text-danger" : "")">
-                                                        @item.DueDate.Value.ToString("dd MMM yyyy")
+                                                        @item.TargetDeliveryDate.Value.ToString("dd MMM yyyy")
                                                     </span>
                                                 }
                                                 else
@@ -237,7 +183,7 @@
                                                 }
                                             </td>
                                             <td>
-                                                <a asp-controller="Action" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-primary">
+                                                <a asp-controller="Project" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-primary">
                                                     <i class="fas fa-edit"></i> Edit
                                                 </a>
                                             </td>
@@ -262,23 +208,21 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-building mr-2"></i>Summary by Business Area
-                        </h3>
+                        <h3 class="card-title">Summary by Business Area</h3>
                     </div>
                     <div class="card-body table-responsive p-0">
                         <table class="table table-hover mb-0 sortable-table">
                             <thead>
                                 <tr>
                                     <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
-                                    <th style="width: 80px;" class="sortable" data-column="Total" tabindex="0" role="button" aria-label="Sort by Total">Total</th>
-                                    <th style="width: 80px;" class="sortable" data-column="Red" tabindex="0" role="button" aria-label="Sort by Red">Red</th>
-                                    <th style="width: 100px;" class="sortable" data-column="AmberRed" tabindex="0" role="button" aria-label="Sort by Amber-Red">Amber-Red</th>
-                                    <th style="width: 80px;" class="sortable" data-column="Amber" tabindex="0" role="button" aria-label="Sort by Amber">Amber</th>
-                                    <th style="width: 100px;" class="sortable" data-column="AmberGreen" tabindex="0" role="button" aria-label="Sort by Amber-Green">Amber-Green</th>
-                                    <th style="width: 80px;" class="sortable" data-column="Green" tabindex="0" role="button" aria-label="Sort by Green">Green</th>
-                                    <th style="width: 120px;" class="sortable" data-column="HighPriority" tabindex="0" role="button" aria-label="Sort by High Priority">High Priority</th>
-                                    <th style="width: 100px;" class="sortable" data-column="Blocked" tabindex="0" role="button" aria-label="Sort by Blocked">Blocked</th>
+                                    <th style="width: 100px;" class="sortable" data-column="Total" tabindex="0" role="button" aria-label="Sort by Total">Total</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Red" tabindex="0" role="button" aria-label="Sort by Red">Red</th>
+                                    <th style="width: 140px;" class="sortable" data-column="AmberRed" tabindex="0" role="button" aria-label="Sort by Amber-Red">Amber-Red</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Amber" tabindex="0" role="button" aria-label="Sort by Amber">Amber</th>
+                                    <th style="width: 140px;" class="sortable" data-column="AmberGreen" tabindex="0" role="button" aria-label="Sort by Amber-Green">Amber-Green</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Green" tabindex="0" role="button" aria-label="Sort by Green">Green</th>
+                                    <th style="width: 150px;" class="sortable" data-column="HighPriority" tabindex="0" role="button" aria-label="Sort by High Priority">High Priority</th>
+                                    <th style="width: 120px;" class="sortable" data-column="Blocked" tabindex="0" role="button" aria-label="Sort by Blocked">Blocked</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -296,7 +240,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">0</span>
+                                                    <span>0</span>
                                                 }
                                             </td>
                                             <td>
@@ -306,7 +250,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">0</span>
+                                                    <span>0</span>
                                                 }
                                             </td>
                                             <td>
@@ -316,7 +260,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">0</span>
+                                                    <span>0</span>
                                                 }
                                             </td>
                                             <td>
@@ -326,7 +270,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">0</span>
+                                                    <span>0</span>
                                                 }
                                             </td>
                                             <td>
@@ -336,7 +280,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">0</span>
+                                                    <span>0</span>
                                                 }
                                             </td>
                                             <td>
