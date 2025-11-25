@@ -40,7 +40,10 @@ public class ProjectContact
     public int SortOrder { get; set; } = 1;
 
     [MaxLength(200)]
-    public string FundingArrangement { get; set; } = "Not specified";
+    public string FundingArrangement { get; set; } = "Admin";
+
+    [MaxLength(50)]
+    public string? TimeAllocation { get; set; }
 
     [MaxLength(20)]
     public string EmploymentType { get; set; } = "Permanent";

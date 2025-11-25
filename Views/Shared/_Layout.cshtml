@@ -56,6 +56,7 @@
             string? currentUserDisplayName = User.Identity?.Name;
             string? currentUserEmail = null;
             bool hasAdminRole = false;
+            int taskCount = 0;
         }
 
         <!-- Preloader -->
@@ -129,6 +130,62 @@
                                     if (currentUser.Photo != null && currentUser.Photo.Length > 0)
                                     {
                                         userPhotoDataUrl = $"data:image/png;base64,{Convert.ToBase64String(currentUser.Photo)}";
+                                    }
+                                    
+                                    // Calculate task count
+                                    try
+                                    {
+                                        var userProjects = DbContext.Projects
+                                            .Where(p => !p.IsDeleted && (
+                                                p.PrimaryContactUserId == currentUser.Id ||
+                                                p.SeniorResponsibleOfficers.Any(sro => sro.UserId == currentUser.Id) ||
+                                                p.ServiceOwners.Any(so => so.UserId == currentUser.Id)
+                                            ))
+                                            .Include(p => p.ProjectContacts)
+                                            .Include(p => p.SeniorResponsibleOfficers)
+                                            .Include(p => p.ServiceOwners)
+                                            .Include(p => p.Directorates)
+                                            .Include(p => p.BudgetOwners)
+                                            .AsNoTracking()
+                                            .ToList();
+                                        
+                                        foreach (var project in userProjects)
+                                        {
+                                            // Check: At least 1 team member added
+                                            var currentTeamMembers = project.ProjectContacts
+                                                .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || 
+                                                             pc.TeamStatus.ToLower() == "current")
+                                                .ToList();
+                                            if (!currentTeamMembers.Any()) taskCount++;
+                                            
+                                            // Check: The SRO is added
+                                            if (!project.SeniorResponsibleOfficers.Any()) taskCount++;
+                                            
+                                            // Check: At least 1 directorate added
+                                            if (!project.Directorates.Any()) taskCount++;
+                                            
+                                            // Check: Activity type is set
+                                            if (project.ActivityTypeLookupId == null) taskCount++;
+                                            
+                                            // Check: RAG Status is set
+                                            if (string.IsNullOrWhiteSpace(project.RagStatus)) taskCount++;
+                                            
+                                            // Check: Business area is set
+                                            if (project.BusinessAreaId == null) taskCount++;
+                                            
+                                            // Check: Aim is set
+                                            if (string.IsNullOrWhiteSpace(project.Aim)) taskCount++;
+                                            
+                                            // Check: At least 1 primary contact
+                                            if (project.PrimaryContactUserId == null) taskCount++;
+                                            
+                                            // Check: Budget owner is set
+                                            if (!project.BudgetOwners.Any()) taskCount++;
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // Non-blocking: task count will remain 0
                                     }
                                 }
                             }
@@ -208,7 +265,7 @@
                             </a>
                             <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "FlagshipProjects" ? "active" : "")" href="@Url.Action("FlagshipProjects", "DdtReports")">
                                 <i class="fas fa-flag mr-2" aria-hidden="true"></i>
-                                Flagship projects
+                                Flagship work items
                             </a>
                             <a class="dropdown-item @(controllerName == "DdtReports" && actionName == "AccessibilityReport" ? "active" : "")" href="@Url.Action("AccessibilityReport", "DdtReports")">
                                 <i class="fas fa-universal-access mr-2" aria-hidden="true"></i>
@@ -246,6 +303,25 @@
                             <a class="dropdown-item @(controllerName == "Analysis" && actionName == "ServiceStandards" ? "active" : "")" href="@Url.Action("ServiceStandards", "Analysis")">
                                 <i class="fas fa-check-circle mr-2" aria-hidden="true"></i>
                                 Service Standards
+                            </a>
+                        </div>
+                    </li>
+                    @{
+                        var isHelpController = controllerName == "Help";
+                    }
+                    <li class="nav-item dropdown d-none d-sm-inline-block">
+                        <a class="nav-link dropdown-toggle @(isHelpController ? "active" : "")" href="#" id="helpDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Help
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="helpDropdown">
+                            <a class="dropdown-item @(isHelpController && actionName == "Index" ? "active" : "")" href="@Url.Action("Index", "Help")">
+                                <i class="fas fa-question-circle mr-2" aria-hidden="true"></i>
+                                How do I...
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="@Url.Action("Index", "Documentation")">
+                                <i class="fas fa-book mr-2" aria-hidden="true"></i>
+                                Documentation
                             </a>
                         </div>
                     </li>
@@ -370,6 +446,20 @@
                             </a>
                         </li>
 
+                        <!-- Tasks -->
+                        <li class="nav-item">
+                            <a href="@Url.Action("Index", "Tasks")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Tasks" ? "active" : "")" style="display: flex; align-items: center;">
+                                <i class="nav-icon fas fa-tasks" aria-hidden="true"></i>
+                                <p style="display: flex; align-items: center; justify-content: space-between; flex: 1; margin-bottom: 0; margin-left: 0.5rem;">
+                                    <span>Tasks</span>
+                                    @if (taskCount > 0)
+                                    {
+                                        <span class="badge badge-warning badge-pill ml-2" style="font-size: 0.7rem; padding: 0.2rem 0.4rem; line-height: 1.2;">@taskCount</span>
+                                    }
+                                </p>
+                            </a>
+                        </li>
+
                         <!-- Demand Management Section -->
                         @if (Configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false))
                         {
@@ -437,7 +527,7 @@
                         <li class="nav-item">
                             <a href="@Url.Action("Index", "Project")" class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Project" && ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active" : "")">
                                 <i class="nav-icon fas fa-hammer" aria-hidden="true"></i>
-                                <p>Delivery reporting</p>
+                                <p>Work reporting</p>
                             </a>
                         </li>
                         @{

@@ -239,8 +239,13 @@ namespace Compass.Controllers
             ViewBag.CurrentFlagship = flagship;
             ViewBag.CurrentPriority = priority;
 
-            // Get business areas and phases from CMS
-            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Get business areas from admin settings and phases from CMS
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
 
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
             ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
@@ -338,8 +343,10 @@ namespace Compass.Controllers
                 .Include(p => p.FundingHistory)
                 .Include(p => p.ActivityTypeLookup)
                 .Include(p => p.RiskAppetiteLookup)
-                .Include(p => p.SeniorResponsibleOfficers)
-                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
                     .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
@@ -410,10 +417,21 @@ namespace Compass.Controllers
                 .ThenBy(m => m.Title)
                 .ToListAsync();
 
-            // Get business areas and phases from CMS
-            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Get business areas from admin settings
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
 
-            ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+            // Get phases from admin settings (PhaseLookups table)
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
 
             // Check if project is in user's watchlist
             var currentUserDetails = await GetCurrentUserAsync();
@@ -528,20 +546,31 @@ namespace Compass.Controllers
             }
 
             // Set current tab
+            // Redirect milestones tab to new MilestonesUpdatesSuccesses overview
+            if (tab == "milestones")
+            {
+                return RedirectToAction("Overview", "MilestonesUpdatesSuccesses", new { projectId = id });
+            }
+            
             ViewBag.CurrentTab = tab;
             ViewBag.IssuesView = string.Equals(issuesView, "priority", StringComparison.OrdinalIgnoreCase) ? "priority" : "table";
 
             // Fetch service assessments for delivery phases tab
-            if (tab == "deliveryphases" && !string.IsNullOrEmpty(project.ProjectCode))
+            if (tab == "deliveryphases")
             {
                 try
                 {
-                    var assessments = await GetServiceAssessmentsByProjectCodeAsync(project.ProjectCode);
+                    // Use delivery code format: DEL-DDT-001
+                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    _logger.LogInformation("Fetching service assessments for delivery phases tab. Project ID: {ProjectId}, Delivery Code: {DeliveryCode}", project.Id, deliveryCode);
+                    var assessments = await GetServiceAssessmentsByProjectCodeAsync(deliveryCode);
+                    _logger.LogInformation("Retrieved {Count} assessments for delivery code {DeliveryCode}", assessments?.Count ?? 0, deliveryCode);
                     ViewBag.ServiceAssessments = assessments;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error fetching service assessments for project code {ProjectCode}", project.ProjectCode);
+                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    _logger.LogError(ex, "Error fetching service assessments for project code {ProjectCode}", deliveryCode);
                     ViewBag.ServiceAssessments = new List<object>();
                 }
             }
@@ -555,10 +584,14 @@ namespace Compass.Controllers
 
         private async Task<List<object>> GetServiceAssessmentsByProjectCodeAsync(string projectCode)
         {
+            _logger.LogInformation("GetServiceAssessmentsByProjectCodeAsync called with project code: {ProjectCode}", projectCode);
+            
             try
             {
                 var apiUrl = _configuration["ServiceAssessments:ApiUrl"] ?? "https://service-assessments.education.gov.uk";
                 var apiToken = _configuration["ServiceAssessments:ApiToken"] ?? "";
+
+                _logger.LogInformation("API URL: {ApiUrl}, Token configured: {HasToken}", apiUrl, !string.IsNullOrEmpty(apiToken));
 
                 if (string.IsNullOrEmpty(apiToken))
                 {
@@ -570,53 +603,102 @@ namespace Compass.Controllers
                 httpClient.DefaultRequestHeaders.Clear();
                 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiToken}");
 
-                // Fetch all published assessments and filter by project code
-                var endpoint = $"{apiUrl}/api/assessments/published/summary";
-                _logger.LogInformation("Fetching service assessments from {Endpoint}", endpoint);
+                // Normalize API URL - remove trailing slashes
+                apiUrl = apiUrl.TrimEnd('/');
+                
+                // Remove /api from the end if present (to avoid /api/api/ in the path)
+                if (apiUrl.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+                {
+                    apiUrl = apiUrl.Substring(0, apiUrl.Length - 4);
+                }
+                
+                // Call the new endpoint: /api/product/project-code/{projectCode}
+                // Ensure project code is URL-encoded
+                var encodedProjectCode = Uri.EscapeDataString(projectCode);
+                var endpoint = $"{apiUrl}/api/product/project-code/{encodedProjectCode}";
+                _logger.LogInformation("Fetching service assessments from {Endpoint} for project code {ProjectCode}", endpoint, projectCode);
 
                 var response = await httpClient.GetAsync(endpoint);
+                _logger.LogInformation("API response status: {StatusCode} for endpoint {Endpoint}", response.StatusCode, endpoint);
                 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("Service Assessment API call failed with status {StatusCode}", response.StatusCode);
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        _logger.LogInformation("No assessments found for project code {ProjectCode} (404) - this is expected if the project has no assessments. Response body: {ErrorContent}", projectCode, errorContent);
+                        return new List<object>();
+                    }
+                    _logger.LogWarning("Service Assessment API call failed with status {StatusCode} for project code {ProjectCode}. Response: {ErrorContent}", 
+                        response.StatusCode, projectCode, errorContent);
                     return new List<object>();
                 }
 
                 var jsonContent = await response.Content.ReadAsStringAsync();
-                var apiResponse = System.Text.Json.JsonSerializer.Deserialize<ServiceAssessmentsApiResponse>(jsonContent, new System.Text.Json.JsonSerializerOptions
+                _logger.LogInformation("API response received. Content length: {Length} characters", jsonContent?.Length ?? 0);
+                
+                if (string.IsNullOrEmpty(jsonContent))
+                {
+                    _logger.LogWarning("API response content is empty for project code {ProjectCode}", projectCode);
+                    return new List<object>();
+                }
+                
+                var apiResponse = System.Text.Json.JsonSerializer.Deserialize<ProjectCodeAssessmentsResponse>(jsonContent, new System.Text.Json.JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
                 if (apiResponse?.Assessments == null)
                 {
+                    _logger.LogWarning("API response deserialized but Assessments is null. Response: {JsonContent}", jsonContent);
                     return new List<object>();
                 }
 
-                // Filter by project code
-                var filteredAssessments = apiResponse.Assessments
-                    .Where(a => !string.IsNullOrEmpty(a.ProjectCode) && 
-                                string.Equals(a.ProjectCode, projectCode, StringComparison.OrdinalIgnoreCase))
+                _logger.LogInformation("Successfully deserialized {Count} assessments for project code {ProjectCode}", apiResponse.Assessments.Count, projectCode);
+
+                // Return assessments as objects
+                return apiResponse.Assessments
                     .Select(a => new
                     {
-                        a.Id,
                         a.AssessmentID,
+                        a.FIPS_ID,
+                        a.Type,
                         a.Phase,
+                        a.ProjectCode,
                         a.Outcome,
                         a.AssessmentDateTime,
-                        a.Type,
-                        a.Status
+                        a.Status,
+                        a.ActionCount
                     })
                     .Cast<object>()
                     .ToList();
-
-                return filteredAssessments;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching service assessments by project code {ProjectCode}", projectCode);
+                _logger.LogError(ex, "Exception in GetServiceAssessmentsByProjectCodeAsync for project code {ProjectCode}. Exception type: {ExceptionType}, Message: {Message}", 
+                    projectCode, ex.GetType().Name, ex.Message);
                 return new List<object>();
             }
+        }
+
+        private class ProjectCodeAssessmentsResponse
+        {
+            public string? ProjectCode { get; set; }
+            public List<ProjectCodeAssessment>? Assessments { get; set; }
+            public int Count { get; set; }
+        }
+
+        private class ProjectCodeAssessment
+        {
+            public int AssessmentID { get; set; }
+            public string? FIPS_ID { get; set; }
+            public string? Type { get; set; }
+            public string? Phase { get; set; }
+            public string? ProjectCode { get; set; }
+            public string? Outcome { get; set; }
+            public DateTime? AssessmentDateTime { get; set; }
+            public string? Status { get; set; }
+            public int ActionCount { get; set; }
         }
 
         private class ServiceAssessmentsApiResponse
@@ -1041,7 +1123,7 @@ namespace Compass.Controllers
             var placeholder = new ProjectContact
             {
                 ProjectId = summary.Id,
-                FundingArrangement = "Not specified",
+                FundingArrangement = "Admin",
                 EmploymentType = "Permanent",
                 TeamStatus = "current"
             };
@@ -1056,6 +1138,7 @@ namespace Compass.Controllers
         {
             input.EmploymentType = NormalizeEmploymentType(input.EmploymentType);
             input.TeamStatus = NormalizeTeamStatus(input.TeamStatus);
+            input.FundingArrangement = NormalizeFundingArrangement(input.FundingArrangement);
 
             if (string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) &&
                 string.IsNullOrWhiteSpace(input.LeaveReason))
@@ -1125,7 +1208,8 @@ namespace Compass.Controllers
                     Name = normalizedName,
                     Email = contactEmail,
                     Role = input.Role.Trim(),
-                    FundingArrangement = input.FundingArrangement.Trim(),
+                    FundingArrangement = input.FundingArrangement,
+                    TimeAllocation = input.TimeAllocation?.Trim(),
                     EmploymentType = input.EmploymentType,
                     TeamStatus = input.TeamStatus,
                     LeaveReason = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? input.LeaveReason?.Trim() : null,
@@ -1203,6 +1287,7 @@ namespace Compass.Controllers
 
             input.EmploymentType = NormalizeEmploymentType(input.EmploymentType);
             input.TeamStatus = NormalizeTeamStatus(input.TeamStatus);
+            input.FundingArrangement = NormalizeFundingArrangement(input.FundingArrangement);
 
             if (string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) &&
                 string.IsNullOrWhiteSpace(input.LeaveReason))
@@ -1267,7 +1352,8 @@ namespace Compass.Controllers
             contact.Name = normalizedName;
             contact.Email = contactEmail;
             contact.Role = input.Role.Trim();
-            contact.FundingArrangement = input.FundingArrangement.Trim();
+            contact.FundingArrangement = input.FundingArrangement;
+            contact.TimeAllocation = input.TimeAllocation?.Trim();
             contact.EmploymentType = input.EmploymentType;
             contact.TeamStatus = input.TeamStatus;
             contact.LeaveReason = string.Equals(input.TeamStatus, "previous", StringComparison.OrdinalIgnoreCase) ? input.LeaveReason?.Trim() : null;
@@ -1281,7 +1367,7 @@ namespace Compass.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Team member updated successfully.";
-            return RedirectToAction(nameof(TeamMemberDetails), new { projectId = input.ProjectId, teamMemberId = contact.Id });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "team" });
         }
 
         [HttpGet]
@@ -1306,6 +1392,7 @@ namespace Compass.Controllers
                 Email = contact.Email,
                 Role = contact.Role,
                 FundingArrangement = contact.FundingArrangement,
+                TimeAllocation = contact.TimeAllocation,
                 EmploymentType = contact.EmploymentType,
                 TeamStatus = string.IsNullOrWhiteSpace(contact.TeamStatus) ? "current" : contact.TeamStatus,
                 LeaveReason = contact.LeaveReason,
@@ -1435,11 +1522,27 @@ namespace Compass.Controllers
             };
         }
 
+        private IReadOnlyList<SelectListItem> BuildTimeAllocationOptions(string? selected)
+        {
+            var options = new List<SelectListItem>
+            {
+                new("Less than 25%", "Less than 25%", string.Equals(selected, "Less than 25%", StringComparison.OrdinalIgnoreCase)),
+                new("25%", "25%", string.Equals(selected, "25%", StringComparison.OrdinalIgnoreCase)),
+                new("50%", "50%", string.Equals(selected, "50%", StringComparison.OrdinalIgnoreCase)),
+                new("75%", "75%", string.Equals(selected, "75%", StringComparison.OrdinalIgnoreCase)),
+                new("100%", "100%", string.Equals(selected, "100%", StringComparison.OrdinalIgnoreCase))
+            };
+            return options;
+        }
+
         private static string NormalizeEmploymentType(string? value)
             => string.Equals(value, "MSP", StringComparison.OrdinalIgnoreCase) ? "MSP" : "Permanent";
 
         private static string NormalizeTeamStatus(string? value)
             => string.Equals(value, "previous", StringComparison.OrdinalIgnoreCase) ? "previous" : "current";
+
+        private static string NormalizeFundingArrangement(string? value)
+            => string.Equals(value, "Programme", StringComparison.OrdinalIgnoreCase) ? "Programme" : "Admin";
 
         private ProjectTeamMemberFormViewModel BuildTeamMemberFormViewModel(ProjectSummaryViewModel summary, ProjectContact? member)
         {
@@ -1449,7 +1552,8 @@ namespace Compass.Controllers
                 TeamMemberId = member?.Id,
                 UserId = member?.UserId,
                 Role = member?.Role ?? string.Empty,
-                FundingArrangement = member?.FundingArrangement ?? "Not specified",
+                FundingArrangement = NormalizeFundingArrangement(member?.FundingArrangement),
+                TimeAllocation = member?.TimeAllocation,
                 EmploymentType = member?.EmploymentType ?? "Permanent",
                 TeamStatus = member?.TeamStatus ?? "current",
                 LeaveReason = member?.LeaveReason
@@ -1462,6 +1566,7 @@ namespace Compass.Controllers
                 ProjectTitle = summary.Title,
                 EmploymentTypeOptions = BuildEmploymentTypeOptions(input.EmploymentType),
                 TeamStatusOptions = BuildTeamStatusOptions(input.TeamStatus),
+                TimeAllocationOptions = BuildTimeAllocationOptions(input.TimeAllocation),
                 SelectedUserName = member?.User?.Name ?? member?.Name,
                 SelectedUserEmail = member?.User?.Email ?? member?.Email
             };
@@ -1494,6 +1599,7 @@ namespace Compass.Controllers
                 ProjectTitle = summary.Title,
                 EmploymentTypeOptions = BuildEmploymentTypeOptions(input.EmploymentType),
                 TeamStatusOptions = BuildTeamStatusOptions(input.TeamStatus),
+                TimeAllocationOptions = BuildTimeAllocationOptions(input.TimeAllocation),
                 SelectedUserName = selectedName,
                 SelectedUserEmail = selectedEmail
             };
@@ -1515,8 +1621,13 @@ namespace Compass.Controllers
             .Select(fs => new { fs.Id, fs.Name })
             .ToListAsync();
 
-        // Get business areas and phases from CMS
-        ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+        // Get business areas from admin settings and phases from CMS
+        ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .Select(ba => ba.Name)
+            .ToListAsync();
 
         ViewBag.Phases = await _productsApiService.GetPhasesAsync();
 
@@ -1589,8 +1700,9 @@ namespace Compass.Controllers
             var project = await _context.Projects
                 .Include(p => p.ActivityTypeLookup)
                 .Include(p => p.RiskAppetiteLookup)
-                .Include(p => p.SeniorResponsibleOfficers)
-                    .ThenInclude(sro => sro.User)
+                .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
                     .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
@@ -1662,6 +1774,7 @@ namespace Compass.Controllers
                 {
                     var existingProject = await _context.Projects
                         .Include(p => p.SeniorResponsibleOfficers)
+                        .Include(p => p.ServiceOwners)
                         .Include(p => p.Directorates)
                         .Include(p => p.BudgetOwners)
                         .Include(p => p.PmoContacts)
@@ -1829,6 +1942,55 @@ namespace Compass.Controllers
                     if (user != null)
                     {
                         project.SeniorResponsibleOfficers.Add(new ProjectSeniorResponsibleOfficer
+                        {
+                            ProjectId = project.Id,
+                            UserId = user.Id,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+
+            // Update Service Owners
+            var serviceOwnerUserIdsString = Request.Form["SelectedServiceOwnerUserIds"].ToString();
+            var selectedServiceOwnerUserIds = new List<Guid>();
+            if (!string.IsNullOrEmpty(serviceOwnerUserIdsString))
+            {
+                selectedServiceOwnerUserIds = serviceOwnerUserIdsString
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(x => Guid.TryParse(x.Trim(), out _))
+                    .Select(x => Guid.Parse(x.Trim()))
+                    .ToList();
+            }
+
+            // Load existing Service Owners with users
+            var existingServiceOwners = await _context.ProjectServiceOwners
+                .Include(so => so.User)
+                .Where(so => so.ProjectId == project.Id)
+                .ToListAsync();
+
+            // Remove existing Service Owners not in the selection
+            var serviceOwnersToRemove = existingServiceOwners
+                .Where(so => so.User != null && !selectedServiceOwnerUserIds.Contains(Guid.Parse(so.User.AzureObjectId ?? "")))
+                .ToList();
+            foreach (var serviceOwner in serviceOwnersToRemove)
+            {
+                _context.ProjectServiceOwners.Remove(serviceOwner);
+            }
+
+            // Add new Service Owners
+            var existingServiceOwnerUserIds = existingServiceOwners
+                .Where(so => so.User != null)
+                .Select(so => Guid.Parse(so.User!.AzureObjectId ?? ""))
+                .ToList();
+            foreach (var userId in selectedServiceOwnerUserIds)
+            {
+                if (!existingServiceOwnerUserIds.Contains(userId))
+                {
+                    var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                    if (user != null)
+                    {
+                        project.ServiceOwners.Add(new ProjectServiceOwner
                         {
                             ProjectId = project.Id,
                             UserId = user.Id,
@@ -2741,7 +2903,7 @@ namespace Compass.Controllers
                                 Email = i < emails.Count ? emails[i] : "",
                                 RoleDescription = i < roleDescriptions.Count ? roleDescriptions[i] : "",
                                 SortOrder = i + 1,
-                                FundingArrangement = "Not specified",
+                                FundingArrangement = "Admin",
                                 EmploymentType = "Permanent",
                                 TeamStatus = "current"
                             });
@@ -2778,8 +2940,13 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            // Get business areas and phases from CMS
-            ViewBag.BusinessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Get business areas from admin settings and phases from CMS
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
 
             ViewBag.Phases = await _productsApiService.GetPhasesAsync();
 
@@ -2999,6 +3166,8 @@ namespace Compass.Controllers
                         var projectWithContacts = await _context.Projects
                             .Include(p => p.SeniorResponsibleOfficers)
                                 .ThenInclude(sro => sro.User)
+                            .Include(p => p.ServiceOwners)
+                                .ThenInclude(so => so.User)
                             .Include(p => p.PrimaryContactUser)
                             .FirstOrDefaultAsync(p => p.Id == projectId);
 
@@ -3651,6 +3820,72 @@ namespace Compass.Controllers
             {
                 _logger.LogError(ex, "Error updating project aim");
                 TempData["ErrorMessage"] = "An error occurred while updating the project aim.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateProblemStatementSimple
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateProblemStatementSimple(int id, int? problemStatementId, string? problemStatement)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var userEmail = User.Identity?.Name;
+                var currentUser = !string.IsNullOrWhiteSpace(userEmail) ? await FindUserByEmailAsync(userEmail) : null;
+
+                var existingProblemStatement = await _context.ProjectProblemStatements
+                    .FirstOrDefaultAsync(ps => ps.ProjectId == id);
+
+                if (existingProblemStatement != null)
+                {
+                    // Save current version to history before updating
+                    var historyEntry = new ProjectProblemStatementHistory
+                    {
+                        ProjectProblemStatementId = existingProblemStatement.Id,
+                        ProblemStatement = existingProblemStatement.ProblemStatement,
+                        ChangedByEmail = User.Identity?.Name,
+                        ChangedByName = currentUser?.Name,
+                        ChangedAt = DateTime.UtcNow
+                    };
+                    _context.ProjectProblemStatementHistories.Add(historyEntry);
+
+                    // Update existing
+                    existingProblemStatement.ProblemStatement = problemStatement;
+                    existingProblemStatement.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    // Create new
+                    var newProblemStatement = new ProjectProblemStatement
+                    {
+                        ProjectId = id,
+                        ProblemStatement = problemStatement,
+                        CreatedByEmail = userEmail,
+                        CreatedByName = currentUser?.Name,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.ProjectProblemStatements.Add(newProblemStatement);
+                }
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Problem statement updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating problem statement for project {ProjectId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the problem statement.";
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
@@ -4819,7 +5054,9 @@ namespace Compass.Controllers
             {
                 var project = await _context.Projects
                     .Include(p => p.SeniorResponsibleOfficers)
-                    .ThenInclude(sro => sro.User)
+                        .ThenInclude(sro => sro.User)
+                    .Include(p => p.ServiceOwners)
+                        .ThenInclude(so => so.User)
                     .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
 
                 if (project == null)
@@ -4841,7 +5078,10 @@ namespace Compass.Controllers
                 // Remove existing SROs not in the selection
                 var existingSros = project.SeniorResponsibleOfficers.ToList();
                 var srosToRemove = existingSros
-                    .Where(sro => sro.User != null && !selectedUserIds.Contains(Guid.Parse(sro.User.AzureObjectId ?? "")))
+                    .Where(sro => sro.User != null && 
+                                  !string.IsNullOrEmpty(sro.User.AzureObjectId) &&
+                                  Guid.TryParse(sro.User.AzureObjectId, out var existingGuid) &&
+                                  !selectedUserIds.Contains(existingGuid))
                     .ToList();
                 foreach (var sro in srosToRemove)
                 {
@@ -4850,8 +5090,10 @@ namespace Compass.Controllers
 
                 // Add new SROs
                 var existingSroUserIds = existingSros
-                    .Where(sro => sro.User != null)
-                    .Select(sro => Guid.Parse(sro.User!.AzureObjectId ?? ""))
+                    .Where(sro => sro.User != null && 
+                                  !string.IsNullOrEmpty(sro.User.AzureObjectId) &&
+                                  Guid.TryParse(sro.User.AzureObjectId, out _))
+                    .Select(sro => Guid.Parse(sro.User!.AzureObjectId!))
                     .ToList();
                 foreach (var userId in selectedUserIds)
                 {
@@ -4916,6 +5158,80 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
+        // POST: Project/UpdateServiceOwners
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateServiceOwners(int id, string selectedServiceOwnerUserIds)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .Include(p => p.ServiceOwners)
+                        .ThenInclude(so => so.User)
+                    .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var selectedUserIds = new List<Guid>();
+                if (!string.IsNullOrEmpty(selectedServiceOwnerUserIds))
+                {
+                    selectedUserIds = selectedServiceOwnerUserIds
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Where(x => Guid.TryParse(x.Trim(), out _))
+                        .Select(x => Guid.Parse(x.Trim()))
+                        .ToList();
+                }
+
+                // Remove existing Service Owners not in the selection
+                var existingServiceOwners = project.ServiceOwners.ToList();
+                var serviceOwnersToRemove = existingServiceOwners
+                    .Where(so => so.User != null && !selectedUserIds.Contains(Guid.Parse(so.User.AzureObjectId ?? "")))
+                    .ToList();
+                foreach (var serviceOwner in serviceOwnersToRemove)
+                {
+                    _context.ProjectServiceOwners.Remove(serviceOwner);
+                }
+
+                // Add new Service Owners
+                var existingServiceOwnerUserIds = existingServiceOwners
+                    .Where(so => so.User != null)
+                    .Select(so => Guid.Parse(so.User!.AzureObjectId ?? ""))
+                    .ToList();
+                foreach (var userId in selectedUserIds)
+                {
+                    if (!existingServiceOwnerUserIds.Contains(userId))
+                    {
+                        var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureObjectId == userId.ToString());
+                        if (user != null)
+                        {
+                            project.ServiceOwners.Add(new ProjectServiceOwner
+                            {
+                                ProjectId = project.Id,
+                                UserId = user.Id,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Service Owners updated successfully.";
+                return RedirectToAction(nameof(Details), new { id = project.Id, tab = "contactsandgovernance" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating Service Owners for project {ProjectId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating Service Owners. Please try again.";
+                return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+            }
         }
 
         // POST: Project/UpdatePmoContacts
@@ -7307,7 +7623,12 @@ namespace Compass.Controllers
                 .Select(source => new SelectListItem(source.Name, source.Id.ToString(CultureInfo.InvariantCulture), input.ActionSourceId == source.Id))
                 .ToList();
 
-            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
             var businessAreaOptions = businessAreas
                 .Select(area => new SelectListItem(area, area, string.Equals(input.BusinessArea, area, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
@@ -7430,7 +7751,12 @@ namespace Compass.Controllers
                 .Select(decision => new SelectListItem(decision.Title, decision.Id.ToString(CultureInfo.InvariantCulture), input.LinkedDecisionIds.Contains(decision.Id)))
                 .ToList();
 
-            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
             var businessAreaOptions = businessAreas
                 .Select(area => new SelectListItem(area, area, string.Equals(input.BusinessArea, area, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
@@ -7550,7 +7876,12 @@ namespace Compass.Controllers
                 .Select(rt => new SelectListItem(rt.Name, rt.Id.ToString(), input.SelectedRiskTypeIds.Contains(rt.Id)))
                 .ToList();
 
-            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
             var businessAreaOptions = businessAreas
                 .Select(area => new SelectListItem(area, area, string.Equals(input.BusinessArea, area, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
@@ -8436,7 +8767,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "Error saving problem statement. Please try again.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "overview" });
         }
 
         [HttpGet]
@@ -8512,7 +8843,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "Error updating problem statement. Please try again.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "outcomes" });
+            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "overview" });
         }
 
         [HttpPost]
@@ -8982,7 +9313,12 @@ namespace Compass.Controllers
                 }
             }
 
-            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
             var businessAreaOptions = new List<SelectListItem>
             {
                 new("Select business area", string.Empty)
@@ -10723,29 +11059,31 @@ namespace Compass.Controllers
             StartDate = project.StartDate,
             TargetDeliveryDate = project.TargetDeliveryDate,
             PrimaryContactName = project.PrimaryContactUser?.Name,
-            PrimaryContactEmail = project.PrimaryContactUser?.Email
+            PrimaryContactEmail = project.PrimaryContactUser?.Email,
+            PmoContacts = project.PmoContacts?
+                .Where(pc => pc.User != null)
+                .Select(pc => new PmoContactInfo
+                {
+                    Name = pc.User!.Name ?? string.Empty,
+                    Email = pc.User.Email
+                })
+                .ToList() ?? new List<PmoContactInfo>()
         };
         }
 
         private async Task<ProjectSummaryViewModel?> GetProjectSummaryAsync(int projectId)
         {
-            return await _context.Projects
+            var project = await _context.Projects
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.PrimaryContactUser)
                 .Where(p => p.Id == projectId && !p.IsDeleted)
-                .Select(p => new ProjectSummaryViewModel
-                {
-                    Id = p.Id,
-                    Title = p.Title,
-                    ProjectCode = p.ProjectCode,
-                    Status = p.Status ?? string.Empty,
-                    RagStatus = p.RagStatus,
-                    Phase = p.Phase,
-                    BusinessArea = p.BusinessArea,
-                    StartDate = p.StartDate,
-                TargetDeliveryDate = p.TargetDeliveryDate,
-                PrimaryContactName = p.PrimaryContactUser != null ? p.PrimaryContactUser.Name : null,
-                PrimaryContactEmail = p.PrimaryContactUser != null ? p.PrimaryContactUser.Email : null
-                })
                 .FirstOrDefaultAsync();
+
+            if (project == null)
+                return null;
+
+            return CreateProjectSummary(project);
         }
 
         private static IEnumerable<SelectListItem> BuildLegacyCategoryOptions(string? currentValue)

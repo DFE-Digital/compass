@@ -179,7 +179,13 @@ public partial class CompassDbContext : DbContext
     
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
+    public DbSet<ProjectMonthlyUpdate> ProjectMonthlyUpdates { get; set; }
+    public DbSet<ProjectWeeklySuccessUpdate> ProjectWeeklySuccessUpdates { get; set; }
+    public DbSet<MonthlyStatusReport> MonthlyStatusReports { get; set; }
+    public DbSet<MonthlyStatusReportTimescaleConfig> MonthlyStatusReportTimescaleConfigs { get; set; }
+    public DbSet<MonthlyUpdateDeadlineConfig> MonthlyUpdateDeadlineConfigs { get; set; }
     public DbSet<ProjectSeniorResponsibleOfficer> ProjectSeniorResponsibleOfficers { get; set; }
+    public DbSet<ProjectServiceOwner> ProjectServiceOwners { get; set; }
     public DbSet<ProjectDirectorate> ProjectDirectorates { get; set; }
     public DbSet<ProjectArtefact> ProjectArtefacts { get; set; }
     public DbSet<ProjectBudgetOwner> ProjectBudgetOwners { get; set; }
@@ -1593,6 +1599,59 @@ public partial class CompassDbContext : DbContext
             .Property(psu => psu.Narrative)
             .HasColumnType("nvarchar(max)");
 
+        // MonthlyStatusReport configuration
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .HasOne(msr => msr.Project)
+            .WithMany()
+            .HasForeignKey(msr => msr.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .HasOne(msr => msr.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(msr => msr.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .HasIndex(msr => new { msr.ProjectId, msr.ReportingYear, msr.ReportingMonth })
+            .IsUnique();
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .HasIndex(msr => new { msr.ReportingYear, msr.ReportingMonth });
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.Narrative)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.MilestoneProgress)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.DeliverableProgress)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.KeyAchievements)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.Challenges)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<MonthlyStatusReport>()
+            .Property(msr => msr.NextMonthOutlook)
+            .HasColumnType("nvarchar(max)");
+
+        // MonthlyStatusReportTimescaleConfig configuration
+        modelBuilder.Entity<MonthlyStatusReportTimescaleConfig>()
+            .HasIndex(tsc => tsc.IsDefault)
+            .HasFilter("[IsDefault] = 1");
+
+        modelBuilder.Entity<MonthlyStatusReportTimescaleConfig>()
+            .HasIndex(tsc => tsc.IsActive);
+
         // ProjectArtefact configuration
         modelBuilder.Entity<ProjectArtefact>()
             .HasOne(pa => pa.Project)
@@ -1644,6 +1703,26 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectSeniorResponsibleOfficer>()
             .HasIndex(psro => new { psro.ProjectId, psro.UserId })
+            .IsUnique();
+
+        // ProjectServiceOwner configuration
+        modelBuilder.Entity<ProjectServiceOwner>()
+            .HasOne(pso => pso.Project)
+            .WithMany(p => p.ServiceOwners)
+            .HasForeignKey(pso => pso.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProjectServiceOwner>()
+            .HasOne(pso => pso.User)
+            .WithMany()
+            .HasForeignKey(pso => pso.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectServiceOwner>()
+            .HasIndex(pso => pso.ProjectId);
+
+        modelBuilder.Entity<ProjectServiceOwner>()
+            .HasIndex(pso => new { pso.ProjectId, pso.UserId })
             .IsUnique();
 
         // ProjectDirectorate configuration
