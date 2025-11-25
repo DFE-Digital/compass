@@ -29,7 +29,10 @@ public class BusinessAreaSummaryItem
     public int AmberCount { get; set; }
     public int AmberGreenCount { get; set; }
     public int GreenCount { get; set; }
+    public int CriticalPriorityCount { get; set; }
     public int HighPriorityCount { get; set; }
+    public int MediumPriorityCount { get; set; }
+    public int LowPriorityCount { get; set; }
     public int BlockedCount { get; set; }
 }
 
@@ -112,6 +115,8 @@ public class CentralOpsController : Controller
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
                 .Where(p => !p.IsDeleted)
                 .ToListAsync();
 
@@ -185,10 +190,14 @@ public class CentralOpsController : Controller
                     AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
                     AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
                     GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
-                    HighPriorityCount = g.Count(p => p.DeliveryPriority != null && (p.DeliveryPriority.Name.ToLower().Contains("high") || p.DeliveryPriority.Name.ToLower().Contains("critical"))),
+                    CriticalPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    HighPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    MediumPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
+                    LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
                     BlockedCount = 0 // Projects don't have a blocked status
                 })
                 .OrderByDescending(x => x.RedCount + x.AmberRedCount)
+                .ThenByDescending(x => x.CriticalPriorityCount)
                 .ThenByDescending(x => x.HighPriorityCount)
                 .ThenByDescending(x => x.Count)
                 .ToList();
@@ -198,6 +207,7 @@ public class CentralOpsController : Controller
             ViewBag.MostAtRisk = mostAtRisk;
             ViewBag.BusinessAreaSummary = businessAreaSummary;
             ViewBag.ActiveWorkItems = allProjects.Count(p => p.Status == "Active");
+            ViewBag.AllProjects = allProjects.OrderBy(p => p.Title).ToList();
 
             return View();
         }
@@ -344,6 +354,8 @@ public class CentralOpsController : Controller
                 .ThenInclude(d => d.DirectorateLookup)
             .Include(p => p.PmoContacts)
                 .ThenInclude(pc => pc.User)
+            .Include(p => p.ProjectObjectives)
+                .ThenInclude(po => po.Objective)
             .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
 
         if (project == null)
@@ -351,12 +363,39 @@ public class CentralOpsController : Controller
             return NotFound();
         }
 
-        // Get priorities for dropdown
+        // Get all lookup data for dropdowns
         ViewBag.Priorities = await _context.DeliveryPriorities
             .Where(dp => dp.IsActive)
             .OrderBy(dp => dp.SortOrder)
             .ThenBy(dp => dp.Name)
             .ToListAsync();
+        
+        ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+            .Where(ba => ba.IsActive)
+            .OrderBy(ba => ba.SortOrder)
+            .ThenBy(ba => ba.Name)
+            .ToListAsync();
+        
+        ViewBag.Phases = await _context.PhaseLookups
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        ViewBag.ActivityTypes = await _context.ActivityTypeLookups
+            .Where(at => at.IsActive)
+            .OrderBy(at => at.SortOrder)
+            .ThenBy(at => at.Name)
+            .ToListAsync();
+        
+        ViewBag.Directorates = await _context.DirectorateLookups
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .ThenBy(d => d.Name)
+            .ToListAsync();
+        
+        ViewBag.RagStatuses = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+        ViewBag.Statuses = new[] { "Active", "Paused", "Completed", "Cancelled" };
 
         return View(project);
     }
@@ -390,6 +429,122 @@ public class CentralOpsController : Controller
         {
             _logger.LogError(ex, "Error updating priority for project {ProjectId}", id);
             TempData["ErrorMessage"] = "An error occurred while updating the priority.";
+        }
+
+        return RedirectToAction(nameof(WorkItemDetails), new { id });
+    }
+
+    // POST: CentralOps/UpdateField
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateField(int id, string field, string? value, string? statusChangeReason)
+    {
+        if (!await IsCentralOpsAdminAsync())
+        {
+            return Forbid();
+        }
+
+        var project = await _context.Projects.FindAsync(id);
+        if (project == null || project.IsDeleted)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            switch (field.ToLower())
+            {
+                case "title":
+                    project.Title = value ?? string.Empty;
+                    break;
+                case "aim":
+                    project.Aim = value;
+                    break;
+                case "businessarea":
+                    if (int.TryParse(value, out var businessAreaId) && businessAreaId > 0)
+                    {
+                        project.BusinessAreaId = businessAreaId;
+                    }
+                    else
+                    {
+                        project.BusinessAreaId = null;
+                    }
+                    break;
+                case "phase":
+                    if (int.TryParse(value, out var phaseId) && phaseId > 0)
+                    {
+                        project.PhaseId = phaseId;
+                    }
+                    else
+                    {
+                        project.PhaseId = null;
+                    }
+                    break;
+                case "activitytype":
+                    if (int.TryParse(value, out var activityTypeId) && activityTypeId > 0)
+                    {
+                        project.ActivityTypeLookupId = activityTypeId;
+                    }
+                    else
+                    {
+                        project.ActivityTypeLookupId = null;
+                    }
+                    break;
+                case "status":
+                    project.Status = value ?? "Active";
+                    if (!string.IsNullOrEmpty(statusChangeReason))
+                    {
+                        // Add status update with reason
+                        // This would require a StatusUpdate model - for now just update the status
+                    }
+                    break;
+                case "ragstatus":
+                    project.RagStatus = value;
+                    break;
+                case "primarycontact":
+                    if (int.TryParse(value, out var userId) && userId > 0)
+                    {
+                        project.PrimaryContactUserId = userId;
+                    }
+                    else
+                    {
+                        project.PrimaryContactUserId = null;
+                    }
+                    break;
+                case "flagship":
+                    project.IsFlagship = value == "true";
+                    break;
+                case "startdate":
+                    if (DateTime.TryParse(value, out var startDate))
+                    {
+                        project.StartDate = startDate;
+                    }
+                    else
+                    {
+                        project.StartDate = null;
+                    }
+                    break;
+                case "targetdate":
+                    if (DateTime.TryParse(value, out var targetDate))
+                    {
+                        project.TargetDeliveryDate = targetDate;
+                    }
+                    else
+                    {
+                        project.TargetDeliveryDate = null;
+                    }
+                    break;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            
+            TempData["SuccessMessage"] = $"{field} updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating {Field} for project {ProjectId}", field, id);
+            TempData["ErrorMessage"] = $"An error occurred while updating {field}.";
         }
 
         return RedirectToAction(nameof(WorkItemDetails), new { id });

@@ -214,24 +214,6 @@
                     <div class="row mb-4">
                         <div class="col-sm-6 col-lg-3 mb-3">
                             <div class="metric-pill">
-                                <strong>@Model.EnterpriseMetrics.TotalOpenIssues</strong>
-                                <span>Open issues</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.EnterpriseMetrics.TotalOpenRisks</strong>
-                                <span>Open risks</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.EnterpriseMetrics.TotalOpenActions</strong>
-                                <span>Open actions</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
                                 <strong>@Model.EnterpriseMetrics.TotalAtRiskProjects</strong>
                                 <span>At risk projects</span>
                             </div>
@@ -298,32 +280,93 @@
                     {
                         <div class="row mt-4">
                             <div class="col-12">
-                                <h3 class="h6 text-uppercase text-muted mb-3">At risk projects</h3>
-                                <div class="table-responsive">
-                                    <table class="table table-sm static-table">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Project</th>
-                                                <th scope="col">RAG</th>
-                                                <th scope="col">Business area</th>
-                                                <th scope="col">Open issues</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var project in Model.EnterpriseAtRiskProjects.Take(10))
-                                            {
-                                                var openIssues = project.Issues?.Count(i => !i.IsDeleted && !string.Equals(i.Status, "closed", StringComparison.OrdinalIgnoreCase) && !string.Equals(i.Status, "resolved", StringComparison.OrdinalIgnoreCase)) ?? 0;
-                                                <tr>
-                                                    <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
-                                                    <td>
-                                                        <span class="badge badge-@(project.RagStatus == "Red" ? "danger" : "warning")">@project.RagStatus</span>
-                                                    </td>
-                                                    <td>@project.BusinessArea</td>
-                                                    <td>@openIssues</td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
+                                <div class="card border-danger mb-4">
+                                    <div class="card-header bg-danger text-white">
+                                        <h3 class="card-title mb-0">
+                                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                                            At Risk Projects (@Model.EnterpriseAtRiskProjects.Count)
+                                        </h3>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        <th scope="col" style="width: 30%;">Project</th>
+                                                        <th scope="col" style="width: 10%;">RAG</th>
+                                                        <th scope="col" style="width: 15%;">Priority</th>
+                                                        <th scope="col" style="width: 15%;">Business area</th>
+                                                        <th scope="col" style="width: 15%;">Primary contact</th>
+                                                        <th scope="col" style="width: 15%;">Service owner</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var project in Model.EnterpriseAtRiskProjects.Take(20))
+                                                    {
+                                                        <tr>
+                                                            <td>
+                                                                <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold">
+                                                                    @project.Title
+                                                                </a>
+                                                                @if (project.IsFlagship)
+                                                                {
+                                                                    <span class="badge badge-info ml-2">Flagship</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                                {
+                                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-secondary">Not set</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (project.DeliveryPriority != null)
+                                                                {
+                                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">Not set</span>
+                                                                }
+                                                            </td>
+                                                            <td>@(project.BusinessArea ?? "-")</td>
+                                                            <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
+                                                            <td>
+                                                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                                                {
+                                                                    var displayedOwners = project.ServiceOwners.Take(2).ToList();
+                                                                    @foreach (var so in displayedOwners)
+                                                                    {
+                                                                        <div>@(so.User?.Name ?? so.User?.Email ?? "-")</div>
+                                                                    }
+                                                                    if (project.ServiceOwners.Count > 2)
+                                                                    {
+                                                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">-</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        @if (Model.EnterpriseAtRiskProjects.Count > 20)
+                                        {
+                                            <div class="card-footer bg-light">
+                                                <p class="mb-0 text-muted">
+                                                    <small>Showing 20 of @Model.EnterpriseAtRiskProjects.Count at risk projects</small>
+                                                </p>
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -360,39 +403,27 @@
                         }
                     </div>
                     
-                    <div class="row mb-4">
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.OpenIssues</strong>
-                                <span>Open issues</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.UnreviewedRisks</strong>
-                                <span>Unreviewed risks</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.TasksDue</strong>
-                                <span>Open actions</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.WatchedDeliverables</strong>
-                                <span>Watched deliverables</span>
-                            </div>
-                        </div>
-                    </div>
-
                     @{
                         var atRiskProjects = Model.OversightProjects
                             .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
                                         string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
                             .ToList();
                     }
+                    
+                    <div class="row mb-4">
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.LeadershipMetrics.WatchedDeliverables</strong>
+                                <span>Deliverables in your business areas</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@atRiskProjects.Count</strong>
+                                <span>At risk projects</span>
+                            </div>
+                        </div>
+                    </div>
 
                     @if (Model.OversightProjects.Any())
                     {
@@ -429,20 +460,12 @@
                                                                 Business area
                                                                 <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                                                             </th>
-                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenIssues" tabindex="0" role="button" aria-label="Sort by Open issues">
-                                                                Open issues
+                                                            <th style="width: 15%;" class="sortable text-right" data-column="UpcomingMilestones" tabindex="0" role="button" aria-label="Sort by Milestones">
+                                                                Upcoming milestones
                                                                 <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                                                             </th>
-                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenRisks" tabindex="0" role="button" aria-label="Sort by Open risks">
-                                                                Open risks
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 9%;" class="sortable text-right" data-column="OpenActions" tabindex="0" role="button" aria-label="Sort by Open actions">
-                                                                Open actions
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 12%;" class="sortable text-right" data-column="UpcomingMilestones" tabindex="0" role="button" aria-label="Sort by Milestones">
-                                                                Milestones
+                                                            <th style="width: 12%;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary contact">
+                                                                Primary contact
                                                                 <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                                                             </th>
                                                         </tr>
@@ -450,20 +473,21 @@
                                                     <tbody>
                                                         @foreach (var project in Model.OversightProjects)
                                                         {
-                                                            var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
-                                                            var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
-                                                            var openActions = project.Actions?.Count(a => !a.IsDeleted && IsOpenStatus(a.Status)) ?? 0;
                                                             var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
                                                             
                                                             <tr data-project-title="@project.Title" 
                                                                 data-priority="@(project.DeliveryPriority?.Name ?? "Not set")"
                                                                 data-rag="@(project.RagStatus ?? "Not set")"
                                                                 data-business-area="@(project.BusinessArea ?? "")"
-                                                                data-open-issues="@openIssues"
-                                                                data-open-risks="@openRisks"
-                                                                data-open-actions="@openActions"
-                                                                data-upcoming-milestones="@upcomingMilestones">
-                                                                <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
+                                                                data-upcoming-milestones="@upcomingMilestones"
+                                                                data-primary-contact="@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "")">
+                                                                <td>
+                                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a>
+                                                                    @if (project.IsFlagship)
+                                                                    {
+                                                                        <span class="badge badge-info ml-2">Flagship</span>
+                                                                    }
+                                                                </td>
                                                                 <td>
                                                                     @if (project.DeliveryPriority != null)
                                                                     {
@@ -484,11 +508,9 @@
                                                                         <span class="badge badge-secondary">Not set</span>
                                                                     }
                                                                 </td>
-                                                                <td>@project.BusinessArea</td>
-                                                                <td class="text-right">@openIssues</td>
-                                                                <td class="text-right">@openRisks</td>
-                                                                <td class="text-right">@openActions</td>
+                                                                <td>@(project.BusinessArea ?? "-")</td>
                                                                 <td class="text-right">@upcomingMilestones</td>
+                                                                <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
                                                             </tr>
                                                         }
                                                     </tbody>
@@ -515,36 +537,93 @@
                         {
                             <div class="row mt-4">
                                 <div class="col-12">
-                                    <h3 class="h6 text-uppercase text-muted mb-3">At risk projects</h3>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm static-table">
-                                            <thead>
-                                                <tr>
-                                                    <th scope="col">Project</th>
-                                                    <th scope="col">RAG</th>
-                                                    <th scope="col">Business area</th>
-                                                    <th scope="col">Open issues</th>
-                                                    <th scope="col">Open risks</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var project in atRiskProjects.Take(10))
-                                                {
-                                                    var openIssues = project.Issues?.Count(i => !i.IsDeleted && IsOpenStatus(i.Status)) ?? 0;
-                                                    var openRisks = project.Risks?.Count(r => !r.IsDeleted && !string.Equals(r.Status, "closed", StringComparison.OrdinalIgnoreCase)) ?? 0;
-                                                    
-                                                    <tr>
-                                                        <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
-                                                        <td>
-                                                            <span class="badge badge-@(project.RagStatus == "Red" ? "danger" : "warning")">@project.RagStatus</span>
-                                                        </td>
-                                                        <td>@project.BusinessArea</td>
-                                                        <td>@openIssues</td>
-                                                        <td>@openRisks</td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
+                                    <div class="card border-danger mb-4">
+                                        <div class="card-header bg-danger text-white">
+                                            <h3 class="card-title mb-0">
+                                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                At Risk Projects (@atRiskProjects.Count)
+                                            </h3>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div class="table-responsive">
+                                                <table class="table table-hover mb-0">
+                                                    <thead class="thead-light">
+                                                        <tr>
+                                                            <th scope="col" style="width: 30%;">Project</th>
+                                                            <th scope="col" style="width: 10%;">RAG</th>
+                                                            <th scope="col" style="width: 15%;">Priority</th>
+                                                            <th scope="col" style="width: 15%;">Business area</th>
+                                                            <th scope="col" style="width: 15%;">Primary contact</th>
+                                                            <th scope="col" style="width: 15%;">Service owner</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var project in atRiskProjects.Take(20))
+                                                        {
+                                                            <tr>
+                                                                <td>
+                                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold">
+                                                                        @project.Title
+                                                                    </a>
+                                                                    @if (project.IsFlagship)
+                                                                    {
+                                                                        <span class="badge badge-info ml-2">Flagship</span>
+                                                                    }
+                                                                </td>
+                                                                <td>
+                                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
+                                                                    {
+                                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge badge-secondary">Not set</span>
+                                                                    }
+                                                                </td>
+                                                                <td>
+                                                                    @if (project.DeliveryPriority != null)
+                                                                    {
+                                                                        <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="text-muted">Not set</span>
+                                                                    }
+                                                                </td>
+                                                                <td>@(project.BusinessArea ?? "-")</td>
+                                                                <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
+                                                                <td>
+                                                                    @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                                                    {
+                                                                        var displayedOwners = project.ServiceOwners.Take(2).ToList();
+                                                                        @foreach (var so in displayedOwners)
+                                                                        {
+                                                                            <div>@(so.User?.Name ?? so.User?.Email ?? "-")</div>
+                                                                        }
+                                                                        if (project.ServiceOwners.Count > 2)
+                                                                        {
+                                                                            <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                                                        }
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="text-muted">-</span>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            @if (atRiskProjects.Count > 20)
+                                            {
+                                                <div class="card-footer bg-light">
+                                                    <p class="mb-0 text-muted">
+                                                        <small>Showing 20 of @atRiskProjects.Count at risk projects</small>
+                                                    </p>
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -569,9 +648,6 @@
                 @{
                     var staticMetrics = new[]
                     {
-                        (Label: "Assigned actions", Count: Model.AssignedActions?.Count ?? 0),
-                        (Label: "Critical issues", Count: Model.HighPriorityIssues?.Count ?? 0),
-                        (Label: "Unreviewed risks", Count: Model.UnmonitoredRisks?.Count ?? 0),
                         (Label: "Milestones this fortnight", Count: Model.MilestonesDueThisWeek?.Count ?? 0)
                     };
                     var myProjectRows = (Model.MyProjects ?? Array.Empty<Project>()).Take(6).ToList();
@@ -606,21 +682,21 @@
                                             <th scope="col">Priority</th>
                                             <th scope="col">RAG</th>
                                             <th scope="col">Business area</th>
-                                            <th scope="col">Risks</th>
-                                            <th scope="col">Actions</th>
-                                            <th scope="col">Issues</th>
-                                            <th scope="col">Decisions</th>
+                                            <th scope="col">Upcoming milestones</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var project in myProjectRows)
                                         {
-                                            var activeRisks = project.Risks?.Count(r => !r.IsDeleted) ?? 0;
-                                            var activeActions = project.Actions?.Count(a => !a.IsDeleted) ?? 0;
-                                            var activeIssues = project.Issues?.Count(i => !i.IsDeleted) ?? 0;
-                                            var activeDecisions = project.Decisions?.Count(d => !d.IsDeleted) ?? 0;
+                                            var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
                                             <tr>
-                                                <td><a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a></td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a>
+                                                    @if (project.IsFlagship)
+                                                    {
+                                                        <span class="badge badge-info ml-2">Flagship</span>
+                                                    }
+                                                </td>
                                                 <td>
                                                     @if (project.DeliveryPriority != null)
                                                     {
@@ -641,11 +717,8 @@
                                                         <span class="badge badge-secondary">Not set</span>
                                                     }
                                                 </td>
-                                                <td>@project.BusinessArea</td>
-                                                <td>@activeRisks</td>
-                                                <td>@activeActions</td>
-                                                <td>@activeIssues</td>
-                                                <td>@activeDecisions</td>
+                                                <td>@(project.BusinessArea ?? "-")</td>
+                                                <td>@upcomingMilestones</td>
                                             </tr>
                                         }
                                     </tbody>
@@ -878,18 +951,15 @@
                     var bCell = b.querySelectorAll('td')[colIndex];
                     
                     // Get values from data attributes for numeric columns
-                    if (column === 'OpenIssues') {
-                        aVal = parseInt(a.getAttribute('data-open-issues')) || 0;
-                        bVal = parseInt(b.getAttribute('data-open-issues')) || 0;
-                    } else if (column === 'OpenRisks') {
-                        aVal = parseInt(a.getAttribute('data-open-risks')) || 0;
-                        bVal = parseInt(b.getAttribute('data-open-risks')) || 0;
-                    } else if (column === 'OpenActions') {
-                        aVal = parseInt(a.getAttribute('data-open-actions')) || 0;
-                        bVal = parseInt(b.getAttribute('data-open-actions')) || 0;
-                    } else if (column === 'UpcomingMilestones') {
+                    if (column === 'UpcomingMilestones') {
                         aVal = parseInt(a.getAttribute('data-upcoming-milestones')) || 0;
                         bVal = parseInt(b.getAttribute('data-upcoming-milestones')) || 0;
+                    } else if (column === 'PrimaryContact') {
+                        // Sort by data attribute or cell text
+                        aVal = a.getAttribute('data-primary-contact') || aCell.textContent.trim();
+                        bVal = b.getAttribute('data-primary-contact') || bCell.textContent.trim();
+                        aVal = (aVal || '').toLowerCase();
+                        bVal = (bVal || '').toLowerCase();
                     } else if (column === 'Project') {
                         // Sort by link text
                         var aLink = aCell.querySelector('a');

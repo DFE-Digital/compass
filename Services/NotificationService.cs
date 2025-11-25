@@ -1,9 +1,8 @@
-using Notify.Client;
-using Notify.Models.Responses;
 using Compass.Data;
 using Compass.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
+using System.Reflection;
 
 namespace Compass.Services;
 
@@ -12,7 +11,7 @@ public class NotificationService : INotificationService
     private readonly IConfiguration _configuration;
     private readonly ILogger<NotificationService> _logger;
     private readonly CompassDbContext _context;
-    private readonly NotificationClient? _notifyClient;
+    private readonly object? _notifyClient;
 
     public NotificationService(
         IConfiguration configuration,
@@ -34,12 +33,29 @@ public class NotificationService : INotificationService
         {
             try
             {
-                _notifyClient = new NotificationClient(apiKey);
-                _logger.LogInformation("GOV.UK Notify client initialized successfully");
+                // Use reflection to load NotificationClient to avoid assembly loading issues
+                var notifyAssembly = Assembly.Load("GovukNotify");
+                var clientType = notifyAssembly.GetType("Notify.Client.NotificationClient");
+                if (clientType != null)
+                {
+                    _notifyClient = Activator.CreateInstance(clientType, apiKey);
+                    _logger.LogInformation("GOV.UK Notify client initialized successfully");
+                }
+                else
+                {
+                    _logger.LogWarning("GOV.UK Notify NotificationClient type not found. Email notifications will not be sent.");
+                    _notifyClient = null;
+                }
+            }
+            catch (System.IO.FileNotFoundException ex)
+            {
+                _logger.LogError(ex, "GOV.UK Notify assembly not found. Email notifications will not be sent. Please ensure the GovukNotify NuGet package is properly installed.");
+                _notifyClient = null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize GOV.UK Notify client");
+                _logger.LogError(ex, "Failed to initialize GOV.UK Notify client: {Error}", ex.Message);
+                _notifyClient = null;
             }
         }
 
@@ -122,32 +138,48 @@ public class NotificationService : INotificationService
                 { "body", body }
             };
 
-            // Send email via GOV.UK Notify
-            EmailNotificationResponse? notifyResponse = null;
+            // Send email via GOV.UK Notify using reflection
+            object? notifyResponse = null;
             try
             {
-                notifyResponse = _notifyClient.SendEmail(
-                    emailAddress: recipientEmail,
-                    templateId: templateId,
-                    personalisation: personalisation);
+                // Use reflection to call SendEmail method
+                var sendEmailMethod = _notifyClient.GetType().GetMethod("SendEmail", new[] { typeof(string), typeof(string), typeof(Dictionary<string, dynamic>) });
+                if (sendEmailMethod != null)
+                {
+                    notifyResponse = sendEmailMethod.Invoke(_notifyClient, new object[] { recipientEmail, templateId, personalisation });
+                }
+                else
+                {
+                    throw new InvalidOperationException("SendEmail method not found on NotificationClient");
+                }
 
                 // Update log with success
                 notificationLog.Status = "sent";
                 notificationLog.StatusMessage = "Email sent successfully";
-                notificationLog.NotifyMessageId = notifyResponse.id;
-                notificationLog.SentAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
+                
+                // Get the id property using reflection
+                if (notifyResponse != null)
+                {
+                    var idProperty = notifyResponse.GetType().GetProperty("id");
+                    if (idProperty != null)
+                {
+                    var messageId = idProperty.GetValue(notifyResponse)?.ToString();
+                    notificationLog.NotifyMessageId = messageId;
+                    notificationLog.SentAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(cancellationToken);
 
-                result.Success = true;
-                result.MessageId = notifyResponse.id;
-                result.SentAt = DateTime.UtcNow;
+                    result.Success = true;
+                    result.MessageId = messageId;
+                    result.SentAt = DateTime.UtcNow;
 
-                _logger.LogInformation(
-                    "Notification sent successfully to {Email} via GOV.UK Notify. Message ID: {MessageId}",
-                    recipientEmail,
-                    notifyResponse.id);
+                    _logger.LogInformation(
+                        "Notification sent successfully to {Email} via GOV.UK Notify. Message ID: {MessageId}",
+                        recipientEmail,
+                        messageId);
+                    }
+                }
             }
-            catch (Notify.Exceptions.NotifyClientException ex)
+            catch (Exception ex) when (ex.GetType().FullName == "Notify.Exceptions.NotifyClientException" || ex.InnerException?.GetType().FullName == "Notify.Exceptions.NotifyClientException")
             {
                 // Handle GOV.UK Notify specific errors
                 notificationLog.Status = "failed";
