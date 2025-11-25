@@ -549,9 +549,10 @@
                         <!-- Central Operations Section -->
                         @{
                             bool isCentralOpsAdmin = false;
+                            bool enableCentralOps = Configuration.GetValue<bool>("FeatureFlags:EnableCentralOps", false);
                             try
                             {
-                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail) && enableCentralOps)
                                 {
                                     isCentralOpsAdmin = await PermissionService.IsSuperAdminAsync(currentUserEmail) ||
                                                        await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin");
@@ -562,7 +563,7 @@
                                 // Non-blocking: section will not be shown
                             }
                         }
-                        @if (isCentralOpsAdmin)
+                        @if (isCentralOpsAdmin && enableCentralOps)
                         {
                             var isCentralOpsSectionActive = controllerName == "CentralOps";
                             var isCentralOpsDashboardActive = controllerName == "CentralOps" && actionName == "Dashboard";
