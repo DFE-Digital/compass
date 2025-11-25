@@ -1,0 +1,374 @@
+@model Compass.Models.Project
+@{
+    ViewData["Title"] = "Work Item Details";
+    var priorities = ViewBag.Priorities as List<Compass.Models.DeliveryPriority> ?? new List<Compass.Models.DeliveryPriority>();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="ManageWork" style="color: #005ea5; text-decoration: none;">Manage Work</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Work Item Details</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Work Item Details</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a asp-controller="CentralOps" asp-action="ManageWork" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Manage Work
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Project Summary</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-borderless mb-0 project-overview-summary">
+                            <tbody>
+                                <tr>
+                                    <td class="summary-label"><strong>Title</strong></td>
+                                    <td class="summary-value">
+                                        @Model.Title
+                                    </td>
+                                    <td class="text-right">
+                                        <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Id" target="_blank">View Full Details</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Status</strong></td>
+                                    <td class="summary-value">
+                                        <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Priority</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.DeliveryPriority != null)
+                                        {
+                                            var priorityClass = Model.DeliveryPriority.Name.ToLower() switch {
+                                                var p when p.Contains("critical") => "badge-danger",
+                                                var p when p.Contains("high") => "badge-danger",
+                                                var p when p.Contains("medium") => "badge-warning",
+                                                var p when p.Contains("low") => "badge-secondary",
+                                                _ => "badge-secondary"
+                                            };
+                                            <span class="badge @priorityClass">@Model.DeliveryPriority.Name</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right">
+                                        <a href="#" data-toggle="modal" data-target="#editPriorityModal">Change</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>RAG Status</strong></td>
+                                    <td class="summary-value">
+                                        @if (!string.IsNullOrEmpty(Model.RagStatus))
+                                        {
+                                            var ragClass = Model.RagStatus.ToLower() switch {
+                                                var r when r.Contains("red") && !r.Contains("amber") => "badge-danger",
+                                                var r when r.Contains("amber-red") => "badge-warning",
+                                                var r when r == "amber" => "badge-warning",
+                                                var r when r.Contains("amber-green") => "badge-info",
+                                                var r when r.Contains("green") && !r.Contains("amber") => "badge-success",
+                                                _ => "badge-secondary"
+                                            };
+                                            <span class="badge @ragClass">@Model.RagStatus</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Phase</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.PhaseLookup != null)
+                                        {
+                                            @Model.PhaseLookup.Name
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not specified</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Business area</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.BusinessAreaLookup != null)
+                                        {
+                                            @Model.BusinessAreaLookup.Name
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not specified</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Activity type</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.ActivityTypeLookup != null)
+                                        {
+                                            @Model.ActivityTypeLookup.Name
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Flagship project</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.IsFlagship)
+                                        {
+                                            <span class="badge badge-info">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Directorate(s)</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.Directorates != null && Model.Directorates.Any())
+                                        {
+                                            @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : ""))
+                                            {
+                                                @if (directorate.DirectorateLookup != null)
+                                                {
+                                                    <div>@directorate.DirectorateLookup.Name</div>
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Primary contact</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.PrimaryContactUser != null)
+                                        {
+                                            @if (!string.IsNullOrEmpty(Model.PrimaryContactUser.Email))
+                                            {
+                                                <a href="mailto:@Model.PrimaryContactUser.Email">@Model.PrimaryContactUser.Name</a>
+                                            }
+                                            else
+                                            {
+                                                @Model.PrimaryContactUser.Name
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>SROs</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
+                                        {
+                                            @foreach (var sro in Model.SeniorResponsibleOfficers.Take(2))
+                                            {
+                                                @if (sro.User != null)
+                                                {
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(sro.User.Email))
+                                                        {
+                                                            <a href="mailto:@sro.User.Email">@sro.User.Name</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @sro.User.Name
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                            @if (Model.SeniorResponsibleOfficers.Count > 2)
+                                            {
+                                                <small class="text-muted">+ @(Model.SeniorResponsibleOfficers.Count - 2) more</small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Service Owner(s)</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.ServiceOwners != null && Model.ServiceOwners.Any())
+                                        {
+                                            @foreach (var serviceOwner in Model.ServiceOwners.Take(2))
+                                            {
+                                                @if (serviceOwner.User != null)
+                                                {
+                                                    <div>
+                                                        @if (!string.IsNullOrEmpty(serviceOwner.User.Email))
+                                                        {
+                                                            <a href="mailto:@serviceOwner.User.Email">@serviceOwner.User.Name</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @serviceOwner.User.Name
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                            @if (Model.ServiceOwners.Count > 2)
+                                            {
+                                                <small class="text-muted">+ @(Model.ServiceOwners.Count - 2) more</small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Start date</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
+                                        {
+                                            @Model.StartDate.Value.ToString("d MMMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not set</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td class="summary-label"><strong>Target end date</strong></td>
+                                    <td class="summary-value">
+                                        @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
+                                        {
+                                            @Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No end date</span>
+                                        }
+                                    </td>
+                                    <td class="text-right"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Edit Priority Modal -->
+<div class="modal fade" id="editPriorityModal" tabindex="-1" role="dialog" aria-labelledby="editPriorityModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPriorityModalLabel">Change Priority</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdatePriority" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <div class="form-group">
+                        <label for="priorityId">Priority</label>
+                        <select class="form-control" id="priorityId" name="priorityId">
+                            <option value="">None</option>
+                            @foreach (var p in priorities)
+                            {
+                                <option value="@p.Id" selected="@(Model.DeliveryPriorityId == p.Id)">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function() {
+                $('.alert').fadeOut('slow');
+            }, 5000);
+        });
+    </script>
+}
+

@@ -14,7 +14,11 @@
  *@
 
 @using System
+@using Compass.Services
+@using Compass.Data
 @inject IConfiguration Configuration
+@inject IPermissionService PermissionService
+@inject CompassDbContext DbContext
 
 <!DOCTYPE html>
 <html lang="en">
@@ -318,11 +322,6 @@
                                 <i class="fas fa-question-circle mr-2" aria-hidden="true"></i>
                                 How do I...
                             </a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="@Url.Action("Index", "Documentation")">
-                                <i class="fas fa-book mr-2" aria-hidden="true"></i>
-                                Documentation
-                            </a>
                         </div>
                     </li>
                     @{
@@ -547,6 +546,53 @@
                         }
                         @* Functional standards navigation moved to the header dropdown *@
 
+                        <!-- Central Operations Section -->
+                        @{
+                            bool isCentralOpsAdmin = false;
+                            bool enableCentralOps = Configuration.GetValue<bool>("FeatureFlags:EnableCentralOps", false);
+                            try
+                            {
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail) && enableCentralOps)
+                                {
+                                    isCentralOpsAdmin = await PermissionService.IsSuperAdminAsync(currentUserEmail) ||
+                                                       await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin");
+                                }
+                            }
+                            catch
+                            {
+                                // Non-blocking: section will not be shown
+                            }
+                        }
+                        @if (isCentralOpsAdmin && enableCentralOps)
+                        {
+                            var isCentralOpsSectionActive = controllerName == "CentralOps";
+                            var isCentralOpsDashboardActive = controllerName == "CentralOps" && actionName == "Dashboard";
+                            var isCentralOpsManageWorkActive = controllerName == "CentralOps" && actionName == "ManageWork";
+                            <li class="nav-header">Central Operations</li>
+                            <li class="nav-item @(isCentralOpsSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isCentralOpsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isCentralOpsSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
+                                    <p>
+                                        Central Operations
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="list">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Dashboard", "CentralOps")" class="nav-link @(isCentralOpsDashboardActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Dashboard</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("ManageWork", "CentralOps")" class="nav-link @(isCentralOpsManageWorkActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Manage work</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
 
                         <!-- Product Governance - Hidden from navigation -->
                         <!--

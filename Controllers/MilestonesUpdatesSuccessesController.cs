@@ -37,6 +37,17 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.Milestones)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.WeeklySuccessUpdates)
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
@@ -44,7 +55,18 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        var deliveryCode = $"DEL-DDT-{project.Id}";
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
+        ViewBag.Project = project;
+
+        var deliveryCode = $"DFE-DDT-{project.Id}";
         
         // Calculate milestone counts
         var milestones = project.Milestones.Where(m => !m.IsDeleted).ToList();
@@ -130,6 +152,17 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         var project = await _context.Projects
             .Include(p => p.Milestones.Where(m => !m.IsDeleted))
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
@@ -137,9 +170,18 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         
         return View(project);
     }
@@ -153,6 +195,17 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         var project = await _context.Projects
             .Include(p => p.MonthlyUpdates)
+            .Include(p => p.Outcomes)
+            .Include(p => p.Successes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
@@ -160,9 +213,18 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         ViewBag.MonthlyUpdateService = _monthlyUpdateService;
         
         return View(project);
@@ -178,6 +240,16 @@ public class MilestonesUpdatesSuccessesController : Controller
         var project = await _context.Projects
             .Include(p => p.WeeklySuccessUpdates)
             .Include(p => p.Successes)
+            .Include(p => p.Outcomes)
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.StatusUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Issues)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
@@ -185,9 +257,18 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         
         return View(project);
     }
@@ -207,7 +288,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         ViewBag.Year = year.Value;
         ViewBag.Month = month.Value;
         ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
@@ -240,13 +321,126 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         ViewBag.Year = year.Value;
         ViewBag.Month = month.Value;
         ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
         
         // TODO: Implement edit update form
         return View(update);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateUpdate(int? projectId, int? year, int? month, ProjectMonthlyUpdate model)
+    {
+        if (!projectId.HasValue || !year.HasValue || !month.HasValue)
+        {
+            return NotFound();
+        }
+
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+        if (project == null)
+        {
+            return NotFound();
+        }
+
+        // Check if update already exists
+        var existingUpdate = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+        
+        if (existingUpdate != null)
+        {
+            return RedirectToAction("EditUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.ProjectId = project.Id;
+            ViewBag.ProjectTitle = project.Title;
+            ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
+            ViewBag.Year = year.Value;
+            ViewBag.Month = month.Value;
+            ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
+            return View(model);
+        }
+
+        // Get user information from claims
+        var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+        var userEmailClaim = User.FindFirst(ClaimTypes.Email)?.Value 
+            ?? User.FindFirst("preferred_username")?.Value
+            ?? User.FindFirst("email")?.Value;
+        var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value 
+            ?? User.FindFirst("name")?.Value;
+
+        var update = new ProjectMonthlyUpdate
+        {
+            ProjectId = projectId.Value,
+            Year = year.Value,
+            Month = month.Value,
+            Narrative = model.Narrative ?? string.Empty,
+            CreatedByEntraId = userObjectIdClaim,
+            CreatedByName = userNameClaim,
+            CreatedByEmail = userEmailClaim,
+            CreatedAt = DateTime.UtcNow,
+            SubmittedAt = DateTime.UtcNow
+        };
+
+        _context.ProjectMonthlyUpdates.Add(update);
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction("Updates", new { projectId = projectId.Value });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditUpdate(int? projectId, int? year, int? month, ProjectMonthlyUpdate model)
+    {
+        if (!projectId.HasValue || !year.HasValue || !month.HasValue)
+        {
+            return NotFound();
+        }
+
+        var update = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(u => u.Id == model.Id && u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+        
+        if (update == null)
+        {
+            return NotFound();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.ProjectId = projectId.Value;
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+            ViewBag.ProjectTitle = project?.Title ?? "Project";
+            ViewBag.ProjectCode = $"DFE-DDT-{projectId.Value}";
+            ViewBag.Year = year.Value;
+            ViewBag.Month = month.Value;
+            ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
+            return View(update);
+        }
+
+        // Get user information from claims
+        var userObjectIdClaim = User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
+        var userEmailClaim = User.FindFirst(ClaimTypes.Email)?.Value 
+            ?? User.FindFirst("preferred_username")?.Value
+            ?? User.FindFirst("email")?.Value;
+        var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value 
+            ?? User.FindFirst("name")?.Value;
+
+        update.Narrative = model.Narrative ?? string.Empty;
+        update.UpdatedAt = DateTime.UtcNow;
+        
+        // If not already submitted, mark as submitted now
+        if (!update.SubmittedAt.HasValue)
+        {
+            update.SubmittedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction("Updates", new { projectId = projectId.Value });
     }
 
     public async Task<IActionResult> CreateWeeklySuccess(int? projectId)
@@ -264,7 +458,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{project.Id}";
+        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
         
         // TODO: Implement create weekly success form
         return View();
@@ -288,7 +482,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         ViewBag.ProjectId = update.ProjectId;
         ViewBag.ProjectTitle = update.Project.Title;
-        ViewBag.ProjectCode = $"DEL-DDT-{update.ProjectId}";
+        ViewBag.ProjectCode = $"DFE-DDT-{update.ProjectId}";
         
         // TODO: Implement edit weekly success form
         return View(update);
