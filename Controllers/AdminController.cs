@@ -2792,6 +2792,7 @@ public class AdminController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SyncBusinessAreasFromCms()
     {
+        _logger.LogInformation("SyncBusinessAreasFromCms endpoint called");
         try
         {
             // Get confirmed matches from form data
@@ -2834,7 +2835,11 @@ public class AdminController : Controller
             }
 
             var cmsBusinessAreas = await GetBusinessAreasFromCmsAsync();
+            _logger.LogInformation("Retrieved {Count} business areas from CMS", cmsBusinessAreas.Count);
+            
+            // Load existing business areas - ensure they're tracked by EF
             var existingBusinessAreas = await _context.BusinessAreaLookups.ToListAsync();
+            _logger.LogInformation("Found {Count} existing business areas in database", existingBusinessAreas.Count);
             
             int created = 0;
             int updated = 0;
@@ -2850,15 +2855,23 @@ public class AdminController : Controller
                 if (exactMatch != null)
                 {
                     // Update existing record with CMS data
-                    exactMatch.SortOrder = cmsBa.SortOrder;
-                    exactMatch.UpdatedAt = DateTime.UtcNow;
-                    // Keep existing description and IsActive status unless they're empty/null
-                    if (string.IsNullOrWhiteSpace(exactMatch.Description))
+                    _logger.LogInformation("Exact match found: '{Name}' (Id: {Id}), updating sort order from {OldSort} to {NewSort}", 
+                        exactMatch.Name, exactMatch.Id, exactMatch.SortOrder, cmsBa.SortOrder);
+                    
+                    // Reload from database to ensure we have a tracked entity
+                    var trackedEntity = await _context.BusinessAreaLookups.FindAsync(exactMatch.Id);
+                    if (trackedEntity != null)
                     {
-                        exactMatch.Description = cmsBa.Description;
+                        trackedEntity.SortOrder = cmsBa.SortOrder;
+                        trackedEntity.UpdatedAt = DateTime.UtcNow;
+                        // Keep existing description and IsActive status unless they're empty/null
+                        if (string.IsNullOrWhiteSpace(trackedEntity.Description))
+                        {
+                            trackedEntity.Description = cmsBa.Description;
+                        }
+                        updated++;
+                        matched++;
                     }
-                    updated++;
-                    matched++;
                     continue;
                 }
 
@@ -2890,25 +2903,23 @@ public class AdminController : Controller
                     }
                     
                     // Update the matched record with CMS name and data
-                    _logger.LogInformation("Updating business area: '{OriginalName}' -> '{CmsName}'", 
-                        originalName, cmsBa.Name);
-                    nameMatch.Name = cmsBa.Name; // Update to CMS name
-                    nameMatch.SortOrder = cmsBa.SortOrder;
-                    nameMatch.UpdatedAt = DateTime.UtcNow;
-                    if (string.IsNullOrWhiteSpace(nameMatch.Description))
+                    _logger.LogInformation("Updating business area: '{OriginalName}' (Id: {Id}) -> '{CmsName}'", 
+                        originalName, nameMatch.Id, cmsBa.Name);
+                    
+                    // Reload from database to ensure we have a tracked entity
+                    var trackedEntity = await _context.BusinessAreaLookups.FindAsync(nameMatch.Id);
+                    if (trackedEntity != null)
                     {
-                        nameMatch.Description = cmsBa.Description;
+                        trackedEntity.Name = cmsBa.Name; // Update to CMS name
+                        trackedEntity.SortOrder = cmsBa.SortOrder;
+                        trackedEntity.UpdatedAt = DateTime.UtcNow;
+                        if (string.IsNullOrWhiteSpace(trackedEntity.Description))
+                        {
+                            trackedEntity.Description = cmsBa.Description;
+                        }
+                        updated++;
+                        matched++;
                     }
-                    // Explicitly mark as modified to ensure Entity Framework tracks the change
-                    _context.Entry(nameMatch).Property(x => x.Name).IsModified = true;
-                    _context.Entry(nameMatch).Property(x => x.SortOrder).IsModified = true;
-                    _context.Entry(nameMatch).Property(x => x.UpdatedAt).IsModified = true;
-                    if (!string.IsNullOrWhiteSpace(nameMatch.Description))
-                    {
-                        _context.Entry(nameMatch).Property(x => x.Description).IsModified = true;
-                    }
-                    updated++;
-                    matched++;
                     
                     if (needsConfirmation)
                     {
@@ -2932,16 +2943,54 @@ public class AdminController : Controller
                 created++;
             }
 
-            await _context.SaveChangesAsync();
+            _logger.LogInformation("About to save changes. Created: {Created}, Updated: {Updated}, Matched: {Matched}", 
+                created, updated, matched);
+            
+            // Force Entity Framework to detect changes
+            _context.ChangeTracker.DetectChanges();
+            
+            // Log what EF thinks has changed
+            var changedEntries = _context.ChangeTracker.Entries()
+                .Where(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Modified || 
+                           e.State == Microsoft.EntityFrameworkCore.EntityState.Added)
+                .ToList();
+            _logger.LogInformation("ChangeTracker found {Count} modified/added entities", changedEntries.Count);
+            foreach (var entry in changedEntries)
+            {
+                if (entry.Entity is BusinessAreaLookup ba)
+                {
+                    _logger.LogInformation("Entity {Id} ({Name}) state: {State}", ba.Id, ba.Name, entry.State);
+                    if (entry.State == Microsoft.EntityFrameworkCore.EntityState.Modified)
+                    {
+                        foreach (var prop in entry.Properties.Where(p => p.IsModified))
+                        {
+                            _logger.LogInformation("  Property {Property}: {Original} -> {Current}", 
+                                prop.Metadata.Name, prop.OriginalValue, prop.CurrentValue);
+                        }
+                    }
+                }
+            }
+            
+            var saveResult = await _context.SaveChangesAsync();
+            _logger.LogInformation("SaveChangesAsync returned: {Result} (created: {Created}, updated: {Updated}, matched: {Matched})", 
+                saveResult, created, updated, matched);
+
+            // Verify the changes were actually saved by reloading
+            if (updated > 0 || created > 0)
+            {
+                var verifyCount = await _context.BusinessAreaLookups.CountAsync();
+                _logger.LogInformation("Verification: Total business areas in database after save: {Count}", verifyCount);
+            }
 
             return Json(new 
             { 
                 success = true, 
-                message = $"Sync completed: {created} created, {updated} updated, {matched} matched from CMS.",
+                message = $"Sync completed: {created} created, {updated} updated, {matched} matched from CMS. {saveResult} records saved.",
                 created = created,
                 updated = updated,
                 matched = matched,
-                matches = appliedMatches
+                matches = appliedMatches,
+                recordsSaved = saveResult
             });
         }
         catch (Exception ex)

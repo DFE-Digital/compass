@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.ViewModels;
 
 namespace Compass.Controllers;
 
@@ -304,8 +305,13 @@ public class DdtReportsController : Controller
     {
         try
         {
-            // Get all business areas for selection
-            var businessAreas = await _productsApiService.GetBusinessAreasAsync();
+            // Get all business areas for selection from admin settings
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
             ViewBag.BusinessAreas = businessAreas;
 
             // Determine the reporting week range
@@ -634,6 +640,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.PhaseLookup)
                 .Where(p => !p.IsDeleted && p.Status == "Active")
                 .OrderBy(p => p.Title)
                 .ToListAsync();
@@ -699,6 +706,12 @@ public class DdtReportsController : Controller
             ViewBag.ActivityTypeLookups = await _context.ActivityTypeLookups
                 .Where(at => at.IsActive)
                 .OrderBy(at => at.Name)
+                .ToListAsync();
+            
+            ViewBag.PhaseLookups = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
                 .ToListAsync();
 
             return View(viewModel);
@@ -3211,6 +3224,89 @@ public class DdtReportsController : Controller
         }
     }
 
+    // POST: DdtReports/UpdateProjectPhase
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectPhase(int projectId, int? phaseLookupId, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.PhaseLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            string? phaseName = null;
+            if (phaseLookupId.HasValue)
+            {
+                var phase = await _context.PhaseLookups.FindAsync(phaseLookupId.Value);
+                if (phase != null && phase.IsActive)
+                {
+                    project.PhaseId = phaseLookupId.Value;
+                    phaseName = phase.Name;
+                }
+                else
+                {
+                    project.PhaseId = null;
+                }
+            }
+            else
+            {
+                project.PhaseId = null;
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var successMessage = phaseName != null
+                ? $"<strong>{projectTitle}</strong> - Phase updated to <strong>{phaseName}</strong>."
+                : $"<strong>{projectTitle}</strong> - Phase cleared.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project phase for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project phase.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
     // POST: DdtReports/UpdateProjectSpendControl
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -3822,6 +3918,277 @@ public class DdtReportsController : Controller
             }
             return RedirectToAction("DeliverablesCompletion");
         }
+    }
+
+    // GET: DdtReports/PeopleReport
+    public async Task<IActionResult> PeopleReport(
+        string? filterName = null,
+        string? filterEmail = null,
+        string? filterRole = null,
+        string? filterEmploymentType = null,
+        string? filterFundingArrangement = null,
+        string? filterProject = null)
+    {
+        try
+        {
+            // Get all active projects
+            var projects = await _context.Projects
+                .Where(p => !p.IsDeleted && p.Status == "Active")
+                .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.PrimaryContactUser)
+                .ToListAsync();
+
+            // Build person allocations dictionary
+            var personAllocations = new Dictionary<string, PersonAllocationSummary>();
+
+            // Process team members (ProjectContacts) where TeamStatus = "current"
+            foreach (var project in projects)
+            {
+                var teamMembers = project.ProjectContacts
+                    .Where(pc => string.Equals(pc.TeamStatus, "current", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                foreach (var member in teamMembers)
+                {
+                    var email = member.Email?.ToLowerInvariant() ?? string.Empty;
+                    var name = member.Name ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    var key = !string.IsNullOrWhiteSpace(email) ? email : name.ToLowerInvariant();
+
+                    if (!personAllocations.ContainsKey(key))
+                    {
+                        personAllocations[key] = new PersonAllocationSummary
+                        {
+                            Name = name,
+                            Email = email,
+                            ProjectAllocations = new List<PersonProjectAllocation>()
+                        };
+                    }
+
+                    var allocation = ParseTimeAllocation(member.TimeAllocation);
+                    personAllocations[key].ProjectAllocations.Add(new PersonProjectAllocation
+                    {
+                        ProjectId = project.Id,
+                        ProjectTitle = project.Title,
+                        Role = member.Role,
+                        RoleType = "Team Member",
+                        TimeAllocation = member.TimeAllocation,
+                        EmploymentType = member.EmploymentType,
+                        FundingArrangement = member.FundingArrangement,
+                        AllocationPercent = allocation
+                    });
+                }
+            }
+
+            // Process SROs
+            foreach (var project in projects)
+            {
+                foreach (var sro in project.SeniorResponsibleOfficers)
+                {
+                    if (sro.User == null) continue;
+
+                    var email = sro.User.Email?.ToLowerInvariant() ?? string.Empty;
+                    var name = sro.User.Name ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    var key = !string.IsNullOrWhiteSpace(email) ? email : name.ToLowerInvariant();
+
+                    if (!personAllocations.ContainsKey(key))
+                    {
+                        personAllocations[key] = new PersonAllocationSummary
+                        {
+                            Name = name,
+                            Email = email,
+                            ProjectAllocations = new List<PersonProjectAllocation>()
+                        };
+                    }
+
+                    // SROs don't have time allocation, so we'll use 0% or could default to 100%
+                    personAllocations[key].ProjectAllocations.Add(new PersonProjectAllocation
+                    {
+                        ProjectId = project.Id,
+                        ProjectTitle = project.Title,
+                        Role = "Senior Responsible Officer",
+                        RoleType = "SRO",
+                        TimeAllocation = null,
+                        EmploymentType = "N/A",
+                        FundingArrangement = "N/A",
+                        AllocationPercent = 0 // SROs typically don't have time allocation
+                    });
+                }
+            }
+
+            // Process Service Owners
+            foreach (var project in projects)
+            {
+                foreach (var serviceOwner in project.ServiceOwners)
+                {
+                    if (serviceOwner.User == null) continue;
+
+                    var email = serviceOwner.User.Email?.ToLowerInvariant() ?? string.Empty;
+                    var name = serviceOwner.User.Name ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    var key = !string.IsNullOrWhiteSpace(email) ? email : name.ToLowerInvariant();
+
+                    if (!personAllocations.ContainsKey(key))
+                    {
+                        personAllocations[key] = new PersonAllocationSummary
+                        {
+                            Name = name,
+                            Email = email,
+                            ProjectAllocations = new List<PersonProjectAllocation>()
+                        };
+                    }
+
+                    personAllocations[key].ProjectAllocations.Add(new PersonProjectAllocation
+                    {
+                        ProjectId = project.Id,
+                        ProjectTitle = project.Title,
+                        Role = "Service Owner",
+                        RoleType = "Service Owner",
+                        TimeAllocation = null,
+                        EmploymentType = "N/A",
+                        FundingArrangement = "N/A",
+                        AllocationPercent = 0
+                    });
+                }
+            }
+
+            // Process Primary Contacts
+            foreach (var project in projects)
+            {
+                if (project.PrimaryContactUser == null) continue;
+
+                var email = project.PrimaryContactUser.Email?.ToLowerInvariant() ?? string.Empty;
+                var name = project.PrimaryContactUser.Name ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                var key = !string.IsNullOrWhiteSpace(email) ? email : name.ToLowerInvariant();
+
+                if (!personAllocations.ContainsKey(key))
+                {
+                    personAllocations[key] = new PersonAllocationSummary
+                    {
+                        Name = name,
+                        Email = email,
+                        ProjectAllocations = new List<PersonProjectAllocation>()
+                    };
+                }
+
+                personAllocations[key].ProjectAllocations.Add(new PersonProjectAllocation
+                {
+                    ProjectId = project.Id,
+                    ProjectTitle = project.Title,
+                    Role = "Primary Contact",
+                    RoleType = "Primary Contact",
+                    TimeAllocation = null,
+                    EmploymentType = "N/A",
+                    FundingArrangement = "N/A",
+                    AllocationPercent = 0
+                });
+            }
+
+            // Calculate total allocation for each person
+            foreach (var person in personAllocations.Values)
+            {
+                person.TotalAllocationPercent = person.ProjectAllocations.Sum(pa => pa.AllocationPercent);
+            }
+
+            // Convert to list and apply filters
+            var peopleList = personAllocations.Values.ToList();
+
+            if (!string.IsNullOrWhiteSpace(filterName))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.Name.Contains(filterName, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterEmail))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.Email.Contains(filterEmail, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterRole))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.ProjectAllocations.Any(pa => pa.Role.Contains(filterRole, StringComparison.OrdinalIgnoreCase))).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterEmploymentType))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.ProjectAllocations.Any(pa => pa.EmploymentType == filterEmploymentType)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterFundingArrangement))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.ProjectAllocations.Any(pa => pa.FundingArrangement == filterFundingArrangement)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterProject))
+            {
+                peopleList = peopleList.Where(p => 
+                    p.ProjectAllocations.Any(pa => pa.ProjectTitle.Contains(filterProject, StringComparison.OrdinalIgnoreCase))).ToList();
+            }
+
+            // Sort by name
+            peopleList = peopleList.OrderBy(p => p.Name).ToList();
+
+            var viewModel = new PeopleReportViewModel
+            {
+                People = peopleList,
+                FilterName = filterName,
+                FilterEmail = filterEmail,
+                FilterRole = filterRole,
+                FilterEmploymentType = filterEmploymentType,
+                FilterFundingArrangement = filterFundingArrangement,
+                FilterProject = filterProject
+            };
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading People Report");
+            TempData["ErrorMessage"] = "An error occurred while loading the People report.";
+            return RedirectToAction("Index");
+        }
+    }
+
+    private static decimal ParseTimeAllocation(string? timeAllocation)
+    {
+        if (string.IsNullOrWhiteSpace(timeAllocation))
+            return 0;
+
+        // Handle "Less than 25%" as 12.5% (midpoint)
+        if (timeAllocation.Contains("Less than 25%", StringComparison.OrdinalIgnoreCase))
+            return 12.5m;
+
+        // Extract numeric value from strings like "25%", "50%", "75%", "100%"
+        var match = System.Text.RegularExpressions.Regex.Match(timeAllocation, @"(\d+)%");
+        if (match.Success && decimal.TryParse(match.Groups[1].Value, out var percent))
+        {
+            return percent;
+        }
+
+        return 0;
     }
 }
 

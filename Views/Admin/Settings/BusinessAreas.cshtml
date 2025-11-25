@@ -185,12 +185,16 @@
                                                 </td>
                                                 <td>
                                                     <div class="btn-group btn-group-sm" role="group">
-                                                        <button type="button" class="btn btn-outline-primary" 
-                                                                onclick="editBusinessArea(@item.Id, '@Html.Raw(item.Name.Replace("'", "\\'"))', '@Html.Raw(item.Description?.Replace("'", "\\'") ?? "")', @item.SortOrder, @(item.IsActive ? "true" : "false"))" 
+                                                        <button type="button" class="btn btn-outline-primary edit-business-area-btn" 
+                                                                data-id="@item.Id"
+                                                                data-name="@Html.Raw(item.Name.Replace("\"", "&quot;"))"
+                                                                data-description="@Html.Raw((item.Description ?? "").Replace("\"", "&quot;"))"
+                                                                data-sort-order="@item.SortOrder"
+                                                                data-is-active="@(item.IsActive ? "true" : "false")"
                                                                 title="Edit">
                                                             Edit
                                                         </button>
-                                                        <form asp-action="DeleteBusinessArea" asp-route-id="@item.Id" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this business area?');">
+                                                        <form asp-action="DeleteBusinessArea" asp-route-id="@item.Id" method="post" style="display: inline;" class="delete-business-area-form">
                                                             @Html.AntiForgeryToken()
                                                             <button type="submit" class="btn btn-outline-danger" title="Delete">
                                                                 Delete
@@ -312,15 +316,44 @@ function editBusinessArea(id, name, description, sortOrder, isActive) {
     $('#editBusinessAreaModal').modal('show');
 }
 
-// Attach event listener when DOM is ready
+// Attach event listeners when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Sync button
     var syncBtn = document.getElementById('syncFromCmsBtn');
     if (syncBtn) {
-        syncBtn.addEventListener('click', syncFromCms);
+        syncBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            syncFromCms();
+        });
         console.log('Sync button event listener attached');
     } else {
         console.error('Sync button not found!');
+        alert('Error: Sync button not found on page!');
     }
+    
+    // Edit buttons
+    var editButtons = document.querySelectorAll('.edit-business-area-btn');
+    editButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.getAttribute('data-id');
+            var name = this.getAttribute('data-name');
+            var description = this.getAttribute('data-description') || '';
+            var sortOrder = this.getAttribute('data-sort-order');
+            var isActive = this.getAttribute('data-is-active') === 'true';
+            editBusinessArea(parseInt(id), name, description, parseInt(sortOrder), isActive);
+        });
+    });
+    
+    // Delete forms
+    var deleteForms = document.querySelectorAll('.delete-business-area-form');
+    deleteForms.forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            if (!confirm('Are you sure you want to delete this business area?')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    });
 });
 
 function syncFromCms() {
@@ -353,6 +386,7 @@ function syncFromCms() {
         if (!response.ok) {
             return response.text().then(text => {
                 console.error('Preview failed:', response.status, text);
+                alert('Error fetching preview: ' + response.status + '\n' + text);
                 throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
             });
         }
@@ -362,6 +396,7 @@ function syncFromCms() {
         console.log('Preview data received:', previewData);
         if (!previewData.success) {
             console.error('Preview failed:', previewData.message);
+            alert('Preview failed: ' + (previewData.message || 'Unknown error'));
             throw new Error(previewData.message || 'Failed to preview sync');
         }
 
@@ -407,6 +442,13 @@ function syncFromCms() {
                     });
                 }
             });
+        }
+        
+        // Debug: Show what will be sent
+        if (confirmedMatches.length > 0) {
+            console.log('Will send ' + confirmedMatches.length + ' confirmed matches');
+        } else {
+            console.log('No matches need confirmation, or none were confirmed');
         }
 
         // Now perform the actual sync
@@ -467,20 +509,32 @@ function syncFromCms() {
         btnText.textContent = 'Sync from CMS';
         spinner.classList.add('d-none');
         
-        if (data.success) {
-            var message = 'Sync completed successfully!\n\n' + data.message;
+        if (data && data.success) {
+            var message = 'Sync completed successfully!\n\n' + (data.message || 'No message');
             if (data.matches && data.matches.length > 0) {
                 message += '\n\nMatches applied:\n';
                 data.matches.forEach(function(match) {
                     message += '- "' + match.existingName + '" matched with "' + match.cmsName + '"\n';
                 });
             }
+            if (data.recordsSaved !== undefined) {
+                message += '\n\nRecords saved to database: ' + data.recordsSaved;
+            }
+            if (data.created !== undefined) {
+                message += '\nCreated: ' + data.created;
+            }
+            if (data.updated !== undefined) {
+                message += '\nUpdated: ' + data.updated;
+            }
             alert(message);
-            console.log('Reloading page...');
-            window.location.reload();
+            console.log('Reloading page in 2 seconds...');
+            // Small delay to ensure the alert is seen before reload
+            setTimeout(function() {
+                window.location.reload();
+            }, 2000);
         } else {
-            console.error('Sync failed:', data.message);
-            alert('Sync failed: ' + data.message);
+            console.error('Sync failed:', data ? data.message : 'No response data');
+            alert('Sync failed: ' + (data ? data.message : 'Unknown error - check console'));
         }
     })
     .catch(error => {
@@ -488,7 +542,10 @@ function syncFromCms() {
         btnText.textContent = 'Sync from CMS';
         spinner.classList.add('d-none');
         console.error('Error in syncFromCms:', error);
-        alert('An error occurred while syncing: ' + error.message + '\n\nPlease check the browser console for details.');
+        var errorMsg = 'An error occurred while syncing.\n\n';
+        errorMsg += 'Error: ' + (error.message || 'Unknown error') + '\n\n';
+        errorMsg += 'Please check the browser console (F12) for more details.';
+        alert(errorMsg);
     });
 }
 </script>
