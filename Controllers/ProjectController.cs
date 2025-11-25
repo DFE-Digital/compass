@@ -550,10 +550,10 @@ namespace Compass.Controllers
             }
 
             // Set current tab
-            // Redirect milestones tab to new MilestonesUpdatesSuccesses overview
+            // Redirect milestones tab to MilestonesUpdatesSuccesses Milestones action
             if (tab == "milestones")
             {
-                return RedirectToAction("Overview", "MilestonesUpdatesSuccesses", new { projectId = id });
+                return RedirectToAction("Milestones", "MilestonesUpdatesSuccesses", new { projectId = id });
             }
             
             ViewBag.CurrentTab = tab;
@@ -1625,7 +1625,7 @@ namespace Compass.Controllers
             .Select(fs => new { fs.Id, fs.Name })
             .ToListAsync();
 
-        // Get business areas from admin settings and phases from CMS
+        // Get business areas from admin settings
         ViewBag.BusinessAreas = await _context.BusinessAreaLookups
             .Where(ba => ba.IsActive)
             .OrderBy(ba => ba.SortOrder)
@@ -1633,7 +1633,13 @@ namespace Compass.Controllers
             .Select(ba => ba.Name)
             .ToListAsync();
 
-        ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+        // Get phases from admin settings (PhaseLookups table)
+        ViewBag.Phases = await _context.PhaseLookups
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
+            .Select(p => p.Name)
+            .ToListAsync();
 
             ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
                 .Where(dp => dp.IsActive)
@@ -2944,7 +2950,7 @@ namespace Compass.Controllers
                 .Select(fs => new { fs.Id, fs.Name })
                 .ToListAsync();
 
-            // Get business areas from admin settings and phases from CMS
+            // Get business areas from admin settings
             ViewBag.BusinessAreas = await _context.BusinessAreaLookups
                 .Where(ba => ba.IsActive)
                 .OrderBy(ba => ba.SortOrder)
@@ -2952,7 +2958,13 @@ namespace Compass.Controllers
                 .Select(ba => ba.Name)
                 .ToListAsync();
 
-            ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+            // Get phases from admin settings (PhaseLookups table)
+            ViewBag.Phases = await _context.PhaseLookups
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync();
 
             ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
                 .Where(dp => dp.IsActive)
