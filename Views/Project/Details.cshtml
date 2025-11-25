@@ -2,7 +2,7 @@
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
-    ViewData["Title"] = "Project Details";
+    ViewData["Title"] = "Work Details";
     var deliveryCode = $"DEL-DDT-{Model.Id}";
     var isRaidEnabled = Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false);
 }
@@ -38,9 +38,9 @@
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
             <li class="breadcrumb-item">
-                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Delivery reporting</a>
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Project</li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Work</li>
         </ol>
     </nav>
 }
@@ -114,16 +114,44 @@
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "overview" ? "active" : "")">
                                 Overview
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "statusupdates" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "statusupdates" ? "active" : "")">
-                                Updates and successes
-                                <span class="badge badge-light float-right">@(statusUpdateCount + successesCount)</span>
-                            </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "milestones" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "milestones" ? "active" : "")">
-                                Milestones
+                            @{
+                                var isMusSectionActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "MilestonesUpdatesSuccesses";
+                                var currentMusAction = ViewContext.RouteData.Values["Action"]?.ToString();
+                            }
+                            <a href="@Url.Action("Overview", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive ? "active" : "")">
+                                Milestones, updates and successes
                                 <span class="badge badge-light float-right">@Model.Milestones.Count</span>
+                                @if (isMusSectionActive)
+                                {
+                                    <i class="fas fa-chevron-down float-right mr-2"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-chevron-right float-right mr-2"></i>
+                                }
                             </a>
+                            @if (isMusSectionActive)
+                            {
+                                <div class="pl-4 bg-light">
+                                    <a href="@Url.Action("Overview", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                                       class="list-group-item list-group-item-action @(currentMusAction == "Overview" ? "active" : "")" style="border-left: 3px solid @(currentMusAction == "Overview" ? "#007bff" : "transparent");">
+                                        Overview
+                                    </a>
+                                    <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                                       class="list-group-item list-group-item-action @(currentMusAction == "Milestones" ? "active" : "")" style="border-left: 3px solid @(currentMusAction == "Milestones" ? "#007bff" : "transparent");">
+                                        Milestones
+                                    </a>
+                                    <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                                       class="list-group-item list-group-item-action @(currentMusAction == "Updates" ? "active" : "")" style="border-left: 3px solid @(currentMusAction == "Updates" ? "#007bff" : "transparent");">
+                                        Monthly Updates
+                                    </a>
+                                    <a href="@Url.Action("Successes", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                                       class="list-group-item list-group-item-action @(currentMusAction == "Successes" ? "active" : "")" style="border-left: 3px solid @(currentMusAction == "Successes" ? "#007bff" : "transparent");">
+                                        Weekly Successes
+                                    </a>
+                                </div>
+                            }
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "rag" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "rag" ? "active" : "")">
                                 RAG Tracking
@@ -148,19 +176,10 @@
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "strategicalignment" ? "active" : "")">
                                 Strategic Alignment
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "outcomes" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "outcomes" ? "active" : "")">
-                                Problem, needs and outcomes
-                            </a>
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "dependencies" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "dependencies" ? "active" : "")">
                                 Dependencies
                                 <span class="badge badge-light float-right">@dependencyCount</span>
-                            </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "artefacts" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "artefacts" ? "active" : "")">
-                                Artefacts and resources
-                                <span class="badge badge-light float-right">@(Model.Artefacts?.Count(a => !a.IsDeleted) ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "products" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "products" ? "active" : "")">
@@ -234,7 +253,7 @@
                         else
                         {
                             <div class="alert alert-warning">
-                                <strong>Access Denied:</strong> Deliverables can only be managed for flagship projects. Mark this project as a flagship in the Strategic Alignment tab.
+                                <strong>Access Denied:</strong> Work items can only be managed for flagship work. Mark this work item as a flagship in the Strategic Alignment tab.
                             </div>
                         }
                         break;
@@ -250,10 +269,6 @@
                     case "kpis":
                         @await Html.PartialAsync("_Kpis", Model)
                         break;
-                    case "successes":
-                        // Redirect to statusupdates since they're merged
-                        @await Html.PartialAsync("_StatusUpdates", Model)
-                        break;
                     case "rag":
                         @await Html.PartialAsync("_RagTracking", Model)
                         break;
@@ -265,7 +280,7 @@
                         else
                         {
                             <div class="alert alert-warning">
-                                <strong>Access Denied:</strong> Delivery phases can only be viewed for projects with a Digital directorate.
+                                <strong>Access Denied:</strong> Delivery phases can only be viewed for work items with a Digital directorate.
                             </div>
                         }
                         break;
@@ -318,7 +333,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="viewMilestonesModalLabel">Project Milestones</h5>
+                <h5 class="modal-title" id="viewMilestonesModalLabel">Work Milestones</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -404,7 +419,7 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
     function confirmDelete(projectId, projectTitle) {
-        if (confirm('Are you sure you want to delete the project "' + projectTitle + '"? This action cannot be undone.')) {
+        if (confirm('Are you sure you want to delete the work item "' + projectTitle + '"? This action cannot be undone.')) {
             // Create a form and submit it
             var form = document.createElement('form');
             form.method = 'POST';

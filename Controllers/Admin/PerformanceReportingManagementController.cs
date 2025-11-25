@@ -58,49 +58,21 @@ namespace Compass.Controllers.Admin
         {
             try
             {
-                var cmsBaseUrl = _configuration["CmsApi:BaseUrl"];
-                if (string.IsNullOrEmpty(cmsBaseUrl))
-                {
-                    _logger.LogWarning("CMS API BaseUrl not configured");
-                    return new List<string>();
-                }
-
-                var httpClient = _httpClientFactory.CreateClient();
-                var response = await httpClient.GetAsync($"{cmsBaseUrl}category-values?filters[category_type][name][$eq]=Business area&fields[0]=name&fields[1]=sort_order&sort=sort_order:asc");
+                var businessAreas = await _context.BusinessAreaLookups
+                    .Where(ba => ba.IsActive)
+                    .OrderBy(ba => ba.SortOrder)
+                    .ThenBy(ba => ba.Name)
+                    .Select(ba => ba.Name)
+                    .ToListAsync();
                 
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await response.Content.ReadAsStringAsync();
-                    var jsonDoc = System.Text.Json.JsonDocument.Parse(content);
-                    
-                    var businessAreas = new List<string>();
-                    if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement))
-                    {
-                        foreach (var item in dataElement.EnumerateArray())
-                        {
-                            if (item.TryGetProperty("name", out var nameElement))
-                            {
-                                var name = nameElement.GetString();
-                                if (!string.IsNullOrEmpty(name))
-                                {
-                                    businessAreas.Add(name);
-                                }
-                            }
-                        }
-                    }
+                _logger.LogInformation("Found {Count} business areas from admin settings", businessAreas.Count);
                     return businessAreas;
-                }
-                else
-                {
-                    _logger.LogWarning("CMS API returned non-success status code: {StatusCode}", response.StatusCode);
-                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching business areas from CMS");
-            }
-            
+                _logger.LogError(ex, "Error fetching business areas from admin settings");
             return new List<string>();
+            }
         }
 
         // ========================================

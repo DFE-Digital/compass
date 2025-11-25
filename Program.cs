@@ -268,6 +268,7 @@ builder.Services.AddHttpClient<IServiceAssessmentApiService, ServiceAssessmentAp
 
 // Register services
 builder.Services.AddScoped<IReturnStatusService, ReturnStatusService>();
+builder.Services.AddScoped<IMonthlyUpdateService, MonthlyUpdateService>();
 builder.Services.AddScoped<IPerformanceReportingEligibilityService, PerformanceReportingEligibilityService>();
 builder.Services.AddScoped<IGraphService, GraphService>();
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();

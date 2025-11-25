@@ -662,6 +662,9 @@
                                                     <a class="dropdown-item" href="#" data-action="set-rag-status" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-flag mr-2"></i> Set RAG Status
                                                     </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-phase" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-layer-group mr-2"></i> Set Phase
+                                                    </a>
                                                     <a class="dropdown-item" href="#" data-action="set-priority" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-star mr-2"></i> Set Priority
                                                     </a>
@@ -780,6 +783,7 @@
     var deliveryPriorities = ViewBag.DeliveryPriorities as List<Compass.Models.DeliveryPriority> ?? new List<Compass.Models.DeliveryPriority>();
     var businessAreaLookups = ViewBag.BusinessAreaLookups as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
     var activityTypeLookups = ViewBag.ActivityTypeLookups as List<Compass.Models.ActivityTypeLookup> ?? new List<Compass.Models.ActivityTypeLookup>();
+    var phaseLookups = ViewBag.PhaseLookups as List<Compass.Models.PhaseLookup> ?? new List<Compass.Models.PhaseLookup>();
 }
 
 <!-- Update RAG Status Modal -->
@@ -847,6 +851,41 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     @Html.AntiForgeryToken()
                     <button type="submit" class="btn btn-primary">Save Priority</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Phase Modal -->
+<div class="modal fade" id="updatePhaseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectPhase" method="post">
+                <input type="hidden" name="projectId" id="phaseProjectId" />
+                <div class="modal-body">
+                    <p class="mb-3">Select the Phase for this deliverable.</p>
+                    <div class="form-group">
+                        <label for="phaseLookupId" class="form-label">Phase</label>
+                        <select class="form-control" id="phaseLookupId" name="phaseLookupId">
+                            <option value="">-- Clear Phase --</option>
+                            @foreach (var phase in phaseLookups)
+                            {
+                                <option value="@phase.Id">@phase.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Phase</button>
                 </div>
             </form>
         </div>
@@ -1231,6 +1270,16 @@
                 return false;
             });
 
+            $(document).on('click', '[data-action="set-phase"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#phaseProjectId').val(projectId);
+                $('#phaseLookupId').val('');
+                $('#updatePhaseModal').modal('show');
+                return false;
+            });
+
             $(document).on('click', '[data-action="set-priority"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1361,6 +1410,7 @@
             setupAjaxForm('#updatePmoContactModal form', handleProjectUpdate);
             setupAjaxForm('#updateDirectorateModal form', handleProjectUpdate);
             setupAjaxForm('#updateRagStatusModal form', handleProjectUpdate);
+            setupAjaxForm('#updatePhaseModal form', handleProjectUpdate);
             setupAjaxForm('#updatePriorityModal form', handleProjectUpdate);
             setupAjaxForm('#updateBusinessAreaModal form', handleProjectUpdate);
             setupAjaxForm('#updatePrimaryContactModal form', handleProjectUpdate);
@@ -1563,6 +1613,14 @@
                         ? '<span class="badge badge-' + getRagBadgeClass(project.ragStatus) + '">' + project.ragStatus + '</span>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="RAG Status missing"></i>';
                     $row.find('td').eq(7).html(ragHtml); // Updated column index
+                }
+
+                if (project.phase !== undefined) {
+                    $row.attr('data-phase', project.phase || '');
+                    var phaseHtml = project.phase
+                        ? '<span class="badge badge-info">' + escapeHtml(project.phase) + '</span>'
+                        : '<span class="text-muted">-</span>';
+                    $row.find('td').eq(2).html(phaseHtml); // Phase column (3rd column, 0-indexed)
                 }
 
                 if (project.priorityName !== undefined) {

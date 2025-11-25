@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using ClosedXML.Excel;
 
 namespace Compass.Controllers;
 
@@ -531,6 +532,163 @@ public class AnalysisController : Controller
             _logger.LogError(ex, "Error loading Service Standards analysis");
             TempData["ErrorMessage"] = "An error occurred while loading the service standards analysis.";
             return RedirectToAction("Index", "Home");
+        }
+    }
+
+    // GET: Analysis/ExportServiceStandards
+    public async Task<IActionResult> ExportServiceStandards()
+    {
+        try
+        {
+            // Get service assessment data
+            var assessmentData = await _serviceAssessmentApiService.GetActionsByStandardAsync();
+
+            if (assessmentData?.Assessments == null || !assessmentData.Assessments.Any())
+            {
+                TempData["ErrorMessage"] = "Unable to export service assessment data. No data available.";
+                return RedirectToAction("ServiceStandards");
+            }
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Service Assessments & Actions");
+
+            // Headers
+            var headers = new[]
+            {
+                "Assessment ID",
+                "Assessment Name",
+                "Assessment Phase",
+                "Assessment Outcome",
+                "Assessment Status",
+                "Assessment Type",
+                "Standard Number",
+                "Standard Title",
+                "Standard Outcome",
+                "Action ID",
+                "Action Comments",
+                "Action Status",
+                "Created Date",
+                "Estimated Resolution Date",
+                "Days Overdue",
+                "Assigned To",
+                "Created By",
+                "Unique ID"
+            };
+
+            // Add header row
+            for (var column = 0; column < headers.Length; column++)
+            {
+                var cell = worksheet.Cell(1, column + 1);
+                cell.Value = headers[column];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            var currentRow = 2;
+
+            // Export all assessments and their actions
+            foreach (var assessment in assessmentData.Assessments.OrderBy(a => a.AssessmentName))
+            {
+                if (assessment.ActionsByStandard == null || !assessment.ActionsByStandard.Any())
+                {
+                    // Add row for assessment with no actions
+                    worksheet.Cell(currentRow, 1).Value = assessment.AssessmentID;
+                    worksheet.Cell(currentRow, 2).Value = assessment.AssessmentName ?? string.Empty;
+                    worksheet.Cell(currentRow, 3).Value = assessment.AssessmentPhase ?? string.Empty;
+                    worksheet.Cell(currentRow, 4).Value = assessment.AssessmentOutcome ?? string.Empty;
+                    worksheet.Cell(currentRow, 5).Value = assessment.AssessmentStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, 6).Value = assessment.AssessmentType ?? string.Empty;
+                    // Leave action columns empty
+                    currentRow++;
+                }
+                else
+                {
+                    // Add rows for each action
+                    foreach (var actionsByStandard in assessment.ActionsByStandard.OrderBy(abs => abs.Standard))
+                    {
+                        if (actionsByStandard.Actions == null || !actionsByStandard.Actions.Any())
+                        {
+                            // Add row for standard with no actions
+                            worksheet.Cell(currentRow, 1).Value = assessment.AssessmentID;
+                            worksheet.Cell(currentRow, 2).Value = assessment.AssessmentName ?? string.Empty;
+                            worksheet.Cell(currentRow, 3).Value = assessment.AssessmentPhase ?? string.Empty;
+                            worksheet.Cell(currentRow, 4).Value = assessment.AssessmentOutcome ?? string.Empty;
+                            worksheet.Cell(currentRow, 5).Value = assessment.AssessmentStatus ?? string.Empty;
+                            worksheet.Cell(currentRow, 6).Value = assessment.AssessmentType ?? string.Empty;
+                            worksheet.Cell(currentRow, 7).Value = actionsByStandard.Standard;
+                            worksheet.Cell(currentRow, 8).Value = actionsByStandard.StandardTitle ?? string.Empty;
+                            worksheet.Cell(currentRow, 9).Value = actionsByStandard.StandardOutcome ?? string.Empty;
+                            // Leave action columns empty
+                            currentRow++;
+                        }
+                        else
+                        {
+                            foreach (var action in actionsByStandard.Actions.OrderBy(a => a.Created))
+                            {
+                                worksheet.Cell(currentRow, 1).Value = assessment.AssessmentID;
+                                worksheet.Cell(currentRow, 2).Value = assessment.AssessmentName ?? string.Empty;
+                                worksheet.Cell(currentRow, 3).Value = assessment.AssessmentPhase ?? string.Empty;
+                                worksheet.Cell(currentRow, 4).Value = assessment.AssessmentOutcome ?? string.Empty;
+                                worksheet.Cell(currentRow, 5).Value = assessment.AssessmentStatus ?? string.Empty;
+                                worksheet.Cell(currentRow, 6).Value = assessment.AssessmentType ?? string.Empty;
+                                worksheet.Cell(currentRow, 7).Value = actionsByStandard.Standard;
+                                worksheet.Cell(currentRow, 8).Value = actionsByStandard.StandardTitle ?? string.Empty;
+                                worksheet.Cell(currentRow, 9).Value = actionsByStandard.StandardOutcome ?? string.Empty;
+                                worksheet.Cell(currentRow, 10).Value = action.ActionID ?? string.Empty;
+                                worksheet.Cell(currentRow, 11).Value = action.Comments ?? string.Empty;
+                                worksheet.Cell(currentRow, 12).Value = action.Status ?? string.Empty;
+                                
+                                if (action.Created.HasValue)
+                                {
+                                    worksheet.Cell(currentRow, 13).Value = action.Created.Value;
+                                    worksheet.Cell(currentRow, 13).Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss";
+                                }
+                                
+                                if (action.EstimatedResolutionDate.HasValue)
+                                {
+                                    worksheet.Cell(currentRow, 14).Value = action.EstimatedResolutionDate.Value;
+                                    worksheet.Cell(currentRow, 14).Style.DateFormat.Format = "yyyy-mm-dd";
+                                    
+                                    // Calculate days overdue if status is open and date is past
+                                    if (action.Status?.ToLower() == "open" && action.EstimatedResolutionDate.Value < DateTime.Today)
+                                    {
+                                        var daysOverdue = (DateTime.Today - action.EstimatedResolutionDate.Value).Days;
+                                        worksheet.Cell(currentRow, 15).Value = daysOverdue;
+                                        if (daysOverdue > 0)
+                                        {
+                                            worksheet.Cell(currentRow, 15).Style.Font.FontColor = XLColor.Red;
+                                        }
+                                    }
+                                }
+                                
+                                worksheet.Cell(currentRow, 16).Value = action.AssignedTo?.ToString() ?? string.Empty;
+                                worksheet.Cell(currentRow, 17).Value = action.CreatedBy?.ToString() ?? string.Empty;
+                                worksheet.Cell(currentRow, 18).Value = action.UniqueID ?? string.Empty;
+                                
+                                currentRow++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Format columns
+            worksheet.Columns().AdjustToContents();
+            worksheet.Column(11).Style.Alignment.WrapText = true; // Action Comments
+            worksheet.SheetView.FreezeRows(1);
+
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"service-assessments-actions-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting service standards data");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("ServiceStandards");
         }
     }
 }
