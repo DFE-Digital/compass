@@ -25,7 +25,6 @@
 }
 
 @{
-
     Func<string, string> normaliseKey = key =>
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -74,14 +73,9 @@
         [nameof(Model.BusinessArea)] = Html.IdFor(m => m.BusinessArea),
         [nameof(Model.StartDate)] = Html.IdFor(m => m.StartDate),
         [nameof(Model.TargetDeliveryDate)] = Html.IdFor(m => m.TargetDeliveryDate),
-        [nameof(Model.HistoricBuRTId)] = Html.IdFor(m => m.HistoricBuRTId),
-        [nameof(Model.IsMultiDepartmentProject)] = Html.IdFor(m => m.IsMultiDepartmentProject),
         [nameof(Model.Status)] = Html.IdFor(m => m.Status),
         [nameof(Model.RagStatus)] = Html.IdFor(m => m.RagStatus),
-        [nameof(Model.RagJustification)] = Html.IdFor(m => m.RagJustification),
-        [nameof(Model.TotalPermFte)] = Html.IdFor(m => m.TotalPermFte),
-        [nameof(Model.TotalMspFte)] = Html.IdFor(m => m.TotalMspFte),
-        [nameof(Model.OtherDepartments)] = Html.IdFor(m => m.OtherDepartments)
+        [nameof(Model.RagJustification)] = Html.IdFor(m => m.RagJustification)
     };
 
     var modelErrors = ViewData.ModelState
@@ -98,9 +92,40 @@
     var errorSummaryClasses = hasModelErrors ? "card error-summary mb-3" : "card error-summary d-none mb-3";
 }
 
+@section Styles {
+    <style>
+        .project-form-section {
+            display: none;
+        }
+        .project-form-section.active {
+            display: block;
+        }
+        .nav-pills .nav-link {
+            border-radius: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #005ea5;
+        }
+        .helper-content {
+            background-color: #f8f9fa;
+            border-left: 3px solid #005ea5;
+            padding: 1rem;
+            border-radius: 0.25rem;
+        }
+        .list-group-item {
+            cursor: pointer;
+        }
+        .list-group-item.active {
+            background-color: #005ea5;
+            border-color: #005ea5;
+        }
+    </style>
+}
+
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-3 align-items-center">
+        <div class="row mb-2">
             <div class="col-lg-8 col-md-7 col-sm-12">
                 <h1 class="m-0">Create delivery entry</h1>
             </div>
@@ -110,7 +135,18 @@
 
 <section class="content">
     <div class="container-fluid">
-        <form asp-action="Create" method="post" novalidate>
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+</div>
+        }
+
+        <form asp-action="Create" method="post" id="createProjectForm" novalidate>
+            @Html.AntiForgeryToken()
+            
             <div id="project-create-error-summary"
                  class="@errorSummaryClasses"
                  role="alert"
@@ -143,34 +179,68 @@
                     </ul>
                 </div>
             </div>
+
             <div class="row">
-                <div class="col-md-8">
-                    <div class="card">
+                <!-- Left Column: Navigation -->
+                <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                    <div class="card mb-4">
                         <div class="card-header">
-                            <h3 class="card-title">Project Details</h3>
+                            <h3 class="card-title">Navigation</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="#section-basic" class="list-group-item list-group-item-action active" data-section="basic">
+                                    <span>Basic details</span>
+                                </a>
+                                <a href="#section-classification" class="list-group-item list-group-item-action" data-section="classification">
+                                    <span>Classification</span>
+                                </a>
+                                <a href="#section-contacts" class="list-group-item list-group-item-action" data-section="contacts">
+                                    <span>Contacts</span>
+                                </a>
+                                <a href="#section-organisational" class="list-group-item list-group-item-action" data-section="organisational">
+                                    <span>Organisational</span>
+                                </a>
+                                <a href="#section-status" class="list-group-item list-group-item-action" data-section="status">
+                                    <span>Status</span>
+                                </a>
+                                <a href="#section-optional" class="list-group-item list-group-item-action" data-section="optional">
+                                    <span>Objectives and Priority outcomes</span>
+                                </a>
+                                <a href="#section-submission" class="list-group-item list-group-item-action" data-section="submission">
+                                    <span>Submission</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Middle Column: Form Inputs -->
+                <div class="col-xxl-7 col-xl-7 col-lg-6 col-md-8 col-sm-12 col-12">
+                    <!-- Basic Details Section -->
+                    <div class="card project-form-section active" id="section-basic">
+                        <div class="card-header">
+                            <h3 class="card-title">Basic Details</h3>
                         </div>
                         <div class="card-body">
-                            <!-- Title -->
                             <div class="form-group @(hasError(nameof(Model.Title)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Title" class="control-label">
                                     Project Title <span class="text-danger">*</span>
                                 </label>
-                                <small class="form-text text-muted">Enter a clear and descriptive title for the project</small>
+                                <small class="form-text text-muted d-block mb-1">Enter a clear and descriptive title for the project</small>
                                 <span asp-validation-for="Title" class="form-error-message"></span>
-                                <input asp-for="Title" class="form-control @(hasError(nameof(Model.Title)) ? "form-control--error" : string.Empty)" required />
+                                <input asp-for="Title" class="form-control @(hasError(nameof(Model.Title)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.Title)" />
                             </div>
 
-                            <!-- Aim -->
                             <div class="form-group @(hasError(nameof(Model.Aim)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Aim" class="control-label">
                                     Project Aim <span class="text-danger">*</span>
                                 </label>
-                                <small class="form-text text-muted">Describe the purpose and objectives of this project</small>
+                                <small class="form-text text-muted d-block mb-1">Describe the purpose and objectives of this project</small>
                                 <span asp-validation-for="Aim" class="form-error-message"></span>
-                                <textarea asp-for="Aim" class="form-control @(hasError(nameof(Model.Aim)) ? "form-control--error" : string.Empty)" rows="3" required></textarea>
+                                <textarea asp-for="Aim" class="form-control @(hasError(nameof(Model.Aim)) ? "form-control--error" : string.Empty)" rows="3" required id="@Html.IdFor(m => m.Aim)"></textarea>
                             </div>
 
-                            <!-- Flagship -->
                             <div class="form-group">
                                 <div class="form-check">
                                     <input asp-for="IsFlagship" class="form-check-input" type="checkbox" />
@@ -178,7 +248,6 @@
                                 </div>
                             </div>
 
-                            <!-- AI initiative -->
                             <div class="form-group">
                                 <div class="form-check">
                                     <input asp-for="IsAiInitiative" class="form-check-input" type="checkbox" />
@@ -186,11 +255,11 @@
                                 </div>
                             </div>
 
-                            <!-- Phase -->
                             <div class="form-group @(hasError(nameof(Model.Phase)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Phase" class="control-label">Phase of Delivery</label>
+                                <small class="form-text text-muted d-block mb-1">Select the current phase of delivery</small>
                                 <span asp-validation-for="Phase" class="form-error-message"></span>
-                                <select asp-for="Phase" class="form-control @(hasError(nameof(Model.Phase)) ? "form-control--error" : string.Empty)">
+                                <select asp-for="Phase" class="form-control @(hasError(nameof(Model.Phase)) ? "form-control--error" : string.Empty)" id="@Html.IdFor(m => m.Phase)">
                                     <option value="">Select phase</option>
                                     @if (ViewBag.Phases != null)
                                     {
@@ -202,11 +271,11 @@
                                 </select>
                             </div>
 
-                            <!-- Business Area -->
                             <div class="form-group @(hasError(nameof(Model.BusinessArea)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="BusinessArea" class="control-label">Business Area</label>
+                                <small class="form-text text-muted d-block mb-1">Select the business area for this project</small>
                                 <span asp-validation-for="BusinessArea" class="form-error-message"></span>
-                                <select asp-for="BusinessArea" class="form-control @(hasError(nameof(Model.BusinessArea)) ? "form-control--error" : string.Empty)">
+                                <select asp-for="BusinessArea" class="form-control @(hasError(nameof(Model.BusinessArea)) ? "form-control--error" : string.Empty)" id="@Html.IdFor(m => m.BusinessArea)">
                                     <option value="">Select business area</option>
                                     @if (ViewBag.BusinessAreas != null)
                                     {
@@ -218,19 +287,143 @@
                                 </select>
                             </div>
 
-                            @{
-                                var primaryContactUser = ViewBag.PrimaryContactUser as Compass.Models.User ?? Model.PrimaryContactUser;
-                            }
+                            <div class="form-group @(hasError(nameof(Model.StartDate)) ? "form-group--error" : string.Empty)">
+                                <label asp-for="StartDate" class="control-label">
+                                    Start Date <span class="text-danger">*</span>
+                                </label>
+                                <small class="form-text text-muted d-block mb-1">The date when the project began or will begin</small>
+                                <span asp-validation-for="StartDate" class="form-error-message"></span>
+                                <input asp-for="StartDate" type="date" class="form-control @(hasError(nameof(Model.StartDate)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.StartDate)" />
+                            </div>
+
+                            <div class="form-group @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-group--error" : string.Empty)">
+                                <label asp-for="TargetDeliveryDate" class="control-label">Target Delivery Date</label>
+                                <small class="form-text text-muted d-block mb-1">Leave blank if not known</small>
+                                <span asp-validation-for="TargetDeliveryDate" class="form-error-message"></span>
+                                <input asp-for="TargetDeliveryDate" type="date" class="form-control @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-control--error" : string.Empty)" />
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="HistoricBuRTId" class="control-label">Historic BuRT ID</label>
+                                <small class="form-text text-muted d-block mb-1">The historic BuRT (Business Risk Tracking) ID for this project</small>
+                                <span asp-validation-for="HistoricBuRTId" class="form-error-message"></span>
+                                <input asp-for="HistoricBuRTId" class="form-control" placeholder="Enter historic BuRT ID" />
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="basic" disabled>Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="basic">Next</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Classification Section -->
+                    <div class="card project-form-section" id="section-classification">
+                        <div class="card-header">
+                            <h3 class="card-title">Project Classification</h3>
+                                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="ActivityTypeLookupId" class="control-label">Activity Type</label>
+                                <small class="form-text text-muted d-block mb-1">Select the type of activity</small>
+                                <select asp-for="ActivityTypeLookupId" class="form-control">
+                                    <option value="">Select activity type</option>
+                                    @if (ViewBag.ActivityTypes != null)
+                                    {
+                                        @foreach (var activityType in ViewBag.ActivityTypes)
+                                        {
+                                            <option value="@activityType.Id">@activityType.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="RiskAppetiteLookupId" class="control-label">Risk Appetite</label>
+                                <small class="form-text text-muted d-block mb-1">Select the risk appetite for this project</small>
+                                <select asp-for="RiskAppetiteLookupId" class="form-control">
+                                    <option value="">Select risk appetite</option>
+                                    @if (ViewBag.RiskAppetites != null)
+                                    {
+                                        @foreach (var riskAppetite in ViewBag.RiskAppetites)
+                                        {
+                                            <option value="@riskAppetite.Id">@riskAppetite.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="ServiceUsers" class="control-label">Service Users</label>
+                                <small class="form-text text-muted d-block mb-1">Describe the service users</small>
+                                <textarea asp-for="ServiceUsers" class="form-control" rows="3" placeholder="Describe the service users"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsInternal" class="form-check-input" id="isInternal" />
+                                    <label asp-for="IsInternal" class="form-check-label">Internal</label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="IsExternal" class="form-check-input" id="isExternal" />
+                                    <label asp-for="IsExternal" class="form-check-label">External</label>
+                                </div>
+                                <small class="form-text text-muted">Select whether the service is internal, external, or both</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsMultiDepartmentProject" class="form-check-input" id="isMultiDept" />
+                                    <label asp-for="IsMultiDepartmentProject" class="form-check-label">Is this a multi-department project?</label>
+                                </div>
+                                <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
+                            </div>
+
+                            <div id="otherDepartmentsRow" style="display: none;">
+                                <div class="form-group @(hasError(nameof(Model.OtherDepartments)) ? "form-group--error" : string.Empty)">
+                                    <label class="control-label">Other Government Departments</label>
+                                    <small class="form-text text-muted d-block mb-1">Select at least one department if this is a multi-department project</small>
+                                <div class="input-group">
+                                        <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." autocomplete="off" />
+                                    <div class="input-group-append">
+                                            <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
+                                    </div>
+                                </div>
+                                    <div id="departmentResults" class="list-group mt-2" style="display: none;"></div>
+                                    <div id="selectedDepartments" class="mt-2"></div>
+                                    <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
+                                    <span asp-validation-for="OtherDepartments" class="form-error-message"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="classification">Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="classification">Next</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contacts Section -->
+                    <div class="card project-form-section" id="section-contacts">
+                        <div class="card-header">
+                            <h3 class="card-title">Project Contacts</h3>
+                        </div>
+                        <div class="card-body">
                             <div class="form-group">
                                 <label class="control-label" for="createPrimaryContact">Primary contact</label>
-                                <small class="form-text text-muted">Optional – choose the main point of contact for this project.</small>
+                                <small class="form-text text-muted d-block mb-1">Optional – choose the main point of contact for this project</small>
+                                @{
+                                    var primaryContactUser = ViewBag.PrimaryContactUser as Compass.Models.User ?? Model.PrimaryContactUser;
+                                }
                                 <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
                                     <div class="position-relative">
                                         <input type="text"
                                                class="form-control js-user-picker-input"
                                                id="createPrimaryContact"
                                                autocomplete="off"
-                                               placeholder="Start typing a name or email address"
+                                               placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
                                                value="@(primaryContactUser?.Name ?? string.Empty)" />
                                         <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
                                         <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
@@ -254,142 +447,78 @@
                                 </div>
                             </div>
 
-                            <!-- Start Date -->
-                            <div class="form-group @(hasError(nameof(Model.StartDate)) ? "form-group--error" : string.Empty)">
-                                <label asp-for="StartDate" class="control-label">
-                                    Start Date <span class="text-danger">*</span>
-                                </label>
-                                <small class="form-text text-muted">The date when the project began or will begin</small>
-                                <span asp-validation-for="StartDate" class="form-error-message"></span>
-                                <input asp-for="StartDate" type="date" class="form-control @(hasError(nameof(Model.StartDate)) ? "form-control--error" : string.Empty)" required />
-                            </div>
-
-                            <!-- Target Date -->
-                            <div class="form-group @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-group--error" : string.Empty)">
-                                <label asp-for="TargetDeliveryDate" class="control-label">Target Delivery Date</label>
-                                <small class="form-text text-muted">Leave blank if not known</small>
-                                <span asp-validation-for="TargetDeliveryDate" class="form-error-message"></span>
-                                <input asp-for="TargetDeliveryDate" type="date" class="form-control @(hasError(nameof(Model.TargetDeliveryDate)) ? "form-control--error" : string.Empty)" />
-                            </div>
-
-                            <!-- Historic BuRT ID -->
-                            <div class="form-group @(hasError(nameof(Model.HistoricBuRTId)) ? "form-group--error" : string.Empty)">
-                                <label asp-for="HistoricBuRTId" class="control-label">Historic BuRT ID</label>
-                                <small class="form-text text-muted">The historic BuRT (Business Risk Tracking) ID for this project</small>
-                                <span asp-validation-for="HistoricBuRTId" class="form-error-message"></span>
-                                <input asp-for="HistoricBuRTId" class="form-control @(hasError(nameof(Model.HistoricBuRTId)) ? "form-control--error" : string.Empty)" placeholder="Enter historic BuRT ID" />
-                            </div>
-
-                            <!-- Multi-department Project -->
-                            <div class="form-group @(hasError(nameof(Model.IsMultiDepartmentProject)) ? "form-group--error" : string.Empty)">
-                                <div class="form-check">
-                                    <input asp-for="IsMultiDepartmentProject" class="form-check-input" id="isMultiDept" />
-                                    <label asp-for="IsMultiDepartmentProject" class="form-check-label">Is this a multi-department project?</label>
-                                </div>
-                                <small class="form-text text-muted">Being delivered by DfE and other government departments</small>
-                                <span asp-validation-for="IsMultiDepartmentProject" class="form-error-message"></span>
-                            </div>
-
-                            <div id="otherDepartmentsRow" style="display: none;">
-                                <div class="form-group @(hasError(nameof(Model.OtherDepartments)) ? "form-group--error" : string.Empty)">
-                                    <label class="control-label">Other Government Departments</label>
-                                    <small class="form-text text-muted">Select at least one department if this is a multi-department project</small>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="departmentSearch" placeholder="Search for government departments..." />
-                                        <div class="input-group-append">
-                                            <button type="button" class="btn btn-outline-secondary" id="addDepartmentBtn">Add</button>
-                                        </div>
-                                    </div>
-                                    <div id="selectedDepartments" class="mt-2"></div>
-                                    <input type="hidden" asp-for="OtherDepartments" id="otherDepartmentsJson" />
-                                    <span asp-validation-for="OtherDepartments" class="form-error-message"></span>
-                                </div>
-                            </div>
-
-                            <hr class="my-4" />
-                            <h5 class="mb-3">Project Classification</h5>
-
-                            <div class="form-group">
-                                <label asp-for="ActivityTypeLookupId" class="control-label">Activity Type</label>
-                                <select asp-for="ActivityTypeLookupId" class="form-control">
-                                    <option value="">Select activity type</option>
-                                    @if (ViewBag.ActivityTypes != null)
-                                    {
-                                        @foreach (var activityType in ViewBag.ActivityTypes)
-                                        {
-                                            <option value="@activityType.Id">@activityType.Name</option>
-                                        }
-                                    }
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label asp-for="RiskAppetiteLookupId" class="control-label">Risk Appetite</label>
-                                <select asp-for="RiskAppetiteLookupId" class="form-control">
-                                    <option value="">Select risk appetite</option>
-                                    @if (ViewBag.RiskAppetites != null)
-                                    {
-                                        @foreach (var riskAppetite in ViewBag.RiskAppetites)
-                                        {
-                                            <option value="@riskAppetite.Id">@riskAppetite.Name</option>
-                                        }
-                                    }
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label asp-for="ServiceUsers" class="control-label">Service Users</label>
-                                <textarea asp-for="ServiceUsers" class="form-control" rows="3" placeholder="Describe the service users"></textarea>
-                                <small class="form-text text-muted">Free text description of the service users</small>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="form-check">
-                                    <input asp-for="IsInternal" class="form-check-input" id="isInternal" />
-                                    <label asp-for="IsInternal" class="form-check-label">Internal</label>
-                                </div>
-                                <div class="form-check">
-                                    <input asp-for="IsExternal" class="form-check-input" id="isExternal" />
-                                    <label asp-for="IsExternal" class="form-check-label">External</label>
-                                </div>
-                                <small class="form-text text-muted">Select whether the service is internal, external, or both</small>
-                            </div>
-
-                            <hr class="my-4" />
-                            <h5 class="mb-3">Project Contacts</h5>
-
                             <div class="form-group">
                                 <label class="control-label">Senior Responsible Officer(s)</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="sroSearch" placeholder="Search for users..." />
-                                    <div class="input-group-append">
-                                        <button type="button" class="btn btn-outline-secondary" id="addSroBtn">Add</button>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for Senior Responsible Officers. You can add multiple SROs.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="srosPicker">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control js-user-picker-input" id="srosSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                                     </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" class="js-user-picker-objectid" />
+                                    <input type="hidden" class="js-user-picker-name" />
+                                    <input type="hidden" class="js-user-picker-email" />
                                 </div>
-                                <div id="selectedSros" class="mt-2"></div>
+                                <div id="selectedSros" class="mt-3"></div>
                                 <input type="hidden" name="SelectedSroUserIds" id="selectedSroUserIds" />
-                                <small class="form-text text-muted">Select one or more Senior Responsible Officers</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="control-label">Service Owner(s)</label>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for Service Owners. You can add multiple service owners.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="serviceOwnersPicker">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control js-user-picker-input" id="serviceOwnersSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                    </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" class="js-user-picker-objectid" />
+                                    <input type="hidden" class="js-user-picker-name" />
+                                    <input type="hidden" class="js-user-picker-email" />
+                                </div>
+                                <div id="selectedServiceOwners" class="mt-3"></div>
+                                <input type="hidden" name="SelectedServiceOwnerUserIds" id="selectedServiceOwnerUserIds" />
                             </div>
 
                             <div class="form-group">
                                 <label class="control-label">PMO Contact(s)</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="pmoSearch" placeholder="Search for users..." />
-                                    <div class="input-group-append">
-                                        <button type="button" class="btn btn-outline-secondary" id="addPmoBtn">Add</button>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for PMO contacts. You can add multiple PMO contacts.</small>
+                                <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="pmoPicker">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control js-user-picker-input" id="pmoSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
+                                        <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                        <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
                                     </div>
+                                    <p class="form-text text-muted js-user-picker-message"></p>
+                                    <input type="hidden" class="js-user-picker-objectid" />
+                                    <input type="hidden" class="js-user-picker-name" />
+                                    <input type="hidden" class="js-user-picker-email" />
                                 </div>
-                                <div id="selectedPmos" class="mt-2"></div>
+                                <div id="selectedPmos" class="mt-3"></div>
                                 <input type="hidden" name="SelectedPmoUserIds" id="selectedPmoUserIds" />
-                                <small class="form-text text-muted">Select one or more PMO contacts</small>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="contacts">Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="contacts">Next</button>
+                            </div>
+                        </div>
                             </div>
 
-                            <hr class="my-4" />
-                            <h5 class="mb-3">Organisational Structure</h5>
-
+                    <!-- Organisational Structure Section -->
+                    <div class="card project-form-section" id="section-organisational">
+                        <div class="card-header">
+                            <h3 class="card-title">Organisational Structure</h3>
+                        </div>
+                        <div class="card-body">
                             <div class="form-group">
                                 <label class="control-label">Directorate(s)</label>
-                                <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
+                                <small class="form-text text-muted d-block mb-1">Select one or more directorates</small>
+                                <div class="border p-3">
                                     @if (ViewBag.Directorates != null)
                                     {
                                         @foreach (var directorate in ViewBag.Directorates)
@@ -405,12 +534,12 @@
                                         }
                                     }
                                 </div>
-                                <small class="form-text text-muted">Select one or more directorates</small>
                             </div>
 
                             <div class="form-group">
                                 <label class="control-label">Budget Owner(s)</label>
-                                <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
+                                <small class="form-text text-muted d-block mb-1">Select one or more budget owners from business areas</small>
+                                <div class="border p-3">
                                     @if (ViewBag.BudgetOwnerBusinessAreas != null)
                                     {
                                         @foreach (var businessArea in ViewBag.BudgetOwnerBusinessAreas)
@@ -426,125 +555,44 @@
                                         }
                                     }
                                 </div>
-                                <small class="form-text text-muted">Select one or more budget owners from business areas</small>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="organisational">Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="organisational">Next</button>
+                            </div>
+                        </div>
                             </div>
 
-                            <hr class="my-4" />
-                            <h5 class="mb-3">Phase Dates</h5>
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Discovery</h6>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Planned)</label>
-                                        <input type="date" asp-for="DiscoveryStartDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Actual)</label>
-                                        <input type="date" asp-for="DiscoveryStartDateActual" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Planned)</label>
-                                        <input type="date" asp-for="DiscoveryEndDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Actual)</label>
-                                        <input type="date" asp-for="DiscoveryEndDateActual" class="form-control" />
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <h6>Alpha</h6>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Planned)</label>
-                                        <input type="date" asp-for="AlphaStartDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Actual)</label>
-                                        <input type="date" asp-for="AlphaStartDateActual" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Planned)</label>
-                                        <input type="date" asp-for="AlphaEndDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Actual)</label>
-                                        <input type="date" asp-for="AlphaEndDateActual" class="form-control" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row mt-3">
-                                <div class="col-md-6">
-                                    <h6>Private Beta</h6>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Planned)</label>
-                                        <input type="date" asp-for="PrivateBetaStartDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Actual)</label>
-                                        <input type="date" asp-for="PrivateBetaStartDateActual" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Planned)</label>
-                                        <input type="date" asp-for="PrivateBetaEndDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Actual)</label>
-                                        <input type="date" asp-for="PrivateBetaEndDateActual" class="form-control" />
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <h6>Public Beta</h6>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Planned)</label>
-                                        <input type="date" asp-for="PublicBetaStartDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">Start Date (Actual)</label>
-                                        <input type="date" asp-for="PublicBetaStartDateActual" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Planned)</label>
-                                        <input type="date" asp-for="PublicBetaEndDatePlanned" class="form-control" />
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="control-label">End Date (Actual)</label>
-                                        <input type="date" asp-for="PublicBetaEndDateActual" class="form-control" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Status -->
+                    <!-- Status Section -->
+                    <div class="card project-form-section" id="section-status">
+                        <div class="card-header">
+                            <h3 class="card-title">Status</h3>
+                        </div>
+                        <div class="card-body">
                             <div class="form-group @(hasError(nameof(Model.Status)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="Status" class="control-label">
                                     Project Status <span class="text-danger">*</span>
                                 </label>
-                                <small class="form-text text-muted">Select the current status of this project</small>
+                                <small class="form-text text-muted d-block mb-1">Select the current status of this project</small>
                                 <span asp-validation-for="Status" class="form-error-message"></span>
-                                <select asp-for="Status" class="form-control @(hasError(nameof(Model.Status)) ? "form-control--error" : string.Empty)" required>
+                                <select asp-for="Status" class="form-control @(hasError(nameof(Model.Status)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.Status)">
                                     <option value="">Select status</option>
                                     <option value="Active">Active</option>
                                     <option value="On Hold">On Hold</option>
                                     <option value="Completed">Completed</option>
                                     <option value="Cancelled">Cancelled</option>
                                 </select>
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- RAG Status -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">RAG Status</h3>
-                        </div>
-                        <div class="card-body">
                             <div class="form-group @(hasError(nameof(Model.RagStatus)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="RagStatus" class="control-label">
                                     RAG Status <span class="text-danger">*</span>
                                 </label>
-                                <small class="form-text text-muted">Select the current Red, Amber, Green status for this project</small>
+                                <small class="form-text text-muted d-block mb-1">Select the current Red, Amber, Green status for this project</small>
                                 <span asp-validation-for="RagStatus" class="form-error-message"></span>
-                                <select asp-for="RagStatus" class="form-control @(hasError(nameof(Model.RagStatus)) ? "form-control--error" : string.Empty)" required>
+                                <select asp-for="RagStatus" class="form-control @(hasError(nameof(Model.RagStatus)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.RagStatus)">
                                     <option value="">Select RAG status</option>
                                     <option value="Green">Green</option>
                                     <option value="Amber-Green">Amber-Green</option>
@@ -553,52 +601,32 @@
                                     <option value="Red">Red</option>
                                 </select>
                             </div>
+
                             <div class="form-group @(hasError(nameof(Model.RagJustification)) ? "form-group--error" : string.Empty)">
                                 <label asp-for="RagJustification" class="control-label">RAG Justification</label>
-                                <small class="form-text text-muted">Provide justification for the selected RAG status</small>
+                                <small class="form-text text-muted d-block mb-1">Provide justification for the selected RAG status</small>
                                 <span asp-validation-for="RagJustification" class="form-error-message"></span>
-                                <textarea asp-for="RagJustification" class="form-control @(hasError(nameof(Model.RagJustification)) ? "form-control--error" : string.Empty)" rows="3" placeholder="Explain why this RAG status has been assigned"></textarea>
+                                <textarea asp-for="RagJustification" class="form-control @(hasError(nameof(Model.RagJustification)) ? "form-control--error" : string.Empty)" rows="3" placeholder="Explain why this RAG status has been assigned" id="@Html.IdFor(m => m.RagJustification)"></textarea>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="status">Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="status">Next</button>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-4 mt-4">
-                        <h4 class="text-muted">Following sections are optional</h4>
-                        <hr class="mt-2" />
-                    </div>
-
-                    <!-- Resourcing -->
-                    <div class="card">
+                    <!-- Objectives and Priority Outcomes Section -->
+                    <div class="card project-form-section" id="section-optional">
                         <div class="card-header">
-                            <h3 class="card-title">Resourcing</h3>
+                            <h3 class="card-title">Objectives and Priority outcomes</h3>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                        <div class="form-group @(hasError(nameof(Model.TotalPermFte)) ? "form-group--error" : string.Empty)">
-                                        <label asp-for="TotalPermFte" class="control-label">Total Permanent FTE</label>
-                                            <span asp-validation-for="TotalPermFte" class="form-error-message"></span>
-                                            <input asp-for="TotalPermFte" type="number" step="0.01" class="form-control @(hasError(nameof(Model.TotalPermFte)) ? "form-control--error" : string.Empty)" />
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                        <div class="form-group @(hasError(nameof(Model.TotalMspFte)) ? "form-group--error" : string.Empty)">
-                                        <label asp-for="TotalMspFte" class="control-label">Total MSP FTE</label>
-                                            <span asp-validation-for="TotalMspFte" class="form-error-message"></span>
-                                            <input asp-for="TotalMspFte" type="number" step="0.01" class="form-control @(hasError(nameof(Model.TotalMspFte)) ? "form-control--error" : string.Empty)" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Mission Pillars -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Mission Pillars</h3>
-                        </div>
-                        <div class="card-body">
-                            <p>Does this project support the delivery of any of the following missions?</p>
+                            <!-- Mission Pillars -->
+                            <div class="form-group">
+                                <label class="control-label">Mission Pillars</label>
+                                <small class="form-text text-muted d-block mb-1">Does this project support the delivery of any of the following missions?</small>
                             @if (ViewBag.Missions != null)
                             {
                                 @foreach (var mission in ViewBag.Missions)
@@ -609,16 +637,12 @@
                                     </div>
                                 }
                             }
-                        </div>
                     </div>
 
                     <!-- Priority Outcomes -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Priority Outcomes</h3>
-                        </div>
-                        <div class="card-body">
-                            <p>Which priority outcomes does this project support?</p>
+                            <div class="form-group">
+                                <label class="control-label">Priority Outcomes</label>
+                                <small class="form-text text-muted d-block mb-1">Which priority outcomes does this project support?</small>
                             @if (ViewBag.Objectives != null)
                             {
                                 @foreach (var themeGroup in ViewBag.Objectives)
@@ -635,175 +659,52 @@
                                     </div>
                                 }
                             }
+                    </div>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="optional">Previous</button>
+                                <button type="button" class="btn btn-primary nav-next-btn" data-section="optional">Next</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Funding -->
-                    <div class="card">
+                    <!-- Submission Section -->
+                    <div class="card project-form-section" id="section-submission">
                         <div class="card-header">
-                            <h3 class="card-title">Funding</h3>
+                            <h3 class="card-title">Submission</h3>
                         </div>
                         <div class="card-body">
-                            <div id="funding-container">
-                                <div class="card mb-3">
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">Funding Source</label>
-                                                    <select name="FundingAllocations[0].FundingSourceId" class="form-control">
-                                                        <option value="">Select funding source</option>
-                                                        @if (ViewBag.FundingSources != null)
-                                                        {
-                                                            @foreach (var source in ViewBag.FundingSources)
-                                                            {
-                                                                <option value="@source.Id">@source.Name</option>
-                                                            }
-                                                        }
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-group">
-                                                    <label class="control-label">Allocation %</label>
-                                                    <input type="number" name="FundingAllocations[0].AllocationPercentage" class="form-control" step="0.01" min="0" max="100" placeholder="0.00" />
-                                                </div>
-                                            </div>
-                                            <div class="col-md-2">
-                                                <div class="form-group">
-                                                    <label class="control-label">&nbsp;</label>
-                                                    <button type="button" class="btn btn-outline-danger btn-block" onclick="removeFundingSource(this)">Remove</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-12">
-                                                <div class="form-group">
-                                                    <label class="control-label">Notes (Optional)</label>
-                                                    <input type="text" name="FundingAllocations[0].Notes" class="form-control" placeholder="Additional notes about this funding allocation" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="alert alert-info mb-4">
+                                <strong>Review your information</strong> - Please review all the information below before creating the entry. You can edit everything after creation.
                             </div>
-                            <button type="button" class="btn btn-outline-primary" onclick="addFundingSource()">Add Another Funding Source</button>
-                        </div>
-                    </div>
 
-                    <!-- Expected Outcomes -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Expected Outcomes</h3>
-                        </div>
-                        <div class="card-body">
-                            <div id="outcomes-container">
-                                <div class="card mb-3">
-                                    <div class="card-body">
-                                        <div class="form-group">
-                                            <label class="control-label">Expected Outcome</label>
-                                            <input type="text" name="Outcomes[0].Outcome" class="form-control" placeholder="Describe the expected outcome" />
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="control-label">Measure of Success</label>
-                                            <input type="text" name="Outcomes[0].MeasureOfSuccess" class="form-control" placeholder="How will you know the outcome has been achieved?" />
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">Confidence Level</label>
-                                                    <select name="Outcomes[0].ConfidenceLevel" class="form-control">
-                                                        <option value="Low">Low</option>
-                                                        <option value="Medium" selected>Medium</option>
-                                                        <option value="High">High</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">&nbsp;</label>
-                                                    <button type="button" class="btn btn-outline-danger btn-block" onclick="removeOutcome(this)">Remove</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="control-label">Confidence Explanation</label>
-                                            <textarea name="Outcomes[0].ConfidenceExplanation" class="form-control" rows="2" placeholder="Explain your confidence level"></textarea>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div id="submissionSummary" class="mb-4">
+                                <!-- Summary will be populated by JavaScript -->
                             </div>
-                            <button type="button" class="btn btn-outline-primary" onclick="addOutcome()">Add Another Outcome</button>
-                        </div>
-                    </div>
 
-                    <!-- Roles & Contacts -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Roles & Contacts</h3>
-                        </div>
-                        <div class="card-body">
-                            <div id="contacts-container">
-                                <div class="card mb-3">
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">
-                                                        Role
-                                                    </label>
-                                                    <input type="text" name="Contacts[0].Role" class="form-control" placeholder="e.g., Product Manager, Delivery Manager" />
-                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Role" data-valmsg-replace="true"></span>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">&nbsp;</label>
-                                                    <button type="button" class="btn btn-outline-danger btn-block" onclick="removeContact(this)">Remove</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">
-                                                        Name
-                                                    </label>
-                                                    <input type="text" name="Contacts[0].Name" class="form-control" placeholder="Contact name" />
-                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Name" data-valmsg-replace="true"></span>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label class="control-label">
-                                                        Email
-                                                    </label>
-                                                    <input type="email" name="Contacts[0].Email" class="form-control" placeholder="Contact email" />
-                                            <span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[0].Email" data-valmsg-replace="true"></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="control-label">Role Description</label>
-                                            <textarea name="Contacts[0].RoleDescription" class="form-control" rows="2" placeholder="Brief description of the role"></textarea>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="d-flex">
+                                <button type="submit" class="btn btn-success mr-2">
+                                    Create entry
+                                </button>
+                                <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
                             </div>
-                            <button type="button" class="btn btn-outline-primary" onclick="addContact()">Add Another Contact</button>
+                        </div>
+                        <div class="card-footer bg-white border-top">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary nav-prev-btn" data-section="submission">Previous</button>
+                                <div></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Actions</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex flex-column">
-                                <button type="submit" class="btn btn-success btn-block mb-2">Create entry</button>
-                                <a asp-action="Index" class="btn btn-outline-secondary btn-block">Cancel</a>
+                <!-- Right Column: Helper Content -->
+                <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-12 col-sm-12 col-12">
+                    <div class="sticky-top" style="top: 20px;">
+                        <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem;">
+                            <div id="helpContent" class="p-3" style="background-color: #f8f9fa; border-radius: 0.375rem; min-height: 300px;">
+                                <p class="text-muted">Click on a field or section to see guidance</p>
                             </div>
                         </div>
                     </div>
@@ -816,193 +717,435 @@
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
     <script src="~/js/user-picker.js" asp-append-version="true"></script>
-    
-    <style>
-        .text-danger[aria-required="true"]::before {
-            content: "* ";
-        }
-        .required-field::after {
-            content: " *";
-            color: #dc3545;
-        }
-    </style>
-    
-    <script>
-        let fundingIndex = 1;
-        let outcomeIndex = 1;
-        let contactIndex = 1;
+    <script nonce="@Context.Items["Nonce"]">
+        // Section navigation
+        document.querySelectorAll('.list-group-item[data-section]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.dataset.section;
+                showSection(section);
+            });
+        });
 
-        function addFundingSource() {
-            const container = document.getElementById('funding-container');
-            const newCard = document.createElement('div');
-            newCard.className = 'card mb-3';
-            newCard.innerHTML = 
-                '<div class="card-body">' +
-                    '<div class="row">' +
-                        '<div class="col-md-6">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">Funding Source</label>' +
-                                '<select name="FundingAllocations[' + fundingIndex + '].FundingSourceId" class="form-control">' +
-                                    '<option value="">Select funding source</option>' +
-                                    '@if (ViewBag.FundingSources != null) { @foreach (var source in ViewBag.FundingSources) { <option value="@source.Id">@source.Name</option> } }' +
-                                '</select>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="col-md-4">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">Allocation %</label>' +
-                                '<input type="number" name="FundingAllocations[' + fundingIndex + '].AllocationPercentage" class="form-control" step="0.01" min="0" max="100" placeholder="0.00" />' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="col-md-2">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">&nbsp;</label>' +
-                                '<button type="button" class="btn btn-outline-danger btn-block" onclick="removeFundingSource(this)">Remove</button>' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="row">' +
-                        '<div class="col-md-12">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">Notes (Optional)</label>' +
-                                '<input type="text" name="FundingAllocations[' + fundingIndex + '].Notes" class="form-control" placeholder="Additional notes about this funding allocation" />' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>';
-            container.appendChild(newCard);
-            fundingIndex++;
-        }
+        // Navigation button mapping
+        const sectionOrder = ['basic', 'classification', 'contacts', 'organisational', 'status', 'optional', 'submission'];
+        
+        // Add event listeners for navigation buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('nav-next-btn')) {
+                e.preventDefault();
+                const currentSection = e.target.getAttribute('data-section');
+                const currentIndex = sectionOrder.indexOf(currentSection);
+                if (currentIndex < sectionOrder.length - 1) {
+                    navigateToSection(sectionOrder[currentIndex + 1]);
+                }
+            } else if (e.target.classList.contains('nav-prev-btn')) {
+                e.preventDefault();
+                const currentSection = e.target.getAttribute('data-section');
+                const currentIndex = sectionOrder.indexOf(currentSection);
+                if (currentIndex > 0) {
+                    navigateToSection(sectionOrder[currentIndex - 1]);
+                }
+            }
+        });
 
-        function removeFundingSource(button) {
-            button.closest('.card').remove();
-        }
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.project-form-section').forEach(section => {
+                section.classList.remove('active');
+            });
 
-        function addOutcome() {
-            const container = document.getElementById('outcomes-container');
-            const newCard = document.createElement('div');
-            newCard.className = 'card mb-3';
-            newCard.innerHTML = 
-                '<div class="card-body">' +
-                    '<div class="form-group">' +
-                        '<label class="control-label">Expected Outcome</label>' +
-                        '<input type="text" name="Outcomes[' + outcomeIndex + '].Outcome" class="form-control" placeholder="Describe the expected outcome" />' +
-                    '</div>' +
-                    '<div class="form-group">' +
-                        '<label class="control-label">Measure of Success</label>' +
-                        '<input type="text" name="Outcomes[' + outcomeIndex + '].MeasureOfSuccess" class="form-control" placeholder="How will you know the outcome has been achieved?" />' +
-                    '</div>' +
-                    '<div class="row">' +
-                        '<div class="col-md-6">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">Confidence Level</label>' +
-                                '<select name="Outcomes[' + outcomeIndex + '].ConfidenceLevel" class="form-control">' +
-                                    '<option value="Low">Low</option>' +
-                                    '<option value="Medium" selected>Medium</option>' +
-                                    '<option value="High">High</option>' +
-                                '</select>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="col-md-6">' +
-                            '<div class="form-group">' +
-                                '<label class="control-label">&nbsp;</label>' +
-                                '<button type="button" class="btn btn-outline-danger btn-block" onclick="removeOutcome(this)">Remove</button>' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="form-group">' +
-                        '<label class="control-label">Confidence Explanation</label>' +
-                        '<textarea name="Outcomes[' + outcomeIndex + '].ConfidenceExplanation" class="form-control" rows="2" placeholder="Explain your confidence level"></textarea>' +
-                    '</div>' +
-                '</div>';
-            container.appendChild(newCard);
-            outcomeIndex++;
+            // Show selected section
+            const section = document.getElementById(`section-${sectionName}`);
+            if (section) {
+                section.classList.add('active');
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            // Update nav active state
+            document.querySelectorAll('.list-group-item[data-section]').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === sectionName) {
+                    link.classList.add('active');
+                }
+            });
+
+            // Update current section and show section-level help (unless a field is focused)
+            currentSection = sectionName;
+            if (!currentField) {
+                showHelp(sectionName, false);
+            }
+
+            // Update submission summary if we're on the submission section
+            if (sectionName === 'submission') {
+                updateSubmissionSummary();
+            }
         }
 
-        function removeOutcome(button) {
-            button.closest('.card').remove();
+        // Update summary when form values change
+        document.addEventListener('change', function(e) {
+            if (currentSection === 'submission') {
+                updateSubmissionSummary();
+            }
+        });
+
+        document.addEventListener('input', function(e) {
+            if (currentSection === 'submission') {
+                updateSubmissionSummary();
+            }
+        });
+
+        function navigateToSection(sectionName) {
+            showSection(sectionName);
         }
 
-        function addContact() {
-            const container = document.getElementById('contacts-container');
-            const newCard = document.createElement('div');
-            newCard.className = 'card mb-3';
-            newCard.innerHTML = 
-                '<div class="card-body">' +
-                    '<div class="row">' +
-                                    '<div class="col-md-6">' +
-                                        '<div class="form-group">' +
-                                            '<label class="control-label">Role</label>' +
-                                            '<input type="text" name="Contacts[' + contactIndex + '].Role" class="form-control" placeholder="e.g., Product Manager, Delivery Manager" />' +
-                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Role" data-valmsg-replace="true"></span>' +
-                                        '</div>' +
-                                    '</div>' +
-                                    '<div class="col-md-6">' +
-                                        '<div class="form-group">' +
-                                            '<label class="control-label">&nbsp;</label>' +
-                                            '<button type="button" class="btn btn-outline-danger btn-block" onclick="removeContact(this)">Remove</button>' +
-                                        '</div>' +
-                                    '</div>' +
-                                '</div>' +
-                                '<div class="row">' +
-                                    '<div class="col-md-6">' +
-                                        '<div class="form-group">' +
-                                            '<label class="control-label">Name</label>' +
-                                            '<input type="text" name="Contacts[' + contactIndex + '].Name" class="form-control" placeholder="Contact name" />' +
-                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Name" data-valmsg-replace="true"></span>' +
-                                        '</div>' +
-                                    '</div>' +
-                                    '<div class="col-md-6">' +
-                                        '<div class="form-group">' +
-                                            '<label class="control-label">Email</label>' +
-                                            '<input type="email" name="Contacts[' + contactIndex + '].Email" class="form-control" placeholder="Contact email" />' +
-                        '<span class="form-error-message field-validation-valid" data-valmsg-for="Contacts[' + contactIndex + '].Email" data-valmsg-replace="true"></span>' +
-                                        '</div>' +
-                                    '</div>' +
-                                '</div>' +
-                    '<div class="form-group">' +
-                        '<label class="control-label">Role Description</label>' +
-                        '<textarea name="Contacts[' + contactIndex + '].RoleDescription" class="form-control" rows="2" placeholder="Brief description of the role"></textarea>' +
-                    '</div>' +
-                '</div>';
-            container.appendChild(newCard);
-            contactIndex++;
+        function updateSubmissionSummary() {
+            const summaryDiv = document.getElementById('submissionSummary');
+            if (!summaryDiv) return;
+
+            // Get all form values
+            const title = document.getElementById('@Html.IdFor(m => m.Title)')?.value || 'Not provided';
+            const aim = document.getElementById('@Html.IdFor(m => m.Aim)')?.value || 'Not provided';
+            const phase = document.getElementById('@Html.IdFor(m => m.Phase)')?.value || 'Not provided';
+            const businessArea = document.getElementById('@Html.IdFor(m => m.BusinessArea)')?.value || 'Not provided';
+            const startDate = document.getElementById('@Html.IdFor(m => m.StartDate)')?.value || 'Not provided';
+            const targetDate = document.getElementById('@Html.IdFor(m => m.TargetDeliveryDate)')?.value || 'Not provided';
+            const status = document.getElementById('@Html.IdFor(m => m.Status)')?.value || 'Not provided';
+            const ragStatus = document.getElementById('@Html.IdFor(m => m.RagStatus)')?.value || 'Not provided';
+            const ragJustification = document.getElementById('@Html.IdFor(m => m.RagJustification)')?.value || 'Not provided';
+            const isFlagship = document.getElementById('@Html.IdFor(m => m.IsFlagship)')?.checked ? 'Yes' : 'No';
+            const isAiInitiative = document.getElementById('@Html.IdFor(m => m.IsAiInitiative)')?.checked ? 'Yes' : 'No';
+            const isMultiDept = document.getElementById('isMultiDept')?.checked ? 'Yes' : 'No';
+
+            // Get selected directorates
+            const selectedDirectorates = Array.from(document.querySelectorAll('input[name="SelectedDirectorateIds"]:checked'))
+                .map(cb => {
+                    const label = document.querySelector(`label[for="${cb.id}"]`);
+                    return label ? label.textContent.trim() : '';
+                })
+                .filter(name => name);
+
+            // Get selected budget owners
+            const selectedBudgetOwners = Array.from(document.querySelectorAll('input[name="SelectedBudgetOwnerIds"]:checked'))
+                .map(cb => {
+                    const label = document.querySelector(`label[for="${cb.id}"]`);
+                    return label ? label.textContent.trim() : '';
+                })
+                .filter(name => name);
+
+            // Get selected missions
+            const selectedMissions = Array.from(document.querySelectorAll('input[name="SelectedMissionIds"]:checked'))
+                .map(cb => {
+                    const label = document.querySelector(`label[for="${cb.id}"]`);
+                    return label ? label.textContent.trim() : '';
+                })
+                .filter(name => name);
+
+            // Get selected objectives
+            const selectedObjectives = Array.from(document.querySelectorAll('input[name="SelectedObjectiveIds"]:checked'))
+                .map(cb => {
+                    const label = document.querySelector(`label[for="${cb.id}"]`);
+                    return label ? label.textContent.trim() : '';
+                })
+                .filter(name => name);
+
+            // Get primary contact
+            const primaryContactName = document.querySelector('.js-user-picker-summary .user-picker__selected-name')?.textContent || 'Not provided';
+            const primaryContactEmail = document.querySelector('.js-user-picker-summary .user-picker__selected-meta')?.textContent || '';
+
+            // Get SROs, Service Owners, PMO contacts
+            const selectedSros = Array.from(document.querySelectorAll('#selectedSros .badge span')).map(el => el.textContent.trim()).filter(t => t && !t.includes('Selected SROs:'));
+            const selectedServiceOwners = Array.from(document.querySelectorAll('#selectedServiceOwners .badge span')).map(el => el.textContent.trim()).filter(t => t && !t.includes('Selected Service Owners:'));
+            const selectedPmos = Array.from(document.querySelectorAll('#selectedPmos .badge span')).map(el => el.textContent.trim()).filter(t => t && !t.includes('Selected PMO Contacts:'));
+
+            // Get activity type and risk appetite
+            const activityTypeSelect = document.querySelector('select[name="ActivityTypeLookupId"]');
+            const activityType = activityTypeSelect?.options[activityTypeSelect.selectedIndex]?.text || 'Not provided';
+            const riskAppetiteSelect = document.querySelector('select[name="RiskAppetiteLookupId"]');
+            const riskAppetite = riskAppetiteSelect?.options[riskAppetiteSelect.selectedIndex]?.text || 'Not provided';
+
+            // Get service users
+            const serviceUsers = document.getElementById('@Html.IdFor(m => m.ServiceUsers)')?.value || 'Not provided';
+
+            // Get selected departments
+            const selectedDepts = Array.from(document.querySelectorAll('#selectedDepartments .badge span')).map(el => el.textContent.trim()).filter(t => t && !t.includes('Selected Departments:'));
+
+            // Build summary HTML
+            let summaryHtml = '<div class="row">';
+            summaryHtml += '<div class="col-md-6">';
+            summaryHtml += '<h5 class="mb-3">Basic Information</h5>';
+            summaryHtml += `<p><strong>Title:</strong> ${escapeHtml(title)}</p>`;
+            summaryHtml += `<p><strong>Aim:</strong> ${escapeHtml(aim)}</p>`;
+            summaryHtml += `<p><strong>Phase:</strong> ${escapeHtml(phase)}</p>`;
+            summaryHtml += `<p><strong>Business Area:</strong> ${escapeHtml(businessArea)}</p>`;
+            summaryHtml += `<p><strong>Start Date:</strong> ${escapeHtml(startDate)}</p>`;
+            summaryHtml += `<p><strong>Target Delivery Date:</strong> ${escapeHtml(targetDate)}</p>`;
+            summaryHtml += `<p><strong>Flagship Project:</strong> ${isFlagship}</p>`;
+            summaryHtml += `<p><strong>AI Initiative:</strong> ${isAiInitiative}</p>`;
+            summaryHtml += '</div>';
+
+            summaryHtml += '<div class="col-md-6">';
+            summaryHtml += '<h5 class="mb-3">Status & Classification</h5>';
+            summaryHtml += `<p><strong>Status:</strong> ${escapeHtml(status)}</p>`;
+            summaryHtml += `<p><strong>RAG Status:</strong> ${escapeHtml(ragStatus)}</p>`;
+            summaryHtml += `<p><strong>RAG Justification:</strong> ${escapeHtml(ragJustification)}</p>`;
+            summaryHtml += `<p><strong>Activity Type:</strong> ${escapeHtml(activityType)}</p>`;
+            summaryHtml += `<p><strong>Risk Appetite:</strong> ${escapeHtml(riskAppetite)}</p>`;
+            summaryHtml += `<p><strong>Service Users:</strong> ${escapeHtml(serviceUsers)}</p>`;
+            summaryHtml += `<p><strong>Multi-Department Project:</strong> ${isMultiDept}</p>`;
+            if (selectedDepts.length > 0) {
+                summaryHtml += `<p><strong>Other Departments:</strong> ${selectedDepts.map(d => escapeHtml(d)).join(', ')}</p>`;
+            }
+            summaryHtml += '</div>';
+            summaryHtml += '</div>';
+
+            summaryHtml += '<div class="row mt-4">';
+            summaryHtml += '<div class="col-md-6">';
+            summaryHtml += '<h5 class="mb-3">Contacts</h5>';
+            summaryHtml += `<p><strong>Primary Contact:</strong> ${escapeHtml(primaryContactName)}${primaryContactEmail ? ` (${escapeHtml(primaryContactEmail)})` : ''}</p>`;
+            if (selectedSros.length > 0) {
+                summaryHtml += `<p><strong>SROs:</strong> ${selectedSros.map(s => escapeHtml(s)).join(', ')}</p>`;
+            }
+            if (selectedServiceOwners.length > 0) {
+                summaryHtml += `<p><strong>Service Owners:</strong> ${selectedServiceOwners.map(s => escapeHtml(s)).join(', ')}</p>`;
+            }
+            if (selectedPmos.length > 0) {
+                summaryHtml += `<p><strong>PMO Contacts:</strong> ${selectedPmos.map(s => escapeHtml(s)).join(', ')}</p>`;
+            }
+            summaryHtml += '</div>';
+
+            summaryHtml += '<div class="col-md-6">';
+            summaryHtml += '<h5 class="mb-3">Organisational</h5>';
+            if (selectedDirectorates.length > 0) {
+                summaryHtml += `<p><strong>Directorates:</strong> ${selectedDirectorates.map(d => escapeHtml(d)).join(', ')}</p>`;
+            }
+            if (selectedBudgetOwners.length > 0) {
+                summaryHtml += `<p><strong>Budget Owners:</strong> ${selectedBudgetOwners.map(b => escapeHtml(b)).join(', ')}</p>`;
+            }
+            summaryHtml += '</div>';
+            summaryHtml += '</div>';
+
+            if (selectedMissions.length > 0 || selectedObjectives.length > 0) {
+                summaryHtml += '<div class="row mt-4">';
+                summaryHtml += '<div class="col-12">';
+                summaryHtml += '<h5 class="mb-3">Objectives and Priority Outcomes</h5>';
+                if (selectedMissions.length > 0) {
+                    summaryHtml += `<p><strong>Mission Pillars:</strong> ${selectedMissions.map(m => escapeHtml(m)).join(', ')}</p>`;
+                }
+                if (selectedObjectives.length > 0) {
+                    summaryHtml += `<p><strong>Priority Outcomes:</strong> ${selectedObjectives.map(o => escapeHtml(o)).join(', ')}</p>`;
+                }
+                summaryHtml += '</div>';
+                summaryHtml += '</div>';
+            }
+
+            summaryDiv.innerHTML = summaryHtml;
         }
 
-        function removeContact(button) {
-            button.closest('.card').remove();
+        // Help content definitions
+        const helpContent = {
+            basic: {
+                title: 'Basic Details',
+                content: '<p>Enter the essential information about your work item.</p><p><strong>Required fields:</strong></p><ul><li>Project Title - A clear, descriptive name</li><li>Project Aim - The purpose and objectives</li><li>Start Date - When the project began or will begin</li></ul><p><strong>Optional:</strong> Phase, Business Area, Target Delivery Date, Historic BuRT ID</p>'
+            },
+            classification: {
+                title: 'Project Classification',
+                content: '<p>Classify your project to help with reporting and analysis.</p><p><strong>Fields:</strong></p><ul><li>Activity Type - The type of work being done</li><li>Risk Appetite - The level of risk acceptable</li><li>Service Users - Who will use the service</li><li>Service Type - Internal, External, or both</li><li>Multi-department - If working with other government departments</li></ul>'
+            },
+            contacts: {
+                title: 'Project Contacts',
+                content: '<p>Add key contacts for this work item.</p><p><strong>Contact types:</strong></p><ul><li>Primary Contact - Main point of contact</li><li>Senior Responsible Officers (SROs) - Senior leadership</li><li>Service Owners - People responsible for the service</li><li>PMO Contacts - Project Management Office contacts</li></ul><p>Search using names or email addresses from Entra ID.</p>'
+            },
+            organisational: {
+                title: 'Organisational Structure',
+                content: '<p>Define the organisational context for this work item.</p><p><strong>Fields:</strong></p><ul><li>Directorates - Select one or more directorates</li><li>Budget Owners - Select from business areas</li></ul>'
+            },
+            status: {
+                title: 'Status',
+                content: '<p>Set the current status and RAG rating for this work item.</p><p><strong>Required fields:</strong></p><ul><li>Project Status - Active, On Hold, Completed, or Cancelled</li><li>RAG Status - Red, Amber, Amber-Green, Amber-Red, or Green</li></ul><p><strong>Optional:</strong> RAG Justification - Explain why this RAG status was assigned</p>'
+            },
+            optional: {
+                title: 'Objectives and Priority outcomes',
+                content: '<p>Link this work item to strategic objectives and missions.</p><p><strong>Sections:</strong></p><ul><li>Mission Pillars - Strategic missions that this project supports</li><li>Priority Outcomes - Strategic priority outcomes that this project contributes to</li></ul><p>Selecting missions and outcomes helps align your work with organizational strategy and enables better reporting and analysis.</p>'
+            },
+            submission: {
+                title: 'Submission',
+                content: '<p>Review your information and create the work item.</p><p><strong>Before submitting:</strong></p><ul><li>Check that all required fields are completed</li><li>Remember you can edit everything after creation</li></ul><p>Click "Create entry" to create the work item.</p>'
+            }
+        };
+
+        // Field-level help content - using actual field IDs
+        const fieldHelpContent = {
+            '@(Html.IdFor(m => m.Title))': {
+                title: 'Project Title',
+                content: '<p><strong>Required field</strong></p><p>Enter a clear and descriptive title for your work item. This should be specific enough to identify the project uniquely.</p><p><strong>Tips:</strong></p><ul><li>Use the full project name as it will be known</li><li>Avoid abbreviations unless they are widely understood</li><li>Keep it concise but descriptive</li></ul>'
+            },
+            '@(Html.IdFor(m => m.Aim))': {
+                title: 'Project Aim',
+                content: '<p><strong>Required field</strong></p><p>Describe the purpose and objectives of this work item. Explain what the project is trying to achieve and why it is important.</p><p><strong>Tips:</strong></p><ul><li>Be clear about the problem being solved</li><li>Explain the expected benefits</li><li>Keep it focused and concise</li></ul>'
+            },
+            '@(Html.IdFor(m => m.IsFlagship))': {
+                title: 'Flagship Project',
+                content: '<p>Select this checkbox if this is a flagship project. Flagship projects are high-priority initiatives that receive special attention and reporting.</p><p>This helps with prioritization and visibility in reports and dashboards.</p>'
+            },
+            '@(Html.IdFor(m => m.IsAiInitiative))': {
+                title: 'AI Initiative',
+                content: '<p>Select this checkbox if this project involves artificial intelligence or machine learning capabilities.</p><p>This helps track AI-related work across the organization.</p>'
+            },
+            '@(Html.IdFor(m => m.Phase))': {
+                title: 'Phase of Delivery',
+                content: '<p>Select the current phase of delivery for this work item. Phases are managed in admin settings and represent different stages of the delivery lifecycle.</p><p><strong>Common phases:</strong></p><ul><li>Discovery - Understanding user needs and problems</li><li>Alpha - Testing hypotheses with prototypes</li><li>Beta - Building and testing with real users</li><li>Live - Service is live and operational</li></ul>'
+            },
+            '@(Html.IdFor(m => m.BusinessArea))': {
+                title: 'Business Area',
+                content: '<p>Select the business area that owns or is primarily responsible for this work item. Business areas are managed in admin settings.</p><p>This helps with reporting and understanding which parts of the organization are involved in different projects.</p>'
+            },
+            '@(Html.IdFor(m => m.StartDate))': {
+                title: 'Start Date',
+                content: '<p><strong>Required field</strong></p><p>Enter the date when the project began or will begin. Use the date picker to select a date.</p><p>If the project has already started, use the actual start date. If it hasn\'t started yet, use the planned start date.</p>'
+            },
+            '@(Html.IdFor(m => m.TargetDeliveryDate))': {
+                title: 'Target Delivery Date',
+                content: '<p>Enter the target or expected delivery date for this work item. This is optional and can be left blank if not yet known.</p><p>You can update this date later as plans become more certain.</p>'
+            },
+            '@(Html.IdFor(m => m.HistoricBuRTId))': {
+                title: 'Historic BuRT ID',
+                content: '<p>If this work item was previously tracked in the Business Risk Tracking (BuRT) system, enter the historic ID here.</p><p>This helps maintain continuity and historical tracking.</p>'
+            },
+            'ActivityTypeLookupId': {
+                title: 'Activity Type',
+                content: '<p>Select the type of activity this work item represents. Activity types are managed in admin settings and help categorize different kinds of work.</p><p>Examples might include: Development, Maintenance, Research, etc.</p>'
+            },
+            'RiskAppetiteLookupId': {
+                title: 'Risk Appetite',
+                content: '<p>Select the risk appetite level for this work item. Risk appetite indicates how much risk the organization is willing to accept for this project.</p><p>This helps with risk management and decision-making processes.</p>'
+            },
+            '@(Html.IdFor(m => m.ServiceUsers))': {
+                title: 'Service Users',
+                content: '<p>Describe who will use the service or benefit from this work item. Be specific about user groups, demographics, or organizational units.</p><p>This helps understand the impact and scope of the work.</p>'
+            },
+            'isInternal': {
+                title: 'Internal Service',
+                content: '<p>Select this checkbox if the service is primarily for internal users (staff within the organization).</p><p>You can select both Internal and External if the service serves both groups.</p>'
+            },
+            'isExternal': {
+                title: 'External Service',
+                content: '<p>Select this checkbox if the service is primarily for external users (citizens, businesses, or other organizations outside of DfE).</p><p>You can select both Internal and External if the service serves both groups.</p>'
+            },
+            'isMultiDept': {
+                title: 'Multi-Department Project',
+                content: '<p>Select this checkbox if this project is being delivered in cooperation with other government departments.</p><p>If selected, you will need to specify which departments are involved using the search field that appears.</p>'
+            },
+            'createPrimaryContact': {
+                title: 'Primary Contact',
+                content: '<p>Search for and select the main point of contact for this work item. This person will be the primary liaison for project-related communications.</p><p><strong>Tips:</strong></p><ul><li>Search by name or email address</li><li>Results come from Entra ID (Azure AD)</li><li>This field is optional but recommended</li></ul>'
+            },
+            'srosSearch': {
+                title: 'Senior Responsible Officers',
+                content: '<p>Search for and add Senior Responsible Officers (SROs) for this work item. SROs are senior leaders accountable for the project.</p><p><strong>Tips:</strong></p><ul><li>You can add multiple SROs</li><li>Search by name or email from Entra ID</li><li>Selected SROs will appear as badges below</li></ul>'
+            },
+            'serviceOwnersSearch': {
+                title: 'Service Owners',
+                content: '<p>Search for and add Service Owners for this work item. Service Owners are responsible for the ongoing operation and success of the service.</p><p><strong>Tips:</strong></p><ul><li>You can add multiple service owners</li><li>Search by name or email from Entra ID</li><li>Selected owners will appear as badges below</li></ul>'
+            },
+            'pmoSearch': {
+                title: 'PMO Contacts',
+                content: '<p>Search for and add PMO (Project Management Office) contacts for this work item. PMO contacts provide project management support and oversight.</p><p><strong>Tips:</strong></p><ul><li>You can add multiple PMO contacts</li><li>Search by name or email from Entra ID</li><li>Selected contacts will appear as badges below</li></ul>'
+            },
+            '@(Html.IdFor(m => m.Status))': {
+                title: 'Project Status',
+                content: '<p><strong>Required field</strong></p><p>Select the current status of this work item:</p><ul><li><strong>Active</strong> - Project is currently in progress</li><li><strong>On Hold</strong> - Project is temporarily paused</li><li><strong>Completed</strong> - Project has finished</li><li><strong>Cancelled</strong> - Project has been cancelled</li></ul>'
+            },
+            '@(Html.IdFor(m => m.RagStatus))': {
+                title: 'RAG Status',
+                content: '<p><strong>Required field</strong></p><p>Select the Red, Amber, Green status for this work item:</p><ul><li><strong>Green</strong> - On track, no issues</li><li><strong>Amber-Green</strong> - Mostly on track, minor concerns</li><li><strong>Amber</strong> - Some issues, needs attention</li><li><strong>Amber-Red</strong> - Significant issues, urgent attention needed</li><li><strong>Red</strong> - Critical issues, immediate action required</li></ul><p>Provide justification in the RAG Justification field.</p>'
+            },
+            '@(Html.IdFor(m => m.RagJustification))': {
+                title: 'RAG Justification',
+                content: '<p>Explain why you have assigned the selected RAG status. This helps stakeholders understand the current state and any concerns.</p><p><strong>Tips:</strong></p><ul><li>Be specific about issues or concerns</li><li>Mention any mitigating actions being taken</li><li>Update this when the RAG status changes</li></ul>'
+            }
+        };
+
+        let currentSection = 'basic';
+        let currentField = null;
+
+        function showHelp(helpKey, isField = false) {
+            const helpDiv = document.getElementById('helpContent');
+            if (!helpDiv) return;
+            
+            if (isField && fieldHelpContent[helpKey]) {
+                const help = fieldHelpContent[helpKey];
+                helpDiv.innerHTML = `
+                    <div class="helper-content">
+                        <h5>${help.title}</h5>
+                        ${help.content}
+                    </div>
+                `;
+            } else if (!isField && helpContent[helpKey]) {
+                const help = helpContent[helpKey];
+                helpDiv.innerHTML = `
+                    <div class="helper-content">
+                        <h5>${help.title}</h5>
+                        ${help.content}
+                    </div>
+                `;
+            } else {
+                helpDiv.innerHTML = '<p class="text-muted">Click on a field or section to see guidance</p>';
+            }
         }
+
+        // Initialize with first section help
+        showHelp('basic');
+
+        // Add field-level guidance on focus
+        function setupFieldGuidance() {
+            // Get all form inputs, selects, and textareas
+            const formFields = document.querySelectorAll('input, select, textarea');
+            
+            formFields.forEach(field => {
+                const fieldId = field.id;
+                
+                // Skip if no ID or if it's a hidden field (unless it's a specific one we want)
+                if (!fieldId || (field.type === 'hidden' && !fieldId.includes('UserIds') && !fieldId.includes('Json'))) {
+                    return;
+                }
+                
+                // Add focus event to show field-specific help
+                field.addEventListener('focus', function() {
+                    currentField = fieldId;
+                    if (fieldHelpContent[fieldId]) {
+                        showHelp(fieldId, true);
+                    }
+                });
+                
+                // Add blur event to return to section help
+                field.addEventListener('blur', function() {
+                    // Small delay to allow clicks on other elements
+                    setTimeout(() => {
+                        if (currentField === fieldId) {
+                            currentField = null;
+                            showHelp(currentSection, false);
+                        }
+                    }, 200);
+                });
+            });
+        }
+
+        // Setup field guidance when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupFieldGuidance);
+        } else {
+            setupFieldGuidance();
+        }
+
 
         // Multi-department project functionality
         let selectedDepartments = [];
         
-        // Initialize with existing departments if any (for Edit scenarios)
-        const existingDepartmentsJson = document.getElementById('otherDepartmentsJson').value;
-        if (existingDepartmentsJson) {
-            try {
-                const departmentIds = JSON.parse(existingDepartmentsJson);
-                if (Array.isArray(departmentIds) && departmentIds.length > 0) {
-                    // Load department details for existing IDs
-                    Promise.all(departmentIds.map(id => 
-                        fetch(`/Admin/GovernmentDepartment/Get?id=${id}`)
-                            .then(r => r.json())
-                            .then(data => ({ id: data.id, text: data.title, abbreviation: data.abbreviation }))
-                            .catch(() => null)
-                    )).then(departments => {
-                        selectedDepartments = departments.filter(d => d !== null);
-                        updateSelectedDepartments();
-                    });
-                }
-            } catch (e) {
-                console.error('Error parsing existing departments:', e);
-            }
-        }
-        
-        // Show/hide department row based on checkbox
         const isMultiDeptCheckbox = document.getElementById('isMultiDept');
         const otherDeptRow = document.getElementById('otherDepartmentsRow');
         
-        // Initialize visibility based on checkbox state
+        if (isMultiDeptCheckbox && otherDeptRow) {
         if (isMultiDeptCheckbox.checked) {
             otherDeptRow.style.display = 'block';
         }
@@ -1016,6 +1159,7 @@
                 updateSelectedDepartments();
             }
         });
+        }
 
         // Department search functionality
         let searchTimeout;
@@ -1038,26 +1182,31 @@
         }
 
         function searchDepartments(query) {
-            fetch(`/Admin/GovernmentDepartment/Search?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
+            const searchUrl = '@Url.Action("Search", "GovernmentDepartment")';
+            fetch(`${searchUrl}?q=${encodeURIComponent(query)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    showDepartmentResults(data.results);
+                    showDepartmentResults(data.results || []);
                 })
                 .catch(error => {
                     console.error('Error searching departments:', error);
+                    const container = document.getElementById('departmentResults');
+                    if (container) {
+                        container.innerHTML = '<div class="list-group-item text-danger">Error searching departments. Please try again.</div>';
+                        container.style.display = 'block';
+                    }
                 });
         }
 
         function showDepartmentResults(departments) {
-            const resultsContainer = document.getElementById('departmentResults');
-            if (!resultsContainer) {
-                const container = document.createElement('div');
-                container.id = 'departmentResults';
-                container.className = 'list-group mt-2';
-                document.getElementById('departmentSearch').parentNode.appendChild(container);
-            }
-            
             const container = document.getElementById('departmentResults');
+            if (!container) return;
+            
             container.innerHTML = '';
             
             if (departments.length === 0) {
@@ -1088,7 +1237,7 @@
                 updateSelectedDepartments();
             }
             
-            document.getElementById('departmentSearch').value = '';
+            if (departmentSearchInput) departmentSearchInput.value = '';
             hideDepartmentResults();
         }
 
@@ -1101,6 +1250,8 @@
             const container = document.getElementById('selectedDepartments');
             const jsonInput = document.getElementById('otherDepartmentsJson');
             
+            if (!container || !jsonInput) return;
+            
             if (selectedDepartments.length === 0) {
                 container.innerHTML = '';
                 jsonInput.value = '';
@@ -1109,10 +1260,13 @@
             
             let html = '<div class="mt-2"><strong>Selected Departments:</strong></div>';
             selectedDepartments.forEach(dept => {
+                const deptId = escapeHtml(dept.id.toString());
+                const deptText = escapeHtml(dept.text);
+                const deptAbbr = dept.abbreviation ? ` (${escapeHtml(dept.abbreviation)})` : '';
                 html += `
-                    <div class="badge badge-primary mr-2 mb-2">
-                        ${dept.text}${dept.abbreviation ? ` (${dept.abbreviation})` : ''}
-                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeDepartment(${dept.id})">×</button>
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                        <span>${deptText}${deptAbbr}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-dept-btn" data-dept-id="${deptId}">×</button>
                     </div>
                 `;
             });
@@ -1128,106 +1282,138 @@
             }
         });
 
-        // Form validation before submit
-        const createForm = document.querySelector('form[method="post"]');
-        if (createForm) {
-            createForm.addEventListener('submit', function(e) {
-                // Validate multi-department project
-                const isMultiDept = document.getElementById('isMultiDept').checked;
-                if (isMultiDept && selectedDepartments.length === 0) {
-                    e.preventDefault();
-                    alert('Please select at least one government department for multi-department projects.');
-                    document.getElementById('otherDepartmentsRow').scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return false;
+        // User picker handlers for SROs, Service Owners, and PMO
+        let selectedSros = [];
+        let selectedServiceOwners = [];
+        let selectedPmos = [];
+
+        function initializeUserPickers() {
+            setTimeout(function() {
+                const srosInput = document.getElementById('srosSearch');
+                const serviceOwnersInput = document.getElementById('serviceOwnersSearch');
+                const pmoInput = document.getElementById('pmoSearch');
+                
+                // SROs picker
+                if (srosInput) {
+                    if (typeof jQuery !== 'undefined') {
+                        $(srosInput).on('userSelected', handleSroUserSelected);
+                    }
+                    srosInput.addEventListener('userSelected', handleSroUserSelected, true);
                 }
 
-                // Validate contact fields if contacts are added (all or nothing)
-                const contactForms = document.querySelectorAll('#contacts-container .card');
-                let contactErrors = [];
+                // Service Owners picker
+                if (serviceOwnersInput) {
+                    if (typeof jQuery !== 'undefined') {
+                        $(serviceOwnersInput).on('userSelected', handleServiceOwnerUserSelected);
+                    }
+                    serviceOwnersInput.addEventListener('userSelected', handleServiceOwnerUserSelected, true);
+                }
                 
-                contactForms.forEach((card) => {
-                    const roleInput = card.querySelector('input[name*=".Role"]');
-                    const nameInput = card.querySelector('input[name*=".Name"]');
-                    const emailInput = card.querySelector('input[name*=".Email"]');
-                    
-                    // Check if any field is filled (indicating user is adding a contact)
-                    const hasAnyContactData = (roleInput && roleInput.value.trim()) || 
-                                             (nameInput && nameInput.value.trim()) || 
-                                             (emailInput && emailInput.value.trim());
-                    
-                    if (hasAnyContactData) {
-                        // If any field is filled, all fields should be filled for completeness
-                        const hasAllData = (roleInput && roleInput.value.trim()) && 
-                                          (nameInput && nameInput.value.trim()) && 
-                                          (emailInput && emailInput.value.trim());
-                        
-                        if (!hasAllData) {
-                            contactErrors.push('For contacts, please fill in all fields (Role, Name, and Email) or remove the contact entirely.');
-                            return;
-                        }
-                        
-                        // Validate email format if provided
-                        if (emailInput && emailInput.value.trim() && !emailInput.validity.valid) {
-                            contactErrors.push('Please provide a valid email address for all contacts.');
-                            return;
+                // PMO picker
+                if (pmoInput) {
+                    if (typeof jQuery !== 'undefined') {
+                        $(pmoInput).on('userSelected', handlePmoUserSelected);
+                    }
+                    pmoInput.addEventListener('userSelected', handlePmoUserSelected, true);
+                }
+            }, 500);
+        }
+
+        function handleSroUserSelected(e, user) {
+            let userData = null;
+            if (user) {
+                userData = user;
+            } else if (e && e.detail) {
+                userData = e.detail;
+            }
+            
+            if (userData && (userData.objectId || userData.id)) {
+                const userId = userData.objectId || userData.id;
+                addSro({
+                    id: userId,
+                    name: userData.name || '',
+                    email: userData.email || ''
+                });
+                clearUserPicker('srosPicker');
+            }
+        }
+
+        function handleServiceOwnerUserSelected(e, user) {
+            let userData = null;
+            if (user) {
+                userData = user;
+            } else if (e && e.detail) {
+                userData = e.detail;
+            }
+            
+            if (userData && (userData.objectId || userData.id)) {
+                const userId = userData.objectId || userData.id;
+                addServiceOwner({
+                    id: userId,
+                    name: userData.name || '',
+                    email: userData.email || ''
+                });
+                clearUserPicker('serviceOwnersPicker');
+            }
+        }
+
+        function handlePmoUserSelected(e, user) {
+            let userData = null;
+            if (user) {
+                userData = user;
+            } else if (e && e.detail) {
+                userData = e.detail;
+            }
+            
+            if (userData && (userData.objectId || userData.id)) {
+                const userId = userData.objectId || userData.id;
+                addPmo({
+                    id: userId,
+                    name: userData.name || '',
+                    email: userData.email || ''
+                });
+                clearUserPicker('pmoPicker');
                         }
                     }
-                });
-                
-                if (contactErrors.length > 0) {
-                    e.preventDefault();
-                    alert(contactErrors[0]);
-                    contactForms[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return false;
-                }
-            });
-        }
 
-        // ========================================
-        // Senior Responsible Officers (SROs)
-        // ========================================
-        let selectedSros = [];
-        let sroSearchTimeout;
-
-        const sroSearchInput = document.getElementById('sroSearch');
-        if (sroSearchInput) {
-            sroSearchInput.addEventListener('input', function() {
-                clearTimeout(sroSearchTimeout);
-                const query = this.value;
+        function clearUserPicker(pickerId) {
+            const picker = document.getElementById(pickerId);
+            if (picker) {
+                const input = picker.querySelector('.js-user-picker-input');
+                const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                const nameInput = picker.querySelector('.js-user-picker-name');
+                const emailInput = picker.querySelector('.js-user-picker-email');
+                const summary = picker.querySelector('.js-user-picker-summary');
+                const message = picker.querySelector('.js-user-picker-message');
                 
-                if (query.length < 2) {
-                    hideSroResults();
-                    return;
-                }
-                
-                sroSearchTimeout = setTimeout(() => {
-                    searchUsers(query, 'sro');
-                }, 300);
-            });
-        }
-
-        document.getElementById('addSroBtn')?.addEventListener('click', function() {
-            const query = sroSearchInput?.value;
-            if (query && query.length >= 2) {
-                searchUsers(query, 'sro', true);
+                if (input) input.value = '';
+                if (objectIdInput) objectIdInput.value = '';
+                if (nameInput) nameInput.value = '';
+                if (emailInput) emailInput.value = '';
+                if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                if (message) message.textContent = '';
             }
-        });
+        }
 
         function addSro(user) {
-            if (!selectedSros.find(s => s.id === user.id)) {
-                selectedSros.push(user);
-                updateSelectedSros();
+            const userId = user.objectId || user.id;
+            if (!userId) return;
+            if (!selectedSros.find(u => u.id === userId)) {
+                selectedSros.push({
+                    id: userId,
+                    name: user.name || '',
+                    email: user.email || ''
+                });
+                updateSrosDisplay();
             }
-            if (sroSearchInput) sroSearchInput.value = '';
-            hideSroResults();
         }
 
         function removeSro(userId) {
-            selectedSros = selectedSros.filter(s => s.id !== userId);
-            updateSelectedSros();
+            selectedSros = selectedSros.filter(u => u.id !== userId);
+            updateSrosDisplay();
         }
 
-        function updateSelectedSros() {
+        function updateSrosDisplay() {
             const container = document.getElementById('selectedSros');
             const hiddenInput = document.getElementById('selectedSroUserIds');
             
@@ -1239,65 +1425,87 @@
                 return;
             }
             
-            let html = '<div class="mt-2"><strong>Selected SROs:</strong></div>';
+            let html = '<div class="mt-2"><strong>Selected SROs:</strong></div><div class="d-flex flex-wrap mt-2">';
             selectedSros.forEach(sro => {
+                const sroId = escapeHtml(sro.id.toString());
                 html += `
-                    <div class="badge badge-primary mr-2 mb-2">
-                        ${sro.name}${sro.email ? ` (${sro.email})` : ''}
-                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSro('${sro.id}')">×</button>
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                        <span>${escapeHtml(sro.name)}${sro.email ? ` (${escapeHtml(sro.email)})` : ''}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-sro-btn" data-sro-id="${sroId}">×</button>
                     </div>
                 `;
             });
+            html += '</div>';
             
             container.innerHTML = html;
-            hiddenInput.value = selectedSros.map(s => s.id).join(',');
+            hiddenInput.value = selectedSros.map(u => u.id).join(',');
         }
 
-        // ========================================
-        // PMO Contacts
-        // ========================================
-        let selectedPmos = [];
-        let pmoSearchTimeout;
+        function addServiceOwner(user) {
+            const userId = user.objectId || user.id;
+            if (!userId) return;
+            if (!selectedServiceOwners.find(u => u.id === userId)) {
+                selectedServiceOwners.push({
+                    id: userId,
+                    name: user.name || '',
+                    email: user.email || ''
+                });
+                updateServiceOwnersDisplay();
+            }
+        }
 
-        const pmoSearchInput = document.getElementById('pmoSearch');
-        if (pmoSearchInput) {
-            pmoSearchInput.addEventListener('input', function() {
-                clearTimeout(pmoSearchTimeout);
-                const query = this.value;
+        function removeServiceOwner(userId) {
+            selectedServiceOwners = selectedServiceOwners.filter(u => u.id !== userId);
+            updateServiceOwnersDisplay();
+        }
+
+        function updateServiceOwnersDisplay() {
+            const container = document.getElementById('selectedServiceOwners');
+            const hiddenInput = document.getElementById('selectedServiceOwnerUserIds');
+            
+            if (!container || !hiddenInput) return;
                 
-                if (query.length < 2) {
-                    hidePmoResults();
+            if (selectedServiceOwners.length === 0) {
+                container.innerHTML = '';
+                hiddenInput.value = '';
                     return;
                 }
                 
-                pmoSearchTimeout = setTimeout(() => {
-                    searchUsers(query, 'pmo');
-                }, 300);
+            let html = '<div class="mt-2"><strong>Selected Service Owners:</strong></div><div class="d-flex flex-wrap mt-2">';
+            selectedServiceOwners.forEach(owner => {
+                const ownerId = escapeHtml(owner.id.toString());
+                html += `
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                        <span>${escapeHtml(owner.name)}${owner.email ? ` (${escapeHtml(owner.email)})` : ''}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-service-owner-btn" data-owner-id="${ownerId}">×</button>
+                    </div>
+                `;
             });
-        }
-
-        document.getElementById('addPmoBtn')?.addEventListener('click', function() {
-            const query = pmoSearchInput?.value;
-            if (query && query.length >= 2) {
-                searchUsers(query, 'pmo', true);
+            html += '</div>';
+            
+            container.innerHTML = html;
+            hiddenInput.value = selectedServiceOwners.map(u => u.id).join(',');
             }
-        });
 
         function addPmo(user) {
-            if (!selectedPmos.find(p => p.id === user.id)) {
-                selectedPmos.push(user);
-                updateSelectedPmos();
+            const userId = user.objectId || user.id;
+            if (!userId) return;
+            if (!selectedPmos.find(u => u.id === userId)) {
+                selectedPmos.push({
+                    id: userId,
+                    name: user.name || '',
+                    email: user.email || ''
+                });
+                updatePmosDisplay();
             }
-            if (pmoSearchInput) pmoSearchInput.value = '';
-            hidePmoResults();
         }
 
         function removePmo(userId) {
             selectedPmos = selectedPmos.filter(p => p.id !== userId);
-            updateSelectedPmos();
+            updatePmosDisplay();
         }
 
-        function updateSelectedPmos() {
+        function updatePmosDisplay() {
             const container = document.getElementById('selectedPmos');
             const hiddenInput = document.getElementById('selectedPmoUserIds');
             
@@ -1309,97 +1517,71 @@
                 return;
             }
             
-            let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div>';
+            let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div><div class="d-flex flex-wrap mt-2">';
             selectedPmos.forEach(pmo => {
+                const pmoId = escapeHtml(pmo.id.toString());
                 html += `
-                    <div class="badge badge-primary mr-2 mb-2">
-                        ${pmo.name}${pmo.email ? ` (${pmo.email})` : ''}
-                        <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmo('${pmo.id}')">×</button>
+                    <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                        <span>${escapeHtml(pmo.name)}${pmo.email ? ` (${escapeHtml(pmo.email)})` : ''}</span>
+                        <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-pmo-btn" data-pmo-id="${pmoId}">×</button>
                     </div>
                 `;
             });
+            html += '</div>';
             
             container.innerHTML = html;
             hiddenInput.value = selectedPmos.map(p => p.id).join(',');
         }
 
-        // ========================================
-        // User Search (shared for SROs and PMO)
-        // ========================================
-        function searchUsers(query, type, selectFirst = false) {
-            fetch(`/Users/Search?term=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (selectFirst && data.length > 0) {
-                        if (type === 'sro') {
-                            addSro({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
-                        } else if (type === 'pmo') {
-                            addPmo({ id: data[0].id, name: data[0].displayName || data[0].name, email: data[0].email });
-                        }
-                    } else {
-                        showUserResults(data, type);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error searching users:', error);
-                });
+        function escapeHtml(value) {
+            if (typeof value !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = value;
+            return div.innerHTML;
         }
 
-        function showUserResults(users, type) {
-            const containerId = type === 'sro' ? 'sroResults' : 'pmoResults';
-            let container = document.getElementById(containerId);
-            const searchInput = type === 'sro' ? sroSearchInput : pmoSearchInput;
-            
-            if (!container) {
-                container = document.createElement('div');
-                container.id = containerId;
-                container.className = 'list-group mt-2';
-                if (searchInput && searchInput.parentNode) {
-                    searchInput.parentNode.appendChild(container);
-                }
-            }
-            
-            container.innerHTML = '';
-            
-            if (users.length === 0) {
-                container.innerHTML = '<div class="list-group-item text-muted">No users found</div>';
-            } else {
-                users.forEach(user => {
-                    const item = document.createElement('div');
-                    item.className = 'list-group-item list-group-item-action';
-                    item.innerHTML = `<strong>${user.displayName || user.name}</strong>${user.email ? ` (${user.email})` : ''}`;
-                    item.addEventListener('click', () => {
-                        if (type === 'sro') {
-                            addSro({ id: user.id, name: user.displayName || user.name, email: user.email });
-                        } else if (type === 'pmo') {
-                            addPmo({ id: user.id, name: user.displayName || user.name, email: user.email });
-                        }
-                    });
-                    container.appendChild(item);
-                });
-            }
-            
-            container.style.display = 'block';
-        }
-
-        function hideSroResults() {
-            const container = document.getElementById('sroResults');
-            if (container) container.style.display = 'none';
-        }
-
-        function hidePmoResults() {
-            const container = document.getElementById('pmoResults');
-            if (container) container.style.display = 'none';
-        }
-
-        // Hide user results when clicking outside
+        // Add event delegation for remove buttons to avoid CSP violations
         document.addEventListener('click', function(e) {
-            if (!e.target.closest('#sroSearch') && !e.target.closest('#sroResults')) {
-                hideSroResults();
-            }
-            if (!e.target.closest('#pmoSearch') && !e.target.closest('#pmoResults')) {
-                hidePmoResults();
+            if (e.target.classList.contains('remove-dept-btn')) {
+                e.preventDefault();
+                const deptId = parseInt(e.target.getAttribute('data-dept-id'));
+                removeDepartment(deptId);
+            } else if (e.target.classList.contains('remove-sro-btn')) {
+                e.preventDefault();
+                const sroId = e.target.getAttribute('data-sro-id');
+                removeSro(sroId);
+            } else if (e.target.classList.contains('remove-service-owner-btn')) {
+                e.preventDefault();
+                const ownerId = e.target.getAttribute('data-owner-id');
+                removeServiceOwner(ownerId);
+            } else if (e.target.classList.contains('remove-pmo-btn')) {
+                e.preventDefault();
+                const pmoId = e.target.getAttribute('data-pmo-id');
+                removePmo(pmoId);
             }
         });
+
+        // Initialize user pickers when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeUserPickers);
+        } else {
+            initializeUserPickers();
+        }
+
+        // Form validation before submit
+        const createForm = document.getElementById('createProjectForm');
+        if (createForm) {
+            createForm.addEventListener('submit', function(e) {
+                // Validate multi-department project
+                const isMultiDept = document.getElementById('isMultiDept')?.checked;
+                if (isMultiDept && selectedDepartments.length === 0) {
+                    e.preventDefault();
+                    alert('Please select at least one government department for multi-department projects.');
+                    showSection('classification');
+                    document.getElementById('otherDepartmentsRow').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+            }
+        });
+        }
     </script>
 }

@@ -2,6 +2,14 @@
 @{
     ViewData["Title"] = "Work Item Details";
     var priorities = ViewBag.Priorities as List<Compass.Models.DeliveryPriority> ?? new List<Compass.Models.DeliveryPriority>();
+    var businessAreas = ViewBag.BusinessAreas as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var phases = ViewBag.Phases as List<Compass.Models.PhaseLookup> ?? new List<Compass.Models.PhaseLookup>();
+    var activityTypes = ViewBag.ActivityTypes as List<Compass.Models.ActivityTypeLookup> ?? new List<Compass.Models.ActivityTypeLookup>();
+    var directorates = ViewBag.Directorates as List<Compass.Models.DirectorateLookup> ?? new List<Compass.Models.DirectorateLookup>();
+    var ragStatuses = ViewBag.RagStatuses as string[] ?? new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+    var statuses = ViewBag.Statuses as string[] ?? new[] { "Active", "Paused", "Completed", "Cancelled" };
+    var currentTab = ViewBag.CurrentTab as string ?? "overview";
+    var deliveryCode = $"DFE-DDT-{Model.Id}";
 }
 
 @section Breadcrumbs {
@@ -16,7 +24,7 @@
             <li class="breadcrumb-item">
                 <a asp-controller="CentralOps" asp-action="ManageWork" style="color: #005ea5; text-decoration: none;">Manage Work</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page">Work Item Details</li>
+            <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
         </ol>
     </nav>
 }
@@ -24,10 +32,17 @@
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">Work Item Details</h1>
+            <div class="col-sm-12 col-md-8">
+                <h1 class="m-0">@Model.Title</h1>
+                <p class="text-muted mb-0">
+                    @deliveryCode
+                    @if (Model.IsFlagship)
+                    {
+                        <span class="badge badge-info ml-2">Flagship project</span>
+                    }
+                </p>
             </div>
-            <div class="col-sm-6 text-right">
+            <div class="col-sm-12 col-md-4 text-md-right">
                 <a asp-controller="CentralOps" asp-action="ManageWork" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Back to Manage Work
                 </a>
@@ -58,274 +73,685 @@
         }
 
         <div class="row">
-            <div class="col-12">
-                <div class="card">
+            <!-- Left Column: Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card mb-4">
                     <div class="card-header">
-                        <h3 class="card-title">Project Summary</h3>
+                        <h3 class="card-title">Navigation</h3>
                     </div>
                     <div class="card-body p-0">
-                        <table class="table table-borderless mb-0 project-overview-summary">
-                            <tbody>
-                                <tr>
-                                    <td class="summary-label"><strong>Title</strong></td>
-                                    <td class="summary-value">
-                                        @Model.Title
-                                    </td>
-                                    <td class="text-right">
-                                        <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.Id" target="_blank">View Full Details</a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Status</strong></td>
-                                    <td class="summary-value">
-                                        <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Priority</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.DeliveryPriority != null)
-                                        {
-                                            var priorityClass = Model.DeliveryPriority.Name.ToLower() switch {
-                                                var p when p.Contains("critical") => "badge-danger",
-                                                var p when p.Contains("high") => "badge-danger",
-                                                var p when p.Contains("medium") => "badge-warning",
-                                                var p when p.Contains("low") => "badge-secondary",
-                                                _ => "badge-secondary"
-                                            };
-                                            <span class="badge @priorityClass">@Model.DeliveryPriority.Name</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right">
-                                        <a href="#" data-toggle="modal" data-target="#editPriorityModal">Change</a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>RAG Status</strong></td>
-                                    <td class="summary-value">
-                                        @if (!string.IsNullOrEmpty(Model.RagStatus))
-                                        {
-                                            var ragClass = Model.RagStatus.ToLower() switch {
-                                                var r when r.Contains("red") && !r.Contains("amber") => "badge-danger",
-                                                var r when r.Contains("amber-red") => "badge-warning",
-                                                var r when r == "amber" => "badge-warning",
-                                                var r when r.Contains("amber-green") => "badge-info",
-                                                var r when r.Contains("green") && !r.Contains("amber") => "badge-success",
-                                                _ => "badge-secondary"
-                                            };
-                                            <span class="badge @ragClass">@Model.RagStatus</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Phase</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.PhaseLookup != null)
-                                        {
-                                            @Model.PhaseLookup.Name
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not specified</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Business area</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.BusinessAreaLookup != null)
-                                        {
-                                            @Model.BusinessAreaLookup.Name
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not specified</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Activity type</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.ActivityTypeLookup != null)
-                                        {
-                                            @Model.ActivityTypeLookup.Name
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Flagship project</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.IsFlagship)
-                                        {
-                                            <span class="badge badge-info">Yes</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">No</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Directorate(s)</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.Directorates != null && Model.Directorates.Any())
-                                        {
-                                            @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : ""))
+                        <div class="list-group list-group-flush">
+                            <a href="#overview" class="list-group-item list-group-item-action @(currentTab == "overview" ? "active" : "")" data-tab="overview">Overview</a>
+                            <a href="#basic" class="list-group-item list-group-item-action @(currentTab == "basic" ? "active" : "")" data-tab="basic">Basic Information</a>
+                            <a href="#contacts" class="list-group-item list-group-item-action @(currentTab == "contacts" ? "active" : "")" data-tab="contacts">Contacts & Governance</a>
+                            <a href="#strategic" class="list-group-item list-group-item-action @(currentTab == "strategic" ? "active" : "")" data-tab="strategic">Strategic Alignment</a>
+                            <a href="#dates" class="list-group-item list-group-item-action @(currentTab == "dates" ? "active" : "")" data-tab="dates">Dates & Timeline</a>
+                            <a href="#status" class="list-group-item list-group-item-action @(currentTab == "status" ? "active" : "")" data-tab="status">Status & Priority</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Overview Section -->
+                <div id="overview-section" class="tab-section @(currentTab == "overview" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Overview</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Title</strong></td>
+                                        <td class="summary-value">@Model.Title</td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="title">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Project Code</strong></td>
+                                        <td class="summary-value">@deliveryCode</td>
+                                        <td class="summary-action text-right"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Aim</strong></td>
+                                        <td class="summary-value">
+                                            @if (!string.IsNullOrEmpty(Model.Aim))
                                             {
-                                                @if (directorate.DirectorateLookup != null)
-                                                {
-                                                    <div>@directorate.DirectorateLookup.Name</div>
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Primary contact</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.PrimaryContactUser != null)
-                                        {
-                                            @if (!string.IsNullOrEmpty(Model.PrimaryContactUser.Email))
-                                            {
-                                                <a href="mailto:@Model.PrimaryContactUser.Email">@Model.PrimaryContactUser.Name</a>
+                                                @Model.Aim
                                             }
                                             else
                                             {
-                                                @Model.PrimaryContactUser.Name
+                                                <span class="text-muted">Not set</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>SROs</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
-                                        {
-                                            @foreach (var sro in Model.SeniorResponsibleOfficers.Take(2))
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="aim">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information Section -->
+                <div id="basic-section" class="tab-section @(currentTab == "basic" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Basic Information</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Business Area</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.BusinessAreaLookup != null)
                                             {
-                                                @if (sro.User != null)
+                                                @Model.BusinessAreaLookup.Name
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="businessArea">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Phase</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.PhaseLookup != null)
+                                            {
+                                                @Model.PhaseLookup.Name
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="phase">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Activity Type</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.ActivityTypeLookup != null)
+                                            {
+                                                @Model.ActivityTypeLookup.Name
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="activityType">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Directorate(s)</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.Directorates != null && Model.Directorates.Any())
+                                            {
+                                                @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : ""))
                                                 {
-                                                    <div>
-                                                        @if (!string.IsNullOrEmpty(sro.User.Email))
-                                                        {
-                                                            <a href="mailto:@sro.User.Email">@sro.User.Name</a>
-                                                        }
-                                                        else
-                                                        {
-                                                            @sro.User.Name
-                                                        }
-                                                    </div>
+                                                    @if (directorate.DirectorateLookup != null)
+                                                    {
+                                                        <div>@directorate.DirectorateLookup.Name</div>
+                                                    }
                                                 }
                                             }
-                                            @if (Model.SeniorResponsibleOfficers.Count > 2)
+                                            else
                                             {
-                                                <small class="text-muted">+ @(Model.SeniorResponsibleOfficers.Count - 2) more</small>
+                                                <span class="text-muted">Not set</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Service Owner(s)</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.ServiceOwners != null && Model.ServiceOwners.Any())
-                                        {
-                                            @foreach (var serviceOwner in Model.ServiceOwners.Take(2))
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="directorates">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Flagship Project</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.IsFlagship)
                                             {
-                                                @if (serviceOwner.User != null)
+                                                <span class="badge badge-info">Yes</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">No</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="flagship">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contacts & Governance Section -->
+                <div id="contacts-section" class="tab-section @(currentTab == "contacts" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Contacts & Governance</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Primary Contact</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.PrimaryContactUser != null)
+                                            {
+                                                @if (!string.IsNullOrEmpty(Model.PrimaryContactUser.Email))
                                                 {
-                                                    <div>
-                                                        @if (!string.IsNullOrEmpty(serviceOwner.User.Email))
-                                                        {
-                                                            <a href="mailto:@serviceOwner.User.Email">@serviceOwner.User.Name</a>
-                                                        }
-                                                        else
-                                                        {
-                                                            @serviceOwner.User.Name
-                                                        }
-                                                    </div>
+                                                    <a href="mailto:@Model.PrimaryContactUser.Email">@Model.PrimaryContactUser.Name</a>
+                                                }
+                                                else
+                                                {
+                                                    @Model.PrimaryContactUser.Name
                                                 }
                                             }
-                                            @if (Model.ServiceOwners.Count > 2)
+                                            else
                                             {
-                                                <small class="text-muted">+ @(Model.ServiceOwners.Count - 2) more</small>
+                                                <span class="text-muted">Not set</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Start date</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
-                                        {
-                                            @Model.StartDate.Value.ToString("d MMMM yyyy")
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not set</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                                <tr>
-                                    <td class="summary-label"><strong>Target end date</strong></td>
-                                    <td class="summary-value">
-                                        @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
-                                        {
-                                            @Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">No end date</span>
-                                        }
-                                    </td>
-                                    <td class="text-right"></td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="primaryContact">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>SROs</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.SeniorResponsibleOfficers != null && Model.SeniorResponsibleOfficers.Any())
+                                            {
+                                                @foreach (var sro in Model.SeniorResponsibleOfficers)
+                                                {
+                                                    @if (sro.User != null)
+                                                    {
+                                                        <div>
+                                                            @if (!string.IsNullOrEmpty(sro.User.Email))
+                                                            {
+                                                                <a href="mailto:@sro.User.Email">@sro.User.Name</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @sro.User.Name
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="sros">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Service Owner(s)</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.ServiceOwners != null && Model.ServiceOwners.Any())
+                                            {
+                                                @foreach (var serviceOwner in Model.ServiceOwners)
+                                                {
+                                                    @if (serviceOwner.User != null)
+                                                    {
+                                                        <div>
+                                                            @if (!string.IsNullOrEmpty(serviceOwner.User.Email))
+                                                            {
+                                                                <a href="mailto:@serviceOwner.User.Email">@serviceOwner.User.Name</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @serviceOwner.User.Name
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="serviceOwners">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>PMO Contact(s)</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.PmoContacts != null && Model.PmoContacts.Any())
+                                            {
+                                                @foreach (var pmo in Model.PmoContacts)
+                                                {
+                                                    @if (pmo.User != null)
+                                                    {
+                                                        <div>
+                                                            @if (!string.IsNullOrEmpty(pmo.User.Email))
+                                                            {
+                                                                <a href="mailto:@pmo.User.Email">@pmo.User.Name</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @pmo.User.Name
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="pmoContacts">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategic Alignment Section -->
+                <div id="strategic-section" class="tab-section @(currentTab == "strategic" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Strategic Alignment</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Mission Pillars</strong></td>
+                                        <td class="summary-value">
+                                            @if (!string.IsNullOrEmpty(Model.MissionPillars))
+                                            {
+                                                @Model.MissionPillars
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="missionPillars">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Priority Outcomes</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.ProjectObjectives != null && Model.ProjectObjectives.Any())
+                                            {
+                                                @foreach (var objective in Model.ProjectObjectives)
+                                                {
+                                                    @if (objective.Objective != null)
+                                                    {
+                                                        <div>@objective.Objective.Title</div>
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="priorityOutcomes">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dates & Timeline Section -->
+                <div id="dates-section" class="tab-section @(currentTab == "dates" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Dates & Timeline</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Start Date</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.StartDate.HasValue && Model.StartDate.Value.Year > 1)
+                                            {
+                                                @Model.StartDate.Value.ToString("d MMMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="startDate">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Target End Date</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1)
+                                            {
+                                                @Model.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="targetDate">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status & Priority Section -->
+                <div id="status-section" class="tab-section @(currentTab == "status" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Status & Priority</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-borderless mb-0 project-overview-summary">
+                                <tbody>
+                                    <tr>
+                                        <td class="summary-label"><strong>Status</strong></td>
+                                        <td class="summary-value">
+                                            <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Paused" ? "warning" : Model.Status == "Completed" ? "info" : "secondary")">@Model.Status</span>
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="status">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>Priority</strong></td>
+                                        <td class="summary-value">
+                                            @if (Model.DeliveryPriority != null)
+                                            {
+                                                var priorityClass = Model.DeliveryPriority.Name.ToLower() switch {
+                                                    var p when p.Contains("critical") => "badge-danger",
+                                                    var p when p.Contains("high") => "badge-danger",
+                                                    var p when p.Contains("medium") => "badge-warning",
+                                                    var p when p.Contains("low") => "badge-secondary",
+                                                    _ => "badge-secondary"
+                                                };
+                                                <span class="badge @priorityClass">@Model.DeliveryPriority.Name</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="priority">Change</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-label"><strong>RAG Status</strong></td>
+                                        <td class="summary-value">
+                                            @if (!string.IsNullOrEmpty(Model.RagStatus))
+                                            {
+                                                // Normalize the status
+                                                var normalized = Model.RagStatus.Trim()
+                                                    .Replace(" / ", "-")
+                                                    .Replace("/", "-")
+                                                    .Replace(" /", "-")
+                                                    .Replace("/ ", "-");
+                                                
+                                                var ragClass = normalized switch {
+                                                    "Red" => "badge badge-red",
+                                                    "Amber-Red" => "badge badge-amber-red",
+                                                    "Amber" => "badge badge-amber",
+                                                    "Amber-Green" => "badge badge-amber-green",
+                                                    "Green" => "badge badge-green",
+                                                    _ => "badge badge-secondary"
+                                                };
+                                                <span class="@ragClass">@Model.RagStatus</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td class="summary-action text-right">
+                                            <a href="#" class="change-link" data-field="ragStatus">Change</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
+<!-- Edit Title Modal -->
+<div class="modal fade" id="editTitleModal" tabindex="-1" role="dialog" aria-labelledby="editTitleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editTitleModalLabel">Change Title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="title" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="titleInput">Title</label>
+                        <input type="text" class="form-control" id="titleInput" name="value" value="@Model.Title" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Aim Modal -->
+<div class="modal fade" id="editAimModal" tabindex="-1" role="dialog" aria-labelledby="editAimModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editAimModalLabel">Change Aim</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="aim" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="aimInput">Aim</label>
+                        <textarea class="form-control" id="aimInput" name="value" rows="5">@Model.Aim</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Business Area Modal -->
+<div class="modal fade" id="editBusinessAreaModal" tabindex="-1" role="dialog" aria-labelledby="editBusinessAreaModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editBusinessAreaModalLabel">Change Business Area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="businessArea" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="businessAreaInput">Business Area</label>
+                        <select class="form-control" id="businessAreaInput" name="value">
+                            <option value="">None</option>
+                            @foreach (var ba in businessAreas)
+                            {
+                                <option value="@ba.Id" selected="@(Model.BusinessAreaId == ba.Id)">@ba.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Phase Modal -->
+<div class="modal fade" id="editPhaseModal" tabindex="-1" role="dialog" aria-labelledby="editPhaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPhaseModalLabel">Change Phase</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="phase" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="phaseInput">Phase</label>
+                        <select class="form-control" id="phaseInput" name="value">
+                            <option value="">None</option>
+                            @foreach (var phase in phases)
+                            {
+                                <option value="@phase.Id" selected="@(Model.PhaseId == phase.Id)">@phase.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Activity Type Modal -->
+<div class="modal fade" id="editActivityTypeModal" tabindex="-1" role="dialog" aria-labelledby="editActivityTypeModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editActivityTypeModalLabel">Change Activity Type</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="activityType" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="activityTypeInput">Activity Type</label>
+                        <select class="form-control" id="activityTypeInput" name="value">
+                            <option value="">None</option>
+                            @foreach (var at in activityTypes)
+                            {
+                                <option value="@at.Id" selected="@(Model.ActivityTypeLookupId == at.Id)">@at.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Status Modal -->
+<div class="modal fade" id="editStatusModal" tabindex="-1" role="dialog" aria-labelledby="editStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editStatusModalLabel">Change Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="status" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="statusInput">Status</label>
+                        <select class="form-control" id="statusInput" name="value" required>
+                            @foreach (var status in statuses)
+                            {
+                                <option value="@status" selected="@(Model.Status == status)">@status</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group" id="statusReasonGroup" style="display: none;">
+                        <label for="statusReasonInput">Reason for Status Change <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="statusReasonInput" name="statusChangeReason" rows="4" placeholder="Please provide a reason for changing the status..."></textarea>
+                        <small class="form-text text-muted">Required when changing to Paused, Completed, or Cancelled</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Priority Modal -->
 <div class="modal fade" id="editPriorityModal" tabindex="-1" role="dialog" aria-labelledby="editPriorityModalLabel" aria-hidden="true">
@@ -339,8 +765,8 @@
             </div>
             <form asp-action="UpdatePriority" method="post">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
                 <div class="modal-body">
-                    <input type="hidden" name="id" value="@Model.Id" />
                     <div class="form-group">
                         <label for="priorityId">Priority</label>
                         <select class="form-control" id="priorityId" name="priorityId">
@@ -361,14 +787,261 @@
     </div>
 </div>
 
+<!-- Edit RAG Status Modal -->
+<div class="modal fade" id="editRagStatusModal" tabindex="-1" role="dialog" aria-labelledby="editRagStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editRagStatusModalLabel">Change RAG Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="ragStatus" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="ragStatusInput">RAG Status</label>
+                        <select class="form-control" id="ragStatusInput" name="value">
+                            <option value="">None</option>
+                            @foreach (var rag in ragStatuses)
+                            {
+                                <option value="@rag" selected="@(Model.RagStatus == rag)">@rag</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Primary Contact Modal -->
+<div class="modal fade" id="editPrimaryContactModal" tabindex="-1" role="dialog" aria-labelledby="editPrimaryContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPrimaryContactModalLabel">Change Primary Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="primaryContact" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label" for="primaryContactSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="primaryContactSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                       value="@(Model.PrimaryContactUser?.Name ?? string.Empty)" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="primaryContactUserId" class="js-user-picker-value" value="@Model.PrimaryContactUserId" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected.">
+                                @if (Model.PrimaryContactUser != null)
+                                {
+                                    <div class="user-picker__selected-card">
+                                        <div class="user-picker__selected-name">@Model.PrimaryContactUser.Name</div>
+                                        <div class="user-picker__selected-meta">@Model.PrimaryContactUser.Email</div>
+                                        <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No primary contact selected.</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Flagship Modal -->
+<div class="modal fade" id="editFlagshipModal" tabindex="-1" role="dialog" aria-labelledby="editFlagshipModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editFlagshipModalLabel">Change Flagship Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="flagship" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isFlagshipCheck" name="value" value="true" @(Model.IsFlagship ? "checked" : "") />
+                            <label class="form-check-label" for="isFlagshipCheck">Mark as Flagship Project</label>
+                        </div>
+                        <small class="form-text text-muted">Flagship projects are high-priority initiatives that appear in dedicated DDT reports and can manage multiple deliverables.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Start Date Modal -->
+<div class="modal fade" id="editStartDateModal" tabindex="-1" role="dialog" aria-labelledby="editStartDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editStartDateModalLabel">Change Start Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="startDate" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="startDateInput">Start Date</label>
+                        <input type="date" class="form-control" id="startDateInput" name="value" value="@(Model.StartDate.HasValue && Model.StartDate.Value.Year > 1 ? Model.StartDate.Value.ToString("yyyy-MM-dd") : "")" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Target Date Modal -->
+<div class="modal fade" id="editTargetDateModal" tabindex="-1" role="dialog" aria-labelledby="editTargetDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editTargetDateModalLabel">Change Target End Date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateField" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="field" value="targetDate" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="targetDateInput">Target End Date</label>
+                        <input type="date" class="form-control" id="targetDateInput" name="value" value="@(Model.TargetDeliveryDate.HasValue && Model.TargetDeliveryDate.Value.Year > 1 ? Model.TargetDeliveryDate.Value.ToString("yyyy-MM-dd") : "")" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            // Auto-dismiss alerts after 5 seconds
+            // Tab navigation
+            $('.list-group-item[data-tab]').on('click', function(e) {
+                e.preventDefault();
+                var tab = $(this).data('tab');
+                
+                // Update active nav item
+                $('.list-group-item').removeClass('active');
+                $(this).addClass('active');
+                
+                // Show/hide sections
+                $('.tab-section').addClass('d-none');
+                $('#' + tab + '-section').removeClass('d-none');
+                
+                // Update URL without reload
+                if (history.pushState) {
+                    var newUrl = window.location.pathname + '?tab=' + tab;
+                    window.history.pushState({path: newUrl}, '', newUrl);
+                }
+            });
+            
+            // Handle change link clicks
+            $(document).on('click', '.change-link', function(e) {
+                e.preventDefault();
+                var field = $(this).data('field');
+                // Map field names to modal IDs
+                var modalMap = {
+                    'title': '#editTitleModal',
+                    'aim': '#editAimModal',
+                    'businessArea': '#editBusinessAreaModal',
+                    'phase': '#editPhaseModal',
+                    'activityType': '#editActivityTypeModal',
+                    'status': '#editStatusModal',
+                    'priority': '#editPriorityModal',
+                    'ragStatus': '#editRagStatusModal',
+                    'primaryContact': '#editPrimaryContactModal',
+                    'flagship': '#editFlagshipModal',
+                    'startDate': '#editStartDateModal',
+                    'targetDate': '#editTargetDateModal',
+                    'sros': '#editSrosModal',
+                    'serviceOwners': '#editServiceOwnersModal',
+                    'pmoContacts': '#editPmoContactsModal',
+                    'directorates': '#editDirectoratesModal',
+                    'missionPillars': '#editMissionPillarsModal',
+                    'priorityOutcomes': '#editPriorityOutcomesModal'
+                };
+                var modalId = modalMap[field] || '#edit' + field.charAt(0).toUpperCase() + field.slice(1) + 'Modal';
+                $(modalId).modal('show');
+            });
+            
+            // Handle status change to show/hide reason field
+            $('#statusInput').on('change', function() {
+                var status = $(this).val();
+                var $reasonGroup = $('#statusReasonGroup');
+                var $reasonField = $('#statusReasonInput');
+                
+                if (status === 'Paused' || status === 'Completed' || status === 'Cancelled') {
+                    $reasonGroup.show();
+                    $reasonField.prop('required', true);
+                } else {
+                    $reasonGroup.hide();
+                    $reasonField.prop('required', false);
+                    $reasonField.val('');
+                }
+            });
+            
+            // Auto-dismiss alerts
             setTimeout(function() {
                 $('.alert').fadeOut('slow');
             }, 5000);
         });
     </script>
 }
-

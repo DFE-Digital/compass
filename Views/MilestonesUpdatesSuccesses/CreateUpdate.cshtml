@@ -31,9 +31,6 @@
                 <a href="@Url.Action("Details", "Project", new { id = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@projectTitle</a>
             </li>
             <li class="breadcrumb-item">
-                <a href="@Url.Action("Overview", "MilestonesUpdatesSuccesses", new { projectId = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Milestones and Updates</a>
-            </li>
-            <li class="breadcrumb-item">
                 <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = projectId })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Monthly Updates</a>
             </li>
             <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Create Update - @periodName</li>
@@ -43,11 +40,19 @@
 
 <div class="content-header">
     <div class="container-fluid">
-        <div class="row mb-3 align-items-center">
-            <div class="col-lg-8 col-md-7 col-sm-12">
-                <h1 class="m-0">Create Monthly Update</h1>
-                <p class="text-muted mb-0">@projectTitle <small class="text-muted">(@projectCode)</small></p>
-                <p class="text-muted mb-0"><strong>Period:</strong> @periodName</p>
+        <div class="row mb-2">
+            <div class="col-sm-12 col-md-8">
+                <h1 class="m-0">@projectTitle</h1>
+                <p class="text-muted mb-0">
+                    @projectCode
+                    @{
+                        var isFlagship = ViewBag.IsFlagship as bool? ?? false;
+                    }
+                    @if (isFlagship)
+                    {
+                        <span class="badge badge-info ml-2">Flagship project</span>
+                    }
+                </p>
             </div>
         </div>
     </div>
@@ -55,6 +60,21 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
         <div class="row">
             <!-- Left Column: Navigation -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
@@ -65,25 +85,55 @@
                     </div>
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
+                            @{
+                                var project = ViewBag.Project as Compass.Models.Project;
+                                var dependencyCount = (project?.DependenciesAsSource?.Count() ?? 0) + (project?.DependenciesAsTarget?.Count() ?? 0);
+                                var teamCount = project?.ProjectContacts?.Count ?? 0;
+                                var hasDigitalDirectorate = ViewBag.HasDigitalDirectorate as bool? ?? false;
+                                var isMusSectionActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "MilestonesUpdatesSuccesses";
+                                var currentMusAction = ViewContext.RouteData.Values["Action"]?.ToString();
+                            }
                             <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "overview" })"
                                class="list-group-item list-group-item-action">
                                 Overview
                             </a>
-                            <a href="@Url.Action("Overview", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
-                               class="list-group-item list-group-item-action">
-                                Milestones and Updates
-                            </a>
                             <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
-                               class="list-group-item list-group-item-action">
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "Milestones" ? "active" : "")">
                                 Milestones
+                                <span class="badge badge-light float-right">@(project?.Milestones?.Count(m => !m.IsDeleted) ?? 0)</span>
                             </a>
-                            <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = projectId })"
-                               class="list-group-item list-group-item-action active">
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "monthlyupdates" })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "CreateUpdate" ? "active" : "")">
                                 Monthly Updates
                             </a>
                             <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "rag" })"
                                class="list-group-item list-group-item-action">
                                 RAG Tracking
+                            </a>
+                            @if (hasDigitalDirectorate)
+                            {
+                                <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "deliveryphases" })"
+                                   class="list-group-item list-group-item-action">
+                                    Delivery phases
+                                </a>
+                            }
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "team" })"
+                               class="list-group-item list-group-item-action">
+                                Team
+                                <span class="badge badge-light float-right">@teamCount</span>
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "contactsandgovernance" })"
+                               class="list-group-item list-group-item-action">
+                                Contacts & Governance
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "strategicalignment" })"
+                               class="list-group-item list-group-item-action">
+                                Strategic Alignment
+                            </a>
+                            <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "dependencies" })"
+                               class="list-group-item list-group-item-action">
+                                Dependencies
+                                <span class="badge badge-light float-right">@dependencyCount</span>
                             </a>
                         </div>
                     </div>
@@ -96,34 +146,106 @@
                     <div class="card-header">
                         <h3 class="card-title">Monthly Update for @periodName</h3>
                     </div>
-                    <form asp-action="CreateUpdate" method="post">
-                        @Html.AntiForgeryToken()
-                        <div class="card-body">
-                            <div asp-validation-summary="All" class="alert alert-danger"></div>
+                    <div class="card-body">
+                        @if (!ViewData.ModelState.IsValid)
+                        {
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                        }
+                        
+                        @{
+                            var existingUpdate = ViewBag.ExistingUpdate as Compass.Models.ProjectMonthlyUpdate;
+                            var narratives = existingUpdate != null ? 
+                                (ViewBag.Narratives as List<Compass.Models.MonthlyUpdateNarrative> ?? new List<Compass.Models.MonthlyUpdateNarrative>()) :
+                                new List<Compass.Models.MonthlyUpdateNarrative>();
+                            
+                            // For now, if we have an existing update but no narratives list, show the single narrative
+                            var hasNarratives = narratives.Any();
+                            var showSingleNarrative = existingUpdate != null && !hasNarratives && !string.IsNullOrWhiteSpace(existingUpdate.Narrative);
+                        }
+
+                        @if (existingUpdate != null && (hasNarratives || showSingleNarrative))
+                        {
+                            <div class="mb-4">
+                                <h5 class="mb-3">Narrative Entries</h5>
+                                @if (hasNarratives)
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 50%;">Narrative</th>
+                                                    <th style="width: 25%;">Added by</th>
+                                                    <th style="width: 25%;">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var narrative in narratives.OrderByDescending(n => n.CreatedAt))
+                                                {
+                                                    <tr>
+                                                        <td>@narrative.Narrative</td>
+                                                        <td>@(narrative.CreatedByName ?? narrative.CreatedByEmail ?? "Unknown")</td>
+                                                        <td>@narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                                else if (showSingleNarrative)
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 50%;">Narrative</th>
+                                                    <th style="width: 25%;">Added by</th>
+                                                    <th style="width: 25%;">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>@existingUpdate.Narrative</td>
+                                                    <td>@(existingUpdate.CreatedByName ?? existingUpdate.CreatedByEmail ?? "Unknown")</td>
+                                                    <td>@existingUpdate.CreatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <form asp-action="CreateUpdate" method="post" id="narrativeForm">
+                            @Html.AntiForgeryToken()
                             
                             <input type="hidden" name="projectId" value="@projectId" />
                             <input type="hidden" name="year" value="@year" />
                             <input type="hidden" name="month" value="@month" />
+                            @if (existingUpdate != null)
+                            {
+                                <input type="hidden" name="updateId" value="@existingUpdate.Id" />
+                            }
 
                             <div class="form-group">
-                                <label for="Narrative" class="control-label font-weight-bold">Narrative <span class="text-danger">*</span></label>
-                                <small class="form-text text-muted">Provide a narrative update for @periodName (required, max 450 characters)</small>
-                                <textarea asp-for="Narrative" class="form-control" rows="8" placeholder="Enter your monthly update narrative..." maxlength="450" required></textarea>
+                                <label for="Narrative" class="control-label font-weight-bold">Add Narrative Entry <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted">Add a narrative update for @periodName (required, max 450 characters)</small>
+                                <textarea name="Narrative" id="Narrative" class="form-control" rows="6" placeholder="Enter your narrative update..." maxlength="450" required></textarea>
                                 <small class="form-text text-muted">
                                     <span id="charCount">0</span> / 450 characters
                                 </small>
                                 <span asp-validation-for="Narrative" class="text-danger"></span>
                             </div>
-                        </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Save Update
-                            </button>
-                            <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = projectId })" class="btn btn-secondary">
-                                Cancel
-                            </a>
-                        </div>
-                    </form>
+                            
+                            <div class="card-footer">
+                                <button type="submit" class="btn btn-primary">
+                                    Add Narrative
+                                </button>
+                                <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "monthlyupdates" })" class="btn btn-secondary">
+                                    Cancel
+                                </a>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -158,4 +280,3 @@
         });
     </script>
 }
-
