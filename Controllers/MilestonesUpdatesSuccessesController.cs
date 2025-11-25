@@ -26,123 +26,6 @@ public class MilestonesUpdatesSuccessesController : Controller
         _monthlyUpdateService = monthlyUpdateService;
     }
 
-    public async Task<IActionResult> Overview(int? projectId)
-    {
-        if (!projectId.HasValue)
-        {
-            return NotFound();
-        }
-
-        var project = await _context.Projects
-            .Include(p => p.Milestones)
-            .Include(p => p.MonthlyUpdates)
-            .Include(p => p.WeeklySuccessUpdates)
-            .Include(p => p.Outcomes)
-            .Include(p => p.Successes)
-            .Include(p => p.ProjectContacts)
-            .Include(p => p.StatusUpdates)
-            .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
-            .Include(p => p.Risks)
-            .Include(p => p.Actions)
-            .Include(p => p.Issues)
-            .Include(p => p.Decisions)
-            .Include(p => p.ProjectProducts)
-            .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
-
-        if (project == null)
-        {
-            return NotFound();
-        }
-
-        // Manually load dependencies since the relationship is polymorphic
-        project.DependenciesAsSource = await _context.Dependencies
-            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
-            .ToListAsync();
-
-        project.DependenciesAsTarget = await _context.Dependencies
-            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
-            .ToListAsync();
-
-        ViewBag.Project = project;
-
-        var deliveryCode = $"DFE-DDT-{project.Id}";
-        
-        // Calculate milestone counts
-        var milestones = project.Milestones.Where(m => !m.IsDeleted).ToList();
-        var totalMilestones = milestones.Count;
-        var completedMilestones = milestones.Count(m => string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase));
-        var activeMilestones = totalMilestones - completedMilestones;
-        var overdueMilestones = milestones.Count(m =>
-            !string.Equals(m.Status, "complete", StringComparison.OrdinalIgnoreCase) &&
-            m.DueDate.Date < DateTime.Today);
-
-        // Calculate monthly update counts and periods
-        var monthlyUpdates = project.MonthlyUpdates.ToList();
-        var totalMonthlyUpdates = monthlyUpdates.Count;
-        
-        // Generate periods starting from November 2025
-        var startDate = new DateTime(2025, 11, 1);
-        var currentDate = DateTime.UtcNow;
-        var periods = new List<MonthlyUpdatePeriodStatus>();
-        
-        var periodDate = startDate;
-        while (periodDate <= currentDate.AddMonths(1))
-        {
-            var year = periodDate.Year;
-            var month = periodDate.Month;
-            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
-            var update = monthlyUpdates.FirstOrDefault(u => u.Year == year && u.Month == month);
-            var status = _monthlyUpdateService.CalculateUpdateStatus(year, month, update?.SubmittedAt);
-            
-            periods.Add(new MonthlyUpdatePeriodStatus
-            {
-                Year = year,
-                Month = month,
-                PeriodName = periodDate.ToString("MMMM yyyy"),
-                DueDate = dueDate,
-                Status = status.ToString().ToLowerInvariant(),
-                SubmittedDate = update?.SubmittedAt,
-                HasUpdate = update != null
-            });
-            
-            periodDate = periodDate.AddMonths(1);
-        }
-        
-        var dueMonthlyUpdates = periods.Count(p => p.Status == "due");
-        var lateMonthlyUpdates = periods.Count(p => p.Status == "late");
-        var submittedMonthlyUpdates = periods.Count(p => p.Status == "submitted");
-
-        // Calculate weekly success counts
-        var weeklySuccesses = project.WeeklySuccessUpdates.ToList();
-        var totalWeeklySuccesses = weeklySuccesses.Count;
-        
-        // Get current week
-        var currentWeek = GetWeekNumber(DateTime.UtcNow);
-        var currentYear = DateTime.UtcNow.Year;
-        var thisWeekSuccesses = weeklySuccesses.Count(s => s.Year == currentYear && s.WeekNumber == currentWeek);
-
-        var viewModel = new MilestonesUpdatesSuccessesOverviewViewModel
-        {
-            ProjectId = project.Id,
-            ProjectTitle = project.Title,
-            ProjectCode = deliveryCode,
-            TotalMilestones = totalMilestones,
-            ActiveMilestones = activeMilestones,
-            CompletedMilestones = completedMilestones,
-            OverdueMilestones = overdueMilestones,
-            TotalMonthlyUpdates = totalMonthlyUpdates,
-            DueMonthlyUpdates = dueMonthlyUpdates,
-            LateMonthlyUpdates = lateMonthlyUpdates,
-            SubmittedMonthlyUpdates = submittedMonthlyUpdates,
-            TotalWeeklySuccesses = totalWeeklySuccesses,
-            ThisWeekSuccesses = thisWeekSuccesses,
-            MonthlyUpdatePeriods = periods.OrderByDescending(p => p.Year).ThenByDescending(p => p.Month).ToList()
-        };
-
-        return View(viewModel);
-    }
-
     public async Task<IActionResult> Milestones(int? projectId)
     {
         if (!projectId.HasValue)
@@ -186,48 +69,15 @@ public class MilestonesUpdatesSuccessesController : Controller
         return View(project);
     }
 
-    public async Task<IActionResult> Updates(int? projectId)
+    public IActionResult Updates(int? projectId)
     {
         if (!projectId.HasValue)
         {
             return NotFound();
         }
 
-        var project = await _context.Projects
-            .Include(p => p.MonthlyUpdates)
-            .Include(p => p.Outcomes)
-            .Include(p => p.Successes)
-            .Include(p => p.ProjectContacts)
-            .Include(p => p.StatusUpdates)
-            .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
-            .Include(p => p.Risks)
-            .Include(p => p.Actions)
-            .Include(p => p.Issues)
-            .Include(p => p.Decisions)
-            .Include(p => p.ProjectProducts)
-            .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
-
-        if (project == null)
-        {
-            return NotFound();
-        }
-
-        // Manually load dependencies since the relationship is polymorphic
-        project.DependenciesAsSource = await _context.Dependencies
-            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
-            .ToListAsync();
-
-        project.DependenciesAsTarget = await _context.Dependencies
-            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
-            .ToListAsync();
-
-        ViewBag.ProjectId = project.Id;
-        ViewBag.ProjectTitle = project.Title;
-        ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
-        ViewBag.MonthlyUpdateService = _monthlyUpdateService;
-        
-        return View(project);
+        // Redirect to Project/Details with monthlyupdates tab
+        return RedirectToAction("Details", "Project", new { id = projectId.Value, tab = "monthlyupdates" });
     }
 
     public async Task<IActionResult> Successes(int? projectId)
@@ -280,11 +130,32 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+        var project = await _context.Projects
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Milestones)
+            .Include(p => p.ProjectContacts)
+            .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
         if (project == null)
         {
             return NotFound();
         }
+
+        // Manually load dependencies since the relationship is polymorphic
+        project.DependenciesAsSource = await _context.Dependencies
+            .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+            .ToListAsync();
+
+        project.DependenciesAsTarget = await _context.Dependencies
+            .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+            .ToListAsync();
+
+        var hasDigitalDirectorate = project.Directorates?.Any(d => d.DirectorateLookup != null && 
+            d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+
+        // Check if update already exists
+        var existingUpdate = await _context.ProjectMonthlyUpdates
+            .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
@@ -292,8 +163,12 @@ public class MilestonesUpdatesSuccessesController : Controller
         ViewBag.Year = year.Value;
         ViewBag.Month = month.Value;
         ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
+        ViewBag.HasDigitalDirectorate = hasDigitalDirectorate;
+        ViewBag.IsFlagship = project.IsFlagship;
+        ViewBag.Project = project; // Pass full project for navigation badges
+        ViewBag.ExistingUpdate = existingUpdate;
+        ViewBag.Narratives = new List<Compass.Models.MonthlyUpdateNarrative>(); // Will be populated when model is added to DbContext
         
-        // TODO: Implement create update form
         return View();
     }
 
@@ -325,6 +200,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         ViewBag.Year = year.Value;
         ViewBag.Month = month.Value;
         ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
+        ViewBag.IsFlagship = project.IsFlagship;
         
         // TODO: Implement edit update form
         return View(update);
@@ -345,23 +221,57 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Check if update already exists
+        // Check if update already exists, if not create it
         var existingUpdate = await _context.ProjectMonthlyUpdates
             .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+
+        var narrativeText = Request.Form["Narrative"].ToString().Trim();
         
-        if (existingUpdate != null)
+        if (string.IsNullOrWhiteSpace(narrativeText))
         {
-            return RedirectToAction("EditUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+            ModelState.AddModelError("Narrative", "Narrative is required.");
         }
 
-        if (!ModelState.IsValid)
+        if (!ModelState.IsValid || string.IsNullOrWhiteSpace(narrativeText))
         {
-            ViewBag.ProjectId = project.Id;
-            ViewBag.ProjectTitle = project.Title;
-            ViewBag.ProjectCode = $"DFE-DDT-{project.Id}";
+            var projectForView = await _context.Projects
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.Milestones)
+                .Include(p => p.ProjectContacts)
+                .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+            
+            if (projectForView != null)
+            {
+                // Manually load dependencies since the relationship is polymorphic
+                projectForView.DependenciesAsSource = await _context.Dependencies
+                    .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == projectForView.Id)
+                    .ToListAsync();
+
+                projectForView.DependenciesAsTarget = await _context.Dependencies
+                    .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == projectForView.Id)
+                    .ToListAsync();
+            }
+            
+            if (projectForView == null)
+            {
+                return NotFound();
+            }
+            
+            var hasDigitalDirectorate = projectForView.Directorates?.Any(d => d.DirectorateLookup != null && 
+                d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+
+            ViewBag.ProjectId = projectForView.Id;
+            ViewBag.ProjectTitle = projectForView.Title;
+            ViewBag.ProjectCode = $"DFE-DDT-{projectForView.Id}";
             ViewBag.Year = year.Value;
             ViewBag.Month = month.Value;
             ViewBag.PeriodName = new DateTime(year.Value, month.Value, 1).ToString("MMMM yyyy");
+            ViewBag.HasDigitalDirectorate = hasDigitalDirectorate;
+            ViewBag.IsFlagship = projectForView.IsFlagship;
+            ViewBag.Project = projectForView;
+            ViewBag.ExistingUpdate = existingUpdate;
+            ViewBag.Narratives = new List<MonthlyUpdateNarrative>();
             return View(model);
         }
 
@@ -373,23 +283,53 @@ public class MilestonesUpdatesSuccessesController : Controller
         var userNameClaim = User.FindFirst(ClaimTypes.Name)?.Value 
             ?? User.FindFirst("name")?.Value;
 
-        var update = new ProjectMonthlyUpdate
+        ProjectMonthlyUpdate update;
+        
+        if (existingUpdate == null)
         {
-            ProjectId = projectId.Value,
-            Year = year.Value,
-            Month = month.Value,
-            Narrative = model.Narrative ?? string.Empty,
-            CreatedByEntraId = userObjectIdClaim,
-            CreatedByName = userNameClaim,
-            CreatedByEmail = userEmailClaim,
-            CreatedAt = DateTime.UtcNow,
-            SubmittedAt = DateTime.UtcNow
-        };
+            // Create new monthly update
+            update = new ProjectMonthlyUpdate
+            {
+                ProjectId = projectId.Value,
+                Year = year.Value,
+                Month = month.Value,
+                Narrative = narrativeText, // Keep for backward compatibility
+                CreatedByEntraId = userObjectIdClaim,
+                CreatedByName = userNameClaim,
+                CreatedByEmail = userEmailClaim,
+                CreatedAt = DateTime.UtcNow,
+                SubmittedAt = DateTime.UtcNow
+            };
+            _context.ProjectMonthlyUpdates.Add(update);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            update = existingUpdate;
+            // Update submitted date if not already set
+            if (!update.SubmittedAt.HasValue)
+            {
+                update.SubmittedAt = DateTime.UtcNow;
+            }
+        }
 
-        _context.ProjectMonthlyUpdates.Add(update);
+        // For now, we'll store the narrative in the main Narrative field
+        // When MonthlyUpdateNarrative is added to DbContext, we'll create entries there
+        // For backward compatibility, append to existing narrative
+        if (string.IsNullOrEmpty(update.Narrative))
+        {
+            update.Narrative = narrativeText;
+        }
+        else
+        {
+            update.Narrative += "\n\n" + narrativeText;
+        }
+        
+        update.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        return RedirectToAction("Updates", new { projectId = projectId.Value });
+        // Redirect back to the same page to show the new narrative
+        return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
     }
 
     [HttpPost]
@@ -440,7 +380,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         await _context.SaveChangesAsync();
 
-        return RedirectToAction("Updates", new { projectId = projectId.Value });
+        return RedirectToAction("Details", "Project", new { id = projectId.Value, tab = "monthlyupdates" });
     }
 
     public async Task<IActionResult> CreateWeeklySuccess(int? projectId)
