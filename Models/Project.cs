@@ -124,7 +124,10 @@ public class Project
 
     // New fields for enhanced project tracking
     public ICollection<ProjectStatusUpdate> StatusUpdates { get; set; } = new List<ProjectStatusUpdate>();
+    public ICollection<ProjectMonthlyUpdate> MonthlyUpdates { get; set; } = new List<ProjectMonthlyUpdate>();
+    public ICollection<ProjectWeeklySuccessUpdate> WeeklySuccessUpdates { get; set; } = new List<ProjectWeeklySuccessUpdate>();
     public ICollection<ProjectSeniorResponsibleOfficer> SeniorResponsibleOfficers { get; set; } = new List<ProjectSeniorResponsibleOfficer>();
+    public ICollection<ProjectServiceOwner> ServiceOwners { get; set; } = new List<ProjectServiceOwner>();
     public ICollection<ProjectDirectorate> Directorates { get; set; } = new List<ProjectDirectorate>();
     public ICollection<ProjectBudgetOwner> BudgetOwners { get; set; } = new List<ProjectBudgetOwner>();
     public ICollection<ProjectPmoContact> PmoContacts { get; set; } = new List<ProjectPmoContact>();
