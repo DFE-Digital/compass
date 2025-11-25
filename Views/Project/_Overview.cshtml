@@ -14,7 +14,7 @@
     var totalPermFte = (Model.TotalPermFte ?? 0) + deliverableProjects.Sum(p => p.TotalPermFte ?? 0);
     var totalMspFte = (Model.TotalMspFte ?? 0) + deliverableProjects.Sum(p => p.TotalMspFte ?? 0);
     var totalFte = totalPermFte + totalMspFte;
-    var deliveryCode = $"DEL-DDT-{Model.Id}";
+    var deliveryCode = $"DFE-DDT-{Model.Id}";
     var deliveryPriorityOptions = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Enumerable.Empty<Compass.Models.DeliveryPriority>();
     var priorityKey = PriorityStyleHelper.GetPriorityKey(Model.DeliveryPriority?.Name);
 }
@@ -26,19 +26,9 @@
             <div class="col-md-6">
                 <div class="card priority-card priority-card--@priorityKey h-100 mb-4" role="group" aria-labelledby="priorityCardHeading" aria-describedby="priorityCardSummary">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <p class="card-label text-uppercase mb-1" id="priorityCardHeading">Priority</p>
-                                <h3 class="card-value mb-0">@((Model.DeliveryPriority?.Name) ?? "Not set")</h3>
-                            </div>
-                            <a href="#"
-                               class="btn btn-sm priority-card__cta"
-                               data-toggle="modal"
-                               data-target="#editDeliveryPriorityModal">
-                                Change priority
-                                <span class="sr-only">for @Model.Title</span>
-                                <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
-                            </a>
+                        <div class="mb-3">
+                            <p class="card-label text-uppercase mb-1" id="priorityCardHeading">Priority</p>
+                            <h3 class="card-value mb-0">@((Model.DeliveryPriority?.Name) ?? "Not set")</h3>
                         </div>
                         @if (Model.DeliveryPriority != null && !string.IsNullOrWhiteSpace(Model.DeliveryPriority.Summary))
                         {
@@ -48,6 +38,7 @@
                         {
                             <p class="mb-0 priority-card__support" id="priorityCardSummary">No summary provided.</p>
                         }
+                        <p class="mb-0 mt-3 small text-muted">This is managed by the Central Operations Team</p>
                     </div>
                 </div>
             </div>
@@ -273,7 +264,7 @@
                                                 <a href="@Url.Action("Details", "Project", new { id = project.Id })">
                                                     <strong>@project.Title</strong>
                                                 </a><br>
-                                                <small class="text-muted">DEL-DDT-@project.Id</small>
+                                                <small class="text-muted">DFE-DDT-@project.Id</small>
                                             </td>
                                             <td>
                                                 @if (!string.IsNullOrEmpty(project.RagStatus))
@@ -1186,47 +1177,6 @@
     </div>
 </div>
 
-<!-- Edit Delivery Priority Modal -->
-<div class="modal fade" id="editDeliveryPriorityModal" tabindex="-1" role="dialog" aria-labelledby="editDeliveryPriorityModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editDeliveryPriorityModalLabel">Edit delivery priority</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <form asp-action="UpdateDeliveryPriority" method="post">
-                <input type="hidden" name="id" value="@Model.Id" />
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="deliveryPrioritySelection">Delivery priority</label>
-                        <select class="form-control"
-                                id="deliveryPrioritySelection"
-                                name="deliveryPriorityId"
-                                data-current-priority="@((Model.DeliveryPriorityId?.ToString()) ?? string.Empty)">
-                            <option value="">Not set</option>
-                            @foreach (var priority in deliveryPriorityOptions)
-                            {
-                                <option value="@priority.Id" selected="@(priority.Id == Model.DeliveryPriorityId ? "selected" : null)">@priority.Name</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="form-group" id="priorityReasonGroup" style="display:none;">
-                        <label for="priorityChangeReason">Why is the priority changing? <span class="text-danger">*</span></label>
-                        <small class="form-text text-muted">Share the context so governance teams understand the shift in focus.</small>
-                        <textarea class="form-control" id="priorityChangeReason" name="priorityChangeReason" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Edit Flagship Modal -->
 <div class="modal fade" id="editFlagshipModal" tabindex="-1" role="dialog" aria-labelledby="editFlagshipModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -1696,35 +1646,6 @@
             $('#editStatusModal').on('show.bs.modal', function() {
                 $('#statusChangeReasonOverview').val('');
                 toggleStatusReasonField();
-            });
-
-            const prioritySelect = document.getElementById('deliveryPrioritySelection');
-            const priorityReasonGroup = document.getElementById('priorityReasonGroup');
-            const priorityReasonField = document.getElementById('priorityChangeReason');
-            const initialPriority = prioritySelect?.dataset.currentPriority ?? '';
-
-            const togglePriorityReasonField = () => {
-                if (!prioritySelect || !priorityReasonGroup || !priorityReasonField) {
-                    return;
-                }
-                const hasChanged = (prioritySelect.value || '') !== (initialPriority || '');
-                if (hasChanged) {
-                    priorityReasonGroup.style.display = 'block';
-                    priorityReasonField.required = true;
-                } else {
-                    priorityReasonGroup.style.display = 'none';
-                    priorityReasonField.required = false;
-                    priorityReasonField.value = '';
-                }
-            };
-
-            prioritySelect?.addEventListener('change', togglePriorityReasonField);
-
-            $('#editDeliveryPriorityModal').on('show.bs.modal', function () {
-                if (priorityReasonField) {
-                    priorityReasonField.value = '';
-                }
-                togglePriorityReasonField();
             });
 
             // Validate form before submission

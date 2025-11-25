@@ -122,8 +122,9 @@ namespace Compass.Controllers
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
                         (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
                     ))
-                    .AsNoTracking()
                     .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Include(p => p.PhaseLookup)
                     .Include(p => p.PrimaryContactUser)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
@@ -134,6 +135,7 @@ namespace Compass.Controllers
                     .Include(p => p.Outcomes)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
+                    .AsNoTracking()
                     .OrderBy(p => p.Title)
                     .ToListAsync();
             }
@@ -151,8 +153,9 @@ namespace Compass.Controllers
                 {
                     watchedProjects = await _context.Projects
                         .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
-                        .AsNoTracking()
                         .Include(p => p.DeliveryPriority)
+                        .Include(p => p.BusinessAreaLookup)
+                        .Include(p => p.PhaseLookup)
                         .Include(p => p.PrimaryContactUser)
                         .Include(p => p.ProjectMissions)
                             .ThenInclude(pm => pm.Mission)
@@ -163,6 +166,7 @@ namespace Compass.Controllers
                         .Include(p => p.Outcomes)
                         .Include(p => p.ProjectContacts)
                             .ThenInclude(pc => pc.User)
+                        .AsNoTracking()
                         .OrderBy(p => p.Title)
                         .ToListAsync();
                 }
@@ -560,8 +564,8 @@ namespace Compass.Controllers
             {
                 try
                 {
-                    // Use delivery code format: DEL-DDT-001
-                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    // Use delivery code format: DFE-DDT-001
+                    var deliveryCode = $"DFE-DDT-{project.Id:D3}";
                     _logger.LogInformation("Fetching service assessments for delivery phases tab. Project ID: {ProjectId}, Delivery Code: {DeliveryCode}", project.Id, deliveryCode);
                     var assessments = await GetServiceAssessmentsByProjectCodeAsync(deliveryCode);
                     _logger.LogInformation("Retrieved {Count} assessments for delivery code {DeliveryCode}", assessments?.Count ?? 0, deliveryCode);
@@ -569,7 +573,7 @@ namespace Compass.Controllers
                 }
                 catch (Exception ex)
                 {
-                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    var deliveryCode = $"DFE-DDT-{project.Id:D3}";
                     _logger.LogError(ex, "Error fetching service assessments for project code {ProjectCode}", deliveryCode);
                     ViewBag.ServiceAssessments = new List<object>();
                 }
