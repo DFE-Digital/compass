@@ -265,7 +265,7 @@
                     <li><strong>Aim:</strong> Project aim and objectives</li>
                     <li><strong>Active milestones:</strong> Upcoming milestones and deadlines</li>
                     <li><strong>Team size:</strong> Permanent and MSP FTE counts</li>
-                    <li><strong>Delivery code:</strong> Unique project identifier (DEL-DDT-XXX)</li>
+                    <li><strong>Delivery code:</strong> Unique project identifier (DFE-DDT-XXX)</li>
                 </ul>
                 <p>Access the overview from the project details page.</p>`
         },

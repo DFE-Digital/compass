@@ -564,8 +564,8 @@ namespace Compass.Controllers
             {
                 try
                 {
-                    // Use delivery code format: DEL-DDT-001
-                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    // Use delivery code format: DFE-DDT-001
+                    var deliveryCode = $"DFE-DDT-{project.Id:D3}";
                     _logger.LogInformation("Fetching service assessments for delivery phases tab. Project ID: {ProjectId}, Delivery Code: {DeliveryCode}", project.Id, deliveryCode);
                     var assessments = await GetServiceAssessmentsByProjectCodeAsync(deliveryCode);
                     _logger.LogInformation("Retrieved {Count} assessments for delivery code {DeliveryCode}", assessments?.Count ?? 0, deliveryCode);
@@ -573,7 +573,7 @@ namespace Compass.Controllers
                 }
                 catch (Exception ex)
                 {
-                    var deliveryCode = $"DEL-DDT-{project.Id:D3}";
+                    var deliveryCode = $"DFE-DDT-{project.Id:D3}";
                     _logger.LogError(ex, "Error fetching service assessments for project code {ProjectCode}", deliveryCode);
                     ViewBag.ServiceAssessments = new List<object>();
                 }
