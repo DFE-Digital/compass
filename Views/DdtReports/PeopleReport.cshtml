@@ -1,0 +1,240 @@
+@model Compass.ViewModels.PeopleReportViewModel
+@{
+    ViewData["Title"] = "People Report";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+        
+        .expandable-row {
+            cursor: pointer;
+        }
+        
+        .expandable-row:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .project-details {
+            display: none;
+        }
+        
+        .project-details.show {
+            display: table-row;
+        }
+        
+        .expand-icon {
+            transition: transform 0.2s;
+        }
+        
+        .expand-icon.expanded {
+            transform: rotate(90deg);
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">DDT Reports</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">People Report</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-12">
+                <h1 class="m-0">People Report</h1>
+                <p class="text-muted mb-0">
+                    <small>
+                        Showing people from teams, SROs, Service Owners, and Primary Contacts. Only includes current team members (status = "Current"). Click a row to expand and see project details.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Filters</h3>
+            </div>
+            <div class="card-body">
+                <form method="get" asp-action="PeopleReport" class="row">
+                    <div class="col-md-3 mb-3">
+                        <label for="filterName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="filterName" name="filterName" value="@Model.FilterName" placeholder="Filter by name">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="filterEmail" class="form-label">Email</label>
+                        <input type="text" class="form-control" id="filterEmail" name="filterEmail" value="@Model.FilterEmail" placeholder="Filter by email">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="filterRole" class="form-label">Role</label>
+                        <input type="text" class="form-control" id="filterRole" name="filterRole" value="@Model.FilterRole" placeholder="Filter by role">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="filterProject" class="form-label">Project</label>
+                        <input type="text" class="form-control" id="filterProject" name="filterProject" value="@Model.FilterProject" placeholder="Filter by project">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="filterEmploymentType" class="form-label">Employment Type</label>
+                        <select class="form-control" id="filterEmploymentType" name="filterEmploymentType">
+                            <option value="">All</option>
+                            <option value="Permanent" selected="@(Model.FilterEmploymentType == "Permanent")">Permanent</option>
+                            <option value="MSP" selected="@(Model.FilterEmploymentType == "MSP")">MSP</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="filterFundingArrangement" class="form-label">Funding</label>
+                        <select class="form-control" id="filterFundingArrangement" name="filterFundingArrangement">
+                            <option value="">All</option>
+                            <option value="Admin" selected="@(Model.FilterFundingArrangement == "Admin")">Admin</option>
+                            <option value="Programme" selected="@(Model.FilterFundingArrangement == "Programme")">Programme</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary mr-2">Apply Filters</button>
+                        <a asp-action="PeopleReport" class="btn btn-secondary">Clear Filters</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Summary</h5>
+                        <p class="mb-0">
+                            <strong>Total People:</strong> @Model.People.Count
+                            | <strong>People with >100% allocation:</strong> @Model.People.Count(p => p.TotalAllocationPercent > 100)
+                            | <strong>People with >150% allocation:</strong> @Model.People.Count(p => p.TotalAllocationPercent > 150)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- People Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">People and Allocations</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="peopleTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;"></th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th class="text-right">Total Allocation</th>
+                                <th class="text-center">Projects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var person in Model.People)
+                            {
+                                <tr class="expandable-row" data-person-id="@person.Email">
+                                    <td>
+                                        <i class="fas fa-chevron-right expand-icon"></i>
+                                    </td>
+                                    <td><strong>@person.Name</strong></td>
+                                    <td>@person.Email</td>
+                                    <td class="text-right">
+                                        <span class="badge @(person.TotalAllocationPercent > 100 ? "badge-danger" : person.TotalAllocationPercent > 80 ? "badge-warning" : "badge-success")">
+                                            @person.TotalAllocationPercent.ToString("F1")%
+                                        </span>
+                                    </td>
+                                    <td class="text-center">@person.ProjectAllocations.Count</td>
+                                </tr>
+                                @foreach (var allocation in person.ProjectAllocations)
+                                {
+                                    <tr class="project-details" data-person-id="@person.Email">
+                                        <td></td>
+                                        <td colspan="4" class="pl-5">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <strong>@allocation.ProjectTitle</strong>
+                                                    <br>
+                                                    <small class="text-muted">
+                                                        Role: @allocation.Role (@allocation.RoleType)
+                                                        @if (!string.IsNullOrWhiteSpace(allocation.TimeAllocation))
+                                                        {
+                                                            <span> | Allocation: @allocation.TimeAllocation</span>
+                                                        }
+                                                        @if (allocation.RoleType == "Team Member")
+                                                        {
+                                                            <span> | Type: @allocation.EmploymentType</span>
+                                                            <span> | Funding: @allocation.FundingArrangement</span>
+                                                        }
+                                                    </small>
+                                                </div>
+                                                <div>
+                                                    @if (!string.IsNullOrWhiteSpace(allocation.TimeAllocation))
+                                                    {
+                                                        <span class="badge badge-info">@allocation.AllocationPercent.ToString("F1")%</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            document.querySelectorAll('.expandable-row').forEach(function(row) {
+                row.addEventListener('click', function() {
+                    var personId = this.getAttribute('data-person-id');
+                    var details = document.querySelectorAll('.project-details[data-person-id="' + personId + '"]');
+                    var icon = this.querySelector('.expand-icon');
+                    
+                    details.forEach(function(detail) {
+                        detail.classList.toggle('show');
+                    });
+                    
+                    if (icon) {
+                        icon.classList.toggle('expanded');
+                    }
+                });
+            });
+        })();
+    </script>
+}
+

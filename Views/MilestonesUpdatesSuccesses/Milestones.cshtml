@@ -1,0 +1,258 @@
+@model Compass.Models.Project
+
+@{
+    ViewData["Title"] = "Milestones";
+    var milestones = Model.Milestones.Where(m => !m.IsDeleted).OrderBy(m => m.DueDate).ToList();
+    var deliveryCode = ViewBag.ProjectCode as string ?? $"DEL-DDT-{Model.Id}";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Project")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Work reporting</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Details", "Project", new { id = Model.Id })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">@Model.Title</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Overview", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Milestones, Updates and Successes</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Milestones</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3 align-items-center">
+            <div class="col-lg-8 col-md-7 col-sm-12">
+                <h1 class="m-0">Milestones</h1>
+                <p class="text-muted mb-0">@Model.Title <small class="text-muted">(@deliveryCode)</small></p>
+            </div>
+            <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
+                <a href="@Url.Action("CreateMilestone", "Project", new { projectId = Model.Id })" class="btn btn-success">Add milestone</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Project milestones</h3>
+            </div>
+            <div class="card-body p-0">
+                @if (milestones.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover text-nowrap sortable-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-column="Name" tabindex="0" role="button" aria-label="Sort by Name">
+                                        Name
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
+                                        Status
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">
+                                        Due date
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="ActualDate" tabindex="0" role="button" aria-label="Sort by Actual Date">
+                                        Actual date
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Progress" tabindex="0" role="button" aria-label="Sort by Progress">
+                                        Progress
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var milestone in milestones)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })">
+                                                @milestone.Name
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @{
+                                                var statusClass = milestone.Status switch
+                                                {
+                                                    "complete" => "badge badge-success",
+                                                    "at_risk" => "badge badge-warning",
+                                                    "in_progress" => "badge badge-info",
+                                                    "delayed" => "badge badge-danger",
+                                                    _ => "badge badge-secondary"
+                                                };
+                                            }
+                                            <span class="@statusClass">@milestone.Status.Replace("_", " ")</span>
+                                        </td>
+                                        <td>@milestone.DueDate.ToString("d MMMM yyyy")</td>
+                                        <td>
+                                            @if (milestone.ActualDate.HasValue)
+                                            {
+                                                @milestone.ActualDate.Value.ToString("d MMMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not completed</span>
+                                            }
+                                        </td>
+                                        <td style="min-width: 150px;">
+                                            @{
+                                                var progress = milestone.ProgressPercent.GetValueOrDefault();
+                                                var progressValue = progress < 0 ? 0 : progress > 100 ? 100 : progress;
+                                            }
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1 mr-2" style="height: 6px;">
+                                                    <div class="progress-bar bg-success" role="progressbar" style="width: @progressValue%" aria-valuenow="@progressValue" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <span class="text-muted small">@progressValue%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-3">
+                        <p class="text-muted mb-2">No milestones recorded.</p>
+                        <a href="@Url.Action("CreateMilestone", "Project", new { projectId = Model.Id })" class="text-block-link">Add the first milestone</a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<script nonce="@Context.Items["Nonce"]">
+    (function() {
+        var table = document.querySelector('.sortable-table');
+        if (!table) return;
+        
+        function initSorting(table) {
+            var sortableHeaders = table.querySelectorAll('.sortable');
+            var currentSort = { column: null, direction: 'asc' };
+            
+            sortableHeaders.forEach(function(header) {
+                header.style.cursor = 'pointer';
+                
+                header.addEventListener('click', function(e) {
+                    handleSort(e, header);
+                });
+                
+                header.addEventListener('keypress', function(e) {
+                    if (e.which === 13 || e.which === 32) {
+                        e.preventDefault();
+                        handleSort(e, header);
+                    }
+                });
+            });
+            
+            function handleSort(e, header) {
+                var column = header.getAttribute('data-column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(column, direction);
+                currentSort = { column: column, direction: direction };
+            }
+            
+            function sortTable(column, direction) {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                    return th.getAttribute('data-column') === column;
+                });
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var aCell = a.querySelectorAll('td')[colIndex];
+                    var bCell = b.querySelectorAll('td')[colIndex];
+                    
+                    if (column === 'Status') {
+                        var aBadge = aCell.querySelector('.badge');
+                        var bBadge = bCell.querySelector('.badge');
+                        aVal = aBadge ? aBadge.textContent.trim().toLowerCase() : '';
+                        bVal = bBadge ? bBadge.textContent.trim().toLowerCase() : '';
+                    } else if (column === 'Name') {
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                    } else if (column === 'DueDate' || column === 'ActualDate') {
+                        var aDate = Date.parse(aCell.textContent.trim());
+                        var bDate = Date.parse(bCell.textContent.trim());
+                        aVal = isNaN(aDate) ? 0 : aDate;
+                        bVal = isNaN(bDate) ? 0 : bDate;
+                    } else if (column === 'Progress') {
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        var aMatch = aText.match(/(\d+)%/);
+                        var bMatch = bText.match(/(\d+)%/);
+                        aVal = aMatch ? parseInt(aMatch[1]) : 0;
+                        bVal = bMatch ? parseInt(bMatch[1]) : 0;
+                    } else {
+                        aVal = aCell.textContent.trim().toLowerCase();
+                        bVal = bCell.textContent.trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.innerHTML = '';
+                rows.forEach(function(row) {
+                    tbody.appendChild(row);
+                });
+                
+                updateSortIcons(column, direction);
+            }
+            
+            function updateSortIcons(column, direction) {
+                var allHeaders = table.querySelectorAll('.sortable i');
+                allHeaders.forEach(function(icon) {
+                    icon.className = 'fas fa-sort float-right';
+                    icon.style.opacity = '0.3';
+                });
+                
+                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                if (activeHeader) {
+                    var icon = activeHeader.querySelector('i');
+                    if (icon) {
+                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                        icon.style.opacity = '1';
+                    }
+                }
+            }
+        }
+        
+        initSorting(table);
+    })();
+</script>
+

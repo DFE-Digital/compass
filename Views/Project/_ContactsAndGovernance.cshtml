@@ -62,9 +62,46 @@
                                 </td>
                             </tr>
                             
-                            <!-- PMO Contacts -->
+                            <!-- Service Owners -->
                             <tr>
-                                <td class="font-weight-bold">PMO Contact(s)</td>
+                                <td class="font-weight-bold">Service Owner(s)</td>
+                                <td>
+                                    @if (Model.ServiceOwners?.Any() == true)
+                                    {
+                                        <div>
+                                            @foreach (var serviceOwner in Model.ServiceOwners)
+                                            {
+                                                @if (serviceOwner.User != null)
+                                                {
+                                                    <div class="mb-1">
+                                                        @if (!string.IsNullOrEmpty(serviceOwner.User.Email))
+                                                        {
+                                                            <a href="mailto:@serviceOwner.User.Email" class="font-weight-bold">@serviceOwner.User.Name</a>
+                                                            <br />
+                                                            <small class="text-muted">@serviceOwner.User.Email</small>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="font-weight-bold">@serviceOwner.User.Name</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No Service Owners assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editServiceOwnersModal">Change</a>
+                                </td>
+                            </tr>
+                            
+                            <!-- Primary Contacts -->
+                            <tr>
+                                <td class="font-weight-bold">Primary contacts</td>
                                 <td>
                                     @if (Model.PmoContacts?.Any() == true)
                                     {
@@ -91,7 +128,7 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted">No PMO contacts assigned.</span>
+                                        <span class="text-muted">No primary contacts assigned.</span>
                                     }
                                 </td>
                                 <td class="text-right">
@@ -218,12 +255,12 @@
     </div>
 </div>
 
-<!-- Edit PMO Contacts Modal -->
+<!-- Edit Primary Contacts Modal -->
 <div class="modal fade" id="editPmoContactsModal" tabindex="-1" role="dialog" aria-labelledby="editPmoContactsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editPmoContactsModalLabel">Edit PMO Contacts</h5>
+                <h5 class="modal-title" id="editPmoContactsModalLabel">Edit Primary Contacts</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -252,7 +289,53 @@
                         </div>
                         <div id="selectedPmosModal" class="mt-3"></div>
                         <input type="hidden" name="selectedPmoUserIds" id="selectedPmoUserIdsModal" value="" />
-                        <small class="form-text text-muted">Select one or more PMO contacts</small>
+                        <small class="form-text text-muted">Select one or more primary contacts</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Service Owners Modal -->
+<div class="modal fade" id="editServiceOwnersModal" tabindex="-1" role="dialog" aria-labelledby="editServiceOwnersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editServiceOwnersModalLabel">Edit Service Owners</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateServiceOwners" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label">Search for users</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="serviceOwnerUserPicker">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="serviceOwnerSearchModal"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" class="js-user-picker-objectid" id="serviceOwnerTempObjectId" />
+                            <input type="hidden" class="js-user-picker-name" id="serviceOwnerTempName" />
+                            <input type="hidden" class="js-user-picker-email" id="serviceOwnerTempEmail" />
+                        </div>
+                        <div id="selectedServiceOwnersModal" class="mt-3"></div>
+                        <input type="hidden" name="selectedServiceOwnerUserIds" id="selectedServiceOwnerUserIdsModal" value="" />
+                        <small class="form-text text-muted">Select one or more Service Owners</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -526,7 +609,9 @@
             }
 
             function removeSroModal(userId) {
-                selectedSrosModal = selectedSrosModal.filter(s => s.id !== userId);
+                // Remove any HTML entity encoding that jQuery might apply
+                const decodedUserId = userId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                selectedSrosModal = selectedSrosModal.filter(s => s.id !== decodedUserId && s.id !== userId);
                 updateSelectedSrosModal();
             }
 
@@ -537,20 +622,22 @@
                 if (!container || !hiddenInput) return;
                 
                 if (selectedSrosModal.length === 0) {
-                    container.innerHTML = '';
+                    container.innerHTML = '<div class="mt-2 text-muted">No SROs selected. Click "Save changes" to remove all SROs.</div>';
                     hiddenInput.value = '';
                     return;
                 }
                 
                 let html = '<div class="mt-2"><strong>Selected SROs:</strong></div><div class="d-flex flex-wrap mt-2">';
                 selectedSrosModal.forEach(sro => {
-                    const escapedId = sro.id.replace(/'/g, "\\'");
+                    // Escape the ID properly for use in onclick attribute
+                    const escapedId = sro.id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const escapedName = (sro.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const escapedEmail = (sro.email || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    // Use data attribute instead of inline onclick for better reliability
                     html += `
                         <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
                             ${escapedName}${escapedEmail ? ` (${escapedEmail})` : ''}
-                            <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removeSroModal('${escapedId}')" aria-label="Remove ${escapedName}">×</button>
+                            <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-sro-btn" data-sro-id="${escapedId}" aria-label="Remove ${escapedName}">×</button>
                         </div>
                     `;
                 });
@@ -558,9 +645,18 @@
                 
                 container.innerHTML = html;
                 hiddenInput.value = selectedSrosModal.map(s => s.id).join(',');
+                
+                // Attach event listeners to remove buttons using event delegation
+                $(container).off('click', '.remove-sro-btn').on('click', '.remove-sro-btn', function(e) {
+                    e.preventDefault();
+                    const sroId = $(this).data('sro-id');
+                    if (sroId) {
+                        removeSroModal(sroId);
+                    }
+                });
             }
 
-            // Make removeSroModal available globally
+            // Make removeSroModal available globally for backward compatibility
             window.removeSroModal = removeSroModal;
             
             // Ensure hidden input is set before form submission
@@ -706,7 +802,9 @@
             }
 
             function removePmoModal(userId) {
-                selectedPmosModal = selectedPmosModal.filter(p => p.id !== userId);
+                // Remove any HTML entity encoding that jQuery might apply
+                const decodedUserId = userId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                selectedPmosModal = selectedPmosModal.filter(p => p.id !== decodedUserId && p.id !== userId);
                 updateSelectedPmosModal();
             }
 
@@ -722,15 +820,21 @@
                     return;
                 }
                 
-                let html = '<div class="mt-2"><strong>Selected PMO Contacts:</strong></div><div class="d-flex flex-wrap mt-2">';
+                if (selectedPmosModal.length === 0) {
+                    container.innerHTML = '<div class="mt-2 text-muted">No primary contacts selected. Click "Save changes" to remove all primary contacts.</div>';
+                    hiddenInput.value = '';
+                    return;
+                }
+                
+                let html = '<div class="mt-2"><strong>Selected Primary Contacts:</strong></div><div class="d-flex flex-wrap mt-2">';
                 selectedPmosModal.forEach(pmo => {
-                    const escapedId = pmo.id.replace(/'/g, "\\'");
+                    const escapedId = pmo.id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const escapedName = (pmo.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const escapedEmail = (pmo.email || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     html += `
                         <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
                             ${escapedName}${escapedEmail ? ` (${escapedEmail})` : ''}
-                            <button type="button" class="btn btn-sm btn-outline-light ml-2" onclick="removePmoModal('${escapedId}')" aria-label="Remove ${escapedName}">×</button>
+                            <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-pmo-btn" data-pmo-id="${escapedId}" aria-label="Remove ${escapedName}">×</button>
                         </div>
                     `;
                 });
@@ -738,6 +842,15 @@
                 
                 container.innerHTML = html;
                 hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
+                
+                // Attach event listeners to remove buttons using event delegation
+                $(container).off('click', '.remove-pmo-btn').on('click', '.remove-pmo-btn', function(e) {
+                    e.preventDefault();
+                    const pmoId = $(this).data('pmo-id');
+                    if (pmoId) {
+                        removePmoModal(pmoId);
+                    }
+                });
             }
 
             // Make removePmoModal available globally
@@ -748,6 +861,177 @@
                 const hiddenInput = document.getElementById('selectedPmoUserIdsModal');
                 if (hiddenInput) {
                     hiddenInput.value = selectedPmosModal.map(p => p.id).join(',');
+                }
+            });
+
+            // ========================================
+            // Service Owners Modal
+            // ========================================
+            let selectedServiceOwnersModal = [];
+
+            // Handle user selection for Service Owners
+            function handleServiceOwnerUserSelected(e, user) {
+                console.log('Service Owner userSelected event received:', e, user);
+                
+                // Extract user data - jQuery passes as second param, native event has detail
+                let userData = null;
+                if (user) {
+                    // jQuery event with user as second parameter
+                    userData = user;
+                } else if (e && e.detail) {
+                    // Native CustomEvent
+                    userData = e.detail;
+                } else if (e && e.originalEvent && e.originalEvent.detail) {
+                    // jQuery wrapped native event
+                    userData = e.originalEvent.detail;
+                }
+                
+                console.log('Extracted user data:', userData);
+                
+                if (userData && (userData.objectId || userData.id)) {
+                    const userId = userData.objectId || userData.id;
+                    console.log('Adding Service Owner with ID:', userId);
+                    addServiceOwnerModal({
+                        id: userId,
+                        name: userData.name || '',
+                        email: userData.email || ''
+                    });
+                    clearServiceOwnerPicker();
+                } else {
+                    console.error('No valid user data found in event:', e, user);
+                }
+            }
+        
+            // Initialize with existing Service Owners when modal opens
+            $('#editServiceOwnersModal').on('show.bs.modal', function() {
+                selectedServiceOwnersModal = [];
+                @if (Model.ServiceOwners?.Any() == true)
+                {
+                    @foreach (var serviceOwner in Model.ServiceOwners)
+                    {
+                        @if (serviceOwner.User != null && !string.IsNullOrEmpty(serviceOwner.User.AzureObjectId))
+                        {
+                            <text>
+                            selectedServiceOwnersModal.push({
+                                id: '@serviceOwner.User.AzureObjectId',
+                                name: '@Html.Raw(serviceOwner.User.Name?.Replace("'", "\\'") ?? "")',
+                                email: '@Html.Raw(serviceOwner.User.Email?.Replace("'", "\\'") ?? "")'
+                            });
+                            </text>
+                        }
+                    }
+                }
+                updateSelectedServiceOwnersModal();
+            });
+
+            // Listen for userSelected events on the Service Owner picker
+            document.addEventListener('userSelected', function(e) {
+                if (e.target && e.target.id === 'serviceOwnerSearchModal') {
+                    handleServiceOwnerUserSelected(e);
+                }
+            }, true);
+            
+            $(document).on('userSelected', '#serviceOwnerSearchModal', handleServiceOwnerUserSelected);
+
+            function clearServiceOwnerPicker() {
+                const picker = document.getElementById('serviceOwnerUserPicker');
+                if (picker) {
+                    const input = picker.querySelector('.js-user-picker-input');
+                    const objectIdInput = picker.querySelector('.js-user-picker-objectid');
+                    const nameInput = picker.querySelector('.js-user-picker-name');
+                    const emailInput = picker.querySelector('.js-user-picker-email');
+                    const summary = picker.querySelector('.js-user-picker-summary');
+                    const message = picker.querySelector('.js-user-picker-message');
+                    
+                    if (input) input.value = '';
+                    if (objectIdInput) objectIdInput.value = '';
+                    if (nameInput) nameInput.value = '';
+                    if (emailInput) emailInput.value = '';
+                    if (summary) summary.innerHTML = '<span class="text-muted">No user selected.</span>';
+                    if (message) message.textContent = '';
+                }
+            }
+
+            function addServiceOwnerModal(user) {
+                console.log('addServiceOwnerModal called with:', user);
+                // Normalize the ID - use objectId if available, otherwise id
+                const userId = user.objectId || user.id;
+                if (!userId) {
+                    console.error('No user ID found:', user);
+                    return;
+                }
+                if (!selectedServiceOwnersModal.find(so => so.id === userId)) {
+                    selectedServiceOwnersModal.push({
+                        id: userId,
+                        name: user.name || '',
+                        email: user.email || ''
+                    });
+                    updateSelectedServiceOwnersModal();
+                } else {
+                    console.log('User already in list:', userId);
+                }
+            }
+
+            function removeServiceOwnerModal(userId) {
+                // Remove any HTML entity encoding that jQuery might apply
+                const decodedUserId = userId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                selectedServiceOwnersModal = selectedServiceOwnersModal.filter(so => so.id !== decodedUserId && so.id !== userId);
+                updateSelectedServiceOwnersModal();
+            }
+
+            function updateSelectedServiceOwnersModal() {
+                const container = document.getElementById('selectedServiceOwnersModal');
+                const hiddenInput = document.getElementById('selectedServiceOwnerUserIdsModal');
+                
+                if (!container || !hiddenInput) return;
+                
+                if (selectedServiceOwnersModal.length === 0) {
+                    container.innerHTML = '';
+                    hiddenInput.value = '';
+                    return;
+                }
+                
+                if (selectedServiceOwnersModal.length === 0) {
+                    container.innerHTML = '<div class="mt-2 text-muted">No service owners selected. Click "Save changes" to remove all service owners.</div>';
+                    hiddenInput.value = '';
+                    return;
+                }
+                
+                let html = '<div class="mt-2"><strong>Selected Service Owners:</strong></div><div class="d-flex flex-wrap mt-2">';
+                selectedServiceOwnersModal.forEach(serviceOwner => {
+                    const escapedId = serviceOwner.id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const escapedName = (serviceOwner.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const escapedEmail = (serviceOwner.email || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    html += `
+                        <div class="badge badge-primary mr-2 mb-2 d-flex align-items-center">
+                            ${escapedName}${escapedEmail ? ` (${escapedEmail})` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-light ml-2 remove-serviceowner-btn" data-serviceowner-id="${escapedId}" aria-label="Remove ${escapedName}">×</button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                container.innerHTML = html;
+                hiddenInput.value = selectedServiceOwnersModal.map(so => so.id).join(',');
+                
+                // Attach event listeners to remove buttons using event delegation
+                $(container).off('click', '.remove-serviceowner-btn').on('click', '.remove-serviceowner-btn', function(e) {
+                    e.preventDefault();
+                    const serviceOwnerId = $(this).data('serviceowner-id');
+                    if (serviceOwnerId) {
+                        removeServiceOwnerModal(serviceOwnerId);
+                    }
+                });
+            }
+
+            // Make removeServiceOwnerModal available globally
+            window.removeServiceOwnerModal = removeServiceOwnerModal;
+            
+            // Ensure hidden input is set before form submission
+            $('#editServiceOwnersModal form').on('submit', function(e) {
+                const hiddenInput = document.getElementById('selectedServiceOwnerUserIdsModal');
+                if (hiddenInput) {
+                    hiddenInput.value = selectedServiceOwnersModal.map(so => so.id).join(',');
                 }
             });
             

@@ -506,54 +506,21 @@ namespace Compass.Controllers
     {
         try
         {
-            var baseUrl = _configuration["CmsApi:BaseUrl"];
-            var apiKey = _configuration["CmsApi:ReadApiKey"];
-            
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-            
-            var url = $"{baseUrl}category-values?filters[category_type][name][$eq]=Business area&fields[0]=name&fields[1]=sort_order&sort=sort_order:asc";
-            _logger.LogInformation("Fetching business areas from: {Url}", url);
-            
-            var response = await httpClient.GetAsync(url);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                _logger.LogInformation("CMS Response: {Content}", content);
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
                 
-                var jsonDoc = System.Text.Json.JsonDocument.Parse(content);
-                
-                var businessAreas = new List<string>();
-                if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement))
-                {
-                    foreach (var item in dataElement.EnumerateArray())
-                    {
-                        if (item.TryGetProperty("name", out var nameElement))
-                        {
-                            var name = nameElement.GetString();
-                            if (!string.IsNullOrEmpty(name))
-                            {
-                                businessAreas.Add(name);
-                            }
-                        }
-                    }
-                }
-                
-                _logger.LogInformation("Found {Count} business areas", businessAreas.Count);
+            _logger.LogInformation("Found {Count} business areas from admin settings", businessAreas.Count);
                 return businessAreas;
-            }
-            else
-            {
-                _logger.LogError("CMS API returned status {StatusCode}", response.StatusCode);
-            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching business areas from CMS");
-        }
-        
+            _logger.LogError(ex, "Error fetching business areas from admin settings");
         return new List<string>();
+        }
     }
 
         // POST: DemandManagement/CreateRequest
@@ -2877,7 +2844,7 @@ namespace Compass.Controllers
                         Name = contact.Name,
                         Email = contact.Email,
                         SortOrder = index + 1,
-                        FundingArrangement = "Not specified",
+                        FundingArrangement = "Admin",
                         EmploymentType = "Permanent",
                         TeamStatus = "current",
                         CreatedAt = DateTime.UtcNow,

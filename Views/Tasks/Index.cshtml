@@ -1,0 +1,208 @@
+@model Compass.ViewModels.TasksViewModel
+
+@{
+    ViewData["Title"] = "Tasks";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Tasks</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-3 align-items-center">
+            <div class="col-lg-8 col-md-7 col-sm-12">
+                <h1 class="m-0">Complete your delivery information for work items</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (Model.Tasks.Any())
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Tasks</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover text-nowrap sortable-table mb-0" id="tasks-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-column="Task" tabindex="0" role="button" aria-label="Sort by Task">
+                                        Task
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                    <th class="sortable" data-column="Project" tabindex="0" role="button" aria-label="Sort by Project">
+                                        Project
+                                        <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var task in Model.Tasks)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@task.ActionUrl" class="text-decoration-none font-weight-bold">
+                                                @task.TaskDescription
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a href="@task.ProjectOverviewUrl" class="text-decoration-none">
+                                                @task.ProjectTitle
+                                            </a>
+                                            <br>
+                                            <small class="text-muted">@task.ProjectCode</small>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> You have no outstanding tasks. All your work items have complete delivery information.
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        (function() {
+            var table = document.getElementById('tasks-table');
+            if (!table) return;
+            
+            function initSorting(table) {
+                var sortableHeaders = table.querySelectorAll('.sortable');
+                var currentSort = { column: null, direction: 'asc' };
+                
+                sortableHeaders.forEach(function(header) {
+                    header.style.cursor = 'pointer';
+                    
+                    header.addEventListener('click', function(e) {
+                        handleSort(e, header);
+                    });
+                    
+                    header.addEventListener('keypress', function(e) {
+                        if (e.which === 13 || e.which === 32) {
+                            e.preventDefault();
+                            handleSort(e, header);
+                        }
+                    });
+                });
+                
+                function handleSort(e, header) {
+                    var column = header.getAttribute('data-column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortTable(column, direction);
+                    currentSort = { column: column, direction: direction };
+                }
+                
+                function sortTable(column, direction) {
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
+                        return th.getAttribute('data-column') === column;
+                    });
+                    
+                    rows.sort(function(a, b) {
+                        var aVal, bVal;
+                        var aCell = a.querySelectorAll('td')[colIndex];
+                        var bCell = b.querySelectorAll('td')[colIndex];
+                        
+                        if (column === 'Task') {
+                            // Sort by link text (task description)
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        } else if (column === 'Project') {
+                            // Sort by project title (first link)
+                            var aLink = aCell.querySelector('a');
+                            var bLink = bCell.querySelector('a');
+                            aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                            bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
+                        } else {
+                            aVal = aCell.textContent.trim().toLowerCase();
+                            bVal = bCell.textContent.trim().toLowerCase();
+                        }
+                        
+                        if (direction === 'asc') {
+                            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                        } else {
+                            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                        }
+                    });
+                    
+                    tbody.innerHTML = '';
+                    rows.forEach(function(row) {
+                        tbody.appendChild(row);
+                    });
+                    
+                    updateSortIcons(column, direction);
+                }
+                
+                function updateSortIcons(column, direction) {
+                    var allHeaders = table.querySelectorAll('.sortable i');
+                    allHeaders.forEach(function(icon) {
+                        icon.className = 'fas fa-sort float-right';
+                        icon.style.opacity = '0.3';
+                    });
+                    
+                    var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
+                    if (activeHeader) {
+                        var icon = activeHeader.querySelector('i');
+                        if (icon) {
+                            icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
+                            icon.style.opacity = '1';
+                        }
+                    }
+                }
+            }
+            
+            initSorting(table);
+        })();
+    </script>
+}
+

@@ -16,6 +16,8 @@ public class ProjectTeamMemberFormViewModel
 
     public IReadOnlyList<SelectListItem> TeamStatusOptions { get; set; } = Array.Empty<SelectListItem>();
 
+    public IReadOnlyList<SelectListItem> TimeAllocationOptions { get; set; } = Array.Empty<SelectListItem>();
+
     public string? SelectedUserName { get; set; }
 
     public string? SelectedUserEmail { get; set; }
@@ -37,8 +39,11 @@ public class ProjectTeamMemberInputModel
     public string Role { get; set; } = string.Empty;
 
     [Required]
-    [StringLength(200, ErrorMessage = "Funding description must be 200 characters or fewer.")]
+    [RegularExpression("(Admin|Programme)", ErrorMessage = "Select Admin or Programme.")]
     public string FundingArrangement { get; set; } = string.Empty;
+
+    [StringLength(50, ErrorMessage = "Time allocation must be 50 characters or fewer.")]
+    public string? TimeAllocation { get; set; }
 
     [Required]
     [RegularExpression("(Permanent|MSP)", ErrorMessage = "Select Permanent or MSP.")]
@@ -67,6 +72,8 @@ public class ProjectTeamMemberDetailsViewModel
     public string Role { get; set; } = string.Empty;
 
     public string FundingArrangement { get; set; } = string.Empty;
+
+    public string? TimeAllocation { get; set; }
 
     public string EmploymentType { get; set; } = string.Empty;
 
