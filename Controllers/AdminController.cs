@@ -9,10 +9,12 @@ using Compass.Models;
 using Microsoft.AspNetCore.Authorization;
 using Compass.Services;
 using Compass.ViewModels.Admin;
+using Compass.Attributes;
 
 namespace Compass.Controllers;
 
 [Authorize]
+[RequireAdmin]
 public class AdminController : Controller
 {
     private readonly CompassDbContext _context;
@@ -308,13 +310,15 @@ public class AdminController : Controller
         {
             try
             {
+                // Set default role - roles are managed through groups in UserManagement
+                user.Role = UserRole.Visitor;
                 user.CreatedAt = DateTime.UtcNow;
                 user.UpdatedAt = DateTime.UtcNow;
                 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = $"User '{user.Name}' has been created successfully.";
+                TempData["SuccessMessage"] = $"User '{user.Name}' has been created successfully. Assign them to groups in User Management to grant permissions.";
                 return RedirectToAction(nameof(Users));
             }
             catch (Exception ex)
@@ -736,9 +740,19 @@ public class AdminController : Controller
         {
             try
             {
-                user.UpdatedAt = DateTime.UtcNow;
+                // Get existing user to preserve Role - roles are managed through groups in UserManagement
+                var existingUser = await _context.Users.FindAsync(id);
+                if (existingUser == null)
+                {
+                    return NotFound();
+                }
+
+                // Only update Name and Email - Role is managed through groups
+                existingUser.Name = user.Name;
+                existingUser.Email = user.Email;
+                existingUser.UpdatedAt = DateTime.UtcNow;
                 
-                _context.Update(user);
+                _context.Update(existingUser);
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = $"User '{user.Name}' has been updated successfully.";
@@ -1902,12 +1916,14 @@ public class AdminController : Controller
 
     // API Token Management
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ApiTokens()
     {
         var tokens = await _apiTokenService.GetAllTokensAsync();
         return View("~/Views/Admin/ApiTokens/Index.cshtml", tokens);
     }
 
+    [RequireSuperAdmin]
     public IActionResult CreateApiToken()
     {
         return View("~/Views/Admin/ApiTokens/Create.cshtml");
@@ -1915,6 +1931,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> CreateApiToken(string name, string? description, DateTime? expiresAt)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -1941,6 +1958,7 @@ public class AdminController : Controller
         }
     }
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ConfigurePermissions(int id)
     {
         var token = await _apiTokenService.GetByIdAsync(id);
@@ -1963,6 +1981,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> SavePermissions(int id, Dictionary<string, string> permissions)
     {
         try
@@ -1997,6 +2016,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> RecycleApiToken(int id)
     {
         try
@@ -2026,6 +2046,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> ToggleApiToken(int id)
     {
         try
@@ -2056,6 +2077,7 @@ public class AdminController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequireSuperAdmin]
     public async Task<IActionResult> DeleteApiToken(int id)
     {
         try
@@ -2080,6 +2102,7 @@ public class AdminController : Controller
         }
     }
 
+    [RequireSuperAdmin]
     public async Task<IActionResult> ApiLogs(int? tokenId = null)
     {
         var query = _context.ApiRequestLogs

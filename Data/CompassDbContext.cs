@@ -180,6 +180,7 @@ public partial class CompassDbContext : DbContext
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
     public DbSet<ProjectMonthlyUpdate> ProjectMonthlyUpdates { get; set; }
+    public DbSet<MonthlyUpdateNarrative> MonthlyUpdateNarratives { get; set; }
     public DbSet<ProjectWeeklySuccessUpdate> ProjectWeeklySuccessUpdates { get; set; }
     public DbSet<MonthlyStatusReport> MonthlyStatusReports { get; set; }
     public DbSet<MonthlyStatusReportTimescaleConfig> MonthlyStatusReportTimescaleConfigs { get; set; }

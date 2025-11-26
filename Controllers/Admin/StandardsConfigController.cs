@@ -4,13 +4,15 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Compass.Attributes;
 
 namespace Compass.Controllers.Admin;
 
 /// <summary>
 /// Admin controller for managing Standards Configuration (Categories and Sub-categories)
 /// </summary>
-[Authorize(Roles = "Admin,SuperAdmin")]
+[Authorize]
+[RequireAdmin]
 [Area("Admin")]
 public class StandardsConfigController : Controller
 {

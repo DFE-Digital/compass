@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Data;
@@ -7,6 +8,7 @@ using System.Text;
 
 namespace Compass.Controllers;
 
+[Authorize]
 public class EnterpriseReportingController : Controller
 {
     private readonly CompassDbContext _context;
