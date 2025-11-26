@@ -177,7 +177,7 @@ public class CentralOpsController : Controller
                 .ThenBy(p => p.TargetDeliveryDate)
                 .ToList();
 
-            // Summary by Business Area
+            // Summary by Business Area - sorted alphabetically
             var businessAreaSummary = allProjects
                 .Where(p => p.BusinessAreaLookup != null)
                 .GroupBy(p => p.BusinessAreaLookup!.Name)
@@ -196,11 +196,30 @@ public class CentralOpsController : Controller
                     LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
                     BlockedCount = 0 // Projects don't have a blocked status
                 })
-                .OrderByDescending(x => x.RedCount + x.AmberRedCount)
-                .ThenByDescending(x => x.CriticalPriorityCount)
-                .ThenByDescending(x => x.HighPriorityCount)
-                .ThenByDescending(x => x.Count)
+                .OrderBy(x => x.BusinessArea)
                 .ToList();
+
+            // Add "Not assigned" row for projects without a business area
+            var unassignedProjects = allProjects.Where(p => p.BusinessAreaLookup == null).ToList();
+            if (unassignedProjects.Any())
+            {
+                var unassignedSummary = new BusinessAreaSummaryItem
+                {
+                    BusinessArea = "Not assigned",
+                    Count = unassignedProjects.Count,
+                    RedCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
+                    AmberRedCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
+                    AmberCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
+                    AmberGreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
+                    GreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
+                    CriticalPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    HighPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    MediumPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
+                    LowPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
+                    BlockedCount = 0
+                };
+                businessAreaSummary.Add(unassignedSummary);
+            }
 
             ViewBag.PrioritySummary = prioritySummary;
             ViewBag.RagSummary = ragSummary;
@@ -548,6 +567,73 @@ public class CentralOpsController : Controller
         }
 
         return RedirectToAction(nameof(WorkItemDetails), new { id });
+    }
+
+    // GET: CentralOps/BusinessAreaDetails/{businessArea}
+    public async Task<IActionResult> BusinessAreaDetails(string? businessArea)
+    {
+        if (!await IsCentralOpsAdminAsync())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrEmpty(businessArea))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            // Get all projects for this business area (or unassigned if "Not assigned")
+            var projects = businessArea == "Not assigned"
+                ? await _context.Projects
+                    .Include(p => p.PrimaryContactUser)
+                    .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Where(p => !p.IsDeleted && p.BusinessAreaLookup == null)
+                    .OrderBy(p => p.Title)
+                    .ToListAsync()
+                : await _context.Projects
+                    .Include(p => p.PrimaryContactUser)
+                    .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Where(p => !p.IsDeleted && p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea)
+                    .OrderBy(p => p.Title)
+                    .ToListAsync();
+
+            // Calculate RAG counts
+            var ragCounts = new Dictionary<string, int>
+            {
+                { "Red", projects.Count(p => NormalizeRagStatus(p.RagStatus) == "Red") },
+                { "Amber-Red", projects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red") },
+                { "Amber", projects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber") },
+                { "Amber-Green", projects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green") },
+                { "Green", projects.Count(p => NormalizeRagStatus(p.RagStatus) == "Green") }
+            };
+
+            // Calculate Priority counts
+            var priorityCounts = new Dictionary<string, int>
+            {
+                { "Critical", projects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")) },
+                { "High", projects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")) },
+                { "Medium", projects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")) },
+                { "Low", projects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")) },
+                { "Not set", projects.Count(p => p.DeliveryPriority == null) }
+            };
+
+            ViewBag.BusinessArea = businessArea;
+            ViewBag.Projects = projects;
+            ViewBag.RagCounts = ragCounts;
+            ViewBag.PriorityCounts = priorityCounts;
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading business area details for {BusinessArea}", businessArea);
+            TempData["ErrorMessage"] = "An error occurred while loading the business area details. Please try again.";
+            return RedirectToAction(nameof(Dashboard));
+        }
     }
 }
 
