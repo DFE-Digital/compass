@@ -54,6 +54,17 @@ public class ProjectWeeklySuccessUpdate
 
     public bool IsReportedToSlt { get; set; } = false;
 
+    // SLT Response fields
+    public string? SltResponse { get; set; }
+
+    [MaxLength(255)]
+    public string? SltRespondedByEmail { get; set; }
+
+    [MaxLength(200)]
+    public string? SltRespondedByName { get; set; }
+
+    public DateTime? SltRespondedAt { get; set; }
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

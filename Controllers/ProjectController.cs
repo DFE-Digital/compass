@@ -365,6 +365,8 @@ namespace Compass.Controllers
                     .ThenInclude(a => a.CreatedByUser)
                 .Include(p => p.Artefacts)
                     .ThenInclude(a => a.UpdatedByUser)
+                .Include(p => p.MonthlyUpdates)
+                    .ThenInclude(mu => mu.MonthlyUpdateNarratives)
                 .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
 
             if (project == null)
@@ -808,7 +810,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while adding the success.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "successes" });
+            return RedirectToAction("Successes", "MilestonesUpdatesSuccesses", new { projectId = input.ProjectId });
         }
 
         // POST: Project/UpdateSuccess
@@ -860,7 +862,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating the success.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = input.ProjectId, tab = "successes" });
+            return RedirectToAction("Successes", "MilestonesUpdatesSuccesses", new { projectId = input.ProjectId });
         }
 
         // POST: Project/DeleteSuccess
@@ -876,7 +878,14 @@ namespace Compass.Controllers
                 if (success == null)
                 {
                     TempData["ErrorMessage"] = "Success not found.";
-                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "successes" });
+                    return RedirectToAction("Successes", "MilestonesUpdatesSuccesses", new { projectId = projectId });
+                }
+
+                // Check if deletion is allowed (not in the week after it was added)
+                if (!CanDeleteSuccess(success.RecordedAt))
+                {
+                    TempData["ErrorMessage"] = "This success cannot be deleted as we are currently in the week after it was added. Deletion is only allowed outside of this period.";
+                    return RedirectToAction("SuccessDetails", new { projectId = projectId, successId = successId });
                 }
 
                 _context.ProjectSuccesses.Remove(success);
@@ -889,7 +898,7 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while deleting the success.";
             }
 
-            return RedirectToAction(nameof(Details), new { id = projectId, tab = "successes" });
+            return RedirectToAction("Successes", "MilestonesUpdatesSuccesses", new { projectId = projectId });
         }
 
         // POST: Project/AddProduct
@@ -8309,6 +8318,9 @@ namespace Compass.Controllers
                 return NotFound();
             }
 
+            // Check if deletion is allowed (not in the week after it was added)
+            var canDelete = CanDeleteSuccess(success.RecordedAt);
+
             var viewModel = new ProjectSuccessDetailsViewModel
             {
                 ProjectId = success.ProjectId,
@@ -8319,10 +8331,33 @@ namespace Compass.Controllers
                 RecordedByEmail = success.RecordedByEmail,
                 RecordedByName = success.RecordedByName,
                 IsReportedToSlt = success.IsReportedToSlt,
-                ProjectSummary = CreateProjectSummary(success.Project)
+                ProjectSummary = CreateProjectSummary(success.Project),
+                CanDelete = canDelete
             };
 
             return View("SuccessDetails", viewModel);
+        }
+
+        private static bool CanDeleteSuccess(DateTime recordedAt)
+        {
+            // Get the Monday of the week when the success was recorded
+            var recordedWeekStart = recordedAt.Date;
+            var daysUntilMonday = ((int)recordedWeekStart.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+            if (daysUntilMonday > 0)
+            {
+                recordedWeekStart = recordedWeekStart.AddDays(-daysUntilMonday);
+            }
+
+            // Get the Monday of the week after (7 days later)
+            var weekAfterStart = recordedWeekStart.AddDays(7);
+            var weekAfterEnd = weekAfterStart.AddDays(6); // Sunday of that week
+
+            // Check if today is in the week after
+            var today = DateTime.UtcNow.Date;
+            var isInWeekAfter = today >= weekAfterStart && today <= weekAfterEnd;
+
+            // Can delete if NOT in the week after
+            return !isInWeekAfter;
         }
 
         private static List<SelectListItem> BuildOutcomeConfidenceOptions(string? selectedValue)

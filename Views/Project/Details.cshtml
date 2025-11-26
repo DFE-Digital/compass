@@ -115,6 +115,8 @@
                                 var statusUpdateCount = Model.StatusUpdates?.Count ?? 0;
                                 var hasDigitalDirectorate = Model.Directorates?.Any(d => d.DirectorateLookup != null && 
                                     d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+                                var submittedWeeklySuccessesCount = (Model.WeeklySuccessUpdates?.Count(s => s.IsReportedToSlt) ?? 0) + 
+                                    (Model.Successes?.Count(s => s.IsReportedToSlt) ?? 0);
                             }
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "overview" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "overview" ? "active" : "")">
@@ -129,9 +131,14 @@
                                 Milestones
                                 <span class="badge badge-light float-right">@Model.Milestones.Count</span>
                             </a>
-                            <a href="@Url.Action("Details", new { id = Model.Id, tab = "monthlyupdates" })"
-                               class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "monthlyupdates" ? "active" : "")">
+                            <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "Updates" ? "active" : "")">
                                 Monthly Updates
+                            </a>
+                            <a href="@Url.Action("Successes", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                               class="list-group-item list-group-item-action @(isMusSectionActive && currentMusAction == "Successes" ? "active" : "")">
+                                Weekly Successes
+                                <span class="badge badge-light float-right">@submittedWeeklySuccessesCount</span>
                             </a>
                             <a href="@Url.Action("Details", new { id = Model.Id, tab = "rag" })"
                                class="list-group-item list-group-item-action @(ViewBag.CurrentTab == "rag" ? "active" : "")">
@@ -273,9 +280,6 @@
                         break;
                     case "contactsandgovernance":
                         @await Html.PartialAsync("_ContactsAndGovernance", Model)
-                        break;
-                    case "statusupdates":
-                        @await Html.PartialAsync("_StatusUpdates", Model)
                         break;
                     case "products":
                         @await Html.PartialAsync("_Products", Model)

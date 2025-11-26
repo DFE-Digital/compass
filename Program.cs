@@ -483,6 +483,7 @@ app.Run();
 static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context)
 {
     const string superAdminEmail = "andy.jones@education.gov.uk";
+    const string superAdminGroupName = "Super admin";
     const string centralOpsAdminGroupName = "Central Operations Admin";
 
     // Check if already seeded
@@ -506,13 +507,47 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         {
             Email = superAdminEmail,
             Name = "Andy Jones",
-            Role = Compass.Models.UserRole.SuperAdmin,
+            Role = Compass.Models.UserRole.Visitor,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
         context.Users.Add(superAdmin);
         await context.SaveChangesAsync();
         Console.WriteLine($"✓ Created super admin user: {superAdminEmail}");
+    }
+
+    // Create Super admin group
+    var superAdminGroup = new Compass.Models.Group
+    {
+        Name = superAdminGroupName,
+        Description = "Super administrator group with full system access including API management",
+        IsActive = true,
+        IsSystemGroup = true,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        CreatedBy = "System",
+        UpdatedBy = "System"
+    };
+    context.Groups.Add(superAdminGroup);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Created group: {superAdminGroupName}");
+
+    // Assign super admin user to Super admin group
+    var superAdminUserGroup = await context.UserGroups
+        .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == superAdminGroup.Id);
+    
+    if (superAdminUserGroup == null)
+    {
+        superAdminUserGroup = new Compass.Models.UserGroup
+        {
+            UserId = superAdmin.Id,
+            GroupId = superAdminGroup.Id,
+            AssignedAt = DateTime.UtcNow,
+            AssignedBy = "System"
+        };
+        context.UserGroups.Add(superAdminUserGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Assigned super admin to {superAdminGroupName} group");
     }
 
     // Create Central Operations Admin group

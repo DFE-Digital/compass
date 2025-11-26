@@ -17,6 +17,7 @@ public class ProjectCompletionViewModel
     public int CompletedPriorityCount { get; set; }
     public int CompletedBusinessAreaCount { get; set; }
     public int CompletedPrimaryContactCount { get; set; }
+    public int CompletedServiceOwnerCount { get; set; }
     public int CompletedActivityTypeCount { get; set; }
     public int CompletedSpendControlCount { get; set; }
 }
@@ -42,6 +43,8 @@ public class ProjectCompletionItem
     public List<int> SeniorResponsibleOfficerUserIds { get; set; } = new();
     public List<string> PmoContactNames { get; set; } = new();
     public List<int> PmoContactUserIds { get; set; } = new();
+    public List<string> ServiceOwnerNames { get; set; } = new();
+    public List<int> ServiceOwnerUserIds { get; set; } = new();
     public List<string> DirectorateNames { get; set; } = new();
     public List<int> DirectorateLookupIds { get; set; } = new();
     public List<string> BudgetOwnerNames { get; set; } = new();
@@ -50,6 +53,7 @@ public class ProjectCompletionItem
     // Completion criteria
     public bool HasSro { get; set; }
     public bool HasPmoContact { get; set; }
+    public bool HasServiceOwner { get; set; }
     public bool HasDirectorate { get; set; }
     public bool HasBudgetOwner { get; set; }
     public bool HasRagStatus { get; set; }
