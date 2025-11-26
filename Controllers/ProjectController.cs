@@ -2744,6 +2744,7 @@ namespace Compass.Controllers
         {
             _logger.LogInformation("Create POST called - Title: {Title}, Aim: {Aim}", project.Title, project.Aim);
             _logger.LogInformation("ModelState.IsValid: {IsValid}", ModelState.IsValid);
+            _logger.LogInformation("BusinessArea from model: {BusinessArea}, BusinessAreaId: {BusinessAreaId}", project.BusinessArea, project.BusinessAreaId);
             
             // Log all form data
             _logger.LogInformation("Form data received:");
@@ -2804,18 +2805,54 @@ namespace Compass.Controllers
                     project.CreationMethod = "Manual";
 
                     // Convert Phase and BusinessArea strings to IDs
-                    if (!string.IsNullOrWhiteSpace(project.Phase))
+                    // Get values from form data since the property getters may return null for new projects
+                    var phaseValue = Request.Form[nameof(project.Phase)].ToString().Trim();
+                    var businessAreaValue = Request.Form[nameof(project.BusinessArea)].ToString().Trim();
+                    
+                    if (!string.IsNullOrWhiteSpace(phaseValue))
                     {
                         var phaseLookup = await _context.PhaseLookups
-                            .FirstOrDefaultAsync(p => p.Name == project.Phase && p.IsActive);
+                            .FirstOrDefaultAsync(p => p.Name == phaseValue && p.IsActive);
                         project.PhaseId = phaseLookup?.Id;
+                        if (phaseLookup == null)
+                        {
+                            _logger.LogWarning("Phase lookup not found for: {PhaseName}", phaseValue);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Phase mapped: {PhaseName} -> {PhaseId}", phaseValue, phaseLookup.Id);
+                        }
+                    }
+                    else
+                    {
+                        project.PhaseId = null;
                     }
                     
-                    if (!string.IsNullOrWhiteSpace(project.BusinessArea))
+                    if (!string.IsNullOrWhiteSpace(businessAreaValue))
                     {
                         var businessAreaLookup = await _context.BusinessAreaLookups
-                            .FirstOrDefaultAsync(ba => ba.Name == project.BusinessArea && ba.IsActive);
+                            .FirstOrDefaultAsync(ba => ba.Name == businessAreaValue && ba.IsActive);
                         project.BusinessAreaId = businessAreaLookup?.Id;
+                        if (businessAreaLookup == null)
+                        {
+                            var availableAreas = await _context.BusinessAreaLookups
+                                .Where(ba => ba.IsActive)
+                                .Select(ba => ba.Name)
+                                .ToListAsync();
+                            _logger.LogWarning("Business Area lookup not found for: {BusinessAreaName}. Available business areas: {AvailableAreas}", 
+                                businessAreaValue, 
+                                string.Join(", ", availableAreas));
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Business Area mapped: {BusinessAreaName} -> {BusinessAreaId}", businessAreaValue, businessAreaLookup.Id);
+                        }
+                    }
+                    else
+                    {
+                        // Explicitly set to null if empty
+                        project.BusinessAreaId = null;
+                        _logger.LogInformation("Business Area is empty, setting BusinessAreaId to null");
                     }
 
                     _logger.LogInformation("Adding project to context with code: {ProjectCode}", project.ProjectCode);
