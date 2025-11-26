@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Services;
@@ -6,6 +7,7 @@ using Compass.Data;
 namespace Compass.Controllers.Api;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class StaffController : ControllerBase
 {

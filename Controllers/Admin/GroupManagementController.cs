@@ -15,15 +15,18 @@ namespace Compass.Controllers.Admin
         private readonly CompassDbContext _context;
         private readonly ILogger<GroupManagementController> _logger;
         private readonly IPermissionService _permissionService;
+        private readonly IUserDirectoryService _userDirectoryService;
 
         public GroupManagementController(
             CompassDbContext context,
             ILogger<GroupManagementController> logger,
-            IPermissionService permissionService)
+            IPermissionService permissionService,
+            IUserDirectoryService userDirectoryService)
         {
             _context = context;
             _logger = logger;
             _permissionService = permissionService;
+            _userDirectoryService = userDirectoryService;
         }
 
         private string GetUserEmail()
@@ -48,7 +51,7 @@ namespace Compass.Controllers.Admin
         // GET: Admin/GroupManagement
         [HttpGet("")]
         [HttpGet("Index")]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? tab = "users")
         {
             if (!await IsSuperAdminOrAdminAsync())
             {
@@ -69,8 +72,14 @@ namespace Compass.Controllers.Admin
                 .OrderBy(u => u.Name)
                 .ToListAsync();
 
+            var features = await _context.Features
+                .OrderBy(f => f.Name)
+                .ToListAsync();
+
             ViewBag.Users = users;
             ViewBag.Groups = groups;
+            ViewBag.Features = features;
+            ViewBag.ActiveTab = tab ?? "users";
 
             return View("~/Views/Admin/GroupManagement/Index.cshtml", groups);
         }
@@ -425,7 +434,7 @@ namespace Compass.Controllers.Admin
         // POST: Admin/GroupManagement/AddUserToGroup
         [HttpPost("AddUserToGroup")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddUserToGroup(int groupId, string userName, string userEmail)
+        public async Task<IActionResult> AddUserToGroup(int groupId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
         {
             if (!await IsSuperAdminOrAdminAsync())
             {
@@ -442,28 +451,69 @@ namespace Compass.Controllers.Admin
                 return NotFound();
             }
 
-            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(userEmail))
+            if (string.IsNullOrWhiteSpace(entraUserObjectId) || string.IsNullOrWhiteSpace(entraUserEmail))
             {
-                TempData["ErrorMessage"] = "Name and Email are required.";
+                TempData["ErrorMessage"] = "Please select a user from Entra ID.";
                 return RedirectToAction(nameof(ManageUsers), new { id = groupId });
             }
 
             try
             {
-                var userEmailLower = userEmail.ToLowerInvariant().Trim();
                 var currentUserEmail = GetUserEmail();
+                User? user = null;
 
-                // Get or create user
-                var user = await _context.Users
+                // Try to get or create user using Entra Object ID
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    try
+                    {
+                        // Use UserDirectoryService to ensure user exists (fetches from Graph and creates/updates in DB)
+                        user = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                        _logger.LogInformation("Ensured user exists via UserDirectoryService: ObjectId={ObjectId}, Email={Email}, Name={Name}", 
+                            entraUserObjectId, user.Email, user.Name);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}, trying email lookup", entraUserObjectId);
+                    }
+                }
+
+                // Fallback: try to find user by email if EnsureUserAsync failed
+                if (user == null && !string.IsNullOrWhiteSpace(entraUserEmail))
+                {
+                    var userEmailLower = entraUserEmail.ToLowerInvariant().Trim();
+                    user = await _context.Users
                     .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmailLower);
 
+                    if (user != null)
+                    {
+                        // Update AzureObjectId if it's missing
+                        if (string.IsNullOrWhiteSpace(user.AzureObjectId) && Guid.TryParse(entraUserObjectId, out var objectIdGuid2))
+                        {
+                            user.AzureObjectId = objectIdGuid2.ToString();
+                            user.UpdatedAt = DateTime.UtcNow;
+                            await _context.SaveChangesAsync();
+                        }
+
+                        // Update name if provided and different
+                        if (!string.IsNullOrWhiteSpace(entraUserName) && user.Name != entraUserName.Trim())
+                        {
+                            user.Name = entraUserName.Trim();
+                            user.UpdatedAt = DateTime.UtcNow;
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+
+                // If still no user, create one with the provided data
                 if (user == null)
                 {
-                    // Create new user
+                    var userEmailLower = entraUserEmail.ToLowerInvariant().Trim();
                     user = new User
                     {
                         Email = userEmailLower,
-                        Name = userName.Trim(),
+                        Name = !string.IsNullOrWhiteSpace(entraUserName) ? entraUserName.Trim() : userEmailLower,
+                        AzureObjectId = Guid.TryParse(entraUserObjectId, out _) ? entraUserObjectId : null,
                         Role = UserRole.Visitor,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
@@ -472,16 +522,6 @@ namespace Compass.Controllers.Admin
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Created new user: {Email}", userEmailLower);
                 }
-                else
-                {
-                    // Update name if it's different
-                    if (user.Name != userName.Trim())
-                    {
-                        user.Name = userName.Trim();
-                        user.UpdatedAt = DateTime.UtcNow;
-                        await _context.SaveChangesAsync();
-                    }
-                }
 
                 // Check if user is already in the group
                 var existingUserGroup = await _context.UserGroups
@@ -489,7 +529,7 @@ namespace Compass.Controllers.Admin
 
                 if (existingUserGroup != null)
                 {
-                    TempData["ErrorMessage"] = $"User {userEmail} is already in this group.";
+                    TempData["ErrorMessage"] = $"User {user.Email} is already in this group.";
                     return RedirectToAction(nameof(ManageUsers), new { id = groupId });
                 }
 
@@ -505,8 +545,8 @@ namespace Compass.Controllers.Admin
                 _context.UserGroups.Add(userGroup);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"User {userName} ({userEmail}) has been added to the group.";
-                _logger.LogInformation("User {UserEmail} added to group {GroupName} by {User}", userEmail, group.Name, currentUserEmail);
+                TempData["SuccessMessage"] = $"User {user.Name} ({user.Email}) has been added to the group.";
+                _logger.LogInformation("User {UserEmail} added to group {GroupName} by {User}", user.Email, group.Name, currentUserEmail);
                 return RedirectToAction(nameof(ManageUsers), new { id = groupId });
             }
             catch (Exception ex)

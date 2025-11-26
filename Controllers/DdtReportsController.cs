@@ -633,6 +633,8 @@ public class DdtReportsController : Controller
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
                     .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
@@ -676,6 +678,7 @@ public class DdtReportsController : Controller
                 FullCompletionCount = fullCompletionCount,
                 CompletedSroCount = completionItems.Count(p => p.HasSro),
                 CompletedPmoContactCount = completionItems.Count(p => p.HasPmoContact),
+                CompletedServiceOwnerCount = completionItems.Count(p => p.HasServiceOwner),
                 CompletedDirectorateCount = completionItems.Count(p => p.HasDirectorate),
                 CompletedBudgetOwnerCount = completionItems.Count(p => p.HasBudgetOwner),
                 CompletedRagStatusCount = completionItems.Count(p => p.HasRagStatus),
@@ -734,6 +737,7 @@ public class DdtReportsController : Controller
         // Check completion criteria
         var hasSro = project.SeniorResponsibleOfficers != null && project.SeniorResponsibleOfficers.Any();
         var hasPmoContact = project.PmoContacts != null && project.PmoContacts.Any();
+        var hasServiceOwner = project.ServiceOwners != null && project.ServiceOwners.Any();
         var hasDirectorate = project.Directorates != null && project.Directorates.Any();
         var hasBudgetOwner = project.BudgetOwners != null && project.BudgetOwners.Any();
         var hasRagStatus = !string.IsNullOrWhiteSpace(project.RagStatus);
@@ -743,10 +747,11 @@ public class DdtReportsController : Controller
         var hasActivityType = project.ActivityTypeLookupId.HasValue;
         var hasSpendControl = project.IsSubjectToSpendControl.HasValue;
 
-        // Calculate completion percentage (10 fields total)
+        // Calculate completion percentage (11 fields total)
         var completedCriteria = 0;
         if (hasSro) completedCriteria++;
         if (hasPmoContact) completedCriteria++;
+        if (hasServiceOwner) completedCriteria++;
         if (hasDirectorate) completedCriteria++;
         if (hasBudgetOwner) completedCriteria++;
         if (hasRagStatus) completedCriteria++;
@@ -756,7 +761,7 @@ public class DdtReportsController : Controller
         if (hasActivityType) completedCriteria++;
         if (hasSpendControl) completedCriteria++;
 
-        var completionPercentage = (completedCriteria / 10.0) * 100;
+        var completionPercentage = (completedCriteria / 11.0) * 100;
 
         // Extract names for collections
         var sroNames = project.SeniorResponsibleOfficers?
@@ -779,6 +784,17 @@ public class DdtReportsController : Controller
         var pmoUserIds = project.PmoContacts?
             .Where(pmo => pmo.User != null)
             .Select(pmo => pmo.User.Id)
+            .ToList() ?? new List<int>();
+
+        var serviceOwnerNames = project.ServiceOwners?
+            .Where(so => so.User != null)
+            .Select(so => so.User.Name ?? so.User.Email ?? "")
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList() ?? new List<string>();
+        
+        var serviceOwnerUserIds = project.ServiceOwners?
+            .Where(so => so.User != null)
+            .Select(so => so.User.Id)
             .ToList() ?? new List<int>();
 
         var directorateNames = project.Directorates?
@@ -822,12 +838,15 @@ public class DdtReportsController : Controller
             SeniorResponsibleOfficerUserIds = sroUserIds,
             PmoContactNames = pmoNames,
             PmoContactUserIds = pmoUserIds,
+            ServiceOwnerNames = serviceOwnerNames,
+            ServiceOwnerUserIds = serviceOwnerUserIds,
             DirectorateNames = directorateNames,
             DirectorateLookupIds = directorateLookupIds,
             BudgetOwnerNames = budgetOwnerNames,
             BudgetOwnerBusinessAreaLookupIds = budgetOwnerBusinessAreaLookupIds,
             HasSro = hasSro,
             HasPmoContact = hasPmoContact,
+            HasServiceOwner = hasServiceOwner,
             HasDirectorate = hasDirectorate,
             HasBudgetOwner = hasBudgetOwner,
             HasRagStatus = hasRagStatus,
@@ -2808,6 +2827,8 @@ public class DdtReportsController : Controller
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
                     .ThenInclude(d => d.DirectorateLookup)
                 .Include(p => p.BudgetOwners)
@@ -3817,6 +3838,116 @@ public class DdtReportsController : Controller
         {
             _logger.LogError(ex, "Error updating project PMO Contact for ProjectId {ProjectId}", projectId);
             var errorMessage = "An error occurred while updating the project PMO Contact.";
+            if (IsAjaxRequest())
+            {
+                return Json(new { success = false, message = errorMessage });
+            }
+            TempData["ErrorMessage"] = errorMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+    }
+
+    // POST: DdtReports/UpdateProjectServiceOwner
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProjectServiceOwner(int projectId, string? entraUserObjectId, string? entraUserEmail, string? entraUserName, bool clearServiceOwner = false, string? returnUrl = null)
+    {
+        try
+        {
+            var project = await _context.Projects
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.BudgetOwners)
+                    .ThenInclude(bo => bo.BusinessAreaLookup)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null || project.IsDeleted)
+            {
+                return Json(new { success = false, message = "Project not found." });
+            }
+
+            // Remove all existing Service Owners (user wants just 1 for completion tracking)
+            var existingServiceOwners = project.ServiceOwners.ToList();
+            foreach (var serviceOwner in existingServiceOwners)
+            {
+                _context.ProjectServiceOwners.Remove(serviceOwner);
+            }
+
+            User? user = null;
+            if (!clearServiceOwner && !string.IsNullOrWhiteSpace(entraUserObjectId))
+            {
+                // Try to parse as Guid and use EnsureUserAsync
+                if (Guid.TryParse(entraUserObjectId, out var objectIdGuid))
+                {
+                    try
+                    {
+                        user = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}, trying email lookup", entraUserObjectId);
+                    }
+                }
+                
+                // Fallback to email lookup if EnsureUserAsync failed or objectId wasn't a valid Guid
+                if (user == null && !string.IsNullOrWhiteSpace(entraUserEmail))
+                {
+                    user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == entraUserEmail.ToLower());
+                }
+                
+                if (user != null)
+                {
+                    project.ServiceOwners.Add(new ProjectServiceOwner
+                    {
+                        ProjectId = project.Id,
+                        UserId = user.Id,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            project.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var projectTitle = project.Title;
+            var serviceOwnerName = clearServiceOwner ? "None" : (user?.Name ?? "Unknown");
+            var successMessage = clearServiceOwner
+                ? $"<strong>{projectTitle}</strong> - Service Owner cleared."
+                : $"<strong>{projectTitle}</strong> - Service Owner updated to <strong>{serviceOwnerName}</strong>.";
+
+            if (IsAjaxRequest())
+            {
+                var completionItem = CreateProjectCompletionItem(project);
+                return Json(new { 
+                    success = true, 
+                    message = successMessage,
+                    project = completionItem
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("DeliverablesCompletion");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project Service Owner for ProjectId {ProjectId}", projectId);
+            var errorMessage = "An error occurred while updating the project Service Owner.";
             if (IsAjaxRequest())
             {
                 return Json(new { success = false, message = errorMessage });
