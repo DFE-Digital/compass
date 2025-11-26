@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Compass.Attributes;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
+using Compass.ViewModels;
 using System.Security.Claims;
 
 namespace Compass.Controllers;
@@ -29,27 +31,27 @@ public class BusinessAreaSummaryItem
     public int AmberCount { get; set; }
     public int AmberGreenCount { get; set; }
     public int GreenCount { get; set; }
+    public int RagNotSetCount { get; set; }
     public int CriticalPriorityCount { get; set; }
     public int HighPriorityCount { get; set; }
     public int MediumPriorityCount { get; set; }
     public int LowPriorityCount { get; set; }
+    public int PriorityNotSetCount { get; set; }
     public int BlockedCount { get; set; }
 }
 
 [Authorize]
+[RequireCentralOpsAdmin]
 public class CentralOpsController : Controller
 {
     private readonly CompassDbContext _context;
-    private readonly IPermissionService _permissionService;
     private readonly ILogger<CentralOpsController> _logger;
 
     public CentralOpsController(
         CompassDbContext context,
-        IPermissionService permissionService,
         ILogger<CentralOpsController> logger)
     {
         _context = context;
-        _permissionService = permissionService;
         _logger = logger;
     }
 
@@ -81,33 +83,10 @@ public class CentralOpsController : Controller
         return string.Join("-", parts);
     }
 
-    private string GetUserEmail()
-    {
-        return User.Identity?.Name 
-            ?? User.FindFirst(ClaimTypes.Email)?.Value 
-            ?? User.FindFirst("preferred_username")?.Value
-            ?? User.FindFirst("email")?.Value
-            ?? string.Empty;
-    }
-
-    private async Task<bool> IsCentralOpsAdminAsync()
-    {
-        var userEmail = GetUserEmail();
-        if (string.IsNullOrEmpty(userEmail))
-            return false;
-
-        return await _permissionService.IsSuperAdminAsync(userEmail) ||
-               await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
-    }
 
     // GET: CentralOps/Dashboard
     public async Task<IActionResult> Dashboard()
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         try
         {
             // Get all projects
@@ -190,10 +169,12 @@ public class CentralOpsController : Controller
                     AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
                     AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
                     GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
+                    RagNotSetCount = g.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
                     CriticalPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
                     HighPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
                     MediumPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
                     LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
+                    PriorityNotSetCount = g.Count(p => p.DeliveryPriority == null),
                     BlockedCount = 0 // Projects don't have a blocked status
                 })
                 .OrderBy(x => x.BusinessArea)
@@ -212,10 +193,12 @@ public class CentralOpsController : Controller
                     AmberCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
                     AmberGreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
                     GreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
+                    RagNotSetCount = unassignedProjects.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
                     CriticalPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
                     HighPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
                     MediumPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
                     LowPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
+                    PriorityNotSetCount = unassignedProjects.Count(p => p.DeliveryPriority == null),
                     BlockedCount = 0
                 };
                 businessAreaSummary.Add(unassignedSummary);
@@ -246,11 +229,6 @@ public class CentralOpsController : Controller
         string? rag,
         string? status)
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         try
         {
             // Debug: Check total projects in database
@@ -348,11 +326,6 @@ public class CentralOpsController : Controller
     // GET: CentralOps/WorkItemDetails/5
     public async Task<IActionResult> WorkItemDetails(int? id)
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         if (id == null)
         {
             return NotFound();
@@ -424,11 +397,6 @@ public class CentralOpsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdatePriority(int id, int? priorityId)
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         var project = await _context.Projects.FindAsync(id);
         if (project == null || project.IsDeleted)
         {
@@ -458,11 +426,6 @@ public class CentralOpsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateField(int id, string field, string? value, string? statusChangeReason)
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         var project = await _context.Projects.FindAsync(id);
         if (project == null || project.IsDeleted)
         {
@@ -572,11 +535,6 @@ public class CentralOpsController : Controller
     // GET: CentralOps/BusinessAreaDetails/{businessArea}
     public async Task<IActionResult> BusinessAreaDetails(string? businessArea)
     {
-        if (!await IsCentralOpsAdminAsync())
-        {
-            return Forbid();
-        }
-
         if (string.IsNullOrEmpty(businessArea))
         {
             return NotFound();
@@ -634,6 +592,352 @@ public class CentralOpsController : Controller
             TempData["ErrorMessage"] = "An error occurred while loading the business area details. Please try again.";
             return RedirectToAction(nameof(Dashboard));
         }
+    }
+
+    // GET: CentralOps/SltWeeklyReport
+    public async Task<IActionResult> SltWeeklyReport(int? year, int? week)
+    {
+        try
+        {
+            // Determine the week to display
+            DateTime weekStart;
+            if (year.HasValue && week.HasValue)
+            {
+                // Calculate the date from year and week number using ISO 8601 week calculation
+                var jan1 = new DateTime(year.Value, 1, 1);
+                var daysOffset = DayOfWeek.Monday - jan1.DayOfWeek;
+                if (daysOffset > 0) daysOffset -= 7; // Adjust if Jan 1 is after Monday
+                var firstMonday = jan1.AddDays(daysOffset);
+                weekStart = firstMonday.AddDays((week.Value - 1) * 7);
+            }
+            else
+            {
+                // Default to current week - calculate Monday of current week
+                var today = DateTime.UtcNow.Date;
+                var daysSinceMonday = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                weekStart = today.AddDays(-daysSinceMonday);
+            }
+
+            weekStart = weekStart.Date;
+            var weekEnd = weekStart.AddDays(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
+
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            var calendar = culture.Calendar;
+            var weekNumber = calendar.GetWeekOfYear(weekStart, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
+            var reportYear = weekStart.Year;
+
+            // Get legacy successes marked for SLT report within this week
+            var legacySuccesses = await _context.ProjectSuccesses
+                .Include(s => s.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(s => s.IsReportedToSlt && 
+                           s.RecordedAt >= weekStart && 
+                           s.RecordedAt <= weekEnd)
+                .OrderByDescending(s => s.RecordedAt)
+                .ToListAsync();
+
+            // Get weekly success updates marked for SLT report within this week
+            var weeklySuccesses = await _context.ProjectWeeklySuccessUpdates
+                .Include(s => s.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(s => s.IsReportedToSlt && 
+                           s.WeekStartDate <= weekEnd && 
+                           s.WeekEndDate >= weekStart)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+
+            // Create unified list of all successes
+            var allSuccesses = new List<UnifiedSuccessItem>();
+            
+            foreach (var success in legacySuccesses)
+            {
+                allSuccesses.Add(new UnifiedSuccessItem
+                {
+                    Type = "Legacy",
+                    Id = success.Id,
+                    ProjectId = success.ProjectId,
+                    SuccessDescription = success.SuccessDescription,
+                    CreatedByName = success.RecordedByName,
+                    CreatedByEmail = success.RecordedByEmail,
+                    CreatedAt = success.RecordedAt,
+                    SltResponse = success.SltResponse,
+                    SltRespondedByName = success.SltRespondedByName,
+                    SltRespondedByEmail = success.SltRespondedByEmail,
+                    SltRespondedAt = success.SltRespondedAt
+                });
+            }
+            
+            foreach (var success in weeklySuccesses)
+            {
+                allSuccesses.Add(new UnifiedSuccessItem
+                {
+                    Type = "Weekly",
+                    Id = success.Id,
+                    ProjectId = success.ProjectId,
+                    SuccessDescription = success.SuccessDescription,
+                    CreatedByName = success.CreatedByName,
+                    CreatedByEmail = success.CreatedByEmail,
+                    CreatedAt = success.CreatedAt,
+                    SltResponse = success.SltResponse,
+                    SltRespondedByName = success.SltRespondedByName,
+                    SltRespondedByEmail = success.SltRespondedByEmail,
+                    SltRespondedAt = success.SltRespondedAt
+                });
+            }
+
+            // Get all active business areas from admin settings
+            var allActiveBusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .ToListAsync();
+
+            // Group successes by Business Area, then by Project
+            var successGroupsByArea = allSuccesses
+                .GroupBy(s => 
+                {
+                    var project = s.Type == "Legacy" 
+                        ? legacySuccesses.First(ls => ls.Id == s.Id).Project
+                        : weeklySuccesses.First(ws => ws.Id == s.Id).Project;
+                    return project.BusinessAreaLookup?.Name ?? "Not assigned";
+                })
+                .ToDictionary(
+                    baGroup => baGroup.Key,
+                    baGroup => baGroup
+                        .GroupBy(s => s.ProjectId)
+                        .Select(pGroup =>
+                        {
+                            var firstSuccess = pGroup.First();
+                            var project = firstSuccess.Type == "Legacy"
+                                ? legacySuccesses.First(ls => ls.Id == firstSuccess.Id).Project
+                                : weeklySuccesses.First(ws => ws.Id == firstSuccess.Id).Project;
+                            
+                            return new ProjectSuccessGroup
+                            {
+                                ProjectId = pGroup.Key,
+                                ProjectTitle = project.Title,
+                                ProjectCode = $"DFE-DDT-{project.Id}",
+                                Successes = pGroup.OrderByDescending(s => s.CreatedAt).ToList()
+                            };
+                        })
+                        .OrderBy(pg => pg.ProjectTitle)
+                        .ToList()
+                );
+
+            // Create business area groups for ALL active business areas
+            var businessAreaGroups = allActiveBusinessAreas
+                .Select(areaName => 
+                {
+                    var hasSuccesses = successGroupsByArea.TryGetValue(areaName, out var projectGroups);
+                    return new BusinessAreaSuccessGroup
+                    {
+                        BusinessAreaName = areaName,
+                        UpdateCount = hasSuccesses ? projectGroups!.SelectMany(pg => pg.Successes).Count() : 0,
+                        ProjectGroups = hasSuccesses ? projectGroups! : new List<ProjectSuccessGroup>()
+                    };
+                })
+                .ToList();
+
+            // Add "Not assigned" if there are successes without a business area
+            if (successGroupsByArea.TryGetValue("Not assigned", out var notAssignedProjects))
+            {
+                businessAreaGroups.Add(new BusinessAreaSuccessGroup
+                {
+                    BusinessAreaName = "Not assigned",
+                    UpdateCount = notAssignedProjects.SelectMany(pg => pg.Successes).Count(),
+                    ProjectGroups = notAssignedProjects
+                });
+            }
+
+            // Keep legacy successes list for backward compatibility
+            var successes = legacySuccesses;
+
+            // Get milestones due this week
+            var milestones = await _context.Milestones
+                .Include(m => m.Project)
+                .Where(m => !m.IsDeleted && 
+                           m.DueDate >= weekStart && 
+                           m.DueDate <= weekEnd)
+                .OrderBy(m => m.DueDate)
+                .ToListAsync();
+
+            // Check for previous week
+            var previousWeekStart = weekStart.AddDays(-7);
+            var previousWeekEnd = previousWeekStart.AddDays(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
+            var hasPreviousWeek = await _context.ProjectSuccesses
+                .AnyAsync(s => s.IsReportedToSlt && 
+                              s.RecordedAt >= previousWeekStart && 
+                              s.RecordedAt <= previousWeekEnd) ||
+                await _context.ProjectWeeklySuccessUpdates
+                    .AnyAsync(s => s.IsReportedToSlt && 
+                                  s.WeekStartDate <= previousWeekEnd && 
+                                  s.WeekEndDate >= previousWeekStart) ||
+                await _context.Milestones
+                    .AnyAsync(m => !m.IsDeleted && 
+                                  m.DueDate >= previousWeekStart && 
+                                  m.DueDate <= previousWeekEnd);
+
+            var prevWeekNumber = calendar.GetWeekOfYear(previousWeekStart, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
+            var prevYear = previousWeekStart.Year;
+
+            // Check for next week
+            var nextWeekStart = weekStart.AddDays(7);
+            var nextWeekEnd = nextWeekStart.AddDays(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
+            var hasNextWeek = await _context.ProjectSuccesses
+                .AnyAsync(s => s.IsReportedToSlt && 
+                              s.RecordedAt >= nextWeekStart && 
+                              s.RecordedAt <= nextWeekEnd) ||
+                await _context.ProjectWeeklySuccessUpdates
+                    .AnyAsync(s => s.IsReportedToSlt && 
+                                  s.WeekStartDate <= nextWeekEnd && 
+                                  s.WeekEndDate >= nextWeekStart) ||
+                await _context.Milestones
+                    .AnyAsync(m => !m.IsDeleted && 
+                                  m.DueDate >= nextWeekStart && 
+                                  m.DueDate <= nextWeekEnd);
+
+            var nextWeekNumber = calendar.GetWeekOfYear(nextWeekStart, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
+            var nextYear = nextWeekStart.Year;
+
+            var viewModel = new SltWeeklyReportViewModel
+            {
+                Year = reportYear,
+                WeekNumber = weekNumber,
+                WeekStartDate = weekStart,
+                WeekEndDate = weekEnd,
+                Successes = successes,
+                Milestones = milestones,
+                BusinessAreaGroups = businessAreaGroups,
+                HasPreviousWeek = hasPreviousWeek,
+                HasNextWeek = hasNextWeek,
+                PreviousWeekYear = hasPreviousWeek ? prevYear : null,
+                PreviousWeekNumber = hasPreviousWeek ? prevWeekNumber : null,
+                NextWeekYear = hasNextWeek ? nextYear : null,
+                NextWeekNumber = hasNextWeek ? nextWeekNumber : null
+            };
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading SLT weekly report");
+            TempData["ErrorMessage"] = "An error occurred while loading the SLT weekly report. Please try again.";
+            return View(new SltWeeklyReportViewModel());
+        }
+    }
+
+    // POST: CentralOps/SaveSltResponse
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveSltResponse(int successId, string successType, string responseText)
+    {
+        try
+        {
+            // Get current user info
+            var userEmail = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("preferred_username")?.Value ?? "Unknown";
+            var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? User.FindFirst("name")?.Value ?? "Unknown";
+
+            if (string.IsNullOrWhiteSpace(responseText))
+            {
+                return Json(new { success = false, message = "Response text cannot be empty." });
+            }
+
+            if (successType == "Legacy")
+            {
+                var success = await _context.ProjectSuccesses.FindAsync(successId);
+                if (success == null)
+                {
+                    return Json(new { success = false, message = "Success record not found." });
+                }
+
+                success.SltResponse = responseText;
+                success.SltRespondedByEmail = userEmail;
+                success.SltRespondedByName = userName;
+                success.SltRespondedAt = DateTime.UtcNow;
+            }
+            else if (successType == "Weekly")
+            {
+                var success = await _context.ProjectWeeklySuccessUpdates.FindAsync(successId);
+                if (success == null)
+                {
+                    return Json(new { success = false, message = "Success record not found." });
+                }
+
+                success.SltResponse = responseText;
+                success.SltRespondedByEmail = userEmail;
+                success.SltRespondedByName = userName;
+                success.SltRespondedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                return Json(new { success = false, message = "Invalid success type." });
+            }
+
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving SLT response for {SuccessType} {SuccessId}", successType, successId);
+            return Json(new { success = false, message = "An error occurred while saving the response." });
+        }
+    }
+
+    // POST: CentralOps/DeleteSltResponse
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteSltResponse(int successId, string successType)
+    {
+        try
+        {
+            if (successType == "Legacy")
+            {
+                var success = await _context.ProjectSuccesses.FindAsync(successId);
+                if (success == null)
+                {
+                    return Json(new { success = false, message = "Success record not found." });
+                }
+
+                success.SltResponse = null;
+                success.SltRespondedByEmail = null;
+                success.SltRespondedByName = null;
+                success.SltRespondedAt = null;
+            }
+            else if (successType == "Weekly")
+            {
+                var success = await _context.ProjectWeeklySuccessUpdates.FindAsync(successId);
+                if (success == null)
+                {
+                    return Json(new { success = false, message = "Success record not found." });
+                }
+
+                success.SltResponse = null;
+                success.SltRespondedByEmail = null;
+                success.SltRespondedByName = null;
+                success.SltRespondedAt = null;
+            }
+            else
+            {
+                return Json(new { success = false, message = "Invalid success type." });
+            }
+
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting SLT response for {SuccessType} {SuccessId}", successType, successId);
+            return Json(new { success = false, message = "An error occurred while deleting the response." });
+        }
+    }
+
+    // GET: CentralOps/AccessDenied
+    // This action should NOT require authorization - it's for showing the access denied message
+    [AllowAnonymous]
+    public IActionResult AccessDenied()
+    {
+        return View();
     }
 }
 

@@ -58,14 +58,26 @@
                                     Submitted
                                     <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
                                 </th>
-                                <th>Action</th>
+                                <th class="sortable" data-column="Count" tabindex="0" role="button" aria-label="Sort by Count">
+                                    Updates
+                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var period in periods)
                             {
                                 <tr>
-                                    <td>@period.PeriodName</td>
+                                    <td>
+                                        @if (period.Update != null)
+                                        {
+                                            <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                        }
+                                    </td>
                                     <td>@period.DueDate.ToString("dd MMM yyyy")</td>
                                     <td>
                                         @if (period.Status == "Submitted")
@@ -86,9 +98,17 @@
                                         }
                                     </td>
                                     <td>
-                                        @if (period.Update?.SubmittedAt.HasValue == true)
+                                        @if (period.Update != null)
                                         {
-                                            @period.Update.SubmittedAt.Value.ToString("dd MMM yyyy")
+                                            var update = (Compass.Models.ProjectMonthlyUpdate)period.Update;
+                                            @if (update.SubmittedAt.HasValue)
+                                            {
+                                                @update.SubmittedAt.Value.ToString("dd MMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
                                         }
                                         else
                                         {
@@ -96,14 +116,10 @@
                                         }
                                     </td>
                                     <td>
-                                        @if (period.Update != null)
-                                        {
-                                            <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })" class="btn btn-sm btn-primary">Edit</a>
+                                        @{
+                                            var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
                                         }
-                                        else
-                                        {
-                                            <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })" class="btn btn-sm btn-success">Add Update</a>
-                                        }
+                                        @narrativeCount
                                     </td>
                                 </tr>
                             }
@@ -168,6 +184,17 @@
                         var bDate = Date.parse(bCell.textContent.trim());
                         aVal = isNaN(aDate) ? 0 : aDate;
                         bVal = isNaN(bDate) ? 0 : bDate;
+                    } else if (column === 'Count') {
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        aVal = parseInt(aText) || 0;
+                        bVal = parseInt(bText) || 0;
+                    } else if (column === 'Period') {
+                        // Handle Period column which may contain links
+                        var aLink = aCell.querySelector('a');
+                        var bLink = bCell.querySelector('a');
+                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
+                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
                     } else {
                         aVal = aCell.textContent.trim().toLowerCase();
                         bVal = bCell.textContent.trim().toLowerCase();

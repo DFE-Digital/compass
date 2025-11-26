@@ -19,4 +19,6 @@ public class ProjectSuccessDetailsViewModel
     public bool IsReportedToSlt { get; set; }
 
     public ProjectSummaryViewModel ProjectSummary { get; set; } = new();
+
+    public bool CanDelete { get; set; } = true;
 }
