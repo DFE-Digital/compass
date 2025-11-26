@@ -48,7 +48,7 @@
                 <h1 class="m-0">Deliverables Completion %</h1>
                 <p class="text-muted mb-0">
                     <small>
-                        Showing Active deliverables only. Track completion of key fields: SRO, PMO Contact, Directorate, Budget owner, RAG, Priority, Business area, Primary contact, Activity type, Spend control.
+                        Showing Active deliverables only. Track completion of key fields: SRO, Primary contact, Service Owner, Directorate, Budget owner, RAG, Priority, Business area, Activity type, Spend control.
                     </small>
                 </p>
             </div>
@@ -274,6 +274,25 @@
 
             <div class="col-lg-2 col-md-4 col-6">
                 @{
+                    var serviceOwnerPercentage = Model.Projects.Any() ? (Model.CompletedServiceOwnerCount / (double)Model.Projects.Count) * 100 : 0;
+                    var serviceOwnerColorClass = serviceOwnerPercentage >= 80 ? "success" : serviceOwnerPercentage >= 50 ? "warning" : "danger";
+                }
+                <div class="card card-@serviceOwnerColorClass" id="completedServiceOwnerCard">
+                    <div class="card-header">
+                        <h3 class="card-title">Service Owner</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="mb-0" style="font-size: 2.5rem; font-weight: bold;" id="completedServiceOwnerValue">@serviceOwnerPercentage.ToString("F1")%</h2>
+                        <p class="text-muted mb-0 mt-2" id="completedServiceOwnerText">@Model.CompletedServiceOwnerCount of @Model.Projects.Count</p>
+                        <div class="progress progress-lg mt-3">
+                            <div class="progress-bar bg-@serviceOwnerColorClass" style="width: @serviceOwnerPercentage%" id="completedServiceOwnerProgress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-2 col-md-4 col-6">
+                @{
                     var activityTypePercentage = Model.Projects.Any() ? (Model.CompletedActivityTypeCount / (double)Model.Projects.Count) * 100 : 0;
                     var activityTypeColorClass = activityTypePercentage >= 80 ? "success" : activityTypePercentage >= 50 ? "warning" : "danger";
                 }
@@ -448,8 +467,11 @@
                                     <th class="text-center sortable" data-column="SRO" style="cursor: pointer;">
                                         SRO <i class="fas fa-sort"></i>
                                     </th>
-                                    <th class="text-center sortable" data-column="PmoContact" style="cursor: pointer;">
-                                        PMO Contact <i class="fas fa-sort"></i>
+                                    <th class="text-center sortable" data-column="PrimaryContact" style="cursor: pointer;">
+                                        Primary Contact <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="text-center sortable" data-column="ServiceOwner" style="cursor: pointer;">
+                                        Service Owner <i class="fas fa-sort"></i>
                                     </th>
                                     <th class="text-center sortable" data-column="Directorate" style="cursor: pointer;">
                                         Directorate <i class="fas fa-sort"></i>
@@ -466,9 +488,6 @@
                                     <th class="text-center sortable" data-column="BusinessArea" style="cursor: pointer;">
                                         Business Area <i class="fas fa-sort"></i>
                                     </th>
-                                    <th class="text-center sortable" data-column="PrimaryContact" style="cursor: pointer;">
-                                        Primary Contact <i class="fas fa-sort"></i>
-                                    </th>
                                     <th class="text-center sortable" data-column="ActivityType" style="cursor: pointer;">
                                         Activity Type <i class="fas fa-sort"></i>
                                     </th>
@@ -483,6 +502,7 @@
                                 {
                                     var sroDataValue = string.Join("||", project.SeniorResponsibleOfficerNames.Select(c => c.ToLowerInvariant()));
                                     var pmoDataValue = string.Join("||", project.PmoContactNames.Select(c => c.ToLowerInvariant()));
+                                    var serviceOwnerDataValue = string.Join("||", project.ServiceOwnerNames.Select(c => c.ToLowerInvariant()));
                                     var directorateDataValue = string.Join("||", project.DirectorateNames.Select(c => c.ToLowerInvariant()));
                                     var budgetOwnerDataValue = string.Join("||", project.BudgetOwnerNames.Select(c => c.ToLowerInvariant()));
                                     <tr data-project-title="@project.ProjectTitle.ToLowerInvariant()" 
@@ -491,6 +511,7 @@
                                         data-business-area="@(project.BusinessArea ?? "")"
                                         data-has-sro="@(project.HasSro ? "true" : "false")"
                                         data-has-pmo="@(project.HasPmoContact ? "true" : "false")"
+                                        data-has-service-owner="@(project.HasServiceOwner ? "true" : "false")"
                                         data-has-directorate="@(project.HasDirectorate ? "true" : "false")"
                                         data-has-budget-owner="@(project.HasBudgetOwner ? "true" : "false")"
                                         data-has-rag="@(project.HasRagStatus ? "true" : "false")"
@@ -503,6 +524,8 @@
                                         data-sro-names="@string.Join("||", project.SeniorResponsibleOfficerNames)"
                                         data-pmo="@pmoDataValue"
                                         data-pmo-names="@string.Join("||", project.PmoContactNames)"
+                                        data-service-owner="@serviceOwnerDataValue"
+                                        data-service-owner-names="@string.Join("||", project.ServiceOwnerNames)"
                                         data-directorate="@directorateDataValue"
                                         data-directorate-names="@string.Join("||", project.DirectorateNames)"
                                         data-budget-owner="@budgetOwnerDataValue"
@@ -550,13 +573,23 @@
                                             }
                                         </td>
                                         <td class="text-center">
-                                            @if (project.HasPmoContact)
+                                            @if (project.HasPrimaryContact)
                                             {
-                                                <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.PmoContactNames)"></i>
+                                                <i class="fas fa-check-square text-success completion-icon" title="@project.PrimaryContactName"></i>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-times-square text-danger completion-icon" title="PMO Contact missing"></i>
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Primary Contact missing"></i>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (project.HasServiceOwner)
+                                            {
+                                                <i class="fas fa-check-square text-success completion-icon" title="@string.Join(", ", project.ServiceOwnerNames)"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times-square text-danger completion-icon" title="Service Owner missing"></i>
                                             }
                                         </td>
                                         <td class="text-center">
@@ -607,16 +640,6 @@
                                             else
                                             {
                                                 <i class="fas fa-times-square text-danger completion-icon" title="Business Area missing"></i>
-                                            }
-                                        </td>
-                                        <td class="text-center">
-                                            @if (project.HasPrimaryContact)
-                                            {
-                                                <i class="fas fa-check-square text-success completion-icon" title="@project.PrimaryContactName"></i>
-                                            }
-                                            else
-                                            {
-                                                <i class="fas fa-times-square text-danger completion-icon" title="Primary Contact missing"></i>
                                             }
                                         </td>
                                         <td class="text-center">
@@ -674,6 +697,9 @@
                                                     <a class="dropdown-item" href="#" data-action="set-primary-contact" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-user mr-2"></i> Set Primary Contact
                                                     </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-service-owner" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-user-tie mr-2"></i> Set Service Owner
+                                                    </a>
                                                     <a class="dropdown-item" href="#" data-action="set-activity-type" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-tasks mr-2"></i> Set Activity Type
                                                     </a>
@@ -725,10 +751,6 @@
                                                                 <td>@(project.HasSro ? string.Join(", ", project.SeniorResponsibleOfficerNames) : "Not set")</td>
                                                             </tr>
                                                             <tr>
-                                                                <td class="font-weight-bold">PMO Contact:</td>
-                                                                <td>@(project.HasPmoContact ? string.Join(", ", project.PmoContactNames) : "Not set")</td>
-                                                            </tr>
-                                                            <tr>
                                                                 <td class="font-weight-bold">Directorate:</td>
                                                                 <td>@(project.HasDirectorate ? string.Join(", ", project.DirectorateNames) : "Not set")</td>
                                                             </tr>
@@ -747,6 +769,10 @@
                                                             <tr>
                                                                 <td class="font-weight-bold">Primary Contact:</td>
                                                                 <td>@(project.HasPrimaryContact ? project.PrimaryContactName : "Not set")</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td class="font-weight-bold">Service Owner:</td>
+                                                                <td>@(project.HasServiceOwner ? string.Join(", ", project.ServiceOwnerNames) : "Not set")</td>
                                                             </tr>
                                                             <tr>
                                                                 <td class="font-weight-bold">Activity Type:</td>
@@ -1019,6 +1045,55 @@
                     <button type="button" class="btn btn-warning" id="clearPmoContactBtn">Clear PMO Contact</button>
                     @Html.AntiForgeryToken()
                     <button type="submit" class="btn btn-primary">Save PMO Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Service Owner Modal -->
+<div class="modal fade" id="updateServiceOwnerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Service Owner</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateProjectServiceOwner" method="post">
+                <input type="hidden" name="projectId" id="serviceOwnerProjectId" />
+                <input type="hidden" name="clearServiceOwner" id="clearServiceOwner" value="false" />
+                <div class="modal-body">
+                    <p class="mb-3">Search for a colleague in Entra ID to set as the Service Owner. The user will be automatically added to the CMS if they don't already exist.</p>
+                    <div class="form-group">
+                        <label class="control-label" for="serviceOwnerSearch">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="serviceOwnerSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="entraUserObjectId" class="js-user-picker-objectid" id="serviceOwnerObjectId" />
+                            <input type="hidden" name="entraUserEmail" class="js-user-picker-email" id="serviceOwnerEmail" />
+                            <input type="hidden" name="entraUserName" class="js-user-picker-name" id="serviceOwnerName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No Service Owner selected.">
+                                <span class="text-muted">No Service Owner selected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearServiceOwnerBtn">Clear Service Owner</button>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-primary">Save Service Owner</button>
                 </div>
             </form>
         </div>
@@ -1324,6 +1399,30 @@
                 $('#updatePrimaryContactModal form').submit();
             });
 
+            $(document).on('click', '[data-action="set-service-owner"]', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var projectId = $(this).data('project-id');
+                $('#serviceOwnerProjectId').val(projectId);
+                $('#clearServiceOwner').val('false');
+                var $picker = $('#updateServiceOwnerModal [data-user-picker]');
+                $picker.find('.js-user-picker-input').val('');
+                $picker.find('.js-user-picker-objectid').val('');
+                $picker.find('.js-user-picker-email').val('');
+                $picker.find('.js-user-picker-name').val('');
+                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No Service Owner selected.</span>');
+                $('#updateServiceOwnerModal').modal('show');
+                setTimeout(function() {
+                    $('#serviceOwnerSearch').focus();
+                }, 300);
+                return false;
+            });
+
+            $('#clearServiceOwnerBtn').on('click', function() {
+                $('#clearServiceOwner').val('true');
+                $('#updateServiceOwnerModal form').submit();
+            });
+
             $(document).on('click', '[data-action="set-activity-type"]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1414,6 +1513,7 @@
             setupAjaxForm('#updatePriorityModal form', handleProjectUpdate);
             setupAjaxForm('#updateBusinessAreaModal form', handleProjectUpdate);
             setupAjaxForm('#updatePrimaryContactModal form', handleProjectUpdate);
+            setupAjaxForm('#updateServiceOwnerModal form', handleProjectUpdate);
             setupAjaxForm('#updateActivityTypeModal form', handleProjectUpdate);
             setupAjaxForm('#updateSpendControlModal form', handleProjectUpdate);
 
@@ -1650,13 +1750,24 @@
                     $row.find('td').eq(10).html(primaryContactHtml); // Updated column index
                 }
 
+                if (project.serviceOwnerNames !== undefined) {
+                    var hasServiceOwner = project.serviceOwnerNames && project.serviceOwnerNames.length > 0;
+                    $row.attr('data-has-service-owner', hasServiceOwner ? 'true' : 'false');
+                    var serviceOwnerNames = hasServiceOwner ? project.serviceOwnerNames.join(', ') : '';
+                    $row.attr('data-service-owner-names', serviceOwnerNames);
+                    var serviceOwnerHtml = hasServiceOwner
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(serviceOwnerNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Service Owner missing"></i>';
+                    $row.find('td').eq(11).html(serviceOwnerHtml); // Updated column index
+                }
+
                 if (project.activityTypeName !== undefined) {
                     $row.attr('data-activity-type-name', project.activityTypeName || '');
                     $row.attr('data-has-activity-type', project.activityTypeName ? 'true' : 'false');
                     var activityTypeHtml = project.activityTypeName
                         ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.activityTypeName) + '"></i>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Activity Type missing"></i>';
-                    $row.find('td').eq(11).html(activityTypeHtml); // Updated column index
+                    $row.find('td').eq(12).html(activityTypeHtml); // Updated column index
                 }
 
                 if (project.isSubjectToSpendControl !== undefined) {
@@ -1666,13 +1777,14 @@
                     var spendControlHtml = spendControlValue !== ''
                         ? '<span class="badge badge-' + (spendControlValue === 'true' ? 'warning' : 'secondary') + '">' + (spendControlValue === 'true' ? 'Yes' : 'No') + '</span>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Spend Control missing"></i>';
-                    $row.find('td').eq(12).html(spendControlHtml); // Updated column index
+                    $row.find('td').eq(13).html(spendControlHtml); // Updated column index
                 }
 
                 // Recalculate completion percentage
                 var completedFields = 0;
                 if ($row.attr('data-has-sro') === 'true') completedFields++;
                 if ($row.attr('data-has-pmo') === 'true') completedFields++;
+                if ($row.attr('data-has-service-owner') === 'true') completedFields++;
                 if ($row.attr('data-has-directorate') === 'true') completedFields++;
                 if ($row.attr('data-has-budget-owner') === 'true') completedFields++;
                 if ($row.attr('data-has-rag') === 'true') completedFields++;
@@ -1682,7 +1794,7 @@
                 if ($row.attr('data-has-activity-type') === 'true') completedFields++;
                 if ($row.attr('data-has-spend-control') === 'true') completedFields++;
 
-                var completionPercentage = (completedFields / 10.0) * 100;
+                var completionPercentage = (completedFields / 11.0) * 100;
                 $row.attr('data-completion', completionPercentage);
                 // Update completion badge in 2nd column
                 var completionBadgeClass = completionPercentage >= 100 ? 'success' :
@@ -1812,6 +1924,7 @@
                 var fieldCounts = {
                     sro: 0,
                     pmo: 0,
+                    serviceOwner: 0,
                     directorate: 0,
                     budgetOwner: 0,
                     rag: 0,
@@ -1832,6 +1945,7 @@
                     // Only count if row has data attributes (main rows have them, detail rows don't)
                     if ($row.attr('data-has-sro') === 'true') fieldCounts.sro++;
                     if ($row.attr('data-has-pmo') === 'true') fieldCounts.pmo++;
+                    if ($row.attr('data-has-service-owner') === 'true') fieldCounts.serviceOwner++;
                     if ($row.attr('data-has-directorate') === 'true') fieldCounts.directorate++;
                     if ($row.attr('data-has-budget-owner') === 'true') fieldCounts.budgetOwner++;
                     if ($row.attr('data-has-rag') === 'true') fieldCounts.rag++;
@@ -1890,6 +2004,7 @@
                 updateFieldCard('#completedPriorityCard', '#completedPriorityValue', '#completedPriorityText', '#completedPriorityProgress', fieldCounts.priority, total);
                 updateFieldCard('#completedBusinessAreaCard', '#completedBusinessAreaValue', '#completedBusinessAreaText', '#completedBusinessAreaProgress', fieldCounts.businessArea, total);
                 updateFieldCard('#completedPrimaryContactCard', '#completedPrimaryContactValue', '#completedPrimaryContactText', '#completedPrimaryContactProgress', fieldCounts.primaryContact, total);
+                updateFieldCard('#completedServiceOwnerCard', '#completedServiceOwnerValue', '#completedServiceOwnerText', '#completedServiceOwnerProgress', fieldCounts.serviceOwner, total);
                 updateFieldCard('#completedActivityTypeCard', '#completedActivityTypeValue', '#completedActivityTypeText', '#completedActivityTypeProgress', fieldCounts.activityType, total);
                 updateFieldCard('#completedSpendControlCard', '#completedSpendControlValue', '#completedSpendControlText', '#completedSpendControlProgress', fieldCounts.spendControl, total);
             }

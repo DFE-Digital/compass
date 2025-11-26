@@ -52,5 +52,8 @@ public class ProjectMonthlyUpdate
     public DateTime? UpdatedAt { get; set; }
 
     public DateTime? SubmittedAt { get; set; }
+
+    // Navigation property for individual narrative entries
+    public ICollection<MonthlyUpdateNarrative> MonthlyUpdateNarratives { get; set; } = new List<MonthlyUpdateNarrative>();
 }
 

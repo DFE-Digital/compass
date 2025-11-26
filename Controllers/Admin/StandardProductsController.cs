@@ -4,12 +4,14 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.ViewModels.Admin;
+using Compass.Attributes;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace Compass.Controllers.Admin;
 
-[Authorize(Roles = "Admin,SuperAdmin")]
+[Authorize]
+[RequireAdmin]
 [Area("Admin")]
 public class StandardProductsController : Controller
 {
