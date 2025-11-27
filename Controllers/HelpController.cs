@@ -35,6 +35,7 @@ public class HelpController : Controller
             "viewreports",
             "managestandards",
             "addstatusupdate",
+            "addweeklynoteupdate",
             "managemilestonesupdatessuccesses",
             "enrolproductaccessibility",
             "createaccessibilityissue",
