@@ -268,6 +268,8 @@ public class CentralOpsController : Controller
                 .Include(p => p.ActivityTypeLookup)
                 .Include(p => p.Directorates)
                     .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
                 .Include(p => p.Milestones)
                 .Where(p => !p.IsDeleted);
 
