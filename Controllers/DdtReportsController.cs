@@ -743,7 +743,12 @@ public class DdtReportsController : Controller
         var hasRagStatus = !string.IsNullOrWhiteSpace(project.RagStatus);
         var hasPriority = project.DeliveryPriorityId.HasValue;
         var hasBusinessArea = project.BusinessAreaId.HasValue;
-        var hasPrimaryContact = project.PrimaryContactUserId.HasValue;
+        // Check if primary contact exists - user object must be loaded and have name or email
+        // If PrimaryContactUserId is set but user is not loaded, we still need to check the user object
+        // because the Include should have loaded it. If it's null, the user might have been deleted.
+        var hasPrimaryContact = project.PrimaryContactUser != null && 
+            (!string.IsNullOrWhiteSpace(project.PrimaryContactUser.Name) || 
+             !string.IsNullOrWhiteSpace(project.PrimaryContactUser.Email));
         var hasActivityType = project.ActivityTypeLookupId.HasValue;
         var hasSpendControl = project.IsSubjectToSpendControl.HasValue;
 
@@ -2241,17 +2246,168 @@ public class DdtReportsController : Controller
                 .OrderByDescending(ba => ba.AverageRiskScore)
                 .ToList();
             
+            // Calculate board-ready structures
+            var avgCompletion = designAndRunBoardItems.Any() 
+                ? designAndRunBoardItems.Average(item => item.CompletionPercentage) 
+                : 0;
+            
+            var objectivesOnTrack = designAndRunBoardItems.Count(p => p.CompletionPercentage >= 80);
+            var objectivesAtRisk = designAndRunBoardItems.Count(p => p.CompletionPercentage >= 60 && p.CompletionPercentage < 80);
+            var objectivesAchieved = designAndRunBoardItems.Count(p => p.CompletionPercentage == 100);
+            var totalObjectives = designAndRunBoardItems.Count;
+            var onTrackPct = totalObjectives > 0 ? (objectivesOnTrack / (double)totalObjectives) * 100 : 0;
+            var achievedPct = totalObjectives > 0 ? (objectivesAchieved / (double)totalObjectives) * 100 : 0;
+            
+            var overallStatus = avgCompletion >= 80 ? "On Track" : avgCompletion >= 60 ? "At Risk" : "Behind";
+            
+            var executiveSummary = new Models.ExecutiveSummary
+            {
+                OverallStatus = overallStatus,
+                ObjectivesOnTrack = objectivesOnTrack,
+                ObjectivesAtRisk = objectivesAtRisk,
+                ObjectivesAchieved = objectivesAchieved,
+                TotalObjectives = totalObjectives,
+                ObjectivesOnTrackPercentage = onTrackPct,
+                ObjectivesAchievedPercentage = achievedPct,
+                TotalPlans = businessAreaSummaries.Count
+            };
+            
+            var focusAreaPerformances = businessAreaSummaries.Select(ba => new Models.FocusAreaPerformance
+            {
+                FocusArea = ba.BusinessArea,
+                TotalObjectives = ba.ProductCount,
+                ObjectivesOnTrack = (int)(ba.ProductCount * (ba.AverageCompletionPercentage / 100.0)),
+                OnTrackPercentage = ba.AverageCompletionPercentage,
+                AverageCompletion = ba.AverageCompletionPercentage,
+                AverageRiskScore = ba.AverageRiskScore
+            }).ToList();
+            
+            var keyMeasures = new List<Models.KeyMeasure>
+            {
+                new Models.KeyMeasure
+                {
+                    Title = "Average FIPS Completion",
+                    CurrentValue = avgCompletion.ToString("F1") + "%",
+                    ExpectedValue = "80%",
+                    TargetValue = "100%",
+                    TargetDate = "Ongoing",
+                    Status = avgCompletion >= 80 ? "On Track" : avgCompletion >= 60 ? "At Risk" : "Behind",
+                    Trend = avgCompletion >= 80 ? "up" : "neutral"
+                },
+                new Models.KeyMeasure
+                {
+                    Title = "Accessibility Enrollment",
+                    CurrentValue = designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility).ToString(),
+                    ExpectedValue = ((int)(designAndRunBoardItems.Count * 0.8)).ToString(),
+                    TargetValue = designAndRunBoardItems.Count.ToString(),
+                    TargetDate = "Ongoing",
+                    Status = (designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility) / (double)designAndRunBoardItems.Count) >= 0.8 ? "On Track" : "At Risk",
+                    Trend = "up"
+                },
+                new Models.KeyMeasure
+                {
+                    Title = "Open Accessibility Issues",
+                    CurrentValue = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount).ToString(),
+                    ExpectedValue = "0",
+                    TargetValue = "0",
+                    TargetDate = "Ongoing",
+                    Status = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount) == 0 ? "On Track" : 
+                            designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount) <= 10 ? "At Risk" : "Behind",
+                    Trend = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount) == 0 ? "up" : "down"
+                }
+            };
+            
+            var objectives = designAndRunBoardItems.Take(15).Select(p => new Models.BoardObjective
+            {
+                Title = p.ProductTitle,
+                FocusArea = p.BusinessArea,
+                Owner = p.LastSubmittedBy ?? "Unassigned",
+                OwnerInitials = !string.IsNullOrEmpty(p.LastSubmittedBy) 
+                    ? string.Join("", p.LastSubmittedBy.Split(' ').Select(n => n.Length > 0 ? n[0].ToString() : "").Take(2))
+                    : "NA",
+                ProgressPercentage = p.CompletionPercentage,
+                Status = p.CompletionPercentage >= 80 ? "On Track" : 
+                        p.CompletionPercentage >= 60 ? "At Risk" : "Behind",
+                Description = $"FIPS ID: {p.FipsId}"
+            }).ToList();
+            
+            var performanceCriteria = new List<Models.PerformanceCriteria>
+            {
+                new Models.PerformanceCriteria
+                {
+                    Category = "FIPS Completion",
+                    Deliverable = "Complete product profiles",
+                    OnTrackCount = designAndRunBoardItems.Count(p => p.CompletionPercentage >= 80),
+                    BehindCount = designAndRunBoardItems.Count(p => p.CompletionPercentage < 80),
+                    AchievedCount = designAndRunBoardItems.Count(p => p.CompletionPercentage == 100),
+                    TotalCount = designAndRunBoardItems.Count,
+                    Status = avgCompletion >= 80 ? "On Track" : "At Risk"
+                },
+                new Models.PerformanceCriteria
+                {
+                    Category = "Accessibility Compliance",
+                    Deliverable = "WCAG compliance and issue resolution",
+                    OnTrackCount = designAndRunBoardItems.Count(p => p.IsEnrolledInAccessibility && p.AccessibilityComplianceStatus == "Compliant"),
+                    BehindCount = designAndRunBoardItems.Count(p => p.IsEnrolledInAccessibility && p.OpenAccessibilityIssuesCount > 0),
+                    AchievedCount = designAndRunBoardItems.Count(p => p.IsEnrolledInAccessibility && p.AccessibilityComplianceStatus == "Compliant" && p.OpenAccessibilityIssuesCount == 0),
+                    TotalCount = designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility),
+                    Status = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount) == 0 ? "On Track" : "At Risk"
+                }
+            };
+            
+            var risks = topAtRiskProducts.Take(5).Select(p => new Models.BoardRisk
+            {
+                Title = $"High risk product: {p.ProductTitle}",
+                Category = "Product Risk",
+                Likelihood = Math.Min(10, p.RiskScore / 10),
+                Impact = Math.Min(10, p.RiskScore / 10),
+                RiskScore = p.RiskScore,
+                RiskLevel = p.RiskScore >= 80 ? "Critical" : 
+                           p.RiskScore >= 60 ? "High" : 
+                           p.RiskScore >= 40 ? "Moderate" : "Low",
+                Mitigation = string.Join(", ", p.RiskFactors.Take(2)),
+                Owner = p.LastSubmittedBy ?? "Unassigned"
+            }).ToList();
+            
+            var aiSummaries = new List<Models.AISummary>
+            {
+                new Models.AISummary
+                {
+                    Title = "Portfolio Health Overview",
+                    Summary = $"The Digital Operations portfolio contains {designAndRunBoardItems.Count} products with an average FIPS completion of {avgCompletion:F1}%. " +
+                             $"{(onTrackPct >= 67 ? "Most" : "Some")} objectives ({onTrackPct:F0}%) are on track or achieved. " +
+                             $"Accessibility enrollment stands at {designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility)} products " +
+                             $"({(designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility) / (double)designAndRunBoardItems.Count * 100):F0}% of portfolio).",
+                    KeyChanges = $"Average completion: {avgCompletion:F1}%\n" +
+                                $"Objectives on track: {objectivesOnTrack} of {totalObjectives}\n" +
+                                $"Open accessibility issues: {designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount)}",
+                    SuggestedActions = avgCompletion < 80 ? 
+                        "Focus on improving FIPS completion for products below 80% completion.\n" +
+                        "Prioritize accessibility enrollment for products not yet enrolled.\n" +
+                        "Address open accessibility issues to improve compliance." :
+                        "Maintain current completion levels.\n" +
+                        "Continue monitoring accessibility compliance.\n" +
+                        "Address any emerging risks proactively.",
+                    Context = "This report provides a comprehensive view of the Digital Operations portfolio health and performance."
+                }
+            };
+            
             var viewModel = new DesignAndRunBoardViewModel
             {
                 Products = designAndRunBoardItems,
-                AverageCompletionPercentage = designAndRunBoardItems.Any() 
-                    ? designAndRunBoardItems.Average(item => item.CompletionPercentage) 
-                    : 0,
+                AverageCompletionPercentage = avgCompletion,
                 BusinessAreaSummaries = businessAreaSummaries,
                 TotalProducts = designAndRunBoardItems.Count,
                 EnrolledInAccessibilityCount = designAndRunBoardItems.Count(item => item.IsEnrolledInAccessibility),
                 TotalOpenAccessibilityIssues = designAndRunBoardItems.Sum(item => item.OpenAccessibilityIssuesCount),
-                TopAtRiskProducts = topAtRiskProducts
+                TopAtRiskProducts = topAtRiskProducts,
+                ExecutiveSummary = executiveSummary,
+                FocusAreaPerformances = focusAreaPerformances,
+                KeyMeasures = keyMeasures,
+                Objectives = objectives,
+                PerformanceCriteria = performanceCriteria,
+                Risks = risks,
+                AISummaries = aiSummaries
             };
             
             // Pass metric info to view
@@ -2867,6 +3023,7 @@ public class DdtReportsController : Controller
 
             var oldPrimaryContactUserId = project.PrimaryContactUserId;
             project.PrimaryContactUserId = clearContact ? null : user?.Id;
+            project.PrimaryContactUser = clearContact ? null : user; // Set navigation property directly
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
