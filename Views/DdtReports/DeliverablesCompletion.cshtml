@@ -672,33 +672,29 @@
                                                         <i class="fas fa-edit mr-2"></i> Change Title
                                                     </a>
                                                     <div class="dropdown-divider"></div>
-                                                    <a class="dropdown-item" href="#" data-action="set-sro" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-user-tie mr-2"></i> Set SRO
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-pmo-contact" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-user-friends mr-2"></i> Set PMO Contact
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-directorate" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-sitemap mr-2"></i> Set Directorate
-                                                    </a>
-                                                    <div class="dropdown-divider"></div>
-                                                    <a class="dropdown-item" href="#" data-action="set-rag-status" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-flag mr-2"></i> Set RAG Status
-                                                    </a>
                                                     <a class="dropdown-item" href="#" data-action="set-phase" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-layer-group mr-2"></i> Set Phase
                                                     </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-priority" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-star mr-2"></i> Set Priority
-                                                    </a>
-                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-project-id="@project.ProjectId">
-                                                        <i class="fas fa-building mr-2"></i> Set Business Area
+                                                    <a class="dropdown-item" href="#" data-action="set-sro" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-user-tie mr-2"></i> Set SRO
                                                     </a>
                                                     <a class="dropdown-item" href="#" data-action="set-primary-contact" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-user mr-2"></i> Set Primary Contact
                                                     </a>
                                                     <a class="dropdown-item" href="#" data-action="set-service-owner" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-user-tie mr-2"></i> Set Service Owner
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-directorate" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-sitemap mr-2"></i> Set Directorate
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-rag-status" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-flag mr-2"></i> Set RAG Status
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-priority" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-star mr-2"></i> Set Priority
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-action="set-business-area" data-project-id="@project.ProjectId">
+                                                        <i class="fas fa-building mr-2"></i> Set Business Area
                                                     </a>
                                                     <a class="dropdown-item" href="#" data-action="set-activity-type" data-project-id="@project.ProjectId">
                                                         <i class="fas fa-tasks mr-2"></i> Set Activity Type
@@ -1469,29 +1465,6 @@
                 $('#updateSroModal form').submit();
             });
 
-            $(document).on('click', '[data-action="set-pmo-contact"]', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                var projectId = $(this).data('project-id');
-                $('#pmoContactProjectId').val(projectId);
-                $('#clearPmoContact').val('false');
-                var $picker = $('#updatePmoContactModal [data-user-picker]');
-                $picker.find('.js-user-picker-input').val('');
-                $picker.find('.js-user-picker-objectid').val('');
-                $picker.find('.js-user-picker-email').val('');
-                $picker.find('.js-user-picker-name').val('');
-                $picker.find('.js-user-picker-summary').html('<span class="text-muted">No PMO contact selected.</span>');
-                $('#updatePmoContactModal').modal('show');
-                setTimeout(function() {
-                    $('#pmoContactSearch').focus();
-                }, 300);
-                return false;
-            });
-
-            $('#clearPmoContactBtn').on('click', function() {
-                $('#clearPmoContact').val('true');
-                $('#updatePmoContactModal form').submit();
-            });
 
             $(document).on('click', '[data-action="set-directorate"]', function(e) {
                 e.preventDefault();
@@ -1506,7 +1479,6 @@
             // Setup AJAX forms
             setupAjaxForm('#updateTitleModal form', handleProjectUpdate);
             setupAjaxForm('#updateSroModal form', handleProjectUpdate);
-            setupAjaxForm('#updatePmoContactModal form', handleProjectUpdate);
             setupAjaxForm('#updateDirectorateModal form', handleProjectUpdate);
             setupAjaxForm('#updateRagStatusModal form', handleProjectUpdate);
             setupAjaxForm('#updatePhaseModal form', handleProjectUpdate);
@@ -1670,7 +1642,7 @@
                     }
                 }
 
-                // Update SRO (4th column)
+                // Update SRO (column 3)
                 if (project.seniorResponsibleOfficerNames !== undefined) {
                     var hasSro = project.seniorResponsibleOfficerNames && project.seniorResponsibleOfficerNames.length > 0;
                     $row.attr('data-has-sro', hasSro ? 'true' : 'false');
@@ -1679,77 +1651,20 @@
                     var sroHtml = hasSro
                         ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(sroNames) + '"></i>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="SRO missing"></i>';
-                    $row.find('td').eq(3).html(sroHtml); // 4th column (0-indexed)
+                    $row.find('td').eq(3).html(sroHtml); // Column 3: SRO
                 }
 
-                // Update PMO Contact (5th column)
-                if (project.pmoContactNames !== undefined) {
-                    var hasPmo = project.pmoContactNames && project.pmoContactNames.length > 0;
-                    $row.attr('data-has-pmo', hasPmo ? 'true' : 'false');
-                    var pmoNames = hasPmo ? project.pmoContactNames.join(', ') : '';
-                    $row.attr('data-pmo-names', pmoNames);
-                    var pmoHtml = hasPmo
-                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(pmoNames) + '"></i>'
-                        : '<i class="fas fa-times-square text-danger completion-icon" title="PMO Contact missing"></i>';
-                    $row.find('td').eq(4).html(pmoHtml); // 5th column (0-indexed)
-                }
-
-                // Update Directorate (6th column)
-                if (project.directorateNames !== undefined) {
-                    var hasDirectorate = project.directorateNames && project.directorateNames.length > 0;
-                    $row.attr('data-has-directorate', hasDirectorate ? 'true' : 'false');
-                    var directorateNames = hasDirectorate ? project.directorateNames.join(', ') : '';
-                    $row.attr('data-directorate-names', directorateNames);
-                    var directorateHtml = hasDirectorate
-                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(directorateNames) + '"></i>'
-                        : '<i class="fas fa-times-square text-danger completion-icon" title="Directorate missing"></i>';
-                    $row.find('td').eq(5).html(directorateHtml); // 6th column (0-indexed)
-                }
-
-                if (project.ragStatus !== undefined) {
-                    $row.attr('data-rag-status', project.ragStatus || '');
-                    $row.attr('data-has-rag', project.ragStatus ? 'true' : 'false');
-                    var ragHtml = project.ragStatus 
-                        ? '<span class="badge badge-' + getRagBadgeClass(project.ragStatus) + '">' + project.ragStatus + '</span>'
-                        : '<i class="fas fa-times-square text-danger completion-icon" title="RAG Status missing"></i>';
-                    $row.find('td').eq(7).html(ragHtml); // Updated column index
-                }
-
-                if (project.phase !== undefined) {
-                    $row.attr('data-phase', project.phase || '');
-                    var phaseHtml = project.phase
-                        ? '<span class="badge badge-info">' + escapeHtml(project.phase) + '</span>'
-                        : '<span class="text-muted">-</span>';
-                    $row.find('td').eq(2).html(phaseHtml); // Phase column (3rd column, 0-indexed)
-                }
-
-                if (project.priorityName !== undefined) {
-                    $row.attr('data-priority-name', project.priorityName || '');
-                    $row.attr('data-has-priority', project.priorityName ? 'true' : 'false');
-                    var priorityHtml = project.priorityName
-                        ? '<span class="badge badge-info">' + project.priorityName + '</span>'
-                        : '<i class="fas fa-times-square text-danger completion-icon" title="Priority missing"></i>';
-                    $row.find('td').eq(8).html(priorityHtml); // Updated column index
-                }
-
-                if (project.businessArea !== undefined) {
-                    $row.attr('data-business-area', project.businessArea || '');
-                    $row.attr('data-has-business-area', project.businessArea ? 'true' : 'false');
-                    var businessAreaHtml = project.businessArea
-                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.businessArea) + '"></i>'
-                        : '<i class="fas fa-times-square text-danger completion-icon" title="Business Area missing"></i>';
-                    $row.find('td').eq(9).html(businessAreaHtml); // Updated column index
-                }
-
+                // Update Primary Contact (column 4)
                 if (project.primaryContactName !== undefined) {
                     $row.attr('data-primary-contact-name', project.primaryContactName || '');
                     $row.attr('data-has-primary-contact', project.primaryContactName ? 'true' : 'false');
                     var primaryContactHtml = project.primaryContactName
                         ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.primaryContactName) + '"></i>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Primary Contact missing"></i>';
-                    $row.find('td').eq(10).html(primaryContactHtml); // Updated column index
+                    $row.find('td').eq(4).html(primaryContactHtml); // Column 4: Primary Contact
                 }
 
+                // Update Service Owner (column 5)
                 if (project.serviceOwnerNames !== undefined) {
                     var hasServiceOwner = project.serviceOwnerNames && project.serviceOwnerNames.length > 0;
                     $row.attr('data-has-service-owner', hasServiceOwner ? 'true' : 'false');
@@ -1758,18 +1673,83 @@
                     var serviceOwnerHtml = hasServiceOwner
                         ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(serviceOwnerNames) + '"></i>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Service Owner missing"></i>';
-                    $row.find('td').eq(11).html(serviceOwnerHtml); // Updated column index
+                    $row.find('td').eq(5).html(serviceOwnerHtml); // Column 5: Service Owner
                 }
 
+                // Update Directorate (column 6)
+                if (project.directorateNames !== undefined) {
+                    var hasDirectorate = project.directorateNames && project.directorateNames.length > 0;
+                    $row.attr('data-has-directorate', hasDirectorate ? 'true' : 'false');
+                    var directorateNames = hasDirectorate ? project.directorateNames.join(', ') : '';
+                    $row.attr('data-directorate-names', directorateNames);
+                    var directorateHtml = hasDirectorate
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(directorateNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Directorate missing"></i>';
+                    $row.find('td').eq(6).html(directorateHtml); // Column 6: Directorate
+                }
+
+                // Update Budget Owner (column 7)
+                if (project.budgetOwnerNames !== undefined) {
+                    var hasBudgetOwner = project.budgetOwnerNames && project.budgetOwnerNames.length > 0;
+                    $row.attr('data-has-budget-owner', hasBudgetOwner ? 'true' : 'false');
+                    var budgetOwnerNames = hasBudgetOwner ? project.budgetOwnerNames.join(', ') : '';
+                    $row.attr('data-budget-owner-names', budgetOwnerNames);
+                    var budgetOwnerHtml = hasBudgetOwner
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(budgetOwnerNames) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Budget Owner missing"></i>';
+                    $row.find('td').eq(7).html(budgetOwnerHtml); // Column 7: Budget Owner
+                }
+
+                // Update RAG Status (column 8)
+                if (project.ragStatus !== undefined) {
+                    $row.attr('data-rag-status', project.ragStatus || '');
+                    $row.attr('data-has-rag', project.ragStatus ? 'true' : 'false');
+                    var ragHtml = project.ragStatus 
+                        ? '<span class="badge badge-' + getRagBadgeClass(project.ragStatus) + '">' + project.ragStatus + '</span>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="RAG Status missing"></i>';
+                    $row.find('td').eq(8).html(ragHtml); // Column 8: RAG Status
+                }
+
+                // Update Phase (column 2)
+                if (project.phase !== undefined) {
+                    $row.attr('data-phase', project.phase || '');
+                    var phaseHtml = project.phase
+                        ? '<span class="badge badge-info">' + escapeHtml(project.phase) + '</span>'
+                        : '<span class="text-muted">-</span>';
+                    $row.find('td').eq(2).html(phaseHtml); // Column 2: Phase
+                }
+
+                // Update Priority (column 9)
+                if (project.priorityName !== undefined) {
+                    $row.attr('data-priority-name', project.priorityName || '');
+                    $row.attr('data-has-priority', project.priorityName ? 'true' : 'false');
+                    var priorityHtml = project.priorityName
+                        ? '<span class="badge badge-info">' + project.priorityName + '</span>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Priority missing"></i>';
+                    $row.find('td').eq(9).html(priorityHtml); // Column 9: Priority
+                }
+
+                // Update Business Area (column 10)
+                if (project.businessArea !== undefined) {
+                    $row.attr('data-business-area', project.businessArea || '');
+                    $row.attr('data-has-business-area', project.businessArea ? 'true' : 'false');
+                    var businessAreaHtml = project.businessArea
+                        ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.businessArea) + '"></i>'
+                        : '<i class="fas fa-times-square text-danger completion-icon" title="Business Area missing"></i>';
+                    $row.find('td').eq(10).html(businessAreaHtml); // Column 10: Business Area
+                }
+
+                // Update Activity Type (column 11)
                 if (project.activityTypeName !== undefined) {
                     $row.attr('data-activity-type-name', project.activityTypeName || '');
                     $row.attr('data-has-activity-type', project.activityTypeName ? 'true' : 'false');
                     var activityTypeHtml = project.activityTypeName
                         ? '<i class="fas fa-check-square text-success completion-icon" title="' + escapeHtml(project.activityTypeName) + '"></i>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Activity Type missing"></i>';
-                    $row.find('td').eq(12).html(activityTypeHtml); // Updated column index
+                    $row.find('td').eq(11).html(activityTypeHtml); // Column 11: Activity Type
                 }
 
+                // Update Spend Control (column 12)
                 if (project.isSubjectToSpendControl !== undefined) {
                     var spendControlValue = project.isSubjectToSpendControl === true ? 'true' : project.isSubjectToSpendControl === false ? 'false' : '';
                     $row.attr('data-spend-control', spendControlValue);
@@ -1777,7 +1757,16 @@
                     var spendControlHtml = spendControlValue !== ''
                         ? '<span class="badge badge-' + (spendControlValue === 'true' ? 'warning' : 'secondary') + '">' + (spendControlValue === 'true' ? 'Yes' : 'No') + '</span>'
                         : '<i class="fas fa-times-square text-danger completion-icon" title="Spend Control missing"></i>';
-                    $row.find('td').eq(13).html(spendControlHtml); // Updated column index
+                    $row.find('td').eq(12).html(spendControlHtml); // Column 12: Spend Control
+                }
+
+                // Note: PMO Contact is not displayed in the table, so we skip updating it
+                if (project.pmoContactNames !== undefined) {
+                    var hasPmo = project.pmoContactNames && project.pmoContactNames.length > 0;
+                    $row.attr('data-has-pmo', hasPmo ? 'true' : 'false');
+                    var pmoNames = hasPmo ? project.pmoContactNames.join(', ') : '';
+                    $row.attr('data-pmo-names', pmoNames);
+                    // PMO Contact column doesn't exist in the table, so we don't update it
                 }
 
                 // Recalculate completion percentage

@@ -7,6 +7,7 @@ using Compass.Models;
 using Compass.Services;
 using Compass.ViewModels;
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 
 namespace Compass.Controllers;
 
@@ -40,19 +41,42 @@ public class BusinessAreaSummaryItem
     public int BlockedCount { get; set; }
 }
 
+public class BulkUpdateRequest
+{
+    [Required]
+    public List<int> ProjectIds { get; set; } = new();
+    public string? PrimaryContactObjectId { get; set; }
+    public string? PrimaryContactEmail { get; set; }
+    public string? PrimaryContactName { get; set; }
+    public bool ClearPrimaryContact { get; set; }
+    public string? SroObjectId { get; set; }
+    public string? SroEmail { get; set; }
+    public string? SroName { get; set; }
+    public bool ClearSro { get; set; }
+    public string? BusinessArea { get; set; }
+    public bool ClearBusinessArea { get; set; }
+    public string? Priority { get; set; }
+    public bool ClearPriority { get; set; }
+    public List<int>? DirectorateIds { get; set; }
+    public bool ClearDirectorates { get; set; }
+}
+
 [Authorize]
 [RequireCentralOpsAdmin]
 public class CentralOpsController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly ILogger<CentralOpsController> _logger;
+    private readonly IUserDirectoryService _userDirectoryService;
 
     public CentralOpsController(
         CompassDbContext context,
-        ILogger<CentralOpsController> logger)
+        ILogger<CentralOpsController> logger,
+        IUserDirectoryService userDirectoryService)
     {
         _context = context;
         _logger = logger;
+        _userDirectoryService = userDirectoryService;
     }
 
     private static string NormalizeRagStatus(string? ragStatus)
@@ -299,6 +323,11 @@ public class CentralOpsController : Controller
                 .OrderBy(dp => dp)
                 .ToListAsync();
 
+            var directorates = await _context.DirectorateLookups
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+
             ViewBag.Search = search;
             ViewBag.BusinessArea = businessArea;
             ViewBag.Priority = priority;
@@ -307,6 +336,7 @@ public class CentralOpsController : Controller
             ViewBag.TotalCount = totalCount;
             ViewBag.BusinessAreas = businessAreas;
             ViewBag.Priorities = priorities;
+            ViewBag.Directorates = directorates;
             ViewBag.Rags = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
             ViewBag.Statuses = new[] { "Active", "Paused", "Completed", "Cancelled" };
 
@@ -929,6 +959,220 @@ public class CentralOpsController : Controller
         {
             _logger.LogError(ex, "Error deleting SLT response for {SuccessType} {SuccessId}", successType, successId);
             return Json(new { success = false, message = "An error occurred while deleting the response." });
+        }
+    }
+
+    // POST: CentralOps/BulkUpdateProjects
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkUpdateProjects([FromBody] BulkUpdateRequest request)
+    {
+        try
+        {
+            if (request.ProjectIds == null || request.ProjectIds.Count == 0)
+            {
+                return Json(new { success = false, message = "No projects selected." });
+            }
+
+            var projects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Where(p => request.ProjectIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync();
+
+            if (!projects.Any())
+            {
+                return Json(new { success = false, message = "No valid projects found." });
+            }
+
+            int updatedCount = 0;
+
+            foreach (var project in projects)
+            {
+                bool projectUpdated = false;
+
+                // Update Primary Contact
+                if (request.ClearPrimaryContact || (!string.IsNullOrEmpty(request.PrimaryContactObjectId) || !string.IsNullOrEmpty(request.PrimaryContactEmail)))
+                {
+                    User? primaryContactUser = null;
+                    if (!request.ClearPrimaryContact)
+                    {
+                        if (Guid.TryParse(request.PrimaryContactObjectId, out var objectIdGuid))
+                        {
+                            try
+                            {
+                                primaryContactUser = await _userDirectoryService.EnsureUserAsync(objectIdGuid);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to ensure user with ObjectId {ObjectId}", request.PrimaryContactObjectId);
+                            }
+                        }
+                        if (primaryContactUser == null && !string.IsNullOrEmpty(request.PrimaryContactEmail))
+                        {
+                            primaryContactUser = await _context.Users
+                                .FirstOrDefaultAsync(u => u.Email.ToLower() == request.PrimaryContactEmail.ToLower());
+                        }
+                    }
+                    project.PrimaryContactUserId = primaryContactUser?.Id;
+                    project.PrimaryContactUser = primaryContactUser;
+                    projectUpdated = true;
+                }
+
+                // Update SRO
+                if (request.ClearSro || (!string.IsNullOrEmpty(request.SroObjectId) || !string.IsNullOrEmpty(request.SroEmail)))
+                {
+                    if (request.ClearSro)
+                    {
+                        var existingSros = project.SeniorResponsibleOfficers.ToList();
+                        foreach (var sro in existingSros)
+                        {
+                            _context.ProjectSeniorResponsibleOfficers.Remove(sro);
+                        }
+                        projectUpdated = true;
+                    }
+                    else
+                    {
+                        User? sroUser = null;
+                        if (Guid.TryParse(request.SroObjectId, out var sroObjectIdGuid))
+                        {
+                            try
+                            {
+                                sroUser = await _userDirectoryService.EnsureUserAsync(sroObjectIdGuid);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to ensure SRO user with ObjectId {ObjectId}", request.SroObjectId);
+                            }
+                        }
+                        if (sroUser == null && !string.IsNullOrEmpty(request.SroEmail))
+                        {
+                            sroUser = await _context.Users
+                                .FirstOrDefaultAsync(u => u.Email.ToLower() == request.SroEmail.ToLower());
+                        }
+
+                        if (sroUser != null)
+                        {
+                            // Check if SRO already exists
+                            var existingSro = project.SeniorResponsibleOfficers
+                                .FirstOrDefault(sro => sro.UserId == sroUser.Id);
+                            if (existingSro == null)
+                            {
+                                // Remove existing SROs if we're replacing
+                                var existingSros = project.SeniorResponsibleOfficers.ToList();
+                                foreach (var sro in existingSros)
+                                {
+                                    _context.ProjectSeniorResponsibleOfficers.Remove(sro);
+                                }
+                                // Add new SRO
+                                var newSro = new ProjectSeniorResponsibleOfficer
+                                {
+                                    ProjectId = project.Id,
+                                    UserId = sroUser.Id,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _context.ProjectSeniorResponsibleOfficers.Add(newSro);
+                                projectUpdated = true;
+                            }
+                        }
+                    }
+                }
+
+                // Update Business Area
+                if (request.ClearBusinessArea || !string.IsNullOrEmpty(request.BusinessArea))
+                {
+                    if (request.ClearBusinessArea)
+                    {
+                        project.BusinessAreaId = null;
+                        projectUpdated = true;
+                    }
+                    else if (!string.IsNullOrEmpty(request.BusinessArea))
+                    {
+                        var businessArea = await _context.BusinessAreaLookups
+                            .FirstOrDefaultAsync(ba => ba.Name == request.BusinessArea && ba.IsActive);
+                        if (businessArea != null)
+                        {
+                            project.BusinessAreaId = businessArea.Id;
+                            projectUpdated = true;
+                        }
+                    }
+                }
+
+                // Update Priority
+                if (request.ClearPriority || !string.IsNullOrEmpty(request.Priority))
+                {
+                    if (request.ClearPriority)
+                    {
+                        project.DeliveryPriorityId = null;
+                        projectUpdated = true;
+                    }
+                    else if (!string.IsNullOrEmpty(request.Priority))
+                    {
+                        var priority = await _context.DeliveryPriorities
+                            .FirstOrDefaultAsync(dp => dp.Name == request.Priority && dp.IsActive);
+                        if (priority != null)
+                        {
+                            project.DeliveryPriorityId = priority.Id;
+                            projectUpdated = true;
+                        }
+                    }
+                }
+
+                // Update Directorates
+                if (request.ClearDirectorates || (request.DirectorateIds != null && request.DirectorateIds.Count > 0))
+                {
+                    if (request.ClearDirectorates)
+                    {
+                        var existingDirectorates = project.Directorates.ToList();
+                        foreach (var dir in existingDirectorates)
+                        {
+                            _context.ProjectDirectorates.Remove(dir);
+                        }
+                        projectUpdated = true;
+                    }
+                    else if (request.DirectorateIds != null && request.DirectorateIds.Count > 0)
+                    {
+                        // Get existing directorate IDs
+                        var existingDirectorateIds = project.Directorates
+                            .Select(d => d.DirectorateLookupId)
+                            .ToList();
+
+                        // Add new directorates
+                        foreach (var directorateId in request.DirectorateIds)
+                        {
+                            if (!existingDirectorateIds.Contains(directorateId))
+                            {
+                                var newDirectorate = new ProjectDirectorate
+                                {
+                                    ProjectId = project.Id,
+                                    DirectorateLookupId = directorateId,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _context.ProjectDirectorates.Add(newDirectorate);
+                                projectUpdated = true;
+                            }
+                        }
+                    }
+                }
+
+                if (projectUpdated)
+                {
+                    project.UpdatedAt = DateTime.UtcNow;
+                    updatedCount++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, updatedCount = updatedCount });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error performing bulk update");
+            return Json(new { success = false, message = "An error occurred while updating projects: " + ex.Message });
         }
     }
 

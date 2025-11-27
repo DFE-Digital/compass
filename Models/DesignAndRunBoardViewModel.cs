@@ -9,6 +9,95 @@ public class DesignAndRunBoardViewModel
     public int EnrolledInAccessibilityCount { get; set; }
     public int TotalOpenAccessibilityIssues { get; set; }
     public List<DesignAndRunBoardItem> TopAtRiskProducts { get; set; } = new();
+    
+    // Board-ready structures
+    public ExecutiveSummary ExecutiveSummary { get; set; } = new();
+    public List<FocusAreaPerformance> FocusAreaPerformances { get; set; } = new();
+    public List<KeyMeasure> KeyMeasures { get; set; } = new();
+    public List<BoardObjective> Objectives { get; set; } = new();
+    public List<PerformanceCriteria> PerformanceCriteria { get; set; } = new();
+    public List<BoardRisk> Risks { get; set; } = new();
+    public List<AISummary> AISummaries { get; set; } = new();
+}
+
+public class ExecutiveSummary
+{
+    public string OverallStatus { get; set; } = "On Track"; // On Track, At Risk, Behind
+    public int ObjectivesOnTrack { get; set; }
+    public int ObjectivesAtRisk { get; set; }
+    public int ObjectivesAchieved { get; set; }
+    public int TotalObjectives { get; set; }
+    public double ObjectivesOnTrackPercentage { get; set; }
+    public double ObjectivesAchievedPercentage { get; set; }
+    public int TotalPlans { get; set; }
+}
+
+public class FocusAreaPerformance
+{
+    public string FocusArea { get; set; } = string.Empty;
+    public int ObjectivesOnTrack { get; set; }
+    public int TotalObjectives { get; set; }
+    public double OnTrackPercentage { get; set; }
+    public double AverageCompletion { get; set; }
+    public double AverageRiskScore { get; set; }
+}
+
+public class KeyMeasure
+{
+    public string Title { get; set; } = string.Empty;
+    public string CurrentValue { get; set; } = string.Empty;
+    public string ExpectedValue { get; set; } = string.Empty;
+    public string TargetValue { get; set; } = string.Empty;
+    public string TargetDate { get; set; } = string.Empty;
+    public string Status { get; set; } = "On Track"; // On Track, At Risk, Behind
+    public string Trend { get; set; } = "neutral"; // up, down, neutral
+}
+
+public class BoardObjective
+{
+    public string Title { get; set; } = string.Empty;
+    public string FocusArea { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
+    public string OwnerInitials { get; set; } = string.Empty;
+    public double ProgressPercentage { get; set; }
+    public DateTime? DueDate { get; set; }
+    public string Status { get; set; } = "On Track"; // On Track, At Risk, Behind, Achieved
+    public string Description { get; set; } = string.Empty;
+}
+
+public class PerformanceCriteria
+{
+    public string Category { get; set; } = string.Empty;
+    public string Deliverable { get; set; } = string.Empty;
+    public string Status { get; set; } = "On Track";
+    public int OnTrackCount { get; set; }
+    public int BehindCount { get; set; }
+    public int AchievedCount { get; set; }
+    public int TotalCount { get; set; }
+    public string Owner { get; set; } = string.Empty;
+    public DateTime? DueDate { get; set; }
+}
+
+public class BoardRisk
+{
+    public string Title { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public double Likelihood { get; set; } // 0-10
+    public double Impact { get; set; } // 0-10
+    public double RiskScore { get; set; } // Likelihood * Impact
+    public string RiskLevel { get; set; } = "Moderate"; // Low, Moderate, High, Critical
+    public string Mitigation { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
+    public DateTime? ProximityDate { get; set; }
+}
+
+public class AISummary
+{
+    public string Title { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string KeyChanges { get; set; } = string.Empty;
+    public string SuggestedActions { get; set; } = string.Empty;
+    public string Context { get; set; } = string.Empty;
 }
 
 public class DesignAndRunBoardItem
