@@ -1168,6 +1168,11 @@ public class HomeController : Controller
         return View();
     }
 
+    public IActionResult Support()
+    {
+        return View();
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetTestUsers()
     {
