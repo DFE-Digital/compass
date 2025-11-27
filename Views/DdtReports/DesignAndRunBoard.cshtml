@@ -29,7 +29,11 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Design and Run Board report</h1>
+                <h1 class="m-0">Digital Operations Board Report</h1>
+                <p class="text-muted mb-0">Executive Quarterly Review - @DateTime.Now.ToString("MMMM yyyy")</p>
+            </div>
+            <div class="col-sm-6 text-right">
+                <span class="badge badge-info">@DateTime.Now.ToString("dd MMM yyyy")</span>
             </div>
         </div>
     </div>
@@ -52,47 +56,933 @@
             </div>
         }
 
-        <!-- Summary Cards -->
-        <div class="row mb-3 d-flex align-items-stretch">
-            <!-- Total Products -->
-            <div class="col-lg-3 col-md-6 col-12 d-flex">
-                <div class="card card-info w-100">
-                    <div class="card-header">
-                        <h3 class="card-title">Total products</h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.TotalProducts</h2>
-                        <p class="text-muted mb-0 mt-2">Products in portfolio</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Average Completion -->
-            <div class="col-lg-3 col-md-6 col-12 d-flex">
-                @{
-                    var completionClass = Model.AverageCompletionPercentage >= 80 ? "success" : 
-                                        Model.AverageCompletionPercentage >= 60 ? "warning" : "danger";
-                }
-                <div class="card card-@completionClass w-100">
-                    <div class="card-header">
-                        <h3 class="card-title">Average FIPS completion</h3>
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="mb-0" style="font-size: 3rem; font-weight: bold;">@Model.AverageCompletionPercentage.ToString("F1")%</h2>
-                        <div class="progress progress-lg mt-3">
-                            <div class="progress-bar bg-@completionClass" style="width: @Model.AverageCompletionPercentage%"></div>
+        <!-- 1. Executive Overview Panel -->
+        @{
+            var overallStatus = Model.ExecutiveSummary.OverallStatus ?? "On Track";
+            var statusClass = overallStatus == "On Track" ? "success" : overallStatus == "At Risk" ? "warning" : "danger";
+            var statusIcon = overallStatus == "On Track" ? "fa-check-circle" : overallStatus == "At Risk" ? "fa-exclamation-triangle" : "fa-times-circle";
+            var objectivesOnTrack = Model.ExecutiveSummary.ObjectivesOnTrack > 0 ? Model.ExecutiveSummary.ObjectivesOnTrack : Model.Products.Count(p => p.CompletionPercentage >= 80);
+            var objectivesAtRisk = Model.ExecutiveSummary.ObjectivesAtRisk > 0 ? Model.ExecutiveSummary.ObjectivesAtRisk : Model.Products.Count(p => p.CompletionPercentage >= 60 && p.CompletionPercentage < 80);
+            var objectivesAchieved = Model.ExecutiveSummary.ObjectivesAchieved > 0 ? Model.ExecutiveSummary.ObjectivesAchieved : Model.Products.Count(p => p.CompletionPercentage == 100);
+            var totalObjectives = Model.ExecutiveSummary.TotalObjectives > 0 ? Model.ExecutiveSummary.TotalObjectives : Model.Products.Count;
+            var onTrackPct = totalObjectives > 0 ? (objectivesOnTrack / (double)totalObjectives) * 100 : 0;
+            var achievedPct = totalObjectives > 0 ? (objectivesAchieved / (double)totalObjectives) * 100 : 0;
+        }
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card board-executive-summary">
+                    <div class="card-body p-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-2 text-center">
+                                <div class="status-indicator status-@statusClass">
+                                    <i class="fas @statusIcon fa-2x"></i>
+                                    <div class="status-label mt-2">@overallStatus</div>
+                                </div>
+                            </div>
+                            <div class="col-md-10">
+                                <div class="row">
+                                    <div class="col-md-3 col-6 mb-2 mb-md-0">
+                                        <div class="kpi-item">
+                                            <div class="kpi-value">@Model.ExecutiveSummary.TotalPlans.ToString()</div>
+                                            <div class="kpi-label">Total Plans</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2 mb-md-0">
+                                        <div class="kpi-item">
+                                            <div class="kpi-value">@totalObjectives</div>
+                                            <div class="kpi-label">Total Objectives</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-item">
+                                            <div class="kpi-value text-success">@onTrackPct.ToString("F0")%</div>
+                                            <div class="kpi-label">Objectives On Track</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-item">
+                                            <div class="kpi-value text-primary">@achievedPct.ToString("F0")%</div>
+                                            <div class="kpi-label">Objectives Achieved</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Accessibility Enrolled -->
-            <div class="col-lg-3 col-md-6 col-12 d-flex">
-                @{
-                    var enrolledPercentage = Model.TotalProducts > 0 ? (Model.EnrolledInAccessibilityCount / (double)Model.TotalProducts) * 100 : 0;
-                    var enrolledClass = enrolledPercentage >= 80 ? "success" : enrolledPercentage >= 50 ? "warning" : "danger";
-                    var enrolledBadgeClass = enrolledPercentage >= 80 ? "badge-success" : enrolledPercentage >= 50 ? "badge-warning" : "badge-danger";
-                }
+        <!-- 2. Plan & Team Health Overview + 3. Focus Areas Performance Dashboard -->
+        <div class="row mb-4">
+            <!-- Plan & Team Health Overview -->
+            <div class="col-lg-6 mb-4 mb-lg-0">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-heartbeat mr-2"></i>
+                            Plan & Team Health Overview
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">Show how each business unit is delivering on the strategy. This view ties execution to who's driving it.</p>
+                        @foreach (var area in Model.BusinessAreaSummaries.OrderByDescending(a => a.AverageRiskScore))
+                        {
+                            var healthScore = 100 - (area.AverageRiskScore * 1.25); // Convert risk to health (0-100)
+                            healthScore = Math.Max(0, Math.Min(100, healthScore));
+                            var healthClass = healthScore >= 80 ? "success" : healthScore >= 60 ? "warning" : "danger";
+                            var areaCompletionClass = area.AverageCompletionPercentage >= 80 ? "success" : 
+                                                 area.AverageCompletionPercentage >= 60 ? "warning" : "danger";
+                            
+                            <div class="health-indicator mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong>@area.BusinessArea</strong>
+                                    <span class="badge badge-@healthClass">Health: @healthScore.ToString("F0")%</span>
+                                </div>
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar bg-@healthClass" role="progressbar" 
+                                         style="width: @healthScore%" 
+                                         aria-valuenow="@healthScore" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        <span class="progress-text">@area.ProductCount products</span>
+                                    </div>
+                                </div>
+                                <div class="health-details mt-1">
+                                    <small class="text-muted">
+                                        Completion: <span class="badge badge-@areaCompletionClass">@area.AverageCompletionPercentage.ToString("F0")%</span>
+                                        | Enrolled: <span class="badge badge-info">@area.EnrolledInAccessibilityCount/@area.ProductCount</span>
+                                        | Issues: <span class="badge @(area.TotalAccessibilityIssues == 0 ? "badge-success" : "badge-warning")">@area.TotalAccessibilityIssues</span>
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Focus Areas Performance Dashboard -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-bullseye mr-2"></i>
+                            Focus Areas Performance
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">Quick snapshot of progress, targets, and gaps across strategic focus areas.</p>
+                        @foreach (var focusArea in Model.FocusAreaPerformances.Any() ? Model.FocusAreaPerformances : 
+                                 Model.BusinessAreaSummaries.Select(ba => new FocusAreaPerformance 
+                                 { 
+                                     FocusArea = ba.BusinessArea, 
+                                     OnTrackPercentage = ba.AverageCompletionPercentage,
+                                     TotalObjectives = ba.ProductCount,
+                                     ObjectivesOnTrack = (int)(ba.ProductCount * (ba.AverageCompletionPercentage / 100.0))
+                                 }))
+                        {
+                            var focusClass = focusArea.OnTrackPercentage >= 80 ? "success" : 
+                                            focusArea.OnTrackPercentage >= 60 ? "warning" : "danger";
+                            
+                            <div class="focus-area-item mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>@focusArea.FocusArea</strong>
+                                    <span class="badge badge-@focusClass">@focusArea.OnTrackPercentage.ToString("F0")% On Track</span>
+                                </div>
+                                <div class="progress-group">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-@focusClass" 
+                                             style="width: @focusArea.OnTrackPercentage%"
+                                             role="progressbar">
+                                        </div>
+                                    </div>
+                                    <div class="mt-1">
+                                        <small class="text-muted">
+                                            @focusArea.ObjectivesOnTrack of @focusArea.TotalObjectives objectives on track
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Key Measures Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-chart-line mr-2"></i>
+                            Key Measures
+                        </h3>
+                        <p class="text-muted small mb-0 mt-1">The board expects numbers. Prove progress with the metrics that matter most.</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            @{
+                                var keyMeasures = Model.KeyMeasures.Any() ? Model.KeyMeasures : new List<KeyMeasure>
+                                {
+                                    new KeyMeasure 
+                                    { 
+                                        Title = "Average FIPS Completion", 
+                                        CurrentValue = Model.AverageCompletionPercentage.ToString("F1") + "%",
+                                        ExpectedValue = "80%",
+                                        TargetValue = "100%",
+                                        TargetDate = "Ongoing",
+                                        Status = Model.AverageCompletionPercentage >= 80 ? "On Track" : Model.AverageCompletionPercentage >= 60 ? "At Risk" : "Behind"
+                                    },
+                                    new KeyMeasure 
+                                    { 
+                                        Title = "Accessibility Enrollment", 
+                                        CurrentValue = Model.EnrolledInAccessibilityCount.ToString(),
+                                        ExpectedValue = ((int)(Model.TotalProducts * 0.8)).ToString(),
+                                        TargetValue = Model.TotalProducts.ToString(),
+                                        TargetDate = "Ongoing",
+                                        Status = (Model.EnrolledInAccessibilityCount / (double)Model.TotalProducts) >= 0.8 ? "On Track" : "At Risk"
+                                    },
+                                    new KeyMeasure 
+                                    { 
+                                        Title = "Open Accessibility Issues", 
+                                        CurrentValue = Model.TotalOpenAccessibilityIssues.ToString(),
+                                        ExpectedValue = "0",
+                                        TargetValue = "0",
+                                        TargetDate = "Ongoing",
+                                        Status = Model.TotalOpenAccessibilityIssues == 0 ? "On Track" : Model.TotalOpenAccessibilityIssues <= 10 ? "At Risk" : "Behind"
+                                    }
+                                };
+                            }
+                            @foreach (var measure in keyMeasures.Take(3))
+                            {
+                                var measureStatusClass = measure.Status == "On Track" ? "success" : 
+                                                        measure.Status == "At Risk" ? "warning" : "danger";
+                                var measureStatusIcon = measure.Status == "On Track" ? "fa-check-circle" : 
+                                                      measure.Status == "At Risk" ? "fa-exclamation-triangle" : "fa-times-circle";
+                                
+                                <div class="col-lg-4 col-md-6 mb-3 mb-lg-0">
+                                    <div class="measure-tile">
+                                        <div class="measure-header">
+                                            <h5 class="mb-1">@measure.Title</h5>
+                                            <span class="badge badge-@measureStatusClass">
+                                                <i class="fas @measureStatusIcon"></i> @measure.Status
+                                            </span>
+                                        </div>
+                                        <div class="measure-value">
+                                            <span class="measure-current">@measure.CurrentValue</span>
+                                        </div>
+                                        <div class="measure-details">
+                                            <small class="text-muted">
+                                                Expected: <strong>@measure.ExpectedValue</strong><br/>
+                                                Target: <strong>@measure.TargetValue</strong> by @measure.TargetDate
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Key Objectives Table -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-bullseye mr-2"></i>
+                            Key Objectives
+                        </h3>
+                        <p class="text-muted small mb-0 mt-1">Answer questions before they're asked. Ensure mission-critical objectives are wrapped with context, risks, and status.</p>
+                    </div>
+                    <div class="card-body p-0">
+                        @{
+                            var objectives = Model.Objectives.Any() ? Model.Objectives : 
+                                            Model.Products.Take(10).Select(p => new BoardObjective
+                                            {
+                                                Title = p.ProductTitle,
+                                                FocusArea = p.BusinessArea,
+                                                Owner = p.LastSubmittedBy ?? "Unassigned",
+                                                OwnerInitials = !string.IsNullOrEmpty(p.LastSubmittedBy) ? 
+                                                    string.Join("", p.LastSubmittedBy.Split(' ').Select(n => n[0]).Take(2)) : "NA",
+                                                ProgressPercentage = p.CompletionPercentage,
+                                                Status = p.CompletionPercentage >= 80 ? "On Track" : 
+                                                        p.CompletionPercentage >= 60 ? "At Risk" : "Behind",
+                                                Description = $"FIPS ID: {p.FipsId}"
+                                            }).ToList();
+                        }
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 objectives-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 30%;">Objective</th>
+                                        <th style="width: 20%;">Focus Area</th>
+                                        <th style="width: 15%;">Owner</th>
+                                        <th style="width: 25%;">Progress</th>
+                                        <th style="width: 10%;" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var objective in objectives)
+                                    {
+                                        var objStatusClass = objective.Status == "On Track" ? "success" : 
+                                                            objective.Status == "At Risk" ? "warning" : "danger";
+                                        var objStatusIcon = objective.Status == "On Track" ? "fa-check-circle" : 
+                                                          objective.Status == "At Risk" ? "fa-exclamation-triangle" : "fa-times-circle";
+                                        
+                                        <tr>
+                                            <td>
+                                                <strong>@objective.Title</strong>
+                                                @if (!string.IsNullOrEmpty(objective.Description))
+                                                {
+                                                    <br/><small class="text-muted">@objective.Description</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-info">@objective.FocusArea</span>
+                                            </td>
+                                            <td>
+                                                <div class="owner-avatar">
+                                                    <span class="avatar-initials">@objective.OwnerInitials</span>
+                                                    <small class="d-block mt-1">@objective.Owner</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar bg-@objStatusClass" 
+                                                         style="width: @objective.ProgressPercentage%"
+                                                         role="progressbar">
+                                                        @objective.ProgressPercentage.ToString("F0")%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@objStatusClass">
+                                                    <i class="fas @objStatusIcon"></i>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. Performance and Success Criteria Grid -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-tasks mr-2"></i>
+                            Performance and Success Criteria
+                        </h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @{
+                            var performanceCriteria = Model.PerformanceCriteria.Any() ? Model.PerformanceCriteria : 
+                                                    new List<PerformanceCriteria>
+                                                    {
+                                                        new PerformanceCriteria
+                                                        {
+                                                            Category = "FIPS Completion",
+                                                            Deliverable = "Complete product profiles",
+                                                            OnTrackCount = Model.Products.Count(p => p.CompletionPercentage >= 80),
+                                                            BehindCount = Model.Products.Count(p => p.CompletionPercentage < 80),
+                                                            AchievedCount = Model.Products.Count(p => p.CompletionPercentage == 100),
+                                                            TotalCount = Model.Products.Count,
+                                                            Status = Model.AverageCompletionPercentage >= 80 ? "On Track" : "At Risk"
+                                                        },
+                                                        new PerformanceCriteria
+                                                        {
+                                                            Category = "Accessibility Compliance",
+                                                            Deliverable = "WCAG compliance and issue resolution",
+                                                            OnTrackCount = Model.Products.Count(p => p.IsEnrolledInAccessibility && p.AccessibilityComplianceStatus == "Compliant"),
+                                                            BehindCount = Model.Products.Count(p => p.IsEnrolledInAccessibility && p.OpenAccessibilityIssuesCount > 0),
+                                                            AchievedCount = Model.Products.Count(p => p.IsEnrolledInAccessibility && p.AccessibilityComplianceStatus == "Compliant" && p.OpenAccessibilityIssuesCount == 0),
+                                                            TotalCount = Model.EnrolledInAccessibilityCount,
+                                                            Status = Model.TotalOpenAccessibilityIssues == 0 ? "On Track" : "At Risk"
+                                                        }
+                                                    };
+                        }
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 25%;">Category</th>
+                                        <th style="width: 30%;">Deliverable</th>
+                                        <th class="text-center" style="width: 15%;">On Track</th>
+                                        <th class="text-center" style="width: 15%;">Behind</th>
+                                        <th class="text-center" style="width: 15%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var criteria in performanceCriteria)
+                                    {
+                                        var critStatusClass = criteria.Status == "On Track" ? "success" : 
+                                                             criteria.Status == "At Risk" ? "warning" : "danger";
+                                        
+                                        <tr>
+                                            <td><strong>@criteria.Category</strong></td>
+                                            <td>@criteria.Deliverable</td>
+                                            <td class="text-center">
+                                                <span class="badge badge-success">@criteria.OnTrackCount</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-warning">@criteria.BehindCount</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-@critStatusClass">@criteria.Status</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. Risks Dashboard -->
+        <div class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Open Risks
+                        </h3>
+                        <p class="text-muted small mb-0 mt-1">Identify top risks and mitigation plans upfront—so the board sees what could jeopardize delivery.</p>
+                    </div>
+                    <div class="card-body p-0">
+                        @{
+                            var risks = Model.Risks.Any() ? Model.Risks : 
+                                       Model.TopAtRiskProducts.Take(5).Select(p => new BoardRisk
+                                       {
+                                           Title = $"High risk product: {p.ProductTitle}",
+                                           Category = "Product Risk",
+                                           Likelihood = Math.Min(10, p.RiskScore / 10),
+                                           Impact = Math.Min(10, p.RiskScore / 10),
+                                           RiskScore = p.RiskScore,
+                                           RiskLevel = p.RiskScore >= 80 ? "Critical" : p.RiskScore >= 60 ? "High" : p.RiskScore >= 40 ? "Moderate" : "Low",
+                                           Mitigation = string.Join(", ", p.RiskFactors.Take(2)),
+                                           Owner = p.LastSubmittedBy ?? "Unassigned"
+                                       }).ToList();
+                        }
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 10%;">Score</th>
+                                        <th style="width: 30%;">Risk</th>
+                                        <th style="width: 20%;">Level</th>
+                                        <th style="width: 40%;">Mitigations</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var risk in risks.OrderByDescending(r => r.RiskScore))
+                                    {
+                                        var riskLevelClass = risk.RiskLevel == "Critical" ? "danger" : 
+                                                           risk.RiskLevel == "High" ? "warning" : 
+                                                           risk.RiskLevel == "Moderate" ? "info" : "success";
+                                        
+                                        <tr>
+                                            <td>
+                                                <span class="badge badge-@riskLevelClass badge-lg">@risk.RiskScore.ToString("F0")</span>
+                                            </td>
+                                            <td><strong>@risk.Title</strong></td>
+                                            <td>
+                                                <span class="badge badge-@riskLevelClass">@risk.RiskLevel</span>
+                                            </td>
+                                            <td>
+                                                <small>@risk.Mitigation</small>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-chart-scatter mr-2"></i>
+                            Risk Distribution
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="riskScatterPlot" height="300"></canvas>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <strong>X-axis:</strong> Impact (0-10)<br/>
+                                <strong>Y-axis:</strong> Likelihood (0-10)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. AI-Generated Summary Panels -->
+        @if (Model.AISummaries.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">
+                                <i class="fas fa-robot mr-2"></i>
+                                Executive Summary & Insights
+                            </h3>
+                            <p class="text-muted small mb-0 mt-1">Use AI-generated summaries to give the board instant clarity on performance shifts, context, and next steps.</p>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var summary in Model.AISummaries)
+                            {
+                                <div class="ai-summary-panel mb-4">
+                                    <h5>@summary.Title</h5>
+                                    <p>@summary.Summary</p>
+                                    @if (!string.IsNullOrEmpty(summary.KeyChanges))
+                                    {
+                                        <div class="key-changes">
+                                            <strong>Key Changes:</strong>
+                                            <ul>
+                                                @foreach (var change in summary.KeyChanges.Split('\n'))
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(change))
+                                                    {
+                                                        <li>@change</li>
+                                                    }
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(summary.SuggestedActions))
+                                    {
+                                        <div class="suggested-actions mt-2">
+                                            <strong>Suggested Actions:</strong>
+                                            <ul>
+                                                @foreach (var action in summary.SuggestedActions.Split('\n'))
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(action))
+                                                    {
+                                                        <li>@action</li>
+                                                    }
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Legacy: Detailed Products Table (Collapsible) -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-list mr-2"></i>
+                            Product Details
+                        </h3>
+                        <button class="btn btn-sm btn-outline-secondary float-right" type="button" data-toggle="collapse" data-target="#productDetailsCollapse">
+                            <i class="fas fa-chevron-down"></i> Toggle Details
+                        </button>
+                    </div>
+                    <div class="collapse" id="productDetailsCollapse">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 sortable-table" id="productsTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="ProductTitle" style="cursor: pointer;">
+                                                Product <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Phase" style="cursor: pointer;">
+                                                Phase <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="sortable" data-column="BusinessArea" style="cursor: pointer;">
+                                                Business area <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="CompletionPercentage" style="cursor: pointer;">
+                                                FIPS completion <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="AccessibilityEnrolled" style="cursor: pointer;">
+                                                Accessibility <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="OpenIssues" style="cursor: pointer;">
+                                                Open issues <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="PerfUx1" style="cursor: pointer;">
+                                                @ViewBag.PerfUx1Title <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th class="text-center sortable" data-column="PerfAcc3" style="cursor: pointer;">
+                                                @ViewBag.PerfAcc3Title <i class="fas fa-sort"></i>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in Model.Products)
+                                        {
+                                            var productCompletionClass = product.CompletionPercentage >= 80 ? "success" : 
+                                                                        product.CompletionPercentage >= 60 ? "warning" : "danger";
+                                            <tr data-product-title="@product.ProductTitle.ToLower()"
+                                                data-fips-id="@product.FipsId.ToLower()"
+                                                data-completion="@product.CompletionPercentage"
+                                                data-business-area="@product.BusinessArea"
+                                                data-accessibility-enrolled="@product.IsEnrolledInAccessibility.ToString().ToLower()"
+                                                data-accessibility-status="@product.AccessibilityComplianceStatus.ToLower()"
+                                                data-open-issues="@product.OpenAccessibilityIssuesCount">
+                                                <td>
+                                                    <a href="@($"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}")" 
+                                                       target="_blank" 
+                                                       rel="noopener noreferrer" 
+                                                       class="font-weight-bold">
+                                                        @product.ProductTitle
+                                                    </a>
+                                                    <br />
+                                                    <small class="text-muted">@product.FipsId</small>
+                                                </td>
+                                                <td>@product.Phase</td>
+                                                <td>@product.BusinessArea</td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-@productCompletionClass badge-lg">
+                                                        @product.CompletionPercentage.ToString("F0")%
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @{
+                                                        if (product.IsEnrolledInAccessibility)
+                                                        {
+                                                            var badgeClass = product.AccessibilityComplianceStatus == "Compliant" ? "badge-success" :
+                                                                            product.AccessibilityComplianceStatus == "Partially compliant" ? "badge-warning" :
+                                                                            product.AccessibilityComplianceStatus == "Non-compliant" ? "badge-danger" : "badge-info";
+                                                            <span class="badge @badgeClass">
+                                                                @product.AccessibilityComplianceStatus
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-secondary">Not enrolled</span>
+                                                        }
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @{
+                                                        if (product.IsEnrolledInAccessibility)
+                                                        {
+                                                            var issuesBadgeClass = product.OpenAccessibilityIssuesCount == 0 ? "success" :
+                                                                                  product.OpenAccessibilityIssuesCount <= 5 ? "warning" : "danger";
+                                                            <span class="badge badge-@issuesBadgeClass">
+                                                                @product.OpenAccessibilityIssuesCount
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @{
+                                                        if (!string.IsNullOrEmpty(product.PerfUx1Value))
+                                                        {
+                                                            if (decimal.TryParse(product.PerfUx1Value, out var uxScore))
+                                                            {
+                                                                var uxBadgeClass = uxScore >= 90 ? "badge-success" :
+                                                                                  uxScore >= 80 ? "badge-warning" : "badge-danger";
+                                                                <span class="badge @uxBadgeClass">@product.PerfUx1Value</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge badge-info">@product.PerfUx1Value</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">No data</span>
+                                                        }
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (!string.IsNullOrEmpty(product.PerfAcc3Value))
+                                                    {
+                                                        <span class="badge badge-info">@product.PerfAcc3Value</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No data</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Completion Details Modal -->
+<div class="modal fade" id="completionDetailsModal" tabindex="-1" role="dialog" aria-labelledby="completionDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="completionDetailsModalLabel">
+                    <i class="fas fa-clipboard-check mr-2"></i>
+                    FIPS completion details
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <h6 class="font-weight-bold mb-3" id="modalProductTitle"></h6>
+                <p class="text-muted mb-3">
+                    <small id="modalFipsId"></small>
+                </p>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="font-weight-bold">Overall completion:</span>
+                        <span class="badge badge-lg" id="modalCompletionBadge"></span>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar" id="modalCompletionProgress" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <hr />
+                
+                <h6 class="font-weight-bold mb-3">Completion criteria (5 items, 20% each):</h6>
+                
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0" id="modalPhaseItem">
+                        <div>
+                            <i class="fas fa-fw mr-2" id="modalPhaseIcon"></i>
+                            <strong>Phase</strong>
+                            <div class="ml-4 mt-1" id="modalPhaseValue"></div>
+                        </div>
+                        <span class="badge" id="modalPhaseBadge"></span>
+                    </li>
+                    
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0" id="modalBusinessAreaItem">
+                        <div>
+                            <i class="fas fa-fw mr-2" id="modalBusinessAreaIcon"></i>
+                            <strong>Business area</strong>
+                            <div class="ml-4 mt-1" id="modalBusinessAreaValue"></div>
+                        </div>
+                        <span class="badge" id="modalBusinessAreaBadge"></span>
+                    </li>
+                    
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0" id="modalContactsItem">
+                        <div>
+                            <i class="fas fa-fw mr-2" id="modalContactsIcon"></i>
+                            <strong>Contacts</strong>
+                            <div class="ml-4 mt-1" id="modalContactsValue"></div>
+                        </div>
+                        <span class="badge" id="modalContactsBadge"></span>
+                    </li>
+                    
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0" id="modalProductUrlItem">
+                        <div>
+                            <i class="fas fa-fw mr-2" id="modalProductUrlIcon"></i>
+                            <strong>Product URL</strong>
+                            <div class="ml-4 mt-1" id="modalProductUrlValue"></div>
+                        </div>
+                        <span class="badge" id="modalProductUrlBadge"></span>
+                    </li>
+                    
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0" id="modalUserGroupsItem">
+                        <div>
+                            <i class="fas fa-fw mr-2" id="modalUserGroupsIcon"></i>
+                            <strong>User groups</strong>
+                            <div class="ml-4 mt-1" id="modalUserGroupsValue"></div>
+                        </div>
+                        <span class="badge" id="modalUserGroupsBadge"></span>
+                    </li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <a href="#" id="modalViewProductLink" target="_blank" class="btn btn-primary btn-sm">
+                    <i class="fas fa-external-link-alt mr-1"></i> View in FIPS
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Board-ready styles */
+.board-executive-summary {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #005ea5;
+}
+
+.status-indicator {
+    text-align: center;
+}
+
+.status-indicator .status-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+}
+
+.status-success { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-danger { color: #dc3545; }
+
+.kpi-item {
+    text-align: center;
+}
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.health-indicator {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+}
+
+.progress-text {
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.focus-area-item {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+}
+
+.measure-tile {
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    border-left: 4px solid #005ea5;
+    height: 100%;
+}
+
+.measure-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.measure-value {
+    margin: 1rem 0;
+}
+
+.measure-current {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #005ea5;
+}
+
+.measure-details {
+    font-size: 0.9rem;
+}
+
+.objectives-table .owner-avatar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.avatar-initials {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #005ea5;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.ai-summary-panel {
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    border-left: 4px solid #6c757d;
+}
+
+.ai-summary-panel h5 {
+    color: #005ea5;
+    margin-bottom: 1rem;
+}
+
+.key-changes ul,
+.suggested-actions ul {
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+}
+
+.badge-lg {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+.completion-badge-link {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.completion-badge-link:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    text-decoration: none;
+}
+</style>
+            @{
+                var enrolledPercentage = Model.TotalProducts > 0 ? (Model.EnrolledInAccessibilityCount / (double)Model.TotalProducts) * 100 : 0;
+                var enrolledClass = enrolledPercentage >= 80 ? "success" : enrolledPercentage >= 50 ? "warning" : "danger";
+                var enrolledBadgeClass = enrolledPercentage >= 80 ? "badge-success" : enrolledPercentage >= 50 ? "badge-warning" : "badge-danger";
+            }
+            <div class="col-md-6 mb-4">
                 <div class="card card-@enrolledClass w-100">
                     <div class="card-header">
                         <h3 class="card-title">Accessibility enrolled</h3>
@@ -569,9 +1459,6 @@
                                             @{
                                                 if (product.IsEnrolledInAccessibility)
                                                 {
-                                                    var statusClass = product.AccessibilityComplianceStatus == "Compliant" ? "success" :
-                                                                    product.AccessibilityComplianceStatus == "Partially compliant" ? "orange" :
-                                                                    product.AccessibilityComplianceStatus == "Non-compliant" ? "danger" : "info";
                                                     var badgeClass = product.AccessibilityComplianceStatus == "Compliant" ? "badge-success" :
                                                                     product.AccessibilityComplianceStatus == "Partially compliant" ? "badge-warning" :
                                                                     product.AccessibilityComplianceStatus == "Non-compliant" ? "badge-danger" : "badge-info";
@@ -906,8 +1793,80 @@
 </style>
 
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" nonce="@Context.Items["Nonce"]"></script>
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
+            // Risk scatter plot
+            var riskData = @Html.Raw(Json.Serialize(Model.Risks.Any() ? Model.Risks : 
+                Model.TopAtRiskProducts.Take(10).Select(p => new { 
+                    Impact = Math.Min(10, p.RiskScore / 10), 
+                    Likelihood = Math.Min(10, p.RiskScore / 10),
+                    RiskLevel = p.RiskScore >= 80 ? "Critical" : p.RiskScore >= 60 ? "High" : p.RiskScore >= 40 ? "Moderate" : "Low",
+                    Title = p.ProductTitle
+                })));
+            
+            if (riskData.length > 0 && $('#riskScatterPlot').length) {
+                var ctx = document.getElementById('riskScatterPlot').getContext('2d');
+                
+                var colors = {
+                    'Critical': 'rgba(220, 53, 69, 0.8)',
+                    'High': 'rgba(255, 193, 7, 0.8)',
+                    'Moderate': 'rgba(23, 162, 184, 0.8)',
+                    'Low': 'rgba(40, 167, 69, 0.8)'
+                };
+                
+                new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Risks',
+                            data: riskData.map(r => ({
+                                x: r.Impact,
+                                y: r.Likelihood
+                            })),
+                            backgroundColor: riskData.map(r => colors[r.RiskLevel] || 'rgba(108, 117, 125, 0.8)'),
+                            borderColor: riskData.map(r => colors[r.RiskLevel] || 'rgba(108, 117, 125, 1)'),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Impact (0-10)'
+                                },
+                                min: 0,
+                                max: 10
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Likelihood (0-10)'
+                                },
+                                min: 0,
+                                max: 10
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var index = context.dataIndex;
+                                        return riskData[index].Title + ' (Impact: ' + riskData[index].Impact.toFixed(1) + ', Likelihood: ' + riskData[index].Likelihood.toFixed(1) + ')';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
             // Handle completion details modal
             $('#completionDetailsModal').on('show.bs.modal', function(e) {
                 var button = $(e.relatedTarget);

@@ -38,14 +38,111 @@
             </div>
         }
 
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@(ViewBag.PendingRetestCount ?? 0)</h3>
+                        <p>Open Retest Requests</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <a href="/Admin/AccessibilityService/RetestRequests" class="small-box-footer">
+                        View all <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box @((ViewBag.OpenIssuesCount ?? 0) == 0 ? "bg-success" : (ViewBag.OpenIssuesCount ?? 0) < 10 ? "bg-warning" : "bg-danger")">
+                    <div class="inner">
+                        <h3>@(ViewBag.OpenIssuesCount ?? 0)</h3>
+                        <p>Open Accessibility Issues</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <a href="/Apps/Accessibility" class="small-box-footer">
+                        View all <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@(ViewBag.EnrolledProductsCount ?? 0)<small style="font-size: 18px;"> / @(ViewBag.TotalProducts ?? 0)</small></h3>
+                        <p>Enrolled Products (@(ViewBag.EnrollmentPercentage ?? 0)%)</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <a href="/Admin/AccessibilityService" class="small-box-footer">
+                        View all <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operational Reporting Summaries -->
         <div class="row">
-            <div class="col-12">
+            <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Welcome to Design Operations</h3>
+                        <h3 class="card-title">Products with Null Satisfaction Score (perf-1)</h3>
                     </div>
                     <div class="card-body">
-                        <p>This is the Design Operations dashboard. Content and features will be added here.</p>
+                        @{
+                            var nullPerf1Products = ViewBag.ProductsWithNullPerf1 as System.Collections.IEnumerable ?? new List<object>();
+                            var nullPerf1Count = 0;
+                            try { nullPerf1Count = (nullPerf1Products as System.Collections.ICollection)?.Count ?? 0; } catch { }
+                        }
+                        @if (nullPerf1Count > 0)
+                        {
+                            <p class="text-muted">@nullPerf1Count product(s) have declared a null return on their Satisfaction score metric:</p>
+                            <ul class="list-group">
+                                @foreach (dynamic product in nullPerf1Products)
+                                {
+                                    <li class="list-group-item">
+                                        <strong>@(product?.FipsId ?? "Unknown")</strong> - @(product?.ProductName ?? "Unknown")
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No products found with null satisfaction score returns.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Products with 0 Open Accessibility Issues (perf-8)</h3>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var zeroIssuesProducts = ViewBag.ProductsWithZeroIssues as System.Collections.IEnumerable ?? new List<object>();
+                            var zeroIssuesCount = 0;
+                            try { zeroIssuesCount = (zeroIssuesProducts as System.Collections.ICollection)?.Count ?? 0; } catch { }
+                        }
+                        @if (zeroIssuesCount > 0)
+                        {
+                            <p class="text-muted">@zeroIssuesCount product(s) have declared 0 total open accessibility issues:</p>
+                            <ul class="list-group">
+                                @foreach (dynamic product in zeroIssuesProducts)
+                                {
+                                    <li class="list-group-item">
+                                        <strong>@(product?.FipsId ?? "Unknown")</strong> - @(product?.ProductName ?? "Unknown")
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No products found with 0 open accessibility issues declared.</p>
+                        }
                     </div>
                 </div>
             </div>
