@@ -99,9 +99,38 @@
                                 </td>
                             </tr>
                             
-                            <!-- Primary Contacts -->
+                            <!-- Primary Contact -->
                             <tr>
-                                <td class="font-weight-bold">Primary contacts</td>
+                                <td class="font-weight-bold">Primary Contact</td>
+                                <td>
+                                    @if (Model.PrimaryContactUser != null)
+                                    {
+                                        <div class="mb-1">
+                                            @if (!string.IsNullOrEmpty(Model.PrimaryContactUser.Email))
+                                            {
+                                                <a href="mailto:@Model.PrimaryContactUser.Email" class="font-weight-bold">@Model.PrimaryContactUser.Name</a>
+                                                <br />
+                                                <small class="text-muted">@Model.PrimaryContactUser.Email</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="font-weight-bold">@Model.PrimaryContactUser.Name</span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No primary contact assigned.</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <a href="#" data-toggle="modal" data-target="#editPrimaryContactModal">Change</a>
+                                </td>
+                            </tr>
+                            
+                            <!-- PMO Contacts -->
+                            <tr>
+                                <td class="font-weight-bold">PMO Contacts</td>
                                 <td>
                                     @if (Model.PmoContacts?.Any() == true)
                                     {
@@ -128,7 +157,7 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted">No primary contacts assigned.</span>
+                                        <span class="text-muted">No PMO contacts assigned.</span>
                                     }
                                 </td>
                                 <td class="text-right">
@@ -255,7 +284,64 @@
     </div>
 </div>
 
-<!-- Edit Primary Contacts Modal -->
+<!-- Edit Primary Contact Modal -->
+<div class="modal fade" id="editPrimaryContactModal" tabindex="-1" role="dialog" aria-labelledby="editPrimaryContactModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPrimaryContactModalLabel">Edit Primary Contact</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdatePrimaryContact" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="control-label" for="primaryContactSearchContacts">Search for a colleague</label>
+                        <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="primaryContactSearchContacts"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                       value="@(Model.PrimaryContactUser?.Name ?? string.Empty)" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="primaryContactUserId" class="js-user-picker-value" value="@Model.PrimaryContactUserId" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No primary contact selected.">
+                                @if (Model.PrimaryContactUser != null)
+                                {
+                                    <div class="user-picker__selected-card">
+                                        <div class="user-picker__selected-name">@Model.PrimaryContactUser.Name</div>
+                                        <div class="user-picker__selected-meta">@Model.PrimaryContactUser.Email</div>
+                                        <button type="button" class="btn btn-link btn-sm js-user-picker-clear">Remove</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No primary contact selected.</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="clearPrimaryContactBtnContacts">Clear Primary Contact</button>
+                    <button type="submit" class="btn btn-success">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit PMO Contacts Modal -->
 <div class="modal fade" id="editPmoContactsModal" tabindex="-1" role="dialog" aria-labelledby="editPmoContactsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
@@ -1137,5 +1223,12 @@
                 }
             });
         }
+        
+        // Handle clear primary contact button
+        $('#clearPrimaryContactBtnContacts').on('click', function() {
+            $('#editPrimaryContactModal .js-user-picker-value').val('');
+            $('#editPrimaryContactModal .js-user-picker-input').val('');
+            $('#editPrimaryContactModal .js-user-picker-summary').html('<span class="text-muted">No primary contact selected.</span>');
+        });
     })();
 </script>
