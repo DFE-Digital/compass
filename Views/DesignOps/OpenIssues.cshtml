@@ -1,0 +1,162 @@
+@{
+    ViewData["Title"] = "Open Accessibility Issues - Oversight";
+    
+    var openIssues = ViewBag.OpenIssues as List<Compass.Models.AccessibilityIssue> ?? new List<Compass.Models.AccessibilityIssue>();
+    var openIssuesCount = ViewBag.OpenIssuesCount as int? ?? 0;
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Dashboard", "DesignOps")" style="color: #005ea5; text-decoration: none;">Design Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("AccessibilityOversight", "DesignOps")" style="color: #005ea5; text-decoration: none;">Accessibility Issues and Statements</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Open Issues</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <h1>Open Accessibility Issues</h1>
+    <p>All open accessibility issues across all products</p>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="dashboard-section mb-4">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-exclamation-circle"></i> Open Issues</h2>
+                <p class="dashboard-section-description">Total: @openIssuesCount open issues</p>
+            </div>
+            @if (openIssues.Any())
+            {
+                <div class="card">
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Issue</th>
+                                    <th>WCAG Criteria</th>
+                                    <th>Status</th>
+                                    <th>Identified Date</th>
+                                    <th>Planned Resolution</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var issue in openIssues)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@issue.ProductAccessibility.ProductName</strong><br>
+                                            <small class="text-muted">@issue.ProductAccessibility.FipsId</small>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(issue.IssueTitle))
+                                            {
+                                                <text>@issue.IssueTitle</text>
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.IssueDescription))
+                                            {
+                                                <text>@(issue.IssueDescription.Length > 100 ? issue.IssueDescription.Substring(0, 100) + "..." : issue.IssueDescription)</text>
+                                            }
+                                            else
+                                            {
+                                                <text>Issue #@issue.Id</text>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (issue.WcagCriteriaLinks.Any())
+                                            {
+                                                @foreach (var link in issue.WcagCriteriaLinks.Take(3))
+                                                {
+                                                    <span class="badge badge-info">@link.WcagCriterion.Criterion</span>
+                                                }
+                                                @if (issue.WcagCriteriaLinks.Count > 3)
+                                                {
+                                                    <text> +@(issue.WcagCriteriaLinks.Count - 3) more</text>
+                                                }
+                                            }
+                                            else if (!string.IsNullOrEmpty(issue.WcagCriteria))
+                                            {
+                                                <span class="badge badge-info">@issue.WcagCriteria</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @(issue.Status == "in_progress" ? "badge-warning" : "badge-danger")">@issue.Status</span>
+                                        </td>
+                                        <td>@issue.IdentifiedDate.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            @if (issue.PlannedResolutionDate.HasValue)
+                                            {
+                                                var daysRemaining = (issue.PlannedResolutionDate.Value.Date - DateTime.Today).Days;
+                                                if (daysRemaining < 0)
+                                                {
+                                                    <span class="badge badge-danger">Overdue: @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</span>
+                                                }
+                                                else if (daysRemaining <= 7)
+                                                {
+                                                    <span class="badge badge-warning">@issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</span>
+                                                }
+                                                else
+                                                {
+                                                    <text>@issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</text>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not set</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <p class="text-muted mb-0">No open issues.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+

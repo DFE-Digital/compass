@@ -1,0 +1,873 @@
+@using Compass.Controllers
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Monthly Summary";
+    var newProjects = ViewBag.NewProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var keyMilestones = ViewBag.KeyMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var achievedMilestones = ViewBag.AchievedMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var highRiskItems = ViewBag.HighRiskItems as List<RiskWithProject> ?? new List<RiskWithProject>();
+    var highPriorityIssues = ViewBag.HighPriorityIssues as List<IssueWithProject> ?? new List<IssueWithProject>();
+    var portfolioSummary = ViewBag.PortfolioSummary as PortfolioSummaryViewModel;
+    var monthlyUpdateStats = ViewBag.MonthlyUpdateStats as MonthlyUpdateStats;
+    var year = ViewBag.Year as int? ?? DateTime.UtcNow.Year;
+    var month = ViewBag.Month as int? ?? DateTime.UtcNow.Month;
+    var monthName = ViewBag.MonthName as string ?? "";
+    var prevMonth = ViewBag.PreviousMonth as int?;
+    var prevYear = ViewBag.PreviousYear as int?;
+    var nextMonth = ViewBag.NextMonth as int?;
+    var nextYear = ViewBag.NextYear as int?;
+    var monthStart = ViewBag.MonthStart as DateTime? ?? DateTime.UtcNow;
+    var monthEnd = ViewBag.MonthEnd as DateTime? ?? DateTime.UtcNow;
+    
+    // Prepare data for charts
+    var ragData = new {
+        Red = portfolioSummary?.RedProjects ?? 0,
+        AmberRed = portfolioSummary?.AmberRedProjects ?? 0,
+        Amber = portfolioSummary?.AmberProjects ?? 0,
+        AmberGreen = portfolioSummary?.AmberGreenProjects ?? 0,
+        Green = portfolioSummary?.GreenProjects ?? 0
+    };
+    
+    var priorityData = new {
+        Critical = portfolioSummary?.CriticalPriorityProjects ?? 0,
+        High = portfolioSummary?.HighPriorityProjects ?? 0,
+        Medium = portfolioSummary?.MediumPriorityProjects ?? 0,
+        Low = portfolioSummary?.LowPriorityProjects ?? 0,
+        NotSet = portfolioSummary?.PriorityNotSetProjects ?? 0
+    };
+    
+    var riskScoreDistribution = highRiskItems
+        .GroupBy(r => r.Risk.RiskScore >= 20 ? "Critical (20+)" : r.Risk.RiskScore >= 15 ? "High (15-19)" : "Medium (10-14)")
+        .ToDictionary(g => g.Key, g => g.Count());
+    
+    var issueSeverityDistribution = highPriorityIssues
+        .GroupBy(i => i.Issue.Severity.ToLower())
+        .ToDictionary(g => g.Key, g => g.Count());
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Monthly Summary</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Header with Navigation -->
+<div class="dashboard-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1>Monthly Summary</h1>
+            <p>@monthName - Executive overview of projects, milestones, risks, and issues</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            @if (prevYear.HasValue && prevMonth.HasValue)
+            {
+                <a asp-controller="CentralOps" asp-action="MonthlySummary" asp-route-year="@prevYear" asp-route-month="@prevMonth" class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </a>
+            }
+            @if (nextYear.HasValue && nextMonth.HasValue)
+            {
+                <a asp-controller="CentralOps" asp-action="MonthlySummary" asp-route-year="@nextYear" asp-route-month="@nextMonth" class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                    Next <i class="fas fa-chevron-right"></i>
+                </a>
+            }
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Key Metrics Cards -->
+        <div class="dashboard-summary-cards">
+            <div class="dashboard-card bg-primary">
+                <div class="dashboard-card-value">@(portfolioSummary?.TotalProjects ?? 0)</div>
+                <div class="dashboard-card-label">Total Projects</div>
+                <div class="dashboard-card-icon"><i class="fas fa-project-diagram"></i></div>
+            </div>
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@(newProjects.Count)</div>
+                <div class="dashboard-card-label">New This Month</div>
+                <div class="dashboard-card-icon"><i class="fas fa-plus-circle"></i></div>
+            </div>
+            <div class="dashboard-card bg-warning">
+                <div class="dashboard-card-value">@(achievedMilestones.Count)</div>
+                <div class="dashboard-card-label">Milestones Achieved</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-double"></i></div>
+            </div>
+            <div class="dashboard-card bg-danger">
+                <div class="dashboard-card-value">@(highRiskItems.Count + highPriorityIssues.Count)</div>
+                <div class="dashboard-card-label">High Risk Items & Issues</div>
+                <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+        </div>
+
+        <!-- Monthly Update Status Cards -->
+        @if (monthlyUpdateStats != null)
+        {
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <h2>Monthly Update Status for @monthName</h2>
+                </div>
+                <div class="dashboard-summary-cards">
+                    <div class="dashboard-card bg-success">
+                        <div class="dashboard-card-value">@monthlyUpdateStats.Submitted</div>
+                        <div class="dashboard-card-label">
+                            Submitted
+                            <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.Submitted * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                            </small>
+                        </div>
+                        <div class="dashboard-card-icon"><i class="fas fa-check"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-danger">
+                        <div class="dashboard-card-value">@monthlyUpdateStats.Late</div>
+                        <div class="dashboard-card-label">
+                            Late
+                            <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.Late * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                            </small>
+                        </div>
+                        <div class="dashboard-card-icon"><i class="fas fa-times"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-warning">
+                        <div class="dashboard-card-value">@monthlyUpdateStats.InProgress</div>
+                        <div class="dashboard-card-label">
+                            In Progress
+                            <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.InProgress * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                            </small>
+                        </div>
+                        <div class="dashboard-card-icon"><i class="fas fa-clock"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-secondary" style="background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);">
+                        <div class="dashboard-card-value">@monthlyUpdateStats.NotStarted</div>
+                        <div class="dashboard-card-label">
+                            Not Started
+                            <small style="display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">
+                                @(monthlyUpdateStats.TotalProjects > 0 ? ((monthlyUpdateStats.NotStarted * 100.0) / monthlyUpdateStats.TotalProjects).ToString("F1") : "0.0")% of @monthlyUpdateStats.TotalProjects
+                            </small>
+                        </div>
+                        <div class="dashboard-card-icon"><i class="fas fa-circle"></i></div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>RAG status distribution</h2>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn active" data-target="ragStatus" data-view="chart">
+                                <i class="fas fa-chart-pie"></i> Chart
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn" data-target="ragStatus" data-view="table">
+                                <i class="fas fa-table"></i> Table
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ragStatus-chart" class="view-content">
+                        <div style="position: relative; height: 350px;">
+                            <canvas id="ragStatusChart"></canvas>
+                        </div>
+                    </div>
+                    <div id="ragStatus-table" class="view-content" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>RAG Status</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green;
+                                        var ragItems = new[] {
+                                            new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
+                                            new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
+                                            new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
+                                            new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
+                                            new { Label = "Green", Count = ragData.Green, Color = "#28a745" }
+                                        };
+                                    }
+                                    @foreach (var item in ragItems)
+                                    {
+                                        var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                                        <tr>
+                                            <td>
+                                                <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" ? "#000" : "#fff");">@item.Label</span>
+                                            </td>
+                                            <td>@item.Count</td>
+                                            <td>@percentage%</td>
+                                        </tr>
+                                    }
+                                    <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                        <td>Total</td>
+                                        <td>@ragTotal</td>
+                                        <td>100.0%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>Priority distribution</h2>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn active" data-target="priority" data-view="chart">
+                                <i class="fas fa-chart-pie"></i> Chart
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn" data-target="priority" data-view="table">
+                                <i class="fas fa-table"></i> Table
+                            </button>
+                        </div>
+                    </div>
+                    <div id="priority-chart" class="view-content">
+                        <div style="position: relative; height: 350px;">
+                            <canvas id="priorityChart"></canvas>
+                        </div>
+                    </div>
+                    <div id="priority-table" class="view-content" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Priority</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
+                                        var priorityItems = new[] {
+                                            new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
+                                            new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
+                                            new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
+                                            new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
+                                            new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
+                                        };
+                                    }
+                                    @foreach (var item in priorityItems)
+                                    {
+                                        var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                                        <tr>
+                                            <td>
+                                                <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                            </td>
+                                            <td>@item.Count</td>
+                                            <td>@percentage%</td>
+                                        </tr>
+                                    }
+                                    <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                        <td>Total</td>
+                                        <td>@priorityTotal</td>
+                                        <td>100.0%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Charts Row -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>High Risk Items by Score</h2>
+                    </div>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>High Priority Issues by Severity</h2>
+                    </div>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="issueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Cards Row -->
+        <div class="dashboard-summary-cards mb-4">
+            <div class="dashboard-card bg-info">
+                <div class="dashboard-card-value">@keyMilestones.Count</div>
+                <div class="dashboard-card-label">Key Milestones</div>
+                <div class="dashboard-card-icon"><i class="fas fa-tasks"></i></div>
+            </div>
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@(portfolioSummary?.OpenRisks ?? 0)</div>
+                <div class="dashboard-card-label">Open Risks</div>
+                <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+            <div class="dashboard-card bg-danger">
+                <div class="dashboard-card-value">@(portfolioSummary?.OpenIssues ?? 0)</div>
+                <div class="dashboard-card-label">Open Issues</div>
+                <div class="dashboard-card-icon"><i class="fas fa-bug"></i></div>
+            </div>
+        </div>
+
+        <!-- Key Highlights with Table/Card Toggle -->
+        <div class="row">
+            <div class="col-lg-4">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>New Projects This Month</h2>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn" data-target="newProjects" data-view="card">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn active" data-target="newProjects" data-view="table">
+                                <i class="fas fa-table"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="newProjects-card" class="view-content" style="display: none;">
+                        @if (newProjects.Any())
+                        {
+                            <div style="padding: 0;">
+                                @foreach (var project in newProjects.Take(10))
+                                {
+                                    <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none; flex: 1;">
+                                                @project.Title
+                                            </a>
+                                            <span class="badge badge-info">New</span>
+                                        </div>
+                                        <div style="font-size: 0.875rem; color: #6b7280;">
+                                            DFE-DDT-@project.Id | @(project.BusinessAreaLookup?.Name ?? "Not assigned")
+                                        </div>
+                                    </div>
+                                }
+                                @if (newProjects.Count > 10)
+                                {
+                                    <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                        <a asp-controller="CentralOps" asp-action="ManageWork" class="text-primary">View All @newProjects.Count Projects</a>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No new projects added this month</div>
+                        }
+                    </div>
+                    <div id="newProjects-table" class="view-content">
+                        @if (newProjects.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>ID</th>
+                                            <th>Business Area</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in newProjects.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                        @project.Title
+                                                    </a>
+                                                </td>
+                                                <td>DFE-DDT-@project.Id</td>
+                                                <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (newProjects.Count > 10)
+                            {
+                                <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                    <a asp-controller="CentralOps" asp-action="ManageWork" class="text-primary">View All @newProjects.Count Projects</a>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No new projects added this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>Milestones Achieved</h2>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn" data-target="milestones" data-view="card">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn active" data-target="milestones" data-view="table">
+                                <i class="fas fa-table"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="milestones-card" class="view-content" style="display: none;">
+                        @if (achievedMilestones.Any())
+                        {
+                            <div style="padding: 0;">
+                                @foreach (var item in achievedMilestones.Take(10))
+                                {
+                                    <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none; flex: 1;">
+                                                @item.Milestone.Name
+                                            </a>
+                                            <span class="badge badge-success">Complete</span>
+                                        </div>
+                                        <div style="font-size: 0.875rem; color: #6b7280;">
+                                            @item.Project.Title | @item.Milestone.ActualDate?.ToString("dd MMM yyyy")
+                                        </div>
+                                    </div>
+                                }
+                                @if (achievedMilestones.Count > 10)
+                                {
+                                    <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                        <span class="text-muted">@achievedMilestones.Count total milestones achieved</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No milestones achieved this month</div>
+                        }
+                    </div>
+                    <div id="milestones-table" class="view-content">
+                        @if (achievedMilestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in achievedMilestones.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.ActualDate?.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (achievedMilestones.Count > 10)
+                            {
+                                <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                    <span class="text-muted">@achievedMilestones.Count total milestones achieved</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No milestones achieved this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>Top High Risk Items</h2>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn" data-target="risks" data-view="card">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary view-toggle-btn active" data-target="risks" data-view="table">
+                                <i class="fas fa-table"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="risks-card" class="view-content" style="display: none;">
+                        @if (highRiskItems.Any())
+                        {
+                            <div style="padding: 0;">
+                                @foreach (var item in highRiskItems.Take(10))
+                                {
+                                    var isNew = item.Risk.CreatedAt >= monthStart && item.Risk.CreatedAt <= monthEnd;
+                                    <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none; flex: 1;">
+                                                @item.Risk.Title
+                                            </a>
+                                            <span class="badge @(item.Risk.RiskScore >= 20 ? "badge-danger" : "badge-warning")">Score: @item.Risk.RiskScore</span>
+                                        </div>
+                                        <div style="font-size: 0.875rem; color: #6b7280;">
+                                            @item.Project.Title @(isNew ? "| New" : "")
+                                        </div>
+                                    </div>
+                                }
+                                @if (highRiskItems.Count > 10)
+                                {
+                                    <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                        <span class="text-muted">@highRiskItems.Count total high risk items</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No high risk items found</div>
+                        }
+                    </div>
+                    <div id="risks-table" class="view-content">
+                        @if (highRiskItems.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Risk</th>
+                                            <th>Project</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in highRiskItems.Take(10))
+                                        {
+                                            var isNew = item.Risk.CreatedAt >= monthStart && item.Risk.CreatedAt <= monthEnd;
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@item.Project.Id" style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                        @item.Risk.Title
+                                                    </a>
+                                                    @if (isNew)
+                                                    {
+                                                        <span class="badge badge-info ml-1">New</span>
+                                                    }
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>
+                                                    <span class="badge @(item.Risk.RiskScore >= 20 ? "badge-danger" : "badge-warning")">@item.Risk.RiskScore</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (highRiskItems.Count > 10)
+                            {
+                                <div style="padding: 1rem; text-align: center; border-top: 1px solid #f3f4f6;">
+                                    <span class="text-muted">@highRiskItems.Count total high risk items</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="padding: 2rem; text-align: center; color: #6b7280;">No high risk items found</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // View toggle functionality
+            $('.view-toggle-btn').on('click', function() {
+                var target = $(this).data('target');
+                var view = $(this).data('view');
+                
+                // Update button states
+                $('.view-toggle-btn[data-target="' + target + '"]').removeClass('active');
+                $(this).addClass('active');
+                
+                // Show/hide views
+                $('#' + target + '-card, #' + target + '-table, #' + target + '-chart').hide();
+                $('#' + target + '-' + view).show();
+            });
+
+            // RAG Status Donut Chart
+            var ragCtx = document.getElementById('ragStatusChart');
+            if (ragCtx) {
+                new Chart(ragCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green'],
+                        datasets: [{
+                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#ffeb3b',
+                                '#28a745'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Priority Distribution Donut Chart
+            var priorityCtx = document.getElementById('priorityChart');
+            if (priorityCtx) {
+                new Chart(priorityCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Critical', 'High', 'Medium', 'Low', 'Not Set'],
+                        datasets: [{
+                            data: [@priorityData.Critical, @priorityData.High, @priorityData.Medium, @priorityData.Low, @priorityData.NotSet],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#6c757d',
+                                '#e9ecef'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Risk Score Distribution Bar Chart
+            var riskCtx = document.getElementById('riskChart');
+            if (riskCtx) {
+                var riskData = @Html.Raw(Json.Serialize(riskScoreDistribution));
+                var riskLabels = Object.keys(riskData);
+                var riskValues = Object.values(riskData);
+                
+                new Chart(riskCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: riskLabels,
+                        datasets: [{
+                            label: 'Number of Risks',
+                            data: riskValues,
+                            backgroundColor: [
+                                'rgba(220, 53, 69, 0.8)',
+                                'rgba(255, 193, 7, 0.8)',
+                                'rgba(23, 162, 184, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(220, 53, 69, 1)',
+                                'rgba(255, 193, 7, 1)',
+                                'rgba(23, 162, 184, 1)'
+                            ],
+                            borderWidth: 2,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    precision: 0
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.parsed.y + ' risk' + (context.parsed.y !== 1 ? 's' : '');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Issue Severity Distribution Bar Chart
+            var issueCtx = document.getElementById('issueChart');
+            if (issueCtx) {
+                var issueData = @Html.Raw(Json.Serialize(issueSeverityDistribution));
+                var issueLabels = Object.keys(issueData).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                var issueValues = Object.values(issueData);
+                
+                new Chart(issueCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: issueLabels,
+                        datasets: [{
+                            label: 'Number of Issues',
+                            data: issueValues,
+                            backgroundColor: [
+                                'rgba(220, 53, 69, 0.8)',
+                                'rgba(255, 193, 7, 0.8)',
+                                'rgba(23, 162, 184, 0.8)',
+                                'rgba(108, 117, 125, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(220, 53, 69, 1)',
+                                'rgba(255, 193, 7, 1)',
+                                'rgba(23, 162, 184, 1)',
+                                'rgba(108, 117, 125, 1)'
+                            ],
+                            borderWidth: 2,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    precision: 0
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.parsed.y + ' issue' + (context.parsed.y !== 1 ? 's' : '');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}

@@ -37,7 +37,50 @@ function initializeAdminLTE() {
     // Initialize popovers
     $('[data-toggle="popover"]').popover();
     
+    // Initialize smooth dropdown transitions for topnav
+    initializeSmoothDropdowns();
+    
     // DataTable initialization moved to individual pages
+}
+
+function initializeSmoothDropdowns() {
+    // Handle smooth dropdown open transitions in navbar-gov
+    $('.navbar-gov .dropdown').on('show.bs.dropdown', function() {
+        const $menu = $(this).find('.dropdown-menu');
+        const $dropdown = $(this);
+        
+        // Ensure menu is visible for transition
+        $menu.css('display', 'block');
+        
+        // Set initial hidden state
+        $menu.css({
+            'opacity': '0',
+            'transform': 'translateY(-8px) scale(0.98)',
+            'visibility': 'visible'
+        });
+        
+        // Force reflow to ensure initial state is rendered
+        $menu[0].offsetHeight;
+        
+        // Trigger transition to visible state
+        requestAnimationFrame(function() {
+            $menu.css({
+                'opacity': '1',
+                'transform': 'translateY(0) scale(1)'
+            });
+        });
+    });
+    
+    // Handle smooth dropdown close transitions
+    $('.navbar-gov .dropdown').on('hide.bs.dropdown', function() {
+        const $menu = $(this).find('.dropdown-menu');
+        
+        // Start closing transition
+        $menu.css({
+            'opacity': '0',
+            'transform': 'translateY(-8px) scale(0.98)'
+        });
+    });
 }
 
 function initializeCustomComponents() {

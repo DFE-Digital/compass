@@ -5,6 +5,8 @@ using Compass.Data;
 using Compass.Models;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Compass.Attributes;
+using Compass.Services;
+using System.Security.Claims;
 
 namespace Compass.Controllers.Admin;
 
@@ -18,11 +20,16 @@ public class StandardsConfigController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly ILogger<StandardsConfigController> _logger;
+    private readonly IStandardsCmsApiService _standardsCmsApiService;
 
-    public StandardsConfigController(CompassDbContext context, ILogger<StandardsConfigController> logger)
+    public StandardsConfigController(
+        CompassDbContext context, 
+        ILogger<StandardsConfigController> logger,
+        IStandardsCmsApiService standardsCmsApiService)
     {
         _context = context;
         _logger = logger;
+        _standardsCmsApiService = standardsCmsApiService;
     }
 
     /// <summary>
@@ -455,6 +462,357 @@ public class StandardsConfigController : Controller
         {
             Name = name;
             Description = description;
+        }
+    }
+
+    /// <summary>
+    /// Migrate categories from CMS
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MigrateCategoriesFromCms(bool skipExisting = true)
+    {
+        try
+        {
+            _logger.LogInformation("Starting migration of categories from CMS");
+
+            var cmsCategories = await _standardsCmsApiService.GetCategoriesAsync(cacheDuration: null);
+
+            if (!cmsCategories.Any())
+            {
+                TempData["ErrorMessage"] = "No categories found in CMS.";
+                return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+            }
+
+            int migrated = 0;
+            int skipped = 0;
+            int errors = 0;
+            var sortOrder = 0;
+
+            foreach (var cmsCategory in cmsCategories)
+            {
+                try
+                {
+                    if (skipExisting)
+                    {
+                        var existing = await _context.StandardCategories
+                            .FirstOrDefaultAsync(c => c.Name == cmsCategory.Title);
+                        if (existing != null)
+                        {
+                            _logger.LogInformation("Skipping category '{Name}' - already exists", cmsCategory.Title);
+                            skipped++;
+                            continue;
+                        }
+                    }
+
+                    var category = new StandardCategory
+                    {
+                        Name = cmsCategory.Title,
+                        Description = cmsCategory.Description,
+                        SortOrder = sortOrder++,
+                        IsActive = cmsCategory.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.StandardCategories.Add(category);
+                    await _context.SaveChangesAsync();
+                    migrated++;
+                    _logger.LogInformation("Migrated category '{Name}' (ID: {Id})", category.Name, category.Id);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    _logger.LogError(ex, "Error migrating category '{Title}'", cmsCategory.Title);
+                }
+            }
+
+            var message = $"Categories migration completed: {migrated} migrated, {skipped} skipped, {errors} errors.";
+            if (errors > 0)
+            {
+                TempData["ErrorMessage"] = message;
+            }
+            else
+            {
+                TempData["SuccessMessage"] = message;
+            }
+
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during categories migration");
+            TempData["ErrorMessage"] = $"Categories migration failed: {ex.Message}";
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+        }
+    }
+
+    /// <summary>
+    /// Migrate sub-categories from CMS
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MigrateSubCategoriesFromCms(bool skipExisting = true)
+    {
+        try
+        {
+            _logger.LogInformation("Starting migration of sub-categories from CMS");
+
+            // Get all published standards to extract unique sub-category IDs
+            var standards = await _standardsCmsApiService.GetStandardsAsync(
+                published: true,
+                cacheDuration: null
+            );
+
+            // Collect unique sub-category IDs
+            var subCategoryIds = new HashSet<int>();
+            foreach (var standard in standards)
+            {
+                if (standard.SubCategories != null)
+                {
+                    foreach (var subCat in standard.SubCategories)
+                    {
+                        subCategoryIds.Add(subCat.Id);
+                    }
+                }
+            }
+
+            if (!subCategoryIds.Any())
+            {
+                TempData["ErrorMessage"] = "No sub-categories found in CMS standards.";
+                return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+            }
+
+            _logger.LogInformation("Found {Count} unique sub-category IDs, fetching from CMS with category relations", subCategoryIds.Count);
+
+            // Fetch sub-categories directly from CMS API with category relations populated
+            var cmsSubCategories = await _standardsCmsApiService.GetSubCategoriesByIdsAsync(
+                subCategoryIds.ToList(),
+                cacheDuration: null
+            );
+
+            if (!cmsSubCategories.Any())
+            {
+                TempData["ErrorMessage"] = "No sub-categories retrieved from CMS API. Check logs for details.";
+                return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+            }
+
+            _logger.LogInformation("Retrieved {Count} sub-categories from CMS API", cmsSubCategories.Count);
+
+            int migrated = 0;
+            int skipped = 0;
+            int errors = 0;
+
+            foreach (var cmsSubCategory in cmsSubCategories)
+            {
+                try
+                {
+                    var cmsCategory = cmsSubCategory.Category;
+
+                    if (cmsCategory == null)
+                    {
+                        _logger.LogWarning("Sub-category '{Title}' (ID: {Id}) has no category relation, skipping", 
+                            cmsSubCategory.Title, cmsSubCategory.Id);
+                        skipped++;
+                        continue;
+                    }
+
+                    // Find the category in our database
+                    var category = await _context.StandardCategories
+                        .FirstOrDefaultAsync(c => c.Name == cmsCategory.Title);
+
+                    if (category == null)
+                    {
+                        _logger.LogWarning("Category '{CategoryName}' not found for sub-category '{SubCategoryName}'. Please migrate categories first.", 
+                            cmsCategory.Title, cmsSubCategory.Title);
+                        skipped++;
+                        continue;
+                    }
+
+                    if (skipExisting)
+                    {
+                        var existing = await _context.StandardSubCategories
+                            .FirstOrDefaultAsync(sc => sc.CategoryId == category.Id && sc.Name == cmsSubCategory.Title);
+                        if (existing != null)
+                        {
+                            _logger.LogInformation("Skipping sub-category '{Name}' - already exists", cmsSubCategory.Title);
+                            skipped++;
+                            continue;
+                        }
+                    }
+
+                    var subCategory = new StandardSubCategory
+                    {
+                        CategoryId = category.Id,
+                        Name = cmsSubCategory.Title,
+                        Description = null, // CMS doesn't provide description for sub-categories
+                        SortOrder = 0,
+                        IsActive = cmsSubCategory.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.StandardSubCategories.Add(subCategory);
+                    await _context.SaveChangesAsync();
+                    migrated++;
+                    _logger.LogInformation("Migrated sub-category '{Name}' under category '{CategoryName}' (ID: {Id})", 
+                        subCategory.Name, category.Name, subCategory.Id);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    _logger.LogError(ex, "Error migrating sub-category '{Title}' (ID: {Id})", 
+                        cmsSubCategory.Title, cmsSubCategory.Id);
+                }
+            }
+
+            var message = $"Sub-categories migration completed: {migrated} migrated, {skipped} skipped, {errors} errors.";
+            if (errors > 0)
+            {
+                TempData["ErrorMessage"] = message;
+            }
+            else
+            {
+                TempData["SuccessMessage"] = message;
+            }
+
+            _logger.LogInformation("Sub-categories migration completed: {Migrated} migrated, {Skipped} skipped, {Errors} errors", 
+                migrated, skipped, errors);
+
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during sub-categories migration");
+            TempData["ErrorMessage"] = $"Sub-categories migration failed: {ex.Message}";
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+        }
+    }
+
+    /// <summary>
+    /// Migrate products from CMS (from approved and tolerated products in standards)
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MigrateProductsFromCms(bool skipExisting = true)
+    {
+        try
+        {
+            _logger.LogInformation("Starting migration of products from CMS");
+
+            // Get all published standards to extract products
+            var standards = await _standardsCmsApiService.GetStandardsAsync(
+                published: true,
+                cacheDuration: null
+            );
+
+            // Extract unique products
+            var productMap = new Dictionary<string, StandardProductDto>();
+
+            foreach (var standard in standards)
+            {
+                if (standard.ApprovedProducts != null)
+                {
+                    foreach (var product in standard.ApprovedProducts)
+                    {
+                        var key = product.Title.ToLowerInvariant();
+                        if (!productMap.ContainsKey(key))
+                        {
+                            productMap[key] = product;
+                        }
+                    }
+                }
+
+                if (standard.ToleratedProducts != null)
+                {
+                    foreach (var product in standard.ToleratedProducts)
+                    {
+                        var key = product.Title.ToLowerInvariant();
+                        if (!productMap.ContainsKey(key))
+                        {
+                            productMap[key] = product;
+                        }
+                    }
+                }
+            }
+
+            if (!productMap.Any())
+            {
+                TempData["ErrorMessage"] = "No products found in CMS standards.";
+                return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+            }
+
+            int migrated = 0;
+            int skipped = 0;
+            int errors = 0;
+
+            // Get current user for CreatedByUserId
+            var userEmail = User.Identity?.Name 
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? string.Empty;
+            var currentUser = !string.IsNullOrEmpty(userEmail)
+                ? await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower())
+                : null;
+
+            foreach (var kvp in productMap)
+            {
+                try
+                {
+                    var cmsProduct = kvp.Value;
+
+                    if (skipExisting)
+                    {
+                        var existing = await _context.StandardProducts
+                            .FirstOrDefaultAsync(sp => sp.Name == cmsProduct.Title);
+                        if (existing != null)
+                        {
+                            _logger.LogInformation("Skipping product '{Name}' - already exists", cmsProduct.Title);
+                            skipped++;
+                            continue;
+                        }
+                    }
+
+                    var product = new StandardProduct
+                    {
+                        Name = cmsProduct.Title,
+                        Description = cmsProduct.UseCase,
+                        Provider = cmsProduct.Vendor,
+                        Version = cmsProduct.Version,
+                        ApprovalStatus = "Approved", // Default to approved since they're in published standards
+                        CreatedByUserId = currentUser?.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.StandardProducts.Add(product);
+                    await _context.SaveChangesAsync();
+                    migrated++;
+                    _logger.LogInformation("Migrated product '{Name}' (ID: {Id})", product.Name, product.Id);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    _logger.LogError(ex, "Error migrating product '{Title}'", kvp.Value.Title);
+                }
+            }
+
+            var message = $"Products migration completed: {migrated} migrated, {skipped} skipped, {errors} errors.";
+            if (errors > 0)
+            {
+                TempData["ErrorMessage"] = message;
+            }
+            else
+            {
+                TempData["SuccessMessage"] = message;
+            }
+
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during products migration");
+            TempData["ErrorMessage"] = $"Products migration failed: {ex.Message}";
+            return RedirectToAction(nameof(Index), "StandardsConfig", new { area = "Admin" });
         }
     }
 }

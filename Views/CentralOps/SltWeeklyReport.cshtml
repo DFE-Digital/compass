@@ -42,19 +42,59 @@
     };
 }
 
+@await Html.PartialAsync("_DashboardStyles")
+
 @Html.AntiForgeryToken()
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">SLT Weekly Report</li>
+        </ol>
+    </nav>
+}
 
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-12">
-                <h1 class="m-0">SLT Weekly Report</h1>
-                <p class="text-muted mb-0">
-                    @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
-                    <br />
-                    Week @Model.WeekNumber, @Model.Year
-                </p>
+            <div class="col-sm-6">
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Header with Navigation -->
+<div class="dashboard-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1>SLT Weekly Report</h1>
+            <p>
+                @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
+                <br />
+                <small style="opacity: 0.9;">Week @Model.WeekNumber, @Model.Year</small>
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            @if (Model.HasPreviousWeek && Model.PreviousWeekYear.HasValue && Model.PreviousWeekNumber.HasValue)
+            {
+                <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.PreviousWeekYear, week = Model.PreviousWeekNumber })" 
+                   class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </a>
+            }
+            @if (Model.HasNextWeek && Model.NextWeekYear.HasValue && Model.NextWeekNumber.HasValue)
+            {
+                <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.NextWeekYear, week = Model.NextWeekNumber })" 
+                   class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                    Next <i class="fas fa-chevron-right"></i>
+                </a>
+            }
         </div>
     </div>
 </div>
@@ -76,113 +116,82 @@
             </div>
         }
 
-        <!-- Week Navigation -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                @if (Model.HasPreviousWeek)
-                                {
-                                    <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.PreviousWeekYear, week = Model.PreviousWeekNumber })" 
-                                       class="btn btn-outline-primary">
-                                        <i class="fas fa-chevron-left mr-2"></i>Previous Week
-                                    </a>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-outline-secondary" disabled>
-                                        <i class="fas fa-chevron-left mr-2"></i>Previous Week
-                                    </button>
-                                }
+        <!-- Summary Cards -->
+        @{
+            var totalSuccesses = Model.BusinessAreaGroups?.Sum(ba => ba.UpdateCount) ?? 0;
+            var totalMilestones = Model.Milestones?.Count ?? 0;
+        }
+        <div class="dashboard-summary-cards mb-4">
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@totalSuccesses</div>
+                <div class="dashboard-card-label">Successes Reported</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
                             </div>
-                            <div class="text-center">
-                                <h4 class="mb-0">
-                                    @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
-                                </h4>
-                                <small class="text-muted">
-                                    Week @Model.WeekNumber, @Model.Year
-                                </small>
+            <div class="dashboard-card bg-info">
+                <div class="dashboard-card-value">@(Model.BusinessAreaGroups?.Count(ba => ba.UpdateCount > 0) ?? 0)</div>
+                <div class="dashboard-card-label">Business Areas with Updates</div>
+                <div class="dashboard-card-icon"><i class="fas fa-building"></i></div>
                             </div>
-                            <div>
-                                @if (Model.HasNextWeek)
-                                {
-                                    <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.NextWeekYear, week = Model.NextWeekNumber })" 
-                                       class="btn btn-outline-primary">
-                                        Next Week<i class="fas fa-chevron-right ml-2"></i>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-outline-secondary" disabled>
-                                        Next Week<i class="fas fa-chevron-right ml-2"></i>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="dashboard-card bg-warning">
+                <div class="dashboard-card-value">@totalMilestones</div>
+                <div class="dashboard-card-label">Milestones Due This Week</div>
+                <div class="dashboard-card-icon"><i class="fas fa-calendar-check"></i></div>
             </div>
         </div>
 
         <!-- Successes Section -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0" style="font-size: 1rem; font-weight: 600;">Successes Reported to SLT</h5>
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-trophy"></i> Successes Reported to SLT</h2>
                         @if (Model.BusinessAreaGroups != null && Model.BusinessAreaGroups.Any())
                         {
-                            <div class="card-tools">
-                                <a href="#" class="btn btn-sm btn-link text-primary" id="expandAllBusinessAreas" style="text-decoration: none;">
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllBusinessAreas">
                                     <i class="fas fa-chevron-down mr-1"></i>Expand all
-                                </a>
-                                <a href="#" class="btn btn-sm btn-link text-primary d-none" id="collapseAllBusinessAreas" style="text-decoration: none;">
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary d-none" id="collapseAllBusinessAreas">
                                     <i class="fas fa-chevron-up mr-1"></i>Collapse all
-                                </a>
+                        </button>
                             </div>
                         }
                     </div>
-                    <div class="card-body p-0">
                         @if (Model.BusinessAreaGroups != null && Model.BusinessAreaGroups.Any())
                         {
                             @foreach (var businessArea in Model.BusinessAreaGroups)
                             {
                                 var safeAreaId = GetSafeId(businessArea.BusinessAreaName);
                                 var hasUpdates = businessArea.UpdateCount > 0;
-                                <div class="business-area-card" style="border-top: 1px solid #dee2e6;">
-                                    <div class="card-header bg-light business-area-header" style="cursor: pointer;" 
+                    <div class="card mb-3" style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                        <div class="card-header bg-light" style="cursor: pointer; padding: 1rem;" 
                                          data-area-id="@safeAreaId"
                                          data-toggle="collapse" 
                                          data-target="#ba-@safeAreaId"
                                          aria-expanded="false"
                                          aria-controls="ba-@safeAreaId">
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <h6 class="mb-0" style="font-size: 0.95rem; font-weight: 600;">
-                                                <i class="fas fa-chevron-down toggle-icon mr-2" style="font-size: 0.85rem;"></i>
+                                <h6 class="mb-0" style="font-size: 1rem; font-weight: 600;">
+                                    <i class="fas fa-chevron-down toggle-icon mr-2" style="font-size: 0.85rem; transition: transform 0.3s;"></i>
                                                 @businessArea.BusinessAreaName
                                             </h6>
                                             @if (hasUpdates)
                                             {
-                                                <span class="badge badge-success" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">@businessArea.UpdateCount update@(businessArea.UpdateCount != 1 ? "s" : "")</span>
+                                    <span class="badge badge-success" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">@businessArea.UpdateCount update@(businessArea.UpdateCount != 1 ? "s" : "")</span>
                                             }
                                             else
                                             {
-                                                <span class="badge badge-warning" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">No Updates</span>
+                                    <span class="badge badge-secondary" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">No Updates</span>
                                             }
                                         </div>
                                     </div>
-                                    <div id="ba-@safeAreaId" 
-                                         class="collapse">
-                                        <div class="card-body p-3">
+                        <div id="ba-@safeAreaId" class="collapse">
+                            <div class="card-body" style="padding: 1.5rem;">
                                             @if (hasUpdates)
                                             {
                                                 @foreach (var projectGroup in businessArea.ProjectGroups)
                                                 {
-                                                <div class="project-thread mb-4" style="border-left: 3px solid #005ea5; padding-left: 1rem;">
-                                                    <div class="project-header mb-3">
-                                                        <h6 class="mb-1" style="font-size: 0.95rem; font-weight: 600;">
+                                        <div class="mb-4" style="border-left: 3px solid #005ea5; padding-left: 1.25rem;">
+                                            <div class="mb-3">
+                                                <h6 class="mb-1" style="font-size: 1rem; font-weight: 600;">
                                                             <a asp-controller="Project" 
                                                                asp-action="Details" 
                                                                asp-route-id="@projectGroup.ProjectId"
@@ -191,7 +200,7 @@
                                                             </a>
                                                             @if (!string.IsNullOrEmpty(projectGroup.ProjectCode))
                                                             {
-                                                                <small class="text-muted ml-2" style="font-size: 0.85rem;">(@projectGroup.ProjectCode)</small>
+                                                        <small class="text-muted ml-2" style="font-size: 0.875rem;">(@projectGroup.ProjectCode)</small>
                                                             }
                                                         </h6>
                                                     </div>
@@ -201,23 +210,23 @@
                                                             ? FormatNameForDisplay(success.CreatedByName) 
                                                             : (!string.IsNullOrWhiteSpace(success.CreatedByEmail) ? success.CreatedByEmail : "Unknown");
                                                         
-                                                        <div class="success-item mb-3 pb-3" style="border-bottom: 1px solid #e9ecef;">
-                                                            <div class="success-content mb-2">
-                                                                <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 0.5rem; text-align: left; max-width: 75%;">
-                                                                    @success.SuccessDescription
+                                                <div class="mb-4 pb-4" style="border-bottom: 1px solid #e9ecef;">
+                                                    <div class="mb-2">
+                                                        <div style="background-color: #f4f8fb; padding: 1.25rem; border-radius: 8px; border-left: 4px solid #005ea5;">
+                                                            <div style="color: #1f2937; line-height: 1.6;">@success.SuccessDescription</div>
                                                                 </div>
                                                             </div>
-                                                            <div class="success-meta">
-                                                                <div class="text-muted small" style="text-align: left;">
-                                                                    Added by @displayName on @success.CreatedAt.ToString("d MMMM yyyy")
-                                                                </div>
+                                                    <div class="mb-3">
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-user mr-1"></i>Added by @displayName on @success.CreatedAt.ToString("d MMMM yyyy")
+                                                        </small>
                                                             </div>
                                                             
                                                             @if (!string.IsNullOrWhiteSpace(success.SltResponse))
                                                             {
-                                                                <div class="slt-response mt-3 p-3" style="background-color: #ffffff; border-left: 4px solid #ffc107; border-radius: 4px; text-align: left; max-width: 75%;" data-success-id="@success.Id" data-success-type="@success.Type">
+                                                        <div class="mt-3 p-3" style="background-color: #fff9e6; border-left: 4px solid #ffc107; border-radius: 8px;" data-success-id="@success.Id" data-success-type="@success.Type">
                                                                     <div class="d-flex justify-content-between align-items-start mb-2">
-                                                                        <strong style="color: #333;">
+                                                                <strong style="color: #1f2937;">
                                                                             <i class="fas fa-comment-dots mr-1"></i>SLT Response
                                                                         </strong>
                                                                         <div>
@@ -235,7 +244,7 @@
                                                                             </button>
                                                                         </div>
                                                                     </div>
-                                                                    <div class="slt-response-content" style="color: #333; text-align: left; word-wrap: break-word; margin-bottom: 0.5rem;">
+                                                            <div class="slt-response-content" style="color: #1f2937; word-wrap: break-word; margin-bottom: 0.75rem; line-height: 1.6;">
                                                                         @success.SltResponse
                                                                     </div>
                                                                     <div class="slt-response-edit-form" style="display: none;">
@@ -255,11 +264,11 @@
                                                                                 @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
                                                                                 {
                                                                                     var sltDisplayName = FormatNameForDisplay(success.SltRespondedByName);
-                                                                                    <text>Added by @sltDisplayName on @sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
+                                                                            <text><i class="fas fa-user-check mr-1"></i>Added by @sltDisplayName on @sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
                                                                                 }
                                                                                 else
                                                                                 {
-                                                                                    <text>@sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
+                                                                            <text><i class="fas fa-clock mr-1"></i>@sltRespondedAt.Value.ToString("d MMMM yyyy")</text>
                                                                                 }
                                                                             }
                                                                         </small>
@@ -268,12 +277,12 @@
                                                             }
                                                             else
                                                             {
-                                                                <div class="slt-response-form mt-3" data-success-type="@success.Type" data-success-id="@success.Id">
+                                                        <div class="mt-3" data-success-type="@success.Type" data-success-id="@success.Id">
                                                                     <button type="button" 
                                                                             class="btn btn-sm btn-primary add-slt-response-btn"
                                                                             data-success-id="@success.Id"
                                                                             data-success-type="@success.Type">
-                                                                        <i class="fas fa-comment mr-1" style="font-size: 0.85rem;"></i>Add SLT Response
+                                                                <i class="fas fa-comment mr-1"></i>Add SLT Response
                                                                     </button>
                                                                     <div class="slt-response-form-container mt-2" style="display: none;">
                                                                         <textarea class="form-control mb-2" 
@@ -304,7 +313,7 @@
                                             }
                                             else
                                             {
-                                                <div class="text-center p-4">
+                                    <div class="text-center py-4">
                                                     <p class="text-muted mb-0">No weekly updates submitted for this business area.</p>
                                                 </div>
                                             }
@@ -315,23 +324,17 @@
                         }
                         else
                         {
-                            <div class="p-4">
+                <div class="text-center py-4">
                                 <p class="text-muted mb-0">No successes reported to SLT for this week.</p>
                             </div>
                         }
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Milestones Section -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0" style="font-size: 1rem; font-weight: 600;">Milestones Due This Week</h5>
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-calendar-check"></i> Milestones Due This Week</h2>
                     </div>
-                    <div class="card-body p-0">
                         @if (Model.Milestones.Any())
                         {
                             <div class="table-responsive">
@@ -354,7 +357,8 @@
                                                     {
                                                         <a asp-controller="Project" 
                                                            asp-action="Details" 
-                                                           asp-route-id="@milestone.ProjectId">
+                                               asp-route-id="@milestone.ProjectId"
+                                               style="font-weight: 600; color: #005ea5; text-decoration: none;">
                                                             @milestone.Project.Title
                                                         </a>
                                                     }
@@ -366,7 +370,8 @@
                                                 <td>
                                                     <a asp-controller="Project" 
                                                        asp-action="MilestoneDetails" 
-                                                       asp-route-id="@milestone.Id">
+                                           asp-route-id="@milestone.Id"
+                                           style="font-weight: 600; color: #005ea5; text-decoration: none;">
                                                         @milestone.Name
                                                     </a>
                                                     @if (!string.IsNullOrWhiteSpace(milestone.Description))
@@ -376,18 +381,18 @@
                                                     }
                                                 </td>
                                                 <td>
-                                                    @milestone.DueDate.ToString("dd MMM yyyy")
+                                        <span style="font-weight: 500;">@milestone.DueDate.ToString("dd MMM yyyy")</span>
                                                 </td>
                                                 <td>
                                                     <span class="badge badge-@(milestone.Status == "complete" ? "success" : milestone.Status == "at_risk" ? "warning" : milestone.Status == "in_progress" ? "info" : "secondary")">
-                                                        @milestone.Status.Replace("_", " ")
+                                            @milestone.Status.Replace("_", " ").ToUpperInvariant()
                                                     </span>
                                                 </td>
                                                 <td>
                                                     @if (milestone.ProgressPercent.HasValue)
                                                     {
                                                         <div class="d-flex align-items-center">
-                                                            <div class="progress flex-grow-1 mr-2" style="height: 20px;">
+                                                <div class="progress flex-grow-1 mr-2" style="height: 24px; border-radius: 4px;">
                                                                 <div class="progress-bar @(milestone.ProgressPercent >= 75 ? "bg-success" : milestone.ProgressPercent >= 50 ? "bg-info" : milestone.ProgressPercent >= 25 ? "bg-warning" : "bg-danger")"
                                                                      role="progressbar"
                                                                      style="width: @milestone.ProgressPercent%"
@@ -396,7 +401,7 @@
                                                                      aria-valuemax="100">
                                                                 </div>
                                                             </div>
-                                                            <span class="small">@milestone.ProgressPercent%</span>
+                                                <span class="small font-weight-600">@milestone.ProgressPercent%</span>
                                                         </div>
                                                     }
                                                     else
@@ -412,37 +417,15 @@
                         }
                         else
                         {
-                            <div class="p-4">
+                <div class="text-center py-4">
                                 <p class="text-muted mb-0">No milestones due this week.</p>
                             </div>
                         }
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </section>
 
 <style>
-    .success-content {
-        text-align: left !important;
-        direction: ltr;
-    }
-    
-    .success-item {
-        text-align: left !important;
-        direction: ltr;
-    }
-    
-    .project-thread {
-        text-align: left !important;
-        direction: ltr;
-    }
-    
-    .business-area-card .card-header {
-        transition: background-color 0.2s;
-    }
-    
     .business-area-card .card-header:hover {
         background-color: #e9ecef !important;
     }
@@ -455,24 +438,8 @@
         transform: rotate(-90deg);
     }
     
-    
-    .project-thread {
-        position: relative;
-    }
-    
-    .project-thread:not(:last-child) {
-        margin-bottom: 2rem !important;
-    }
-    
-    .success-item {
-        position: relative;
-        padding-left: 0.5rem;
-    }
-    
     .slt-response {
         animation: slideIn 0.3s ease-out;
-        text-align: left !important;
-        direction: ltr;
     }
     
     @@keyframes slideIn {
@@ -493,7 +460,6 @@
         const businessAreaHeaders = document.querySelectorAll('.business-area-header');
         businessAreaHeaders.forEach(function(header) {
             header.addEventListener('click', function() {
-                // Icon rotation is handled by CSS
                 updateExpandCollapseButtons();
             });
         });
@@ -503,26 +469,24 @@
         const collapseAllBtn = document.getElementById('collapseAllBusinessAreas');
         
         if (expandAllBtn && collapseAllBtn) {
-            // Use jQuery if available, otherwise use vanilla JS
             if (typeof jQuery !== 'undefined') {
                 $(expandAllBtn).on('click', function(e) {
                     e.preventDefault();
-                    $('.business-area-card .collapse').collapse('show');
+                    $('.card .collapse').collapse('show');
                     $(this).addClass('d-none');
                     $(collapseAllBtn).removeClass('d-none');
                 });
                 
                 $(collapseAllBtn).on('click', function(e) {
                     e.preventDefault();
-                    $('.business-area-card .collapse').collapse('hide');
+                    $('.card .collapse').collapse('hide');
                     $(this).addClass('d-none');
                     $(expandAllBtn).removeClass('d-none');
                 });
                 
-                // Update button visibility based on current state
                 function updateExpandCollapseButtons() {
-                    const allCollapses = $('.business-area-card .collapse');
-                    const expandedCollapses = $('.business-area-card .collapse.show');
+                    const allCollapses = $('.card .collapse');
+                    const expandedCollapses = $('.card .collapse.show');
                     
                     if (allCollapses.length === 0) {
                         $(expandAllBtn).addClass('d-none');
@@ -531,56 +495,19 @@
                     }
                     
                     if (expandedCollapses.length === allCollapses.length) {
-                        // All expanded
                         $(expandAllBtn).addClass('d-none');
                         $(collapseAllBtn).removeClass('d-none');
                     } else if (expandedCollapses.length === 0) {
-                        // All collapsed
                         $(expandAllBtn).removeClass('d-none');
                         $(collapseAllBtn).addClass('d-none');
                     } else {
-                        // Mixed state
                         $(expandAllBtn).removeClass('d-none');
                         $(collapseAllBtn).removeClass('d-none');
                     }
                 }
                 
-                // Listen for collapse events to update button state
-                $('.business-area-card .collapse').on('shown.bs.collapse hidden.bs.collapse', updateExpandCollapseButtons);
-                
-                // Initial button state
+                $('.card .collapse').on('shown.bs.collapse hidden.bs.collapse', updateExpandCollapseButtons);
                 updateExpandCollapseButtons();
-            } else {
-                // Fallback to vanilla JS
-                expandAllBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const allCollapses = document.querySelectorAll('.business-area-card .collapse');
-                    allCollapses.forEach(function(collapse) {
-                        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
-                            const bsCollapse = new bootstrap.Collapse(collapse, { toggle: false });
-                            bsCollapse.show();
-                        } else {
-                            collapse.classList.add('show');
-                        }
-                    });
-                    expandAllBtn.classList.add('d-none');
-                    collapseAllBtn.classList.remove('d-none');
-                });
-                
-                collapseAllBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const allCollapses = document.querySelectorAll('.business-area-card .collapse');
-                    allCollapses.forEach(function(collapse) {
-                        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
-                            const bsCollapse = new bootstrap.Collapse(collapse, { toggle: false });
-                            bsCollapse.hide();
-                        } else {
-                            collapse.classList.remove('show');
-                        }
-                    });
-                    collapseAllBtn.classList.add('d-none');
-                    expandAllBtn.classList.remove('d-none');
-                });
             }
         }
         
@@ -590,7 +517,7 @@
             button.addEventListener('click', function() {
                 const successId = this.getAttribute('data-success-id');
                 const successType = this.getAttribute('data-success-type');
-                const formContainer = document.querySelector(`.slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
+                const formContainer = document.querySelector(`.slt-response-form-container[data-success-id="${successId}"], .slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
                 
                 if (formContainer) {
                     formContainer.style.display = 'block';
@@ -609,7 +536,7 @@
             button.addEventListener('click', function() {
                 const successId = this.getAttribute('data-success-id');
                 const successType = this.getAttribute('data-success-type');
-                const formContainer = document.querySelector(`.slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
+                const formContainer = document.querySelector(`.slt-response-form-container[data-success-id="${successId}"], .slt-response-form[data-success-id="${successId}"][data-success-type="${successType}"] .slt-response-form-container`);
                 const addButton = document.querySelector(`.add-slt-response-btn[data-success-id="${successId}"][data-success-type="${successType}"]`);
                 const textarea = formContainer ? formContainer.querySelector('textarea') : null;
                 
@@ -649,7 +576,7 @@
         const cancelEditButtons = document.querySelectorAll('.cancel-edit-slt-response-btn');
         cancelEditButtons.forEach(function(button) {
             button.addEventListener('click', function() {
-                const sltResponse = this.closest('.slt-response');
+                const sltResponse = this.closest('[data-success-id]');
                 const contentDiv = sltResponse.querySelector('.slt-response-content');
                 const editForm = sltResponse.querySelector('.slt-response-edit-form');
                 const editBtn = sltResponse.querySelector('.edit-slt-response-btn');
@@ -666,7 +593,7 @@
         const saveEditButtons = document.querySelectorAll('.save-edit-slt-response-btn');
         saveEditButtons.forEach(function(button) {
             button.addEventListener('click', async function() {
-                const sltResponse = this.closest('.slt-response');
+                const sltResponse = this.closest('[data-success-id]');
                 const successId = sltResponse.getAttribute('data-success-id');
                 const successType = sltResponse.getAttribute('data-success-type');
                 const textarea = sltResponse.querySelector('.slt-response-edit-form textarea');
@@ -783,7 +710,6 @@
                     return;
                 }
                 
-                // Get anti-forgery token
                 const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
                 const token = tokenElement ? tokenElement.value : '';
                 
@@ -793,7 +719,6 @@
                 }
                 
                 try {
-                    // Use form data to properly send anti-forgery token
                     const formData = new FormData();
                     formData.append('successId', successId.toString());
                     formData.append('successType', successType);
@@ -809,7 +734,6 @@
                     });
                     
                     if (response.ok) {
-                        // Reload the page to show the new response
                         window.location.reload();
                     } else {
                         const errorText = await response.text();
@@ -828,4 +752,3 @@
         });
     });
 </script>
-

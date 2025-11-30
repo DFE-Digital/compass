@@ -120,5 +120,46 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
         
         return exclusion != null;
     }
+
+    public async Task<(int Year, int Month)?> FindNextActiveReportingPeriodAsync(int fromYear, int fromMonth, string? businessArea = null, PerformanceReportingEligibilityCache? cache = null)
+    {
+        cache ??= await LoadEligibilityCacheAsync();
+        
+        // Start from the month after the given period
+        var currentDate = new DateTime(fromYear, fromMonth, 1).AddMonths(1);
+        var maxDate = currentDate.AddYears(2); // Look ahead up to 2 years
+        
+        while (currentDate <= maxDate)
+        {
+            var year = currentDate.Year;
+            var month = currentDate.Month;
+            
+            // Check if this period is excluded
+            var periodExcluded = cache.PeriodExclusions.Any(e => e.Year == year && e.Month == month);
+            
+            // Check if business area overrides the exclusion
+            var businessAreaReporting = false;
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                businessAreaReporting = cache.BusinessAreaConfigs.Any(c => 
+                    c.BusinessAreaName == businessArea &&
+                    (c.ApplicableFromYear < year || 
+                     (c.ApplicableFromYear == year && c.ApplicableFromMonth <= month)) &&
+                    (!c.ApplicableUntilYear.HasValue || 
+                     c.ApplicableUntilYear.Value > year || 
+                     (c.ApplicableUntilYear.Value == year && c.ApplicableUntilMonth >= month)));
+            }
+            
+            // If period is not excluded, or business area overrides it, this is an active period
+            if (!periodExcluded || businessAreaReporting)
+            {
+                return (year, month);
+            }
+            
+            currentDate = currentDate.AddMonths(1);
+        }
+        
+        return null; // No active period found within 2 years
+    }
 }
 
