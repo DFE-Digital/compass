@@ -1,0 +1,168 @@
+@model IEnumerable<Compass.Models.ServiceStandard>
+
+@{
+    ViewData["Title"] = "Service Standards";
+    var totalStandards = ViewBag.TotalStandards as int? ?? Model.Count();
+    var activeStandards = ViewBag.ActiveStandards as int? ?? Model.Count(s => s.IsActive);
+    var standardsWithGuidance = ViewBag.StandardsWithGuidance as int? ?? Model.Count(s => s.PhaseGuidance.Any());
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Service Standards</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <h1>Apply the Service Standard</h1>
+            <p>Guidance and information for how to apply the Government Service Standard to design and build accessible, usable and understandable services in DfE. Manage phase-specific guidance for Discovery, Alpha, Beta, and Live phases.</p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="dashboard-summary-cards mb-4">
+            <div class="dashboard-card bg-primary">
+                <div class="dashboard-card-value">@totalStandards</div>
+                <div class="dashboard-card-label">Total Standards</div>
+                <div class="dashboard-card-icon"><i class="fas fa-list-alt"></i></div>
+            </div>
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@activeStandards</div>
+                <div class="dashboard-card-label">Active Standards</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+            </div>
+            <div class="dashboard-card bg-info">
+                <div class="dashboard-card-value">@standardsWithGuidance</div>
+                <div class="dashboard-card-label">With Phase Guidance</div>
+                <div class="dashboard-card-icon"><i class="fas fa-book"></i></div>
+            </div>
+        </div>
+
+        <!-- Service Standards List -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-gavel"></i> The 14 Service Standards</h2>
+                <p class="dashboard-section-description">Click on any standard to view details and manage phase-specific guidance.</p>
+            </div>
+            
+            <div class="standards-list">
+                @foreach (var standard in Model.OrderBy(s => s.StandardNumber))
+                {
+                    var hasGuidance = standard.PhaseGuidance.Any();
+                    var guidanceCount = standard.PhaseGuidance.Count;
+                    var phasesWithGuidance = standard.PhaseGuidance.Select(pg => pg.Phase).ToList();
+                    
+                    <div class="standard-item @(standard.IsActive ? "" : "standard-item-inactive")">
+                        <div class="standard-item-header">
+                            <div class="standard-number-badge">@standard.StandardNumber</div>
+                            <div class="standard-title-section">
+                                <h3 class="standard-title">@standard.Title</h3>
+                                @if (!standard.IsActive)
+                                {
+                                    <span class="badge badge-secondary ml-2">Inactive</span>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="standard-item-body">
+                            @if (!string.IsNullOrEmpty(standard.Summary))
+                            {
+                                <p class="standard-summary">@standard.Summary</p>
+                            }
+                            else if (!string.IsNullOrEmpty(standard.Description))
+                            {
+                                <p class="standard-summary">@(standard.Description.Length > 250 ? standard.Description.Substring(0, 250) + "…" : standard.Description)</p>
+                            }
+                            
+                            <div class="standard-meta">
+                                @if (hasGuidance)
+                                {
+                                    <div class="standard-guidance-badge">
+                                        <i class="fas fa-check-circle text-success"></i>
+                                        <span>Guidance available for: @string.Join(", ", phasesWithGuidance)</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="standard-guidance-badge standard-guidance-missing">
+                                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                                        <span>No phase guidance added yet</span>
+                                    </div>
+                                }
+                                
+                                @if (standard.ServiceStandardProfessions != null && standard.ServiceStandardProfessions.Any())
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-muted d-block mb-1"><strong>Applies to:</strong></small>
+                                        <div>
+                                            @foreach (var ssp in standard.ServiceStandardProfessions.OrderBy(ssp => ssp.DdatProfession.Name))
+                                            {
+                                                <span class="badge badge-primary mr-1 mb-1">@ssp.DdatProfession.Name</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="standard-item-actions">
+                            <a asp-action="Details" asp-route-id="@standard.Id" class="btn btn-primary btn-sm">
+                                <i class="fas fa-eye"></i> View Standard
+                            </a>
+                            <a asp-action="ManagePhaseGuidance" asp-route-id="@standard.Id" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-book"></i> Manage Guidance
+                            </a>
+                            <a asp-action="Edit" asp-route-id="@standard.Id" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div class="dashboard-section">
+                <div class="alert alert-info">
+                    <h4><i class="fas fa-info-circle"></i> No Service Standards Found</h4>
+                    <p>The 14 GOV.UK Service Standards need to be seeded into the database. Please contact an administrator to initialize the standards.</p>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

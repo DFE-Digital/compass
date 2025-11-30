@@ -20,6 +20,7 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<DashboardBlockInstance> BlockInstances { get; set; } = Array.Empty<DashboardBlockInstance>();
 
     public IReadOnlyCollection<Project> MyProjects { get; set; } = Array.Empty<Project>();
+    public IReadOnlyCollection<Project> WatchedProjects { get; set; } = Array.Empty<Project>();
     public IReadOnlyCollection<ProductDto> MyProducts { get; set; } = Array.Empty<ProductDto>();
     public IReadOnlyCollection<Milestone> MilestonesDueThisWeek { get; set; } = Array.Empty<Milestone>();
     public IReadOnlyCollection<Milestone> OverdueMilestones { get; set; } = Array.Empty<Milestone>();
@@ -34,6 +35,11 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<UserBusinessAreaRoleAssignment> LeadershipAssignments { get; set; } = Array.Empty<UserBusinessAreaRoleAssignment>();
     public IReadOnlyCollection<string> LeadershipBusinessAreas { get; set; } = Array.Empty<string>();
     public LeadershipRoleTier? HighestLeadershipRole { get; set; }
+    
+    // DDT Standards
+    public IReadOnlyCollection<DdtStandard> MyDdtStandards { get; set; } = Array.Empty<DdtStandard>();
+    public IReadOnlyCollection<DdtStandard> MyOwnedDdtStandards { get; set; } = Array.Empty<DdtStandard>();
+    public IReadOnlyCollection<DdtStandard> MyContactDdtStandards { get; set; } = Array.Empty<DdtStandard>();
 
     // Leadership view data
     public EnterpriseLeadershipMetrics EnterpriseMetrics { get; set; } = new();
