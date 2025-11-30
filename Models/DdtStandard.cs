@@ -20,11 +20,25 @@ public class DdtStandard
     public string? LegacyId { get; set; }
 
     /// <summary>
+    /// Legacy reference from external CMS system (if migrated)
+    /// </summary>
+    [MaxLength(200)]
+    public string? LegacyReference { get; set; }
+
+    /// <summary>
     /// UUID for standards as code (immutable identifier)
     /// </summary>
     [Required]
     [MaxLength(36)]
     public string StandardUuid { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>
+    /// Parent standard ID (if this was created from "Make a change" on a published standard)
+    /// </summary>
+    public int? ParentStandardId { get; set; }
+
+    [ForeignKey(nameof(ParentStandardId))]
+    public DdtStandard? ParentStandard { get; set; }
 
     /// <summary>
     /// Standard title (required, unique)
@@ -202,9 +216,19 @@ public class DdtStandard
     public ICollection<DdtStandardProduct> Products { get; set; } = new List<DdtStandardProduct>();
 
     /// <summary>
+    /// Known exceptions to this standard
+    /// </summary>
+    public ICollection<DdtStandardException> Exceptions { get; set; } = new List<DdtStandardException>();
+
+    /// <summary>
     /// Audit log entries
     /// </summary>
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
+    /// <summary>
+    /// Unpublish audit log entries
+    /// </summary>
+    public ICollection<DdtStandardUnpublishAudit> UnpublishAudits { get; set; } = new List<DdtStandardUnpublishAudit>();
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

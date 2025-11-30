@@ -1,11 +1,8 @@
 @model List<Compass.Models.ProductReturnStatusViewModel>
 @inject Compass.Services.IReturnStatusService ReturnStatusService
 @{
-    ViewData["Title"] = "Product performance metrics";
-    var currentPeriod = Model.FirstOrDefault();
-    var pageSize = 20;
-    var totalProducts = Model.Count;
-    var totalPages = (int)Math.Ceiling(totalProducts / (double)pageSize);
+    ViewData["Title"] = "Monthly operational performance reporting";
+    var upcomingReportingDates = ViewBag.UpcomingReportingDates as List<(int Year, int Month, DateTime DueDate, string PeriodName)> ?? new List<(int, int, DateTime, string)>();
 }
 
 @section Breadcrumbs {
@@ -16,170 +13,309 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Product performance metrics</li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Monthly operational performance reporting</li>
         </ol>
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">Product performance metrics</h1>
-            </div>
-            <div class="col-sm-6 text-right">
+@await Html.PartialAsync("_DashboardStyles")
 
-            </div>
-        </div>
-    </div>
+<div class="dashboard-header">
+    <h1>Monthly operational performance reporting</h1>
+    <p>For live running, operational services to report performance metrics</p>
 </div>
 
 <section class="content">
     <div class="container-fluid">
-        @if (currentPeriod != null)
+        @if (TempData["SuccessMessage"] != null)
         {
-            var periodStart = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, 1);
-            var periodEnd = new DateTime(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth, DateTime.DaysInMonth(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth));
-            var dueDate = ReturnStatusService.GetReturnDueDate(currentPeriod.CurrentPeriodYear, currentPeriod.CurrentPeriodMonth);
-            
-            // Calculate status counts
-            var submittedCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Submitted);
-            var lateCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Late && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
-            var inProgressCount = Model.Count(m => (m.Status == Compass.Models.ReturnStatus.Due || m.Status == Compass.Models.ReturnStatus.Late) && m.CompletedMetrics > 0);
-            var dueCount = Model.Count(m => m.Status == Compass.Models.ReturnStatus.Due && (m.CompletedMetrics == 0 || m.CompletedMetrics == null));
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
         }
 
-       
+        @{
+            var userProducts = ViewBag.UserProducts as List<Compass.Models.ProductReturnStatusViewModel> ?? new List<Compass.Models.ProductReturnStatusViewModel>();
+        }
 
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Your products</h3>
+        <div class="row mb-4">
+            <!-- Left Column: Your Tasks and Your Products -->
+            <div class="col-md-8">
+                <!-- Your Tasks Card -->
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h3>Your tasks</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap sortable-table" id="userProductsTable">
-                        <thead>
-                            <tr>
-                                <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable col-user-role" data-column="UserRole" tabindex="0" role="button" aria-label="Sort by Your role">Your role <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
-                            </tr>
-                        </thead>
-                    <tbody>
-                        @if (Model != null && Model.Any())
-                        {
-                            @foreach (var item in Model.OrderBy(p => p.Product.Title))
-                            {
-                                <tr>
-                                    <td>
-                                        <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
-                                            @item.Product.Title<br/>
-                                            <small class="text-muted product-fips-id">@item.Product.FipsId
-                                            @if (!string.IsNullOrEmpty(item.Product.Phase))
-                                            {
-                                                <text> - </text>@item.Product.Phase
-                                            }
-                                            </small>
-                                        </a>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.UserRole))
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="card">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover text-nowrap sortable-table" id="tasksTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-reporting-status" data-column="ReportingStatus" tabindex="0" role="button" aria-label="Sort by Reporting status">Reporting status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="sortable col-status" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="col-actions text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model.OrderBy(p => p.Product.Title))
                                         {
-                                            // UserRole may already be formatted (e.g., "Service Owner") or may need formatting (e.g., "delivery_manager")
-                                            var roleParts = item.UserRole.Split(',');
-                                            var formattedRoles = roleParts.Select(role => 
-                                            {
-                                                var trimmed = role.Trim();
-                                                // If it contains underscores, format it; otherwise use as-is
-                                                if (trimmed.Contains('_'))
-                                                {
-                                                    return string.Join(" ", trimmed.Split('_').Select(word => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(word.ToLower())));
-                                                }
-                                                return trimmed;
-                                            });
-                                            @string.Join(", ", formattedRoles)
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (item.Status.HasValue)
-                                        {
-                                            @switch (item.Status.Value)
-                                            {
-                                                case Compass.Models.ReturnStatus.Upcoming:
-                                                    <span class="badge badge-secondary">Upcoming</span>
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Due:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-fipsId="@item.Product.FipsId" class="font-weight-bold">
+                                                        @item.Product.Title<br/>
+                                                        <small class="text-muted product-fips-id">@item.Product.FipsId
+                                                        @if (!string.IsNullOrEmpty(item.Product.Phase))
+                                                        {
+                                                            <text> - </text>@item.Product.Phase
+                                                        }
+                                                        </small>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    @if (item.IsReportingRequired)
                                                     {
-                                                        <span class="badge badge-info">In progress</span>
+                                                        <span class="badge badge-success">Reporting required</span>
                                                     }
                                                     else
                                                     {
-                                                        <span class="badge badge-warning">Due</span>
+                                                        <span class="badge badge-secondary">Not required</span>
+                                                        @if (!string.IsNullOrEmpty(item.ReportingSuspensionReason))
+                                                        {
+                                                            <br/>
+                                                            <small class="text-muted">@item.ReportingSuspensionReason</small>
+                                                            @if (item.NextReportingPeriod.HasValue && item.NextReportingPeriodDueDate.HasValue)
+                                                            {
+                                                                <br/>
+                                                                <small class="text-muted">
+                                                                    You will be expected to submit reports for the products listed below, by <strong>@item.NextReportingPeriodDueDate.Value.ToString("d MMMM yyyy")</strong>, which will report on performance for the month of <strong>@item.NextReportingPeriod.Value.ToString("MMMM yyyy")</strong>.
+                                                                </small>
+                                                            }
+                                                        }
                                                     }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Late:
-                                                    @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                </td>
+                                                <td>
+                                                    @if (item.Status.HasValue)
                                                     {
-                                                        <span class="badge badge-warning">In progress (Late)</span>
+                                                        @switch (item.Status.Value)
+                                                        {
+                                                            case Compass.Models.ReturnStatus.Upcoming:
+                                                                {
+                                                                    var now = DateTime.UtcNow;
+                                                                    var isDueInNext10Days = item.CurrentPeriodDueDate.HasValue && 
+                                                                                             item.CurrentPeriodDueDate.Value > now && 
+                                                                                             item.CurrentPeriodDueDate.Value <= now.AddDays(10);
+                                                                    if (isDueInNext10Days)
+                                                                    {
+                                                                        <span class="badge badge-secondary">Upcoming</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="text-muted">No return due</span>
+                                                                    }
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Due:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-info">In progress</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-warning">Due</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Late:
+                                                                @if (item.TotalMetrics > 0 && item.CompletedMetrics > 0)
+                                                                {
+                                                                    <span class="badge badge-warning">In progress (Late)</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-danger">Late</span>
+                                                                }
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Submitted:
+                                                                <span class="badge badge-success">Submitted</span>
+                                                                break;
+                                                        }
                                                     }
                                                     else
                                                     {
-                                                        <span class="badge badge-danger">Late</span>
+                                                        <span class="text-muted">-</span>
                                                     }
-                                                    break;
-                                                case Compass.Models.ReturnStatus.Submitted:
-                                                    <span class="badge badge-success">Submitted</span>
-                                                    break;
-                                            }
+                                                </td>
+                                                <td class="text-right">
+                                                    @if (item.IsReportingRequired)
+                                                    {
+                                                        <a asp-controller="ProductReporting" asp-action="SubmitMetrics" 
+                                                           asp-route-fipsId="@item.Product.FipsId" 
+                                                           asp-route-year="@item.CurrentPeriodYear" 
+                                                           asp-route-month="@item.CurrentPeriodMonth" 
+                                                           class="btn btn-sm btn-primary">
+                                                            @if (item.Status == Compass.Models.ReturnStatus.Late)
+                                                            {
+                                                                <text>Complete return</text>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>Start return</text>
+                                                            }
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
                                         }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        }
-                        else
-                        {
-                            <tr>
-                                <td colspan="3" class="text-center">No products found</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                    </div>
-                    <div class="card-footer">
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <div class="text-muted">
-                                    Showing <span id="userShowingStart">1</span> to <span id="userShowingEnd">@Math.Min(pageSize, totalProducts)</span> of <strong id="userTotalCount">@totalProducts</strong> products
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <ul class="pagination pagination-sm m-0 float-right" id="userPaginationControls">
-                                    <!-- Pagination buttons will be generated by JavaScript -->
-                                </ul>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
+                    }
+                    else
+                    {
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">You have no reporting tasks due</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Your Products Card -->
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h3>Your products</h3>
                     </div>
-                    <div class="card-footer">
-                        <a asp-controller="ProductReporting" asp-action="ReportOtherProduct" class="btn btn-info">
-                            <i class="fas fa-plus-circle mr-2"></i>Report for another product
+                    @if (userProducts.Any())
+                    {
+                        <div class="card">
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Product Name</th>
+                                            <th>Status</th>
+                                            <th>Due Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in userProducts.Take(20))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-fipsId="@product.Product.FipsId" style="font-weight: 600; color: #005ea5; text-decoration: none;">
+                                                        @product.Product.Title
+                                                    </a>
+                                                    <br/>
+                                                    <small class="text-muted">@product.Product.FipsId</small>
+                                                    @if (!string.IsNullOrEmpty(product.Product.Phase))
+                                                    {
+                                                        <br/><small class="text-muted">@product.Product.Phase</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (product.Status.HasValue)
+                                                    {
+                                                        @switch (product.Status.Value)
+                                                        {
+                                                            case Compass.Models.ReturnStatus.Due:
+                                                                <span class="badge badge-warning">Due</span>
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Late:
+                                                                <span class="badge badge-danger">Late</span>
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Submitted:
+                                                                <span class="badge badge-success">Submitted</span>
+                                                                break;
+                                                            case Compass.Models.ReturnStatus.Upcoming:
+                                                                <span class="badge badge-info">Upcoming</span>
+                                                                break;
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Not required</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (product.CurrentPeriodDueDate.HasValue)
+                                                    {
+                                                        <span>@product.CurrentPeriodDueDate.Value.ToString("d MMMM yyyy")</span>
+                                                    }
+                                                    else if (product.NextReportingPeriodDueDate.HasValue)
+                                                    {
+                                                        <span>@product.NextReportingPeriodDueDate.Value.ToString("d MMMM yyyy")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (userProducts.Count > 20)
+                            {
+                                <div class="card-footer">
+                                    <p class="text-muted mb-0">Showing first 20 of @userProducts.Count products</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No products found</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Right Column: Guidance and Upcoming Dates -->
+            <div class="col-md-4">
+                <!-- Guidance Links Section -->
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h2>Guidance</h2>
+                    </div>
+                    <div class="mb-3">
+                        <a href="@Url.Action("WhatYouNeedToReport", "ProductReporting")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit; display: block;">
+                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-book"></i></div>
+                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">What you need to report</div>
+                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">Learn about the metrics and data you need to submit</div>
                         </a>
-                        <small class="text-muted ml-3">If you're covering for someone or recently joined a team</small>
+                    </div>
+                    <div class="mb-3">
+                        <a href="@Url.Action("ReportingDates", "ProductReporting")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit; display: block;">
+                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">Reporting dates</div>
+                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">View all reporting deadlines and period information</div>
+                        </a>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -188,205 +324,13 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            var pageSize = @pageSize;
-            
-            // User products pagination
-            var userCurrentPage = 1;
-            var userAllRows = $('#userProductsTable tbody tr').toArray();
-            
-            function filterAndPaginateUser() {
-                // Show all rows (no filtering)
-                var filteredRows = userAllRows;
-                
-                // Update total count
-                var totalFiltered = filteredRows.length;
-                $('#userTotalCount').text(totalFiltered);
-                
-                // Calculate pagination
-                var totalPages = Math.ceil(totalFiltered / pageSize);
-                
-                // Reset to page 1 if current page is beyond total pages
-                if (userCurrentPage > totalPages && totalPages > 0) {
-                    userCurrentPage = 1;
-                }
-                
-                // Hide all rows first
-                $(userAllRows).hide();
-                
-                // Show only rows for current page
-                var startIndex = (userCurrentPage - 1) * pageSize;
-                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
-                
-                for (var i = startIndex; i < endIndex; i++) {
-                    $(filteredRows[i]).show();
-                }
-                
-                // Update pagination info
-                $('#userShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
-                $('#userShowingEnd').text(endIndex);
-                
-                // Generate pagination controls
-                generateUserPagination(totalPages, totalFiltered);
-            }
-            
-            function generateUserPagination(totalPages, totalFiltered) {
-                var paginationHtml = '';
-                
-                if (totalPages <= 1) {
-                    $('#userPaginationControls').html('');
-                    return;
-                }
-                
-                // Previous button
-                paginationHtml += '<li class="page-item ' + (userCurrentPage === 1 ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage - 1) + '">Previous</a>';
-                paginationHtml += '</li>';
-                
-                // Page numbers
-                var startPage = Math.max(1, userCurrentPage - 2);
-                var endPage = Math.min(totalPages, userCurrentPage + 2);
-                
-                if (startPage > 1) {
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
-                    if (startPage > 2) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                }
-                
-                for (var i = startPage; i <= endPage; i++) {
-                    paginationHtml += '<li class="page-item ' + (i === userCurrentPage ? 'active' : '') + '">';
-                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
-                    paginationHtml += '</li>';
-                }
-                
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
-                }
-                
-                // Next button
-                paginationHtml += '<li class="page-item ' + (userCurrentPage === totalPages ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (userCurrentPage + 1) + '">Next</a>';
-                paginationHtml += '</li>';
-                
-                $('#userPaginationControls').html(paginationHtml);
-                
-                // Bind click events
-                $('#userPaginationControls a').click(function(e) {
-                    e.preventDefault();
-                    var page = parseInt($(this).data('page'));
-                    if (!isNaN(page) && page > 0 && page <= totalPages) {
-                        userCurrentPage = page;
-                        filterAndPaginateUser();
-                    }
-                });
-            }
-            
-            // All products pagination
-            var allCurrentPage = 1;
-            var allAllRows = $('#allProductsTable tbody tr').toArray();
-            
-            function filterAndPaginateAllProducts() {
-                // Filter all rows
-                var filteredRows = allAllRows;
-                
-                // Update total count
-                var totalFiltered = filteredRows.length;
-                $('#allTotalCount').text(totalFiltered);
-                
-                // Calculate pagination
-                var totalPages = Math.ceil(totalFiltered / pageSize);
-                
-                // Reset to page 1 if current page is beyond total pages
-                if (allCurrentPage > totalPages && totalPages > 0) {
-                    allCurrentPage = 1;
-                }
-                
-                // Hide all rows first
-                $(allAllRows).hide();
-                
-                // Show only rows for current page
-                var startIndex = (allCurrentPage - 1) * pageSize;
-                var endIndex = Math.min(startIndex + pageSize, totalFiltered);
-                
-                for (var i = startIndex; i < endIndex; i++) {
-                    $(filteredRows[i]).show();
-                }
-                
-                // Update pagination info
-                $('#allShowingStart').text(totalFiltered > 0 ? startIndex + 1 : 0);
-                $('#allShowingEnd').text(endIndex);
-                
-                // Generate pagination controls
-                generateAllPagination(totalPages, totalFiltered);
-            }
-            
-            function generateAllPagination(totalPages, totalFiltered) {
-                var paginationHtml = '';
-                
-                if (totalPages <= 1) {
-                    $('#allPaginationControls').html('');
-                    return;
-                }
-                
-                // Previous button
-                paginationHtml += '<li class="page-item ' + (allCurrentPage === 1 ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage - 1) + '">Previous</a>';
-                paginationHtml += '</li>';
-                
-                // Page numbers
-                var startPage = Math.max(1, allCurrentPage - 2);
-                var endPage = Math.min(totalPages, allCurrentPage + 2);
-                
-                if (startPage > 1) {
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
-                    if (startPage > 2) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                }
-                
-                for (var i = startPage; i <= endPage; i++) {
-                    paginationHtml += '<li class="page-item ' + (i === allCurrentPage ? 'active' : '') + '">';
-                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
-                    paginationHtml += '</li>';
-                }
-                
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
-                }
-                
-                // Next button
-                paginationHtml += '<li class="page-item ' + (allCurrentPage === totalPages ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (allCurrentPage + 1) + '">Next</a>';
-                paginationHtml += '</li>';
-                
-                $('#allPaginationControls').html(paginationHtml);
-                
-                // Bind click events
-                $('#allPaginationControls a').click(function(e) {
-                    e.preventDefault();
-                    var page = parseInt($(this).data('page'));
-                    if (!isNaN(page) && page > 0 && page <= totalPages) {
-                        allCurrentPage = page;
-                        filterAndPaginateAllProducts();
-                    }
-                });
-            }
-            
-            // Initialize sortable tables using the same pattern as Project/Index
+            // Initialize sortable tables
             $('.sortable-table').each(function() {
                 initializeSortableTable($(this));
             });
 
             function initializeSortableTable(table) {
                 var currentSort = { column: null, direction: 'asc' };
-                var tableId = table.attr('id');
-                var isUserTable = tableId === 'userProductsTable';
 
                 table.find('.sortable').on('click keypress', function(e) {
                     if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
@@ -400,11 +344,11 @@
                         direction = 'desc';
                     }
                     
-                    sortTable(table, column, direction, isUserTable);
+                    sortTable(table, column, direction);
                     currentSort = { column: column, direction: direction };
                 });
 
-                function sortTable(table, column, direction, isUserTable) {
+                function sortTable(table, column, direction) {
                     var tbody = table.find('tbody');
                     var rows = tbody.find('tr').toArray();
                     
@@ -434,13 +378,6 @@
                     });
                     
                     updateSortIcons(table, column, direction);
-                    
-                    // Re-paginate after sorting
-                    if (isUserTable) {
-                        userAllRows = rows;
-                        userCurrentPage = 1;
-                        filterAndPaginateUser();
-                    }
                 }
 
                 function updateSortIcons(table, column, direction) {
@@ -450,9 +387,6 @@
                     header.find('i').removeClass('fa-sort').addClass(iconClass);
                 }
             }
-            
-            // Initial pagination
-            filterAndPaginateUser();
         });
     </script>
 }

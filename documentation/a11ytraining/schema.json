@@ -1,0 +1,161 @@
+{
+  "schema": "accessibility_manual",
+  "description": "Database schema for accessibility training system",
+  "tables": {
+    "training_sessions": {
+      "description": "Stores unique training session codes for intermediate training. Each session has a unique code that users can use to resume their training.",
+      "columns": {
+        "id": {
+          "type": "SERIAL",
+          "primary_key": true,
+          "description": "Auto-incrementing primary key"
+        },
+        "unique_code": {
+          "type": "VARCHAR(9)",
+          "unique": true,
+          "required": true,
+          "description": "Unique 9-character code (format: XXXX-XXXX) used to identify and resume training sessions"
+        },
+        "created_at": {
+          "type": "TIMESTAMP",
+          "default": "CURRENT_TIMESTAMP",
+          "description": "Timestamp when the training session was created"
+        }
+      },
+      "relationships": {
+        "one_to_many": ["answers"]
+      }
+    },
+    "answers": {
+      "description": "Stores user answers for intermediate training questions. Each row represents one answer to one question within a training session.",
+      "columns": {
+        "training_session_id": {
+          "type": "INTEGER",
+          "foreign_key": "training_sessions.id",
+          "required": true,
+          "description": "References the training session this answer belongs to"
+        },
+        "question_number": {
+          "type": "INTEGER",
+          "required": true,
+          "description": "The question number (1-20 for intermediate training)"
+        },
+        "question_type": {
+          "type": "VARCHAR(50)",
+          "required": true,
+          "enum": ["multipleChoice", "trueFalse", "multipleSelect"],
+          "description": "Type of question: multipleChoice (single answer), trueFalse (boolean), or multipleSelect (multiple answers)"
+        },
+        "user_answer": {
+          "type": "TEXT",
+          "nullable": true,
+          "description": "User's answer stored as comma-separated indices (e.g., '0,2' for multiple select, '1' for single choice). Indices correspond to the options array in intermediateQuestions.json"
+        },
+        "answer_status": {
+          "type": "VARCHAR(20)",
+          "required": true,
+          "enum": ["Correct", "Incorrect", "Not answered"],
+          "description": "Status of the answer: Correct, Incorrect, or Not answered"
+        },
+        "created_at": {
+          "type": "TIMESTAMP",
+          "default": "CURRENT_TIMESTAMP",
+          "description": "Timestamp when the answer was first created"
+        },
+        "updated_at": {
+          "type": "TIMESTAMP",
+          "default": "CURRENT_TIMESTAMP",
+          "description": "Timestamp when the answer was last updated"
+        }
+      },
+      "primary_key": ["training_session_id", "question_number"],
+      "relationships": {
+        "many_to_one": ["training_sessions"]
+      }
+    },
+    "sent_codes": {
+      "description": "Tracks when training session codes are emailed to users for record-keeping purposes",
+      "columns": {
+        "id": {
+          "type": "SERIAL",
+          "primary_key": true,
+          "description": "Auto-incrementing primary key"
+        },
+        "email": {
+          "type": "VARCHAR(255)",
+          "required": true,
+          "description": "Email address where the code was sent"
+        },
+        "code": {
+          "type": "VARCHAR(9)",
+          "required": true,
+          "description": "The training session code that was sent"
+        },
+        "sent_at": {
+          "type": "TIMESTAMP",
+          "default": "CURRENT_TIMESTAMP",
+          "description": "Timestamp when the code was emailed"
+        }
+      }
+    }
+  },
+  "data_sources": {
+    "questions": {
+      "file": "app/data/questions.json",
+      "description": "Basic training questions (10 questions). Used for basic training quiz. Stored in session, not database.",
+      "structure": {
+        "question": "string",
+        "options": "array of strings",
+        "correctAnswer": "integer (index)"
+      }
+    },
+    "intermediateQuestions": {
+      "file": "app/data/intermediateQuestions.json",
+      "description": "Intermediate training questions (20 questions). Answers stored in database. Questions referenced by id (1-20).",
+      "structure": {
+        "id": "integer (1-20)",
+        "summary": "string",
+        "question": "string",
+        "type": "multipleChoice | trueFalse | multipleSelect",
+        "options": "array of strings",
+        "correctAnswers": "array of integers (indices)",
+        "explanation": "string",
+        "relatedLinks": "array of {text: string, url: string}"
+      }
+    }
+  },
+  "common_queries": {
+    "get_session_by_code": {
+      "description": "Get training session by unique code",
+      "sql": "SELECT * FROM accessibility_manual.training_sessions WHERE unique_code = $1"
+    },
+    "get_answers_for_session": {
+      "description": "Get all answers for a training session",
+      "sql": "SELECT question_number, answer_status, user_answer FROM accessibility_manual.answers WHERE training_session_id = $1 ORDER BY question_number"
+    },
+    "get_answer_status_map": {
+      "description": "Get answer statuses as a map for a session",
+      "sql": "SELECT question_number, answer_status FROM accessibility_manual.answers WHERE training_session_id = $1"
+    },
+    "get_sessions_with_stats": {
+      "description": "Get training sessions with answer statistics",
+      "sql": "SELECT ts.*, COUNT(a.question_number) as total_answers, COUNT(CASE WHEN a.answer_status = 'Correct' THEN 1 END) as correct_answers FROM accessibility_manual.training_sessions ts LEFT JOIN accessibility_manual.answers a ON ts.id = a.training_session_id GROUP BY ts.id"
+    }
+  },
+  "reporting_insights": {
+    "available_metrics": [
+      "Total training sessions created",
+      "Total answers submitted",
+      "Correct vs incorrect answer rates",
+      "Question-level performance (which questions are answered correctly most/least)",
+      "Completion rates (sessions with all 20 questions answered)",
+      "Average time to complete (using created_at timestamps)",
+      "Codes sent via email (from sent_codes table)"
+    ],
+    "key_relationships": {
+      "training_sessions -> answers": "One session can have many answers (up to 20 for intermediate training)",
+      "answers.question_number": "Maps to intermediateQuestions.json id field (1-20)"
+    }
+  }
+}
+
