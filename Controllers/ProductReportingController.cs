@@ -1034,11 +1034,49 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products - both from product_contacts and service_owner
-        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
-        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        // Get current reporting period (previous month)
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
         
-        // Combine and deduplicate products (by FipsId)
+        // PERFORMANCE OPTIMIZATION: Load all data in parallel and only fetch what's needed
+        // Fetch user's products in parallel with database queries
+        var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
+        var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
+        var overridesTask = _context.PerformanceReportingDueDateOverrides
+            .Where(o => o.IsActive)
+            .ToDictionaryAsync(o => (o.ReportingYear, o.ReportingMonth), o => o);
+        var periodExclusionsTask = _context.PerformanceReportingPeriodExclusions
+            .Where(e => e.IsActive)
+            .OrderBy(e => e.Year)
+            .ThenBy(e => e.Month)
+            .ToListAsync();
+        var businessAreaConfigsTask = _context.PerformanceReportingBusinessAreaConfigs
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.BusinessAreaName)
+            .ThenBy(c => c.ApplicableFromYear)
+            .ThenBy(c => c.ApplicableFromMonth)
+            .ToListAsync();
+        
+        // Wait for all parallel operations
+        await Task.WhenAll(
+            userProductsByContactTask,
+            userProductsByServiceOwnerTask,
+            eligibilityCacheTask,
+            overridesTask,
+            periodExclusionsTask,
+            businessAreaConfigsTask);
+        
+        // Get results
+        var productsByContact = await userProductsByContactTask;
+        var productsByServiceOwner = await userProductsByServiceOwnerTask;
+        var eligibilityCache = await eligibilityCacheTask;
+        var overrides = await overridesTask;
+        var periodExclusions = await periodExclusionsTask;
+        var businessAreaConfigs = await businessAreaConfigsTask;
+        
+        // Combine and deduplicate user's products
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
             .GroupBy(p => p.FipsId)
@@ -1046,72 +1084,9 @@ public class ProductReportingController : Controller
             .Select(g => g.First())
             .ToList();
         
-        // Get current reporting period (previous month)
-        var now = DateTime.UtcNow;
-        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
-        
-        // Load eligibility cache
-        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
-        
-        // Get all returns for current period
-        var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
-        var userReturns = await _context.ProductReturns
-            .Include(pr => pr.MetricValues)
-            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
-            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
-
-        // Create view models for user's products to calculate counts
-        var userProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in userProducts)
-        {
-            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-            if (vm != null)
-            {
-                userProductStatuses.Add(vm);
-            }
-        }
-        
-        // Calculate counts for navigation badges
-        var tasksCount = userProductStatuses.Count(p => 
-            (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
-            (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
-        var yourProductsCount = userProductStatuses.Count;
-        
-        // Get all products count (Active only)
-        var allProducts = await _productsApiService.GetAllProductsAsync();
-        var activeProducts = allProducts
-            .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var allFipsIds = activeProducts
-            .Where(p => !string.IsNullOrEmpty(p.FipsId))
-            .Select(p => p.FipsId!)
-            .ToList();
-        var allReturns = await _context.ProductReturns
-            .Include(pr => pr.MetricValues)
-            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
-            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
-        
-        var allProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in activeProducts)
-        {
-            var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-            if (vm != null)
-            {
-                allProductStatuses.Add(vm);
-            }
-        }
-        var allProductsCount = allProductStatuses.Count;
-        
+        // Build list of reporting periods with their due dates
         var startDate = new DateTime(2025, 10, 1); // Reporting started in October 2025
         var endDate = now.AddMonths(12); // Show next 12 months
-        
-        // Get all active due date overrides
-        var overrides = await _context.PerformanceReportingDueDateOverrides
-            .Where(o => o.IsActive)
-            .ToDictionaryAsync(o => (o.ReportingYear, o.ReportingMonth), o => o);
-        
-        // Build list of reporting periods with their due dates
         var reportingPeriods = new List<(int Year, int Month, DateTime DueDate, bool HasOverride, string? OverrideReason)>();
         
         for (var date = startDate; date <= endDate; date = date.AddMonths(1))
@@ -1134,20 +1109,47 @@ public class ProductReportingController : Controller
             ));
         }
         
-        // Get active period exclusions
-        var periodExclusions = await _context.PerformanceReportingPeriodExclusions
-            .Where(e => e.IsActive)
-            .OrderBy(e => e.Year)
-            .ThenBy(e => e.Month)
-            .ToListAsync();
+        // Calculate counts efficiently (only for user's products, not all products)
+        var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
         
-        // Get active business area configs
-        var businessAreaConfigs = await _context.PerformanceReportingBusinessAreaConfigs
-            .Where(c => c.IsActive)
-            .OrderBy(c => c.BusinessAreaName)
-            .ThenBy(c => c.ApplicableFromYear)
-            .ThenBy(c => c.ApplicableFromMonth)
-            .ToListAsync();
+        // Only fetch returns without MetricValues (not needed for counts)
+        var userReturns = await _context.ProductReturns
+            .AsNoTracking()
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
+        // Calculate counts efficiently - only process user's products
+        var tasksCount = 0;
+        var yourProductsCount = userProducts.Count;
+        
+        // Only calculate task count if user has products
+        if (userProducts.Any())
+        {
+            // Create view models for user's products to calculate counts (simplified)
+            var userProductStatuses = new List<ProductReturnStatusViewModel>();
+            foreach (var product in userProducts)
+            {
+                var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+                if (vm != null)
+                {
+                    userProductStatuses.Add(vm);
+                }
+            }
+            
+            tasksCount = userProductStatuses.Count(p => 
+                (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
+                (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
+        }
+        
+        // PERFORMANCE OPTIMIZATION: Get all products count efficiently
+        // Count distinct products that have returns for the current period
+        // This is a simple count query that doesn't require loading all product data
+        var allProductsCount = await _context.ProductReturns
+            .AsNoTracking()
+            .Where(pr => pr.Year == currentYear && pr.Month == currentMonth && !string.IsNullOrEmpty(pr.FipsId))
+            .Select(pr => pr.FipsId)
+            .Distinct()
+            .CountAsync();
         
         ViewBag.ReportingPeriods = reportingPeriods;
         ViewBag.DefaultRule = "Returns are due by the 3rd working day of the following month";
@@ -1166,11 +1168,35 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products for counts
-        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
-        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        // Get current reporting period (previous month)
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
         
-        // Combine and deduplicate products (by FipsId)
+        // PERFORMANCE OPTIMIZATION: Load all data in parallel
+        // Fetch user's products in parallel with database queries
+        var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
+        var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
+        var metricsTask = _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+        
+        // Wait for all parallel operations
+        await Task.WhenAll(
+            userProductsByContactTask,
+            userProductsByServiceOwnerTask,
+            eligibilityCacheTask,
+            metricsTask);
+        
+        // Get results
+        var productsByContact = await userProductsByContactTask;
+        var productsByServiceOwner = await userProductsByServiceOwnerTask;
+        var eligibilityCache = await eligibilityCacheTask;
+        var metrics = await metricsTask;
+        
+        // Combine and deduplicate user's products
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
             .GroupBy(p => p.FipsId)
@@ -1178,68 +1204,47 @@ public class ProductReportingController : Controller
             .Select(g => g.First())
             .ToList();
         
-        // Get current reporting period (previous month)
-        var now = DateTime.UtcNow;
-        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
-        
-        // Load eligibility cache
-        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
-        
-        // Get all returns for current period
+        // Calculate counts efficiently (only for user's products, not all products)
         var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
+        
+        // Only fetch returns without MetricValues (not needed for counts)
         var userReturns = await _context.ProductReturns
-            .Include(pr => pr.MetricValues)
+            .AsNoTracking()
             .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
             .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
 
-        // Create view models for user's products to calculate counts
-        var userProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in userProducts)
+        // Calculate counts efficiently - only process user's products
+        var tasksCount = 0;
+        var yourProductsCount = userProducts.Count;
+        
+        // Only calculate task count if user has products
+        if (userProducts.Any())
         {
-            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-            if (vm != null)
+            // Create view models for user's products to calculate counts
+            var userProductStatuses = new List<ProductReturnStatusViewModel>();
+            foreach (var product in userProducts)
             {
-                userProductStatuses.Add(vm);
+                var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+                if (vm != null)
+                {
+                    userProductStatuses.Add(vm);
+                }
             }
+            
+            tasksCount = userProductStatuses.Count(p => 
+                (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
+                (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
         }
         
-        // Calculate counts for navigation badges
-        var tasksCount = userProductStatuses.Count(p => 
-            (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
-            (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
-        var yourProductsCount = userProductStatuses.Count;
-        
-        // Get all products count (Active only)
-        var allProducts = await _productsApiService.GetAllProductsAsync();
-        var activeProducts = allProducts
-            .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var allFipsIds = activeProducts
-            .Where(p => !string.IsNullOrEmpty(p.FipsId))
-            .Select(p => p.FipsId!)
-            .ToList();
-        var allReturns = await _context.ProductReturns
-            .Include(pr => pr.MetricValues)
-            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
-            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
-        
-        var allProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in activeProducts)
-        {
-            var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-            if (vm != null)
-            {
-                allProductStatuses.Add(vm);
-            }
-        }
-        var allProductsCount = allProductStatuses.Count;
-        
-        // Get all active performance metrics
-        var metrics = await _context.PerformanceMetrics
-            .Where(m => !m.IsDisabled)
-            .OrderBy(m => m.Identifier)
-            .ToListAsync();
+        // PERFORMANCE OPTIMIZATION: Get all products count efficiently
+        // Count distinct products that have returns for the current period
+        // This is a simple count query that doesn't require loading all product data
+        var allProductsCount = await _context.ProductReturns
+            .AsNoTracking()
+            .Where(pr => pr.Year == currentYear && pr.Month == currentMonth && !string.IsNullOrEmpty(pr.FipsId))
+            .Select(pr => pr.FipsId)
+            .Distinct()
+            .CountAsync();
         
         ViewBag.Metrics = metrics;
         ViewBag.TasksCount = tasksCount;

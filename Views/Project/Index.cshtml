@@ -383,7 +383,7 @@
                 
 
                 <!-- All Work Items Section -->
-                <div class="card mb-4 collapsed-card">
+                <div class="card mb-4 collapsed-card" id="all-work-items-card">
                     <div class="card-header">
                         <h3 class="card-title">
                             @{
@@ -770,6 +770,54 @@
                 header.find('i').removeClass('fa-sort').addClass(iconClass);
             }
         }
+        
+        // ========================================
+        // Card collapse state persistence
+        // ========================================
+        $(document).ready(function() {
+            var cardId = 'all-work-items-card';
+            var storageKey = 'project-index-card-state';
+            var card = $('#' + cardId);
+            var collapseButton = card.find('[data-card-widget="collapse"]');
+            
+            // Restore card state from localStorage
+            var savedState = localStorage.getItem(storageKey);
+            
+            if (savedState === 'expanded' && card.hasClass('collapsed-card')) {
+                // Card should be expanded, but it's currently collapsed
+                card.removeClass('collapsed-card');
+                card.find('.card-body').show();
+                collapseButton.find('i')
+                    .removeClass('fa-plus')
+                    .addClass('fa-minus');
+            } else if (savedState === 'collapsed' && !card.hasClass('collapsed-card')) {
+                // Card should be collapsed, but it's currently expanded
+                card.addClass('collapsed-card');
+                card.find('.card-body').hide();
+                collapseButton.find('i')
+                    .removeClass('fa-minus')
+                    .addClass('fa-plus');
+            }
+            
+            // Function to save state
+            function saveCardState() {
+                var isCollapsed = card.hasClass('collapsed-card');
+                localStorage.setItem(storageKey, isCollapsed ? 'collapsed' : 'expanded');
+            }
+            
+            // Listen for card collapse/expand events (AdminLTE events)
+            card.on('expanded.lte.cardwidget collapsed.lte.cardwidget', function() {
+                saveCardState();
+            });
+            
+            // Also listen for direct button clicks as a fallback
+            collapseButton.on('click', function() {
+                // Use setTimeout to check state after AdminLTE has processed the click
+                setTimeout(function() {
+                    saveCardState();
+                }, 100);
+            });
+        });
         })();
     </script>
 }
