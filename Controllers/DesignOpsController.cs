@@ -15,18 +15,15 @@ public class DesignOpsController : Controller
     private readonly ILogger<DesignOpsController> _logger;
     private readonly CompassDbContext _context;
     private readonly IProductsApiService _productsApiService;
-    private readonly IAccessibilityTrainingService _accessibilityTrainingService;
 
     public DesignOpsController(
         ILogger<DesignOpsController> logger, 
         CompassDbContext context, 
-        IProductsApiService productsApiService,
-        IAccessibilityTrainingService accessibilityTrainingService)
+        IProductsApiService productsApiService)
     {
         _logger = logger;
         _context = context;
         _productsApiService = productsApiService;
-        _accessibilityTrainingService = accessibilityTrainingService;
     }
 
     // GET: DesignOps/Dashboard
@@ -58,121 +55,11 @@ public class DesignOpsController : Controller
                 ? Math.Round((double)enrolledProductsCount / totalProducts * 100, 1) 
                 : 0;
             
-            // Get products with null perf-1 (satisfaction score) from latest returns
-            var perf1Metric = await _context.PerformanceMetrics
-                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-1");
-            
-            var productsWithNullPerf1 = new List<object>();
-            if (perf1Metric != null)
-            {
-                // Get all returns with perf-1 metric values
-                var allReturns = await _context.ProductReturns
-                    .Include(pr => pr.MetricValues.Where(mv => mv.PerformanceMetricId == perf1Metric.Id))
-                    .Where(pr => pr.MetricValues.Any(mv => mv.PerformanceMetricId == perf1Metric.Id))
-                    .ToListAsync();
-                
-                // Get latest return for each product
-                var latestReturns = allReturns
-                    .GroupBy(pr => pr.FipsId)
-                    .Select(g => g.OrderByDescending(pr => pr.Year)
-                        .ThenByDescending(pr => pr.Month)
-                        .First())
-                    .ToList();
-                
-                var nullPerf1Returns = latestReturns
-                    .Where(pr => pr.MetricValues.Any(mv => 
-                        mv.PerformanceMetricId == perf1Metric.Id && 
-                        (string.IsNullOrWhiteSpace(mv.Value) || mv.IsNotCaptured)))
-                    .Select(pr => new
-                    {
-                        FipsId = pr.FipsId,
-                        ProductName = cmsProducts?.FirstOrDefault(p => p.FipsId == pr.FipsId)?.Title ?? "Unknown"
-                    })
-                    .ToList();
-                
-                productsWithNullPerf1 = nullPerf1Returns.Cast<object>().ToList();
-            }
-            
-            // Get products with 0 open accessibility issues (perf-8) from latest returns
-            var perf8Metric = await _context.PerformanceMetrics
-                .FirstOrDefaultAsync(pm => pm.Identifier == "perf-8");
-            
-            var productsWithZeroIssues = new List<object>();
-            if (perf8Metric != null)
-            {
-                // Get all returns with perf-8 metric values
-                var allReturnsForPerf8 = await _context.ProductReturns
-                    .Include(pr => pr.MetricValues.Where(mv => mv.PerformanceMetricId == perf8Metric.Id))
-                    .Where(pr => pr.MetricValues.Any(mv => mv.PerformanceMetricId == perf8Metric.Id))
-                    .ToListAsync();
-                
-                // Get latest return for each product
-                var latestReturnsForPerf8 = allReturnsForPerf8
-                    .GroupBy(pr => pr.FipsId)
-                    .Select(g => g.OrderByDescending(pr => pr.Year)
-                        .ThenByDescending(pr => pr.Month)
-                        .First())
-                    .ToList();
-                
-                var zeroIssuesReturns = latestReturnsForPerf8
-                    .Where(pr => pr.MetricValues.Any(mv => 
-                        mv.PerformanceMetricId == perf8Metric.Id && 
-                        mv.Value == "0"))
-                    .Select(pr => new
-                    {
-                        FipsId = pr.FipsId,
-                        ProductName = cmsProducts?.FirstOrDefault(p => p.FipsId == pr.FipsId)?.Title ?? "Unknown"
-                    })
-                    .ToList();
-                
-                productsWithZeroIssues = zeroIssuesReturns.Cast<object>().ToList();
-            }
-            
-            // Get accessibility training metrics
-            var totalTrainingSessions = await _accessibilityTrainingService.GetTotalTrainingSessionsAsync();
-            var totalAnswers = await _accessibilityTrainingService.GetTotalAnswersAsync();
-            var correctAnswers = await _accessibilityTrainingService.GetCorrectAnswersCountAsync();
-            var incorrectAnswers = await _accessibilityTrainingService.GetIncorrectAnswersCountAsync();
-            var completedSessions = await _accessibilityTrainingService.GetCompletedSessionsCountAsync();
-            var completionRate = await _accessibilityTrainingService.GetCompletionRateAsync();
-            var correctAnswerRate = await _accessibilityTrainingService.GetCorrectAnswerRateAsync();
-            var codesSent = await _accessibilityTrainingService.GetCodesSentCountAsync();
-            
-            // Get question performance stats (top 5 most difficult questions)
-            var questionStats = await _accessibilityTrainingService.GetQuestionPerformanceStatsAsync();
-            var mostDifficultQuestions = questionStats
-                .Where(q => q.TotalAnswers > 0)
-                .OrderBy(q => q.CorrectPercentage)
-                .ThenByDescending(q => q.TotalAnswers)
-                .Take(5)
-                .ToList();
-            
-            // Get enhanced analytics
-            var monthlySessions = await _accessibilityTrainingService.GetCompletedSessionsByMonthAsync();
-            var dailySessions = await _accessibilityTrainingService.GetCompletedSessionsByDayAsync(30);
-            
             ViewBag.PendingRetestCount = pendingRetestCount;
             ViewBag.OpenIssuesCount = openIssuesCount;
             ViewBag.EnrolledProductsCount = enrolledProductsCount;
             ViewBag.TotalProducts = totalProducts;
             ViewBag.EnrollmentPercentage = enrollmentPercentage;
-            ViewBag.ProductsWithNullPerf1 = productsWithNullPerf1;
-            ViewBag.ProductsWithZeroIssues = productsWithZeroIssues;
-            
-            // Accessibility Training Metrics
-            ViewBag.TotalTrainingSessions = totalTrainingSessions;
-            ViewBag.TotalAnswers = totalAnswers;
-            ViewBag.CorrectAnswers = correctAnswers;
-            ViewBag.IncorrectAnswers = incorrectAnswers;
-            ViewBag.CompletedSessions = completedSessions;
-            ViewBag.CompletionRate = completionRate;
-            ViewBag.CorrectAnswerRate = correctAnswerRate;
-            ViewBag.CodesSent = codesSent;
-            ViewBag.MostDifficultQuestions = mostDifficultQuestions;
-            
-            // Enhanced Analytics
-            ViewBag.MonthlySessions = monthlySessions;
-            ViewBag.DailySessions = dailySessions;
             
             return View();
         }

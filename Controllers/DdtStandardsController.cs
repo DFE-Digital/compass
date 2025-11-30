@@ -238,12 +238,13 @@ public class DdtStandardsController : Controller
         ViewBag.ExceptionsCount = exceptionsCount;
         ViewBag.IsStandardsManager = isStandardsManager;
         
-        // Get all standards for the list
+        // Get all published standards for the list (exclude unpublished)
         var allStandards = await _context.DdtStandards
             .AsNoTracking()
             .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
             .Include(s => s.Categories).ThenInclude(c => c.Category)
-            .Where(s => !s.IsDeleted)
+            .Where(s => !s.IsDeleted && s.Stage != "Unpublished")
             .OrderByDescending(s => s.UpdatedAt)
             .ToListAsync();
         

@@ -64,6 +64,8 @@
 
         @if (isStandardsManager)
         {
+            var publishedStandards = allStandards.Where(s => s.Stage != "Unpublished").ToList();
+            
             <!-- Standards Manager View -->
             <!-- Summary Cards -->
             <div class="dashboard-summary-cards">
@@ -87,29 +89,19 @@
                     <div class="dashboard-card-label">Published</div>
                     <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
                 </a>
-                <a href="@Url.Action("Index", new { view = "unpublished" })" class="dashboard-card bg-secondary" style="text-decoration: none; color: inherit;">
+                <a href="@Url.Action("Index", new { view = "unpublished" })" class="dashboard-card" style="text-decoration: none; color: white !important; background: linear-gradient(145deg, #6c757d, #5a6268) !important;">
                     <div class="dashboard-card-value">@allUnpublishedCount</div>
                     <div class="dashboard-card-label">Unpublished</div>
                     <div class="dashboard-card-icon"><i class="fas fa-archive"></i></div>
                 </a>
-                <a href="@Url.Action("ApprovedProducts")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit;">
-                    <div class="dashboard-card-value">@approvedProductsCount</div>
-                    <div class="dashboard-card-label">Approved Products</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-check-square"></i></div>
-                </a>
-                <a href="@Url.Action("Exceptions")" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit;">
-                    <div class="dashboard-card-value">@exceptionsCount</div>
-                    <div class="dashboard-card-label">Exemptions</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                </a>
             </div>
 
-            <!-- All Standards List -->
-            @if (allStandards.Any())
+            <!-- Published Standards List -->
+            @if (publishedStandards.Any())
             {
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
-                        <h2><i class="fas fa-list"></i> All Standards</h2>
+                        <h3>Published standards</h3>
                     </div>
                     <div class="card">
                         <div class="card-body table-responsive p-0">
@@ -117,16 +109,14 @@
                                 <thead>
                                     <tr>
                                         <th>Title</th>
-                                        <th>Stage</th>
                                         <th>Version</th>
                                         <th>Categories</th>
-                                        <th>Created By</th>
+                                        <th>Standard owner</th>
                                         <th>Updated</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var standard in allStandards)
+                                    @foreach (var standard in publishedStandards)
                                     {
                                         <tr>
                                             <td>
@@ -135,20 +125,6 @@
                                                 {
                                                     <br /><small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
                                                 }
-                                            </td>
-                                            <td>
-                                                @{
-                                                    var stageBadge = standard.Stage switch
-                                                    {
-                                                        "Draft" => "badge-secondary",
-                                                        "For Approval" => "badge-warning",
-                                                        "Awaiting Publication" => "badge-primary",
-                                                        "Published" => "badge-success",
-                                                        "Unpublished" => "badge-secondary",
-                                                        _ => "badge-secondary"
-                                                    };
-                                                }
-                                                <span class="badge @stageBadge">@standard.Stage</span>
                                             </td>
                                             <td>@standard.Version</td>
                                             <td>
@@ -168,11 +144,17 @@
                                                     <span class="text-muted">-</span>
                                                 }
                                             </td>
-                                            <td>@(standard.CreatorUser?.Name ?? "Unknown")</td>
-                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
                                             <td>
-                                                <a asp-action="Details" asp-route-id="@standard.Id" class="btn btn-sm btn-primary">View</a>
+                                                @if (standard.Owners != null && standard.Owners.Any())
+                                                {
+                                                    @standard.Owners.First().User?.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
                                             </td>
+                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -247,12 +229,13 @@
                 </a>
             </div>
 
-            <!-- All Standards List -->
-            @if (allStandards.Any())
+            <!-- Published Standards List -->
+            var publishedStandardsRegular = allStandards.Where(s => s.Stage != "Unpublished").ToList();
+            if (publishedStandardsRegular.Any())
             {
                 <div class="dashboard-section">
                     <div class="dashboard-section-header">
-                        <h2><i class="fas fa-list"></i> All Standards</h2>
+                        <h3>Published standards</h3>
                     </div>
                     <div class="card">
                         <div class="card-body table-responsive p-0">
@@ -260,16 +243,14 @@
                                 <thead>
                                     <tr>
                                         <th>Title</th>
-                                        <th>Stage</th>
                                         <th>Version</th>
                                         <th>Categories</th>
-                                        <th>Created By</th>
+                                        <th>Standard owner</th>
                                         <th>Updated</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var standard in allStandards)
+                                    @foreach (var standard in publishedStandardsRegular)
                                     {
                                         <tr>
                                             <td>
@@ -278,20 +259,6 @@
                                                 {
                                                     <br /><small class="text-muted">@(standard.Summary.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary)</small>
                                                 }
-                                            </td>
-                                            <td>
-                                                @{
-                                                    var stageBadge = standard.Stage switch
-                                                    {
-                                                        "Draft" => "badge-secondary",
-                                                        "For Approval" => "badge-warning",
-                                                        "Awaiting Publication" => "badge-primary",
-                                                        "Published" => "badge-success",
-                                                        "Unpublished" => "badge-secondary",
-                                                        _ => "badge-secondary"
-                                                    };
-                                                }
-                                                <span class="badge @stageBadge">@standard.Stage</span>
                                             </td>
                                             <td>@standard.Version</td>
                                             <td>
@@ -311,11 +278,17 @@
                                                     <span class="text-muted">-</span>
                                                 }
                                             </td>
-                                            <td>@(standard.CreatorUser?.Name ?? "Unknown")</td>
-                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
                                             <td>
-                                                <a asp-action="Details" asp-route-id="@standard.Id" class="btn btn-sm btn-primary">View</a>
+                                                @if (standard.Owners != null && standard.Owners.Any())
+                                                {
+                                                    @standard.Owners.First().User?.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
                                             </td>
+                                            <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
                                         </tr>
                                     }
                                 </tbody>
