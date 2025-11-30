@@ -331,12 +331,30 @@ namespace Compass.Controllers
                     .Take(pageSize)
                     .ToList();
 
+                // Calculate user-specific statistics
+                var myProductsOpenIssues = myProductViewModels.Sum(p => ((dynamic)p).OpenIssuesCount);
+                var myProductsOverdueIssues = myProductViewModels.Sum(p => ((dynamic)p).PastDueCount);
+                var myProductsCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "compliant");
+                var myProductsPartiallyCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "partially compliant");
+                var myProductsNonCompliant = myProductViewModels.Count(p => ((dynamic)p).ComplianceStatus == "non-compliant");
+                var myProductsVerified = myProductViewModels.Count(p => ((dynamic)p).IsVerified);
+                var myProductsTotal = myProductViewModels.Count;
+
                 ViewBag.MyProducts = myProductViewModels;
                 ViewBag.EnrolledProducts = enrolledProductViewModels;
                 ViewBag.NonEnrolledProducts = pagedNonEnrolledProducts;
                 ViewBag.ProductsPage = productsPage;
                 ViewBag.ProductsTotalPages = totalPages;
                 ViewBag.ProductsTotalCount = totalCount;
+                
+                // User-specific statistics
+                ViewBag.MyProductsOpenIssues = myProductsOpenIssues;
+                ViewBag.MyProductsOverdueIssues = myProductsOverdueIssues;
+                ViewBag.MyProductsCompliant = myProductsCompliant;
+                ViewBag.MyProductsPartiallyCompliant = myProductsPartiallyCompliant;
+                ViewBag.MyProductsNonCompliant = myProductsNonCompliant;
+                ViewBag.MyProductsVerified = myProductsVerified;
+                ViewBag.MyProductsTotal = myProductsTotal;
                 
                 // Pass search filter to view if set
                 if (!string.IsNullOrWhiteSpace(search))

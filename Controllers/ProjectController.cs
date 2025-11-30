@@ -24,6 +24,8 @@ namespace Compass.Controllers
         private readonly IConfiguration _configuration;
         private readonly IProjectImportService _projectImportService;
         private readonly INotificationRuleService _notificationRuleService;
+        private readonly IMonthlyUpdateService _monthlyUpdateService;
+        private readonly IPermissionService _permissionService;
         private const string OtherOptionValue = "__other__";
 
         private static readonly (string Value, string Label)[] MilestoneStatuses = new[]
@@ -88,7 +90,7 @@ namespace Compass.Controllers
             "High"
         };
 
-        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService, IConfiguration configuration, IProjectImportService projectImportService, INotificationRuleService notificationRuleService)
+        public ProjectController(CompassDbContext context, ILogger<ProjectController> logger, IProductsApiService productsApiService, IConfiguration configuration, IProjectImportService projectImportService, INotificationRuleService notificationRuleService, IMonthlyUpdateService monthlyUpdateService, IPermissionService permissionService)
         {
             _context = context;
             _logger = logger;
@@ -96,19 +98,153 @@ namespace Compass.Controllers
             _configuration = configuration;
             _projectImportService = projectImportService;
             _notificationRuleService = notificationRuleService;
+            _monthlyUpdateService = monthlyUpdateService;
+            _permissionService = permissionService;
         }
 
         // GET: Project
-        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1)
+        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
+
+            // Session keys for filters
+            const string sessionKeySearch = "ProjectIndex_Search";
+            const string sessionKeyRagStatus = "ProjectIndex_RagStatus";
+            const string sessionKeyBusinessArea = "ProjectIndex_BusinessArea";
+            const string sessionKeyPhase = "ProjectIndex_Phase";
+            const string sessionKeyFlagship = "ProjectIndex_Flagship";
+            const string sessionKeyPriority = "ProjectIndex_Priority";
+
+            // Clear filters from session if requested
+            if (clearFilters)
+            {
+                HttpContext.Session.Remove(sessionKeySearch);
+                HttpContext.Session.Remove(sessionKeyRagStatus);
+                HttpContext.Session.Remove(sessionKeyBusinessArea);
+                HttpContext.Session.Remove(sessionKeyPhase);
+                HttpContext.Session.Remove(sessionKeyFlagship);
+                HttpContext.Session.Remove(sessionKeyPriority);
+                search = null;
+                ragStatus = null;
+                businessArea = null;
+                phase = null;
+                flagship = null;
+                priority = null;
+            }
+            else
+            {
+                // Check which parameters were actually provided in the query string
+                var requestQuery = Request.Query;
+                var hasSearchParam = requestQuery.ContainsKey("search");
+                var hasRagStatusParam = requestQuery.ContainsKey("ragStatus");
+                var hasBusinessAreaParam = requestQuery.ContainsKey("businessArea");
+                var hasPhaseParam = requestQuery.ContainsKey("phase");
+                var hasFlagshipParam = requestQuery.ContainsKey("flagship");
+                var hasPriorityParam = requestQuery.ContainsKey("priority");
+
+                // Handle search filter
+                if (hasSearchParam)
+                {
+                    if (string.IsNullOrEmpty(search))
+                        HttpContext.Session.Remove(sessionKeySearch);
+                    else
+                        HttpContext.Session.SetString(sessionKeySearch, search);
+                }
+                else
+                {
+                    search = HttpContext.Session.GetString(sessionKeySearch);
+                }
+
+                // Handle RAG Status filter
+                if (hasRagStatusParam)
+                {
+                    if (string.IsNullOrEmpty(ragStatus))
+                        HttpContext.Session.Remove(sessionKeyRagStatus);
+                    else
+                        HttpContext.Session.SetString(sessionKeyRagStatus, ragStatus);
+                }
+                else
+                {
+                    ragStatus = HttpContext.Session.GetString(sessionKeyRagStatus);
+                }
+
+                // Handle Business Area filter
+                if (hasBusinessAreaParam)
+                {
+                    if (string.IsNullOrEmpty(businessArea))
+                        HttpContext.Session.Remove(sessionKeyBusinessArea);
+                    else
+                        HttpContext.Session.SetString(sessionKeyBusinessArea, businessArea);
+                }
+                else
+                {
+                    businessArea = HttpContext.Session.GetString(sessionKeyBusinessArea);
+                }
+
+                // Handle Phase filter
+                if (hasPhaseParam)
+                {
+                    if (string.IsNullOrEmpty(phase))
+                        HttpContext.Session.Remove(sessionKeyPhase);
+                    else
+                        HttpContext.Session.SetString(sessionKeyPhase, phase);
+                }
+                else
+                {
+                    phase = HttpContext.Session.GetString(sessionKeyPhase);
+                }
+
+                // Handle Flagship filter
+                if (hasFlagshipParam)
+                {
+                    if (string.IsNullOrEmpty(flagship))
+                        HttpContext.Session.Remove(sessionKeyFlagship);
+                    else
+                        HttpContext.Session.SetString(sessionKeyFlagship, flagship);
+                }
+                else
+                {
+                    flagship = HttpContext.Session.GetString(sessionKeyFlagship);
+                }
+
+                // Handle Priority filter
+                if (hasPriorityParam)
+                {
+                    if (priority.HasValue)
+                        HttpContext.Session.SetInt32(sessionKeyPriority, priority.Value);
+                    else
+                        HttpContext.Session.Remove(sessionKeyPriority);
+                }
+                else
+                {
+                    var sessionPriority = HttpContext.Session.GetInt32(sessionKeyPriority);
+                    if (sessionPriority.HasValue)
+                        priority = sessionPriority.Value;
+                }
+            }
 
             // Get current user's email
             var userEmail = User.Identity?.Name;
 
             // Check if user has admin role (now available globally via claims from middleware)
             ViewBag.HasAdminRole = User.IsCompassAdmin();
+
+            // Check if user is in Central Operations Admin group
+            bool isCentralOpsAdmin = false;
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                try
+                {
+                    isCentralOpsAdmin = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+            ViewBag.IsCentralOpsAdmin = isCentralOpsAdmin;
 
             // Get current user
             var currentUser = await GetCurrentUserAsync();
@@ -135,6 +271,7 @@ namespace Compass.Controllers
                     .Include(p => p.Outcomes)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
+                    .Include(p => p.MonthlyUpdates)
                     .AsNoTracking()
                     .OrderBy(p => p.Title)
                     .ToListAsync();
@@ -166,6 +303,7 @@ namespace Compass.Controllers
                         .Include(p => p.Outcomes)
                         .Include(p => p.ProjectContacts)
                             .ThenInclude(pc => pc.User)
+                        .Include(p => p.MonthlyUpdates)
                         .AsNoTracking()
                         .OrderBy(p => p.Title)
                         .ToListAsync();
@@ -186,6 +324,7 @@ namespace Compass.Controllers
                 .Include(p => p.Outcomes)
                 .Include(p => p.ProjectContacts)
                     .ThenInclude(pc => pc.User)
+                .Include(p => p.MonthlyUpdates)
                 .AsQueryable();
 
             // Apply search filter
@@ -258,6 +397,56 @@ namespace Compass.Controllers
                 .ThenBy(dp => dp.Name)
                 .AsNoTracking()
                 .ToListAsync();
+
+            // Calculate monthly update counts for user's projects
+            var now = DateTime.UtcNow;
+            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            var dueCount = 0;
+            var lateCount = 0;
+            var inProgressCount = 0;
+            var submittedCount = 0;
+            
+            if (userProjects.Any())
+            {
+                var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+                var currentDate = DateTime.UtcNow;
+                
+                foreach (var project in userProjects)
+                {
+                    var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == currentYear && u.Month == currentMonth);
+                    var status = _monthlyUpdateService.CalculateUpdateStatus(currentYear, currentMonth, update?.SubmittedAt);
+                    
+                    switch (status)
+                    {
+                        case UpdateSubmissionStatus.Submitted:
+                            submittedCount++;
+                            break;
+                        case UpdateSubmissionStatus.Due:
+                            dueCount++;
+                            break;
+                        case UpdateSubmissionStatus.Late:
+                            lateCount++;
+                            break;
+                        case UpdateSubmissionStatus.Upcoming:
+                            // If update exists but not submitted and period hasn't ended, it's in progress
+                            if (update != null && !update.SubmittedAt.HasValue)
+                            {
+                                inProgressCount++;
+                            }
+                            break;
+                    }
+                }
+            }
+            
+            ViewBag.MonthlyUpdateDueCount = dueCount;
+            ViewBag.MonthlyUpdateLateCount = lateCount;
+            ViewBag.MonthlyUpdateInProgressCount = inProgressCount;
+            ViewBag.MonthlyUpdateSubmittedCount = submittedCount;
+            ViewBag.CurrentReportingYear = currentYear;
+            ViewBag.CurrentReportingMonth = currentMonth;
+            ViewBag.CurrentReportingMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
 
             var viewModel = new ProjectIndexViewModel
             {
@@ -3694,8 +3883,6 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating the project title.";
                 return RedirectToAction(nameof(Details), new { id });
             }
-
-            return RedirectToAction(nameof(Details), new { id = id, tab = "settings" });
         }
 
     // POST: Project/UpdateDeliveryPriority

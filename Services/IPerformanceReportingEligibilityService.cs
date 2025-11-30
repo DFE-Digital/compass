@@ -34,6 +34,11 @@ public interface IPerformanceReportingEligibilityService
     /// Determines if a product is required to report using pre-loaded cache (much faster for batch operations)
     /// </summary>
     bool IsReportingRequired(string fipsId, string? businessArea, int year, int month, PerformanceReportingEligibilityCache cache);
+    
+    /// <summary>
+    /// Finds the next active reporting period after the given year/month
+    /// </summary>
+    Task<(int Year, int Month)?> FindNextActiveReportingPeriodAsync(int fromYear, int fromMonth, string? businessArea = null, PerformanceReportingEligibilityCache? cache = null);
 }
 
 public class PerformanceReportingEligibilityCache
