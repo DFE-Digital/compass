@@ -39,6 +39,75 @@ public class BusinessAreaSummaryItem
     public int LowPriorityCount { get; set; }
     public int PriorityNotSetCount { get; set; }
     public int BlockedCount { get; set; }
+    public double PreviousMonthSubmittedPercent { get; set; }
+    public double CurrentMonthSubmittedPercent { get; set; }
+    public int PreviousMonthSubmitted { get; set; }
+    public int CurrentMonthSubmitted { get; set; }
+}
+
+public class MonthlyUpdateStats
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public int TotalProjects { get; set; }
+    public int Submitted { get; set; }
+    public int NotStarted { get; set; }
+    public int InProgress { get; set; }
+    public int Late { get; set; }
+    public DateTime DueDate { get; set; }
+}
+
+public class BusinessAreaMonthlyUpdateStats
+{
+    public string BusinessArea { get; set; } = string.Empty;
+    public int TotalProjects { get; set; }
+    public int PreviousMonthSubmitted { get; set; }
+    public double PreviousMonthSubmittedPercent { get; set; }
+    public int CurrentMonthSubmitted { get; set; }
+    public double CurrentMonthSubmittedPercent { get; set; }
+}
+
+public class MilestoneWithProject
+{
+    public Compass.Models.Milestone Milestone { get; set; } = null!;
+    public Compass.Models.Project Project { get; set; } = null!;
+}
+
+public class RiskWithProject
+{
+    public Compass.Models.Risk Risk { get; set; } = null!;
+    public Compass.Models.Project Project { get; set; } = null!;
+}
+
+public class IssueWithProject
+{
+    public Compass.Models.Issue Issue { get; set; } = null!;
+    public Compass.Models.Project Project { get; set; } = null!;
+}
+
+public class PortfolioSummaryViewModel
+{
+    public int TotalProjects { get; set; }
+    public int ActiveProjects { get; set; }
+    public int PausedProjects { get; set; }
+    public int CompletedProjects { get; set; }
+    public int CancelledProjects { get; set; }
+    public int RedProjects { get; set; }
+    public int AmberRedProjects { get; set; }
+    public int AmberProjects { get; set; }
+    public int AmberGreenProjects { get; set; }
+    public int GreenProjects { get; set; }
+    public int CriticalPriorityProjects { get; set; }
+    public int HighPriorityProjects { get; set; }
+    public int MediumPriorityProjects { get; set; }
+    public int LowPriorityProjects { get; set; }
+    public int PriorityNotSetProjects { get; set; }
+    public int TotalMilestones { get; set; }
+    public int CompletedMilestones { get; set; }
+    public int TotalRisks { get; set; }
+    public int OpenRisks { get; set; }
+    public int TotalIssues { get; set; }
+    public int OpenIssues { get; set; }
 }
 
 public class BulkUpdateRequest
@@ -68,15 +137,72 @@ public class CentralOpsController : Controller
     private readonly CompassDbContext _context;
     private readonly ILogger<CentralOpsController> _logger;
     private readonly IUserDirectoryService _userDirectoryService;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
 
     public CentralOpsController(
         CompassDbContext context,
         ILogger<CentralOpsController> logger,
-        IUserDirectoryService userDirectoryService)
+        IUserDirectoryService userDirectoryService,
+        IMonthlyUpdateService monthlyUpdateService)
     {
         _context = context;
         _logger = logger;
         _userDirectoryService = userDirectoryService;
+        _monthlyUpdateService = monthlyUpdateService;
+    }
+
+    private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
+        List<Project> projects, 
+        int year, 
+        int month, 
+        IMonthlyUpdateService monthlyUpdateService)
+    {
+        var totalProjects = projects.Count;
+        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+        var currentDate = DateTime.UtcNow;
+        
+        var submitted = 0;
+        var notStarted = 0;
+        var inProgress = 0;
+        var late = 0;
+        
+        foreach (var project in projects)
+        {
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
+            
+            // If update exists and has been submitted
+            if (update != null && update.SubmittedAt.HasValue)
+            {
+                submitted++;
+            }
+            // Check if the due date has passed (regardless of whether update exists)
+            else if (currentDate > dueDate)
+            {
+                late++;
+            }
+            // If update exists but not submitted and due date hasn't passed
+            else if (update != null && !update.SubmittedAt.HasValue)
+            {
+                inProgress++;
+            }
+            // No update exists and due date hasn't passed
+            else
+            {
+                notStarted++;
+            }
+        }
+        
+        return new MonthlyUpdateStats
+        {
+            Year = year,
+            Month = month,
+            TotalProjects = totalProjects,
+            Submitted = submitted,
+            NotStarted = notStarted,
+            InProgress = inProgress,
+            Late = late,
+            DueDate = dueDate
+        };
     }
 
     private static string NormalizeRagStatus(string? ragStatus)
@@ -120,6 +246,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
+                .Include(p => p.MonthlyUpdates)
                 .Where(p => !p.IsDeleted)
                 .ToListAsync();
 
@@ -180,26 +307,45 @@ public class CentralOpsController : Controller
                 .ThenBy(p => p.TargetDeliveryDate)
                 .ToList();
 
+            // Calculate Monthly Update Completion Status
+            var currentDate = DateTime.UtcNow;
+            var currentYear = currentDate.Year;
+            var currentMonth = currentDate.Month;
+            
+            // Previous month
+            var previousMonth = currentMonth == 1 ? 12 : currentMonth - 1;
+            var previousYear = currentMonth == 1 ? currentYear - 1 : currentYear;
+
             // Summary by Business Area - sorted alphabetically
             var businessAreaSummary = allProjects
                 .Where(p => p.BusinessAreaLookup != null)
                 .GroupBy(p => p.BusinessAreaLookup!.Name)
-                .Select(g => new BusinessAreaSummaryItem
-                {
-                    BusinessArea = g.Key,
-                    Count = g.Count(),
-                    RedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
-                    AmberRedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
-                    AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
-                    AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
-                    GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
-                    RagNotSetCount = g.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
-                    CriticalPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                    HighPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                    MediumPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
-                    LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
-                    PriorityNotSetCount = g.Count(p => p.DeliveryPriority == null),
-                    BlockedCount = 0 // Projects don't have a blocked status
+                .Select(g => {
+                    var areaProjects = g.ToList();
+                    var prevMonthStats = CalculateMonthlyUpdateStats(areaProjects, previousYear, previousMonth, _monthlyUpdateService);
+                    var currentMonthStats = CalculateMonthlyUpdateStats(areaProjects, currentYear, currentMonth, _monthlyUpdateService);
+                    
+                    return new BusinessAreaSummaryItem
+                    {
+                        BusinessArea = g.Key,
+                        Count = g.Count(),
+                        RedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
+                        AmberRedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
+                        AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
+                        AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
+                        GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
+                        RagNotSetCount = g.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
+                        CriticalPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                        HighPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                        MediumPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
+                        LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
+                        PriorityNotSetCount = g.Count(p => p.DeliveryPriority == null),
+                        BlockedCount = 0, // Projects don't have a blocked status
+                        PreviousMonthSubmittedPercent = areaProjects.Count > 0 ? (prevMonthStats.Submitted * 100.0) / areaProjects.Count : 0,
+                        CurrentMonthSubmittedPercent = areaProjects.Count > 0 ? (currentMonthStats.Submitted * 100.0) / areaProjects.Count : 0,
+                        PreviousMonthSubmitted = prevMonthStats.Submitted,
+                        CurrentMonthSubmitted = currentMonthStats.Submitted
+                    };
                 })
                 .OrderBy(x => x.BusinessArea)
                 .ToList();
@@ -208,6 +354,9 @@ public class CentralOpsController : Controller
             var unassignedProjects = allProjects.Where(p => p.BusinessAreaLookup == null).ToList();
             if (unassignedProjects.Any())
             {
+                var unassignedPrevMonthStats = CalculateMonthlyUpdateStats(unassignedProjects, previousYear, previousMonth, _monthlyUpdateService);
+                var unassignedCurrentMonthStats = CalculateMonthlyUpdateStats(unassignedProjects, currentYear, currentMonth, _monthlyUpdateService);
+                
                 var unassignedSummary = new BusinessAreaSummaryItem
                 {
                     BusinessArea = "Not assigned",
@@ -223,10 +372,20 @@ public class CentralOpsController : Controller
                     MediumPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
                     LowPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
                     PriorityNotSetCount = unassignedProjects.Count(p => p.DeliveryPriority == null),
-                    BlockedCount = 0
+                    BlockedCount = 0,
+                    PreviousMonthSubmittedPercent = unassignedProjects.Count > 0 ? (unassignedPrevMonthStats.Submitted * 100.0) / unassignedProjects.Count : 0,
+                    CurrentMonthSubmittedPercent = unassignedProjects.Count > 0 ? (unassignedCurrentMonthStats.Submitted * 100.0) / unassignedProjects.Count : 0,
+                    PreviousMonthSubmitted = unassignedPrevMonthStats.Submitted,
+                    CurrentMonthSubmitted = unassignedCurrentMonthStats.Submitted
                 };
                 businessAreaSummary.Add(unassignedSummary);
             }
+            
+            // Calculate stats for previous month
+            var previousMonthStats = CalculateMonthlyUpdateStats(allProjects, previousYear, previousMonth, _monthlyUpdateService);
+            
+            // Calculate stats for current month
+            var currentMonthStats = CalculateMonthlyUpdateStats(allProjects, currentYear, currentMonth, _monthlyUpdateService);
 
             ViewBag.PrioritySummary = prioritySummary;
             ViewBag.RagSummary = ragSummary;
@@ -234,6 +393,10 @@ public class CentralOpsController : Controller
             ViewBag.BusinessAreaSummary = businessAreaSummary;
             ViewBag.ActiveWorkItems = allProjects.Count(p => p.Status == "Active");
             ViewBag.AllProjects = allProjects.OrderBy(p => p.Title).ToList();
+            ViewBag.PreviousMonthStats = previousMonthStats;
+            ViewBag.CurrentMonthStats = currentMonthStats;
+            ViewBag.PreviousMonthName = new DateTime(previousYear, previousMonth, 1).ToString("MMMM yyyy");
+            ViewBag.CurrentMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
 
             return View();
         }
@@ -242,6 +405,124 @@ public class CentralOpsController : Controller
             _logger.LogError(ex, "Error loading Central Operations dashboard");
             TempData["ErrorMessage"] = "An error occurred while loading the dashboard. Please try again.";
             return View();
+        }
+    }
+
+    // GET: CentralOps/MonthlyUpdateStatus
+    public async Task<IActionResult> MonthlyUpdateStatus(int year, int month, string status)
+    {
+        try
+        {
+            // Get all projects with monthly updates
+            var allProjects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.MonthlyUpdates)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+            var currentDate = DateTime.UtcNow;
+
+            // Filter projects by status
+            var filteredProjects = new List<Project>();
+            
+            foreach (var project in allProjects)
+            {
+                var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
+                string projectStatus;
+
+                // If update exists and has been submitted
+                if (update != null && update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "Submitted";
+                }
+                // Check if the due date has passed (regardless of whether update exists)
+                else if (currentDate > dueDate)
+                {
+                    projectStatus = "Late";
+                }
+                // If update exists but not submitted and due date hasn't passed
+                else if (update != null && !update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "In Progress";
+                }
+                // No update exists and due date hasn't passed
+                else
+                {
+                    projectStatus = "Not Started";
+                }
+
+                if (projectStatus.Equals(status, StringComparison.OrdinalIgnoreCase))
+                {
+                    filteredProjects.Add(project);
+                }
+            }
+
+            // Calculate previous month for display
+            var prevMonth = month == 1 ? 12 : month - 1;
+            var prevYear = month == 1 ? year - 1 : year;
+
+            // Calculate business area completion percentages
+            var businessAreaStats = new List<BusinessAreaMonthlyUpdateStats>();
+            
+            // Get all business areas
+            var businessAreas = allProjects
+                .Where(p => p.BusinessAreaLookup != null)
+                .Select(p => p.BusinessAreaLookup!.Name)
+                .Distinct()
+                .OrderBy(ba => ba)
+                .ToList();
+
+            // Add "Not assigned" if there are projects without business area
+            if (allProjects.Any(p => p.BusinessAreaLookup == null))
+            {
+                businessAreas.Add("Not assigned");
+            }
+
+            foreach (var businessArea in businessAreas)
+            {
+                var areaProjects = businessArea == "Not assigned"
+                    ? allProjects.Where(p => p.BusinessAreaLookup == null).ToList()
+                    : allProjects.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea).ToList();
+
+                if (!areaProjects.Any()) continue;
+
+                // Calculate for previous month
+                var prevMonthStats = CalculateMonthlyUpdateStats(areaProjects, prevYear, prevMonth, _monthlyUpdateService);
+                
+                // Calculate for current month
+                var currentMonthStats = CalculateMonthlyUpdateStats(areaProjects, year, month, _monthlyUpdateService);
+
+                businessAreaStats.Add(new BusinessAreaMonthlyUpdateStats
+                {
+                    BusinessArea = businessArea,
+                    TotalProjects = areaProjects.Count,
+                    PreviousMonthSubmitted = prevMonthStats.Submitted,
+                    PreviousMonthSubmittedPercent = areaProjects.Count > 0 ? (prevMonthStats.Submitted * 100.0) / areaProjects.Count : 0,
+                    CurrentMonthSubmitted = currentMonthStats.Submitted,
+                    CurrentMonthSubmittedPercent = areaProjects.Count > 0 ? (currentMonthStats.Submitted * 100.0) / areaProjects.Count : 0
+                });
+            }
+
+            ViewBag.Year = year;
+            ViewBag.Month = month;
+            ViewBag.Status = status;
+            ViewBag.MonthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+            ViewBag.DueDate = dueDate;
+            ViewBag.FilteredProjects = filteredProjects.OrderBy(p => p.Title).ToList();
+            ViewBag.BusinessAreaStats = businessAreaStats;
+            ViewBag.PreviousMonthName = new DateTime(prevYear, prevMonth, 1).ToString("MMMM yyyy");
+            ViewBag.CurrentMonthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly update status for {Year}-{Month}, status: {Status}", year, month, status);
+            TempData["ErrorMessage"] = "An error occurred while loading the monthly update status. Please try again.";
+            return RedirectToAction(nameof(Dashboard));
         }
     }
 
@@ -1175,6 +1456,156 @@ public class CentralOpsController : Controller
         {
             _logger.LogError(ex, "Error performing bulk update");
             return Json(new { success = false, message = "An error occurred while updating projects: " + ex.Message });
+        }
+    }
+
+    // GET: CentralOps/MonthlySummary
+    public async Task<IActionResult> MonthlySummary(int? year, int? month)
+    {
+        try
+        {
+            // Default to current month if not specified
+            var currentDate = DateTime.UtcNow;
+            var reportYear = year ?? currentDate.Year;
+            var reportMonth = month ?? currentDate.Month;
+            
+            // Calculate month boundaries
+            var monthStart = new DateTime(reportYear, reportMonth, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+            
+            // Calculate previous and next months for navigation
+            var prevMonth = reportMonth == 1 ? 12 : reportMonth - 1;
+            var prevYear = reportMonth == 1 ? reportYear - 1 : reportYear;
+            var nextMonth = reportMonth == 12 ? 1 : reportMonth + 1;
+            var nextYear = reportMonth == 12 ? reportYear + 1 : reportYear;
+            
+            // Get all projects
+            var allProjects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.Milestones)
+                .Include(p => p.Risks)
+                .Include(p => p.Issues)
+                .Include(p => p.MonthlyUpdates)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+            
+            // 1. New projects added this month
+            var newProjects = allProjects
+                .Where(p => p.CreatedAt >= monthStart && p.CreatedAt <= monthEnd)
+                .OrderByDescending(p => p.CreatedAt)
+                .ToList();
+            
+            // 2. Key milestones from priority projects (High/Critical priority)
+            var priorityProjects = allProjects
+                .Where(p => p.DeliveryPriority != null && 
+                           (p.DeliveryPriority.Name.ToLower().Contains("high") || 
+                            p.DeliveryPriority.Name.ToLower().Contains("critical")))
+                .ToList();
+            
+            var keyMilestones = priorityProjects
+                .SelectMany(p => p.Milestones
+                    .Where(m => !m.IsDeleted && 
+                               m.DueDate >= monthStart && 
+                               m.DueDate <= monthEnd.AddMonths(3)) // Show milestones due in next 3 months
+                    .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
+                .OrderBy(x => x.Milestone.DueDate)
+                .ToList();
+            
+            // 3. Milestones achieved this month
+            var achievedMilestones = allProjects
+                .SelectMany(p => p.Milestones
+                    .Where(m => !m.IsDeleted && 
+                               m.Status == "complete" && 
+                               m.ActualDate.HasValue &&
+                               m.ActualDate.Value >= monthStart && 
+                               m.ActualDate.Value <= monthEnd)
+                    .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
+                .OrderByDescending(x => x.Milestone.ActualDate)
+                .ToList();
+            
+            // 4. Open and new high risk items
+            var highRiskItems = allProjects
+                .SelectMany(p => p.Risks
+                    .Where(r => !r.IsDeleted && 
+                               (r.Status != "closed" || r.ClosedDate == null) &&
+                               (r.RiskScore >= 15 || // High risk score threshold
+                                r.ImpactRating >= 4 || 
+                                r.LikelihoodRating >= 4 ||
+                                (r.CreatedAt >= monthStart && r.CreatedAt <= monthEnd))) // New this month
+                    .Select(r => new RiskWithProject { Project = p, Risk = r }))
+                .OrderByDescending(x => x.Risk.RiskScore)
+                .ThenByDescending(x => x.Risk.CreatedAt)
+                .ToList();
+            
+            // 5. Open and high priority issues
+            var highPriorityIssues = allProjects
+                .SelectMany(p => p.Issues
+                    .Where(i => !i.IsDeleted && 
+                               (i.Status != "resolved" && i.Status != "closed") &&
+                               (i.Severity.ToLower() == "high" || 
+                                i.Severity.ToLower() == "critical" ||
+                                i.Priority != null && (i.Priority.ToLower() == "high" || i.Priority.ToLower() == "critical") ||
+                                (i.CreatedAt >= monthStart && i.CreatedAt <= monthEnd))) // New this month
+                    .Select(i => new IssueWithProject { Project = p, Issue = i }))
+                .OrderByDescending(x => x.Issue.Severity == "critical" ? 2 : x.Issue.Severity == "high" ? 1 : 0)
+                .ThenByDescending(x => x.Issue.CreatedAt)
+                .ToList();
+            
+            // 6. Portfolio Summary
+            var portfolioSummary = new PortfolioSummaryViewModel
+            {
+                TotalProjects = allProjects.Count,
+                ActiveProjects = allProjects.Count(p => p.Status == "Active"),
+                PausedProjects = allProjects.Count(p => p.Status == "Paused"),
+                CompletedProjects = allProjects.Count(p => p.Status == "Completed"),
+                CancelledProjects = allProjects.Count(p => p.Status == "Cancelled"),
+                RedProjects = allProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
+                AmberRedProjects = allProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
+                AmberProjects = allProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
+                AmberGreenProjects = allProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
+                GreenProjects = allProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
+                CriticalPriorityProjects = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                HighPriorityProjects = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                MediumPriorityProjects = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
+                LowPriorityProjects = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
+                PriorityNotSetProjects = allProjects.Count(p => p.DeliveryPriority == null),
+                TotalMilestones = allProjects.SelectMany(p => p.Milestones).Count(m => !m.IsDeleted),
+                CompletedMilestones = allProjects.SelectMany(p => p.Milestones).Count(m => !m.IsDeleted && m.Status == "complete"),
+                TotalRisks = allProjects.SelectMany(p => p.Risks).Count(r => !r.IsDeleted),
+                OpenRisks = allProjects.SelectMany(p => p.Risks).Count(r => !r.IsDeleted && r.Status != "closed"),
+                TotalIssues = allProjects.SelectMany(p => p.Issues).Count(i => !i.IsDeleted),
+                OpenIssues = allProjects.SelectMany(p => p.Issues).Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed")
+            };
+            
+            // Monthly update stats for the selected month
+            var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+            
+            ViewBag.Year = reportYear;
+            ViewBag.Month = reportMonth;
+            ViewBag.MonthName = monthStart.ToString("MMMM yyyy");
+            ViewBag.MonthStart = monthStart;
+            ViewBag.MonthEnd = monthEnd;
+            ViewBag.PreviousMonth = prevMonth;
+            ViewBag.PreviousYear = prevYear;
+            ViewBag.NextMonth = nextMonth;
+            ViewBag.NextYear = nextYear;
+            ViewBag.NewProjects = newProjects;
+            ViewBag.KeyMilestones = keyMilestones;
+            ViewBag.AchievedMilestones = achievedMilestones;
+            ViewBag.HighRiskItems = highRiskItems;
+            ViewBag.HighPriorityIssues = highPriorityIssues;
+            ViewBag.PortfolioSummary = portfolioSummary;
+            ViewBag.MonthlyUpdateStats = monthlyUpdateStats;
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly summary for {Year}-{Month}", year, month);
+            TempData["ErrorMessage"] = "An error occurred while loading the monthly summary. Please try again.";
+            return RedirectToAction(nameof(Dashboard));
         }
     }
 

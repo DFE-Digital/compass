@@ -1,0 +1,148 @@
+@model IEnumerable<Compass.Models.TechnologyCodeOfPractice>
+
+@{
+    ViewData["Title"] = "Technology Code of Practice";
+    var totalPoints = ViewBag.TotalPoints as int? ?? Model.Count();
+    var activePoints = ViewBag.ActivePoints as int? ?? Model.Count(p => p.IsActive);
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Technology Code of Practice</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <h1>Technology Code of Practice</h1>
+            <p>A set of criteria to help government design, build and buy technology. The TCoP is used for the Cabinet Office spend control process and the Local Digital Declaration. <a href="https://www.gov.uk/guidance/the-technology-code-of-practice" target="_blank" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">View on GOV.UK <i class="fas fa-external-link-alt"></i></a></p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="dashboard-summary-cards mb-4">
+            <div class="dashboard-card bg-primary">
+                <div class="dashboard-card-value">@totalPoints</div>
+                <div class="dashboard-card-label">Total Points</div>
+                <div class="dashboard-card-icon"><i class="fas fa-list-alt"></i></div>
+            </div>
+            <div class="dashboard-card bg-success">
+                <div class="dashboard-card-value">@activePoints</div>
+                <div class="dashboard-card-label">Active Points</div>
+                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+            </div>
+        </div>
+
+        <!-- TCoP Points List -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-code"></i> The 13 Technology Code of Practice Points</h2>
+                <p class="dashboard-section-description">Click on any point to view details and manage guidance.</p>
+            </div>
+            
+            <div class="standards-list">
+                @foreach (var point in Model.OrderBy(p => p.PointNumber))
+                {
+                    <div class="standard-item @(point.IsActive ? "" : "standard-item-inactive")">
+                        <div class="standard-item-header">
+                            <div class="standard-number-badge">@point.PointNumber</div>
+                            <div class="standard-title-section">
+                                <h3 class="standard-title">@point.Title</h3>
+                                @if (!point.IsActive)
+                                {
+                                    <span class="badge badge-secondary ml-2">Inactive</span>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="standard-item-body">
+                            @if (!string.IsNullOrEmpty(point.Summary))
+                            {
+                                <p class="standard-summary">@point.Summary</p>
+                            }
+                            else if (!string.IsNullOrEmpty(point.Description))
+                            {
+                                <p class="standard-summary">@(point.Description.Length > 250 ? point.Description.Substring(0, 250) + "…" : point.Description)</p>
+                            }
+                            
+                            <div class="standard-meta">
+                                @if (!string.IsNullOrEmpty(point.GuidanceUrl))
+                                {
+                                    <div class="standard-guidance-badge">
+                                        <i class="fas fa-external-link-alt text-info"></i>
+                                        <a href="@point.GuidanceUrl" target="_blank" style="color: inherit; text-decoration: none;">View guidance on GOV.UK</a>
+                                    </div>
+                                }
+                                
+                                @if (point.TechnologyCodeOfPracticeProfessions != null && point.TechnologyCodeOfPracticeProfessions.Any())
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-muted d-block mb-1"><strong>Applies to:</strong></small>
+                                        <div>
+                                            @foreach (var tcp in point.TechnologyCodeOfPracticeProfessions.OrderBy(tcp => tcp.DdatProfession.Name))
+                                            {
+                                                <span class="badge badge-primary mr-1 mb-1">@tcp.DdatProfession.Name</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="standard-item-actions">
+                            <a asp-action="Details" asp-route-id="@point.Id" class="btn btn-primary btn-sm">
+                                <i class="fas fa-eye"></i> View Point
+                            </a>
+                            <a asp-action="Edit" asp-route-id="@point.Id" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div class="dashboard-section">
+                <div class="alert alert-info">
+                    <h4><i class="fas fa-info-circle"></i> No Technology Code of Practice Points Found</h4>
+                    <p>The 13 Technology Code of Practice points need to be seeded into the database. Please contact an administrator to initialize the points.</p>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+

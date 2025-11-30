@@ -14,7 +14,7 @@
 
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
             </li>
@@ -42,7 +42,7 @@
             background-color: #005ea5;
         }
         .helper-content {
-            background-color: #f8f9fa;
+            background-color: #f4f8fb;
             border-left: 3px solid #005ea5;
             padding: 1rem;
             border-radius: 0.25rem;
@@ -327,9 +327,9 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label for="governance">Governance</label>
+                                <label for="governance">Governance <span class="text-danger">*</span></label>
                                 <small class="form-text text-muted d-block mb-1">Governance information (markdown supported)</small>
-                                <textarea class="form-control markdown-textarea" id="governance" name="governance" rows="8" data-help="governance"></textarea>
+                                <textarea class="form-control markdown-textarea" id="governance" name="governance" rows="8" data-help="governance" required>@(standard?.Governance ?? "")</textarea>
                             </div>
 
                             <div class="form-group">
@@ -346,9 +346,9 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="validityPeriod">Validity Period (months)</label>
+                                <label for="validityPeriod">Validity Period (months) <span class="text-danger">*</span></label>
                                 <small class="form-text text-muted d-block mb-1">Validity period in months</small>
-                                <input type="number" class="form-control" id="validityPeriod" name="validityPeriod" min="1" data-help="validityPeriod" value="@(standard?.ValidityPeriod?.ToString() ?? "")" />
+                                <input type="number" class="form-control" id="validityPeriod" name="validityPeriod" min="1" data-help="validityPeriod" required value="@(standard?.ValidityPeriod?.ToString() ?? "")" />
                             </div>
 
                             <div class="form-group">
@@ -366,8 +366,8 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group" data-help="owners">
-                                <label>Standard Owners</label>
-                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard owners. You can add multiple owners.</small>
+                                <label>Standard Owners <span class="text-danger">*</span></label>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard owners. At least one owner is required. You can add multiple owners.</small>
                                 <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="ownersPicker">
                                     <div class="position-relative">
                                         <input type="text" class="form-control js-user-picker-input" id="ownersSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
@@ -385,7 +385,7 @@
 
                             <div class="form-group" data-help="contacts">
                                 <label>Standard Contacts</label>
-                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard contacts. You can add multiple contacts.</small>
+                                <small class="form-text text-muted d-block mb-1">Search Entra ID for standard contacts. Contacts are optional. You can add multiple contacts.</small>
                                 <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="contactsPicker">
                                     <div class="position-relative">
                                         <input type="text" class="form-control js-user-picker-input" id="contactsSearch" placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" autocomplete="off" />
@@ -411,16 +411,28 @@
                         <div class="card-body">
                             <div class="form-group">
                                 <label>Approved Products</label>
-                                <div id="approvedProductsContainer">
-                                    <p class="text-muted">Product management will be added in a future update.</p>
+                                <small class="form-text text-muted d-block mb-1">Select approved products for this standard (optional)</small>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="productSearch" placeholder="Search for a product..." autocomplete="off" />
+                                    <div id="productSearchResults" class="list-group" style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none;"></div>
                                 </div>
+                                <div id="approvedProductsContainer" class="mt-3">
+                                    <!-- Selected products will appear here -->
+                                </div>
+                                <input type="hidden" id="approvedProductIds" name="approvedProductIds" />
                             </div>
 
                             <div class="form-group">
                                 <label>Tolerated Products</label>
-                                <div id="toleratedProductsContainer">
-                                    <p class="text-muted">Product management will be added in a future update.</p>
+                                <small class="form-text text-muted d-block mb-1">Select tolerated products for this standard (optional)</small>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="toleratedProductSearch" placeholder="Search for a product..." autocomplete="off" />
+                                    <div id="toleratedProductSearchResults" class="list-group" style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none;"></div>
                                 </div>
+                                <div id="toleratedProductsContainer" class="mt-3">
+                                    <!-- Selected products will appear here -->
+                                </div>
+                                <input type="hidden" id="toleratedProductIds" name="toleratedProductIds" />
                             </div>
                         </div>
                     </div>
@@ -433,9 +445,15 @@
                         <div class="card-body">
                             <div class="form-group">
                                 <label>Exceptions</label>
-                                <div id="exemptionsContainer">
-                                    <p class="text-muted">Exception management will be added in a future update.</p>
+                                <small class="form-text text-muted d-block mb-1">Link existing exceptions to this standard (optional)</small>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="exceptionSearch" placeholder="Search for an exception..." autocomplete="off" />
+                                    <div id="exceptionSearchResults" class="list-group" style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none;"></div>
                                 </div>
+                                <div id="exemptionsContainer" class="mt-3">
+                                    <!-- Selected exceptions will appear here -->
+                                </div>
+                                <input type="hidden" id="exceptionIds" name="exceptionIds" />
                             </div>
                         </div>
                     </div>
@@ -485,7 +503,7 @@
                             <div class="tab-content" style="min-height: 400px;">
                                 <!-- Guidance Tab -->
                                 <div class="tab-pane fade show active" id="guidance-pane" role="tabpanel" aria-labelledby="guidance-tab">
-                                    <div id="helpContent" class="p-3" style="background-color: #f8f9fa; border-radius: 0.375rem; min-height: 300px;">
+                                    <div id="helpContent" class="p-3" style="background-color: #f4f8fb; border-radius: 0.375rem; min-height: 300px;">
                                         <p class="text-muted">Click on a field or section to see guidance</p>
                                     </div>
                                 </div>
@@ -546,7 +564,7 @@
                                     }
                                     else
                                     {
-                                        <div class="p-3" style="background-color: #f8f9fa; border-radius: 0.375rem;">
+                                        <div class="p-3" style="background-color: #f4f8fb; border-radius: 0.375rem;">
                                             <p class="text-muted">Comments are available once you save the draft.</p>
                                         </div>
                                     }
@@ -560,6 +578,47 @@
     </div>
 </section>
 
+<!-- Submit for Review Confirmation Modal -->
+<div class="modal fade" id="submitForReviewModal" tabindex="-1" role="dialog" aria-labelledby="submitForReviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="submitForReviewModalLabel">
+                    <i class="fas fa-paper-plane mr-2"></i>Submit Standard for Review
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to submit this standard for review?</p>
+                @if (standard?.ParentStandardId.HasValue == true)
+                {
+                    <p class="mb-2">Once submitted, the standard will move to:</p>
+                    <ul class="mb-2">
+                        <li><strong>"For Approval"</strong> status if this is a major change (adding/removing products/exceptions or changing legal status)</li>
+                        <li><strong>"Awaiting Publication"</strong> status if this is a minor or patch change (other content changes or description updates only)</li>
+                    </ul>
+                    <p class="mb-0"><small class="text-muted">Major changes require approval by Standards Managers. Minor and patch changes can be published directly by an Administrator.</small></p>
+                }
+                else
+                {
+                    <p class="mb-0">Once submitted, the standard will move to <strong>"For Approval"</strong> status and will be reviewed by the standards forum.</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form id="submitForReviewForm" method="post" action="@Url.Action("SubmitForReview", "DdtStandards")" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="submitForReviewId" value="@(standard?.Id ?? 0)" />
+                    <button type="submit" class="btn btn-warning" id="submitForReviewFormBtn">
+                        <i class="fas fa-paper-plane mr-2"></i>Submit for Review
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script src="~/js/user-picker.js" asp-append-version="true"></script>
@@ -632,7 +691,7 @@
             },
             submission: {
                 title: 'Submission',
-                content: '<p>Once submitted, the standard moves to "Under Review" status.</p><p><strong>Review process:</strong></p><ul><li>Administrators will review the standard</li><li>They may request changes or clarification</li><li>Standards can be approved or rejected</li></ul><p>You can continue editing the standard while it\'s in draft. After submission, you may need to wait for review before making changes.</p>'
+                content: '<p>Once submitted, the standard moves to "For Approval" status.</p><p><strong>Review process:</strong></p><ul><li>Standards Managers will review the standard</li><li>They may request changes or clarification</li><li>Standards can be approved (moves to "Awaiting Publication") or rejected</li><li>After approval, an Admin can publish the standard</li></ul><p>You can continue editing the standard while it\'s in draft. After submission, you may need to wait for review before making changes.</p>'
             }
         };
 
@@ -1657,7 +1716,7 @@
                                 
                                 <!-- Reply Form (hidden by default) -->
                                 <div class="reply-form-container mt-3" id="reply-form-${comment.id}" style="display: none;">
-                                    <div class="p-2" style="background-color: #f8f9fa; border-radius: 0.375rem;">
+                                    <div class="p-2" style="background-color: #f4f8fb; border-radius: 0.375rem;">
                                         <div class="form-group mb-2">
                                             <textarea class="form-control form-control-sm" id="reply-text-${comment.id}" rows="3" placeholder="Write a reply..."></textarea>
                                         </div>
@@ -2005,29 +2064,27 @@
 
 
         function submitForReview() {
-            if (confirm('Are you sure you want to submit this standard for review? It will move to "Under Review" status.')) {
-                // Create a hidden form to submit for review
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '@Url.Action("SubmitForReview", "DdtStandards")';
-                
-                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-                const tokenInput = document.createElement('input');
-                tokenInput.type = 'hidden';
-                tokenInput.name = '__RequestVerificationToken';
-                tokenInput.value = token;
-                form.appendChild(tokenInput);
-                
-                const idInput = document.createElement('input');
-                idInput.type = 'hidden';
-                idInput.name = 'id';
-                idInput.value = '@(Model?.Id ?? 0)';
-                form.appendChild(idInput);
-                
-                document.body.appendChild(form);
-                form.submit();
+            // Check if standard has been saved (has an ID)
+            var standardId = document.getElementById('submitForReviewId')?.value;
+            if (!standardId || standardId === '0') {
+                alert('Please save the standard first before submitting for review.');
+                return;
             }
+            
+            // Show the confirmation modal
+            $('#submitForReviewModal').modal('show');
         }
+        
+        // Handle form submission in modal
+        $('#submitForReviewForm').on('submit', function(e) {
+            var standardId = $('#submitForReviewId').val();
+            if (!standardId || standardId === '0') {
+                e.preventDefault();
+                alert('Please save the standard first before submitting for review.');
+                $('#submitForReviewModal').modal('hide');
+                return false;
+            }
+        });
 
         // Criteria Management
         (function() {
@@ -2198,6 +2255,366 @@
 
             // Make function available globally for restoreFormData
             window.addCriteriaToList = addCriteriaToList;
+        })();
+
+        // Products and Exceptions Management
+        (function() {
+            var allProducts = @Html.Raw(Json.Serialize(ViewBag.AllProducts ?? new List<object>()));
+            var selectedApprovedProducts = [];
+            var selectedToleratedProducts = [];
+            var selectedExceptions = [];
+
+            // Initialize products and exceptions if editing
+            @if (standard != null && ViewBag.StandardProducts != null)
+            {
+                <text>
+                @foreach (var sp in ViewBag.StandardProducts as List<Compass.Models.DdtStandardProduct>)
+                {
+                    if (sp.ProductType == "Approved")
+                    {
+                        <text>
+                        selectedApprovedProducts.push({
+                            id: @sp.StandardProductId,
+                            name: '@Html.Raw(sp.StandardProduct?.Name?.Replace("'", "\\'") ?? "")'
+                        });
+                        </text>
+                    }
+                    else if (sp.ProductType == "Tolerated")
+                    {
+                        <text>
+                        selectedToleratedProducts.push({
+                            id: @sp.StandardProductId,
+                            name: '@Html.Raw(sp.StandardProduct?.Name?.Replace("'", "\\'") ?? "")'
+                        });
+                        </text>
+                    }
+                }
+                updateApprovedProductsDisplay();
+                updateToleratedProductsDisplay();
+                </text>
+            }
+
+            // Product search autocomplete
+            var productSearchInput = document.getElementById('productSearch');
+            var productSearchResults = document.getElementById('productSearchResults');
+            var toleratedProductSearchInput = document.getElementById('toleratedProductSearch');
+            var toleratedProductSearchResults = document.getElementById('toleratedProductSearchResults');
+
+            if (productSearchInput) {
+                productSearchInput.addEventListener('input', function() {
+                    var searchTerm = this.value.trim().toLowerCase();
+                    if (searchTerm.length < 2) {
+                        productSearchResults.style.display = 'none';
+                        return;
+                    }
+
+                    var filtered = allProducts.filter(function(p) {
+                        return p.name.toLowerCase().includes(searchTerm) &&
+                               !selectedApprovedProducts.find(sp => sp.id === p.id) &&
+                               !selectedToleratedProducts.find(sp => sp.id === p.id);
+                    });
+
+                    if (filtered.length === 0) {
+                        productSearchResults.innerHTML = '<div class="list-group-item">No products found</div>';
+                    } else {
+                        productSearchResults.innerHTML = filtered.slice(0, 10).map(function(p) {
+                            return '<a href="#" class="list-group-item list-group-item-action" data-product-id="' + p.id + '" data-product-name="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + '</a>';
+                        }).join('');
+                    }
+                    productSearchResults.style.display = 'block';
+                });
+
+                productSearchResults.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (e.target.classList.contains('list-group-item-action')) {
+                        var productId = parseInt(e.target.getAttribute('data-product-id'));
+                        var productName = e.target.getAttribute('data-product-name');
+                        addApprovedProduct({ id: productId, name: productName });
+                        productSearchInput.value = '';
+                        productSearchResults.style.display = 'none';
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!productSearchInput.contains(e.target) && !productSearchResults.contains(e.target)) {
+                        productSearchResults.style.display = 'none';
+                    }
+                });
+            }
+
+            if (toleratedProductSearchInput) {
+                toleratedProductSearchInput.addEventListener('input', function() {
+                    var searchTerm = this.value.trim().toLowerCase();
+                    if (searchTerm.length < 2) {
+                        toleratedProductSearchResults.style.display = 'none';
+                        return;
+                    }
+
+                    var filtered = allProducts.filter(function(p) {
+                        return p.name.toLowerCase().includes(searchTerm) &&
+                               !selectedApprovedProducts.find(sp => sp.id === p.id) &&
+                               !selectedToleratedProducts.find(sp => sp.id === p.id);
+                    });
+
+                    if (filtered.length === 0) {
+                        toleratedProductSearchResults.innerHTML = '<div class="list-group-item">No products found</div>';
+                    } else {
+                        toleratedProductSearchResults.innerHTML = filtered.slice(0, 10).map(function(p) {
+                            return '<a href="#" class="list-group-item list-group-item-action" data-product-id="' + p.id + '" data-product-name="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + '</a>';
+                        }).join('');
+                    }
+                    toleratedProductSearchResults.style.display = 'block';
+                });
+
+                toleratedProductSearchResults.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (e.target.classList.contains('list-group-item-action')) {
+                        var productId = parseInt(e.target.getAttribute('data-product-id'));
+                        var productName = e.target.getAttribute('data-product-name');
+                        addToleratedProduct({ id: productId, name: productName });
+                        toleratedProductSearchInput.value = '';
+                        toleratedProductSearchResults.style.display = 'none';
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!toleratedProductSearchInput.contains(e.target) && !toleratedProductSearchResults.contains(e.target)) {
+                        toleratedProductSearchResults.style.display = 'none';
+                    }
+                });
+            }
+
+            function addApprovedProduct(product) {
+                if (!selectedApprovedProducts.find(p => p.id === product.id)) {
+                    selectedApprovedProducts.push(product);
+                    updateApprovedProductsDisplay();
+                    checkFormValidity();
+                }
+            }
+
+            function removeApprovedProduct(productId) {
+                selectedApprovedProducts = selectedApprovedProducts.filter(p => p.id !== productId);
+                updateApprovedProductsDisplay();
+                checkFormValidity();
+            }
+
+            function addToleratedProduct(product) {
+                if (!selectedToleratedProducts.find(p => p.id === product.id)) {
+                    selectedToleratedProducts.push(product);
+                    updateToleratedProductsDisplay();
+                    checkFormValidity();
+                }
+            }
+
+            function removeToleratedProduct(productId) {
+                selectedToleratedProducts = selectedToleratedProducts.filter(p => p.id !== productId);
+                updateToleratedProductsDisplay();
+                checkFormValidity();
+            }
+
+            function updateApprovedProductsDisplay() {
+                var container = document.getElementById('approvedProductsContainer');
+                var hiddenInput = document.getElementById('approvedProductIds');
+                if (!container || !hiddenInput) return;
+
+                if (selectedApprovedProducts.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No approved products selected</p>';
+                    hiddenInput.value = '';
+                    return;
+                }
+
+                var html = '<div class="d-flex flex-wrap">';
+                selectedApprovedProducts.forEach(function(product) {
+                    html += '<div class="badge badge-success mr-2 mb-2 d-flex align-items-center">';
+                    html += '<span>' + escapeHtml(product.name) + '</span>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-light ml-2 remove-approved-product" data-product-id="' + product.id + '" aria-label="Remove">×</button>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                hiddenInput.value = selectedApprovedProducts.map(p => p.id).join(',');
+
+                // Attach remove handlers
+                container.querySelectorAll('.remove-approved-product').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        removeApprovedProduct(parseInt(this.getAttribute('data-product-id')));
+                    });
+                });
+            }
+
+            function updateToleratedProductsDisplay() {
+                var container = document.getElementById('toleratedProductsContainer');
+                var hiddenInput = document.getElementById('toleratedProductIds');
+                if (!container || !hiddenInput) return;
+
+                if (selectedToleratedProducts.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No tolerated products selected</p>';
+                    hiddenInput.value = '';
+                    return;
+                }
+
+                var html = '<div class="d-flex flex-wrap">';
+                selectedToleratedProducts.forEach(function(product) {
+                    html += '<div class="badge badge-warning mr-2 mb-2 d-flex align-items-center">';
+                    html += '<span>' + escapeHtml(product.name) + '</span>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-light ml-2 remove-tolerated-product" data-product-id="' + product.id + '" aria-label="Remove">×</button>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                hiddenInput.value = selectedToleratedProducts.map(p => p.id).join(',');
+
+                // Attach remove handlers
+                container.querySelectorAll('.remove-tolerated-product').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        removeToleratedProduct(parseInt(this.getAttribute('data-product-id')));
+                    });
+                });
+            }
+
+            // Exception search - fetch from API
+            var exceptionSearchInput = document.getElementById('exceptionSearch');
+            var exceptionSearchResults = document.getElementById('exceptionSearchResults');
+
+            if (exceptionSearchInput) {
+                exceptionSearchInput.addEventListener('input', function() {
+                    var searchTerm = this.value.trim();
+                    if (searchTerm.length < 2) {
+                        exceptionSearchResults.style.display = 'none';
+                        return;
+                    }
+
+                    // Fetch exceptions from API
+                    fetch('@Url.Action("GetExceptions", "DdtStandards")?search=' + encodeURIComponent(searchTerm))
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.exceptions) {
+                                var filtered = data.exceptions.filter(function(e) {
+                                    return !selectedExceptions.find(se => se.id === e.id);
+                                });
+
+                                if (filtered.length === 0) {
+                                    exceptionSearchResults.innerHTML = '<div class="list-group-item">No exceptions found</div>';
+                                } else {
+                                    exceptionSearchResults.innerHTML = filtered.slice(0, 10).map(function(e) {
+                                        return '<a href="#" class="list-group-item list-group-item-action" data-exception-id="' + e.id + '" data-exception-title="' + escapeHtml(e.title) + '">' + escapeHtml(e.title) + '</a>';
+                                    }).join('');
+                                }
+                                exceptionSearchResults.style.display = 'block';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching exceptions:', error);
+                        });
+                });
+
+                exceptionSearchResults.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (e.target.classList.contains('list-group-item-action')) {
+                        var exceptionId = parseInt(e.target.getAttribute('data-exception-id'));
+                        var exceptionTitle = e.target.getAttribute('data-exception-title');
+                        addException({ id: exceptionId, title: exceptionTitle });
+                        exceptionSearchInput.value = '';
+                        exceptionSearchResults.style.display = 'none';
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!exceptionSearchInput.contains(e.target) && !exceptionSearchResults.contains(e.target)) {
+                        exceptionSearchResults.style.display = 'none';
+                    }
+                });
+            }
+
+            function addException(exception) {
+                if (!selectedExceptions.find(e => e.id === exception.id)) {
+                    selectedExceptions.push(exception);
+                    updateExceptionsDisplay();
+                    checkFormValidity();
+                }
+            }
+
+            function removeException(exceptionId) {
+                selectedExceptions = selectedExceptions.filter(e => e.id !== exceptionId);
+                updateExceptionsDisplay();
+                checkFormValidity();
+            }
+
+            function updateExceptionsDisplay() {
+                var container = document.getElementById('exemptionsContainer');
+                var hiddenInput = document.getElementById('exceptionIds');
+                if (!container || !hiddenInput) return;
+
+                if (selectedExceptions.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No exceptions selected</p>';
+                    hiddenInput.value = '';
+                    return;
+                }
+
+                var html = '<div class="d-flex flex-wrap">';
+                selectedExceptions.forEach(function(exception) {
+                    html += '<div class="badge badge-info mr-2 mb-2 d-flex align-items-center">';
+                    html += '<span>' + escapeHtml(exception.title) + '</span>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-light ml-2 remove-exception" data-exception-id="' + exception.id + '" aria-label="Remove">×</button>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                hiddenInput.value = selectedExceptions.map(e => e.id).join(',');
+
+                // Attach remove handlers
+                container.querySelectorAll('.remove-exception').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        removeException(parseInt(this.getAttribute('data-exception-id')));
+                    });
+                });
+            }
+
+            // Form validation to enable/disable submit button
+            function checkFormValidity() {
+                var submitBtn = document.getElementById('submitForReviewBtn');
+                if (!submitBtn) return;
+
+                var title = document.getElementById('title')?.value.trim() || '';
+                var governance = document.getElementById('governance')?.value.trim() || '';
+                var validityPeriod = document.getElementById('validityPeriod')?.value || '';
+                var ownerIds = document.getElementById('ownerObjectIds')?.value || '';
+
+                var isValid = title.length > 0 &&
+                             governance.length > 0 &&
+                             validityPeriod.length > 0 &&
+                             ownerIds.length > 0;
+
+                submitBtn.disabled = !isValid;
+            }
+
+            // Attach validation listeners
+            var titleInput = document.getElementById('title');
+            var governanceInput = document.getElementById('governance');
+            var validityPeriodInput = document.getElementById('validityPeriod');
+            var ownerIdsInput = document.getElementById('ownerObjectIds');
+
+            if (titleInput) titleInput.addEventListener('input', checkFormValidity);
+            if (governanceInput) governanceInput.addEventListener('input', checkFormValidity);
+            if (validityPeriodInput) validityPeriodInput.addEventListener('input', checkFormValidity);
+            if (ownerIdsInput) {
+                // Watch for changes in selected owners
+                var observer = new MutationObserver(checkFormValidity);
+                observer.observe(ownerIdsInput, { attributes: true, attributeFilter: ['value'] });
+                ownerIdsInput.addEventListener('change', checkFormValidity);
+            }
+
+            // Also check when owners/contacts are updated
+            if (typeof updateOwnersDisplay === 'function') {
+                var originalUpdateOwners = updateOwnersDisplay;
+                window.updateOwnersDisplay = function() {
+                    originalUpdateOwners();
+                    checkFormValidity();
+                };
+            }
+
+            // Initial check
+            setTimeout(checkFormValidity, 500);
         })();
     </script>
 }

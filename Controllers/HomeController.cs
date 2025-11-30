@@ -343,10 +343,37 @@ public class HomeController : Controller
             .OrderBy(p => p.Title)
             .ToListAsync();
 
-        var allProducts = await _productsApiService.GetProductsAsync();
-        var myProducts = allProducts
-            .Where(p => p.ProductContacts?.Any(pc =>
-                pc.UsersPermissionsUser?.Email?.Equals(userEmail, StringComparison.OrdinalIgnoreCase) == true) == true)
+        // Fetch watched projects
+        var watchedProjectIds = await _context.ProjectWatchlists
+            .Where(w => w.UserId == currentUser.Id)
+            .Select(w => w.ProjectId)
+            .ToListAsync();
+
+        var watchedProjects = await _context.Projects
+            .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
+            .Include(p => p.ProjectContacts)
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.Milestones)
+            .Include(p => p.Issues)
+            .Include(p => p.Risks)
+            .Include(p => p.Actions)
+            .Include(p => p.Decisions)
+            .Include(p => p.ProjectProducts)
+            .Include(p => p.Successes)
+            .OrderBy(p => p.Title)
+            .ToListAsync();
+
+        // Fetch user's products - both from product_contacts and service_owner (same approach as ProductReportingController)
+        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId)
+        var myProducts = productsByContact
+            .Concat(productsByServiceOwner)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
             .OrderBy(p => p.Title)
             .ToList();
 
@@ -624,7 +651,9 @@ public class HomeController : Controller
             DashboardFocus = preference.DashboardFocus
         };
 
-        var firstName = ExtractFirstName(currentUser.Name);
+        var firstName = !string.IsNullOrWhiteSpace(currentUser.FirstName) 
+            ? currentUser.FirstName 
+            : ExtractFirstName(currentUser.Name);
 
         var blockDefinitions = DashboardLayoutHelper.GetBlockCatalog();
         var blockInstances = DashboardLayoutHelper.ParseLayout(preference.DashboardLayout, blockDefinitions);
@@ -640,9 +669,30 @@ public class HomeController : Controller
             await _context.SaveChangesAsync();
         }
 
+        // Get DDT Standards for the user (only published standards)
+        var myOwnedStandards = await _context.DdtStandards
+            .Where(s => !s.IsDeleted && s.IsPublished && s.Owners.Any(o => o.UserId == currentUser.Id))
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .OrderByDescending(s => s.UpdatedAt)
+            .ToListAsync();
+
+        var myContactStandards = await _context.DdtStandards
+            .Where(s => !s.IsDeleted && s.IsPublished && s.Contacts.Any(c => c.UserId == currentUser.Id))
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .OrderByDescending(s => s.UpdatedAt)
+            .ToListAsync();
+
+        var myDdtStandards = myOwnedStandards
+            .Union(myContactStandards)
+            .GroupBy(s => s.Id)
+            .Select(g => g.First())
+            .ToList();
+
         _logger.LogInformation(
-            "Dashboard VM built for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues, {Actions} assigned actions",
-            userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count, assignedActions.Count);
+            "Dashboard VM built for {Email}: {Projects} projects, {Products} products, {Milestones} milestones, {Issues} issues, {Actions} assigned actions, {Standards} DDT standards",
+            userEmail, myProjects.Count, myProducts.Count, allActiveMilestones.Count, allActiveIssues.Count, assignedActions.Count, myDdtStandards.Count);
 
         return new HomeDashboardViewModel
         {
@@ -658,6 +708,7 @@ public class HomeController : Controller
             BlockDefinitions = blockDefinitions,
             BlockInstances = blockInstances,
             MyProjects = myProjects,
+            WatchedProjects = watchedProjects,
             OversightProjects = leadershipProjects,
             MyProducts = myProducts,
             MilestonesDueThisWeek = milestonesDueThisWeek,
@@ -675,7 +726,10 @@ public class HomeController : Controller
             EnterpriseMetrics = enterpriseMetrics,
             ActiveMissions = activeMissions,
             PriorityOutcomes = priorityOutcomes,
-            EnterpriseAtRiskProjects = enterpriseAtRiskProjects
+            EnterpriseAtRiskProjects = enterpriseAtRiskProjects,
+            MyDdtStandards = myDdtStandards,
+            MyOwnedDdtStandards = myOwnedStandards,
+            MyContactDdtStandards = myContactStandards
         };
     }
 

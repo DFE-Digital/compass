@@ -227,11 +227,24 @@ public partial class CompassDbContext : DbContext
     public DbSet<DdtStandardSubCategory> DdtStandardSubCategories { get; set; }
     public DbSet<DdtStandardComment> DdtStandardComments { get; set; }
     public DbSet<DdtStandardProduct> DdtStandardProducts { get; set; }
+    public DbSet<DdtStandardException> DdtStandardExceptions { get; set; }
+    public DbSet<DdtStandardUnpublishAudit> DdtStandardUnpublishAudits { get; set; }
     
     // Standards Configuration
     public DbSet<StandardCategory> StandardCategories { get; set; }
     public DbSet<StandardSubCategory> StandardSubCategories { get; set; }
     public DbSet<StandardProduct> StandardProducts { get; set; }
+    
+    // Service Standards (GOV.UK Service Standards)
+    public DbSet<ServiceStandard> ServiceStandards { get; set; }
+    public DbSet<ServiceStandardPhaseGuidance> ServiceStandardPhaseGuidance { get; set; }
+    public DbSet<DdatProfession> DdatProfessions { get; set; }
+    public DbSet<ServiceStandardProfession> ServiceStandardProfessions { get; set; }
+    
+    // Technology Code of Practice
+    public DbSet<TechnologyCodeOfPractice> TechnologyCodeOfPractice { get; set; }
+    public DbSet<TechnologyCodeOfPracticeProfession> TechnologyCodeOfPracticeProfessions { get; set; }
+    public DbSet<TechnologyCodeOfPracticePhaseGuidance> TechnologyCodeOfPracticePhaseGuidance { get; set; }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -2202,6 +2215,10 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<TriageMeeting>()
             .Property(tm => tm.Title)
             .HasMaxLength(150);
+
+        // DdatProfession configuration - ignore RoleGroup property until migration is created
+        modelBuilder.Entity<DdatProfession>()
+            .Ignore(d => d.RoleGroup);
 
     }
 }
