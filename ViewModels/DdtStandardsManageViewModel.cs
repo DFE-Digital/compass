@@ -48,6 +48,16 @@ public class DdtStandardsManageViewModel
     public List<DdtStandard> AllPublished { get; set; } = new List<DdtStandard>();
 
     /// <summary>
+    /// Unpublished standards created by the current user
+    /// </summary>
+    public List<DdtStandard> MyUnpublished { get; set; } = new List<DdtStandard>();
+
+    /// <summary>
+    /// All unpublished standards
+    /// </summary>
+    public List<DdtStandard> AllUnpublished { get; set; } = new List<DdtStandard>();
+
+    /// <summary>
     /// Available filter stages
     /// </summary>
     public List<string> Stages { get; set; } = new List<string>();

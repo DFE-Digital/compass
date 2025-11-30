@@ -32,7 +32,7 @@ public class ProductReportingController : Controller
     }
 
     // GET: ProductReporting/PerformanceMetrics
-    public async Task<IActionResult> PerformanceMetrics()
+    public async Task<IActionResult> PerformanceMetrics(string view = "tasks")
     {
         // Get the current user's email
         var userEmail = User.Identity?.Name;
@@ -64,107 +64,153 @@ public class ProductReportingController : Controller
             .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
             .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
 
-        // Create view model for user's products
+        // Create view model for user's products (show ALL products user is responsible for)
         var userProductStatuses = new List<ProductReturnStatusViewModel>();
         foreach (var product in userProducts)
         {
-            if (string.IsNullOrEmpty(product.FipsId)) continue;
+            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            if (vm != null)
+            {
+                userProductStatuses.Add(vm);
+            }
+        }
+        
+        // Calculate counts for navigation badges
+        // Tasks count: products that require reporting AND are Due or Late
+        var tasksCount = userProductStatuses.Count(p => 
+            p.IsReportingRequired && (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
+        var yourProductsCount = userProductStatuses.Count;
+        
+        // For "All products" view, get all eligible products
+        List<ProductReturnStatusViewModel> allProductStatuses = new List<ProductReturnStatusViewModel>();
+        int allProductsCount = 0;
+        
+        if (view == "all")
+        {
+            var allProducts = await _productsApiService.GetAllProductsAsync();
+            // Filter to only Active products
+            var activeProducts = allProducts
+                .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             
-            // Extract business area from category_values
-            var businessArea = product.CategoryValues?
-                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
-                ?.Name;
+            var allFipsIds = activeProducts
+                .Where(p => !string.IsNullOrEmpty(p.FipsId))
+                .Select(p => p.FipsId!)
+                .ToList();
             
-            // Check if reporting is required (using cached data - NO database query)
-            var reportingRequired = _eligibilityService.IsReportingRequired(
-                product.FipsId, 
-                businessArea, 
-                currentYear, 
-                currentMonth,
-                eligibilityCache);
+            var allReturns = await _context.ProductReturns
+                .Include(pr => pr.MetricValues)
+                .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+                .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
             
-            // Skip this product if reporting is not required
-            if (!reportingRequired)
+            foreach (var product in activeProducts)
+            {
+                var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+                if (vm != null)
+                {
+                    allProductStatuses.Add(vm);
+                }
+            }
+            
+            allProductsCount = allProductStatuses.Count;
+        }
+        // Note: allProductsCount will be 0 when not on "all" view - badge will show 0 or be hidden
+        
+        // Determine which data to show based on view
+        List<ProductReturnStatusViewModel> displayData;
+        if (view == "tasks")
+        {
+            // Show products that:
+            // 1. Require reporting (includes business area overrides), OR
+            // 2. Have business area override (even if period excluded)
+            // AND have status Due or Late
+            displayData = userProductStatuses
+                .Where(p => (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
+                           (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late))
+                .ToList();
+        }
+        else if (view == "all")
+        {
+            displayData = allProductStatuses;
+        }
+        else // "products" or default
+        {
+            displayData = userProductStatuses;
+        }
+        
+        // Check if current period is excluded and there are no business area overrides
+        var periodExcluded = eligibilityCache.PeriodExclusions.Any(e => e.Year == currentYear && e.Month == currentMonth);
+        var hasBusinessAreaOverrides = eligibilityCache.BusinessAreaConfigs.Any(c => 
+            (c.ApplicableFromYear < currentYear || 
+             (c.ApplicableFromYear == currentYear && c.ApplicableFromMonth <= currentMonth)) &&
+            (!c.ApplicableUntilYear.HasValue || 
+             c.ApplicableUntilYear.Value > currentYear || 
+             (c.ApplicableUntilYear.Value == currentYear && c.ApplicableUntilMonth >= currentMonth)));
+        
+        string? globalSuspensionMessage = null;
+        DateTime? globalNextReportingPeriod = null;
+        DateTime? globalNextReportingPeriodDueDate = null;
+        
+        if (periodExcluded && !hasBusinessAreaOverrides)
+        {
+            globalSuspensionMessage = "Reporting is not required at this time due to period exclusion";
+            var nextPeriod = await _eligibilityService.FindNextActiveReportingPeriodAsync(currentYear, currentMonth, null, eligibilityCache);
+            if (nextPeriod.HasValue)
+            {
+                globalNextReportingPeriod = new DateTime(nextPeriod.Value.Year, nextPeriod.Value.Month, 1);
+                globalNextReportingPeriodDueDate = _returnStatusService.GetReturnDueDate(nextPeriod.Value.Year, nextPeriod.Value.Month);
+            }
+        }
+        
+        // Calculate upcoming reporting dates (3 months in advance)
+        // Exclude periods that are in the period exclusions list
+        var upcomingReportingDates = new List<(int Year, int Month, DateTime DueDate, string PeriodName)>();
+        
+        // Start from current reporting period and go forward 3 months
+        for (int i = 0; i <= 3; i++)
+        {
+            var futureMonth = currentMonth + i;
+            var futureYear = currentYear;
+            
+            // Handle year rollover
+            while (futureMonth > 12)
+            {
+                futureMonth -= 12;
+                futureYear += 1;
+            }
+            
+            // Skip if this period is excluded
+            var isExcluded = eligibilityCache.PeriodExclusions.Any(e => e.Year == futureYear && e.Month == futureMonth);
+            if (isExcluded)
             {
                 continue;
             }
             
-            var currentReturn = userReturns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
-            
-            ReturnStatus? status = null;
-            int? completedMetrics = null;
-            int? totalMetrics = null;
-            
-            if (currentReturn != null)
-            {
-                status = _returnStatusService.CalculateReturnStatus(
-                    currentReturn.Year, 
-                    currentReturn.Month, 
-                    currentReturn.SubmittedDate);
-                    
-                totalMetrics = currentReturn.MetricValues?.Count ?? 0;
-                completedMetrics = currentReturn.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
-            }
-            else
-            {
-                // Check if this period has started yet
-                var periodStart = new DateTime(currentYear, currentMonth, 1);
-                if (periodStart >= new DateTime(2025, 10, 1))
-                {
-                    status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, null);
-                }
-            }
-            
-            // Find the user's role for this product
-            // Check product_contacts first, then check service_owner and other role fields
-            string? userRole = null;
-            List<string> roles = new List<string>();
-            
-            if (!string.IsNullOrEmpty(userEmail))
-            {
-                // Check product_contacts
-                if (product.ProductContacts != null)
-            {
-                var userContact = product.ProductContacts.FirstOrDefault(pc => 
-                    pc.UsersPermissionsUser != null && 
-                    !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
-                    pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
-                
-                    if (!string.IsNullOrEmpty(userContact?.Role))
-                    {
-                        roles.Add(userContact.Role);
-                    }
-                }
-                
-                // Check service_owner (relation to entra-user)
-                if (product.ServiceOwner != null && 
-                    !string.IsNullOrEmpty(product.ServiceOwner.EmailAddress) &&
-                    product.ServiceOwner.EmailAddress.Equals(userEmail, StringComparison.OrdinalIgnoreCase))
-                {
-                    roles.Add("Service Owner");
-                }
-                
-                // Note: Other roles (product_manager, delivery_manager, etc.) are relations to admin entities
-                // which we don't have email addresses for in the current DTO structure.
-                // If needed, we can add those checks later when we populate those relations.
-            }
-            
-            // Combine roles if user has multiple
-            userRole = roles.Any() ? string.Join(", ", roles) : null;
-            
-            userProductStatuses.Add(new ProductReturnStatusViewModel
-            {
-                Product = product,
-                CurrentPeriodYear = currentYear,
-                CurrentPeriodMonth = currentMonth,
-                Status = status,
-                CompletedMetrics = completedMetrics,
-                TotalMetrics = totalMetrics,
-                UserRole = userRole
-            });
+            var dueDate = _returnStatusService.GetReturnDueDate(futureYear, futureMonth);
+            var periodName = new DateTime(futureYear, futureMonth, 1).ToString("MMMM yyyy");
+            upcomingReportingDates.Add((futureYear, futureMonth, dueDate, periodName));
         }
         
-        return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", userProductStatuses);
+        // Get products table data (user's products that need reporting)
+        var productsForTable = userProductStatuses
+            .Where(p => p.IsReportingRequired)
+            .OrderBy(p => p.Product.Title)
+            .ToList();
+
+        ViewBag.CurrentView = view;
+        ViewBag.TasksCount = tasksCount;
+        ViewBag.YourProductsCount = yourProductsCount;
+        ViewBag.AllProductsCount = allProductsCount;
+        ViewBag.CurrentYear = currentYear;
+        ViewBag.CurrentMonth = currentMonth;
+        ViewBag.GlobalSuspensionMessage = globalSuspensionMessage;
+        ViewBag.GlobalNextReportingPeriod = globalNextReportingPeriod;
+        ViewBag.GlobalNextReportingPeriodDueDate = globalNextReportingPeriodDueDate;
+        ViewBag.UpcomingReportingDates = upcomingReportingDates;
+        ViewBag.ProductsForTable = productsForTable;
+        ViewBag.UserProducts = userProductStatuses;
+        
+        return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", displayData);
     }
     
     // GET: ProductReporting/ReportOtherProduct
@@ -720,6 +766,158 @@ public class ProductReportingController : Controller
         return newReturn;
     }
 
+    private async Task<ProductReturnStatusViewModel?> CreateProductStatusViewModelAsync(
+        ProductDto product, 
+        Dictionary<string, ProductReturn> returnsDict,
+        int currentYear,
+        int currentMonth,
+        string? userEmail,
+        PerformanceReportingEligibilityCache eligibilityCache)
+    {
+        if (string.IsNullOrEmpty(product.FipsId)) return null;
+        
+        // Extract business area from category_values
+        var businessArea = product.CategoryValues?
+            .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+            ?.Name;
+        
+        // Check if reporting is required (using cached data - NO database query)
+        var reportingRequired = _eligibilityService.IsReportingRequired(
+            product.FipsId, 
+            businessArea, 
+            currentYear, 
+            currentMonth,
+            eligibilityCache);
+        
+        // Check if period is excluded and business area has override
+        var periodExcluded = eligibilityCache.PeriodExclusions.Any(e => e.Year == currentYear && e.Month == currentMonth);
+        var businessAreaReporting = false;
+        var isBusinessAreaInScope = false;
+        if (!string.IsNullOrEmpty(businessArea))
+        {
+            // Check if business area is configured for reporting (in scope)
+            isBusinessAreaInScope = eligibilityCache.BusinessAreaConfigs.Any(c => 
+                c.BusinessAreaName == businessArea &&
+                c.IsActive);
+            
+            // Check if business area reporting applies for current period
+            businessAreaReporting = eligibilityCache.BusinessAreaConfigs.Any(c => 
+                c.BusinessAreaName == businessArea &&
+                c.IsActive &&
+                (c.ApplicableFromYear < currentYear || 
+                 (c.ApplicableFromYear == currentYear && c.ApplicableFromMonth <= currentMonth)) &&
+                (!c.ApplicableUntilYear.HasValue || 
+                 c.ApplicableUntilYear.Value > currentYear || 
+                 (c.ApplicableUntilYear.Value == currentYear && c.ApplicableUntilMonth >= currentMonth)));
+        }
+        
+        // Determine suspension reason and next reporting period
+        string? suspensionReason = null;
+        DateTime? nextReportingPeriod = null;
+        DateTime? nextReportingPeriodDueDate = null;
+        
+        if (!reportingRequired && periodExcluded && !businessAreaReporting)
+        {
+            suspensionReason = "Reporting is not required at this time due to period exclusion";
+            var nextPeriod = await _eligibilityService.FindNextActiveReportingPeriodAsync(currentYear, currentMonth, businessArea, eligibilityCache);
+            if (nextPeriod.HasValue)
+            {
+                nextReportingPeriod = new DateTime(nextPeriod.Value.Year, nextPeriod.Value.Month, 1);
+                // Calculate the due date for the next reporting period
+                nextReportingPeriodDueDate = _returnStatusService.GetReturnDueDate(nextPeriod.Value.Year, nextPeriod.Value.Month);
+            }
+        }
+        
+        var currentReturn = returnsDict.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
+        
+        ReturnStatus? status = null;
+        int? completedMetrics = null;
+        int? totalMetrics = null;
+        DateTime? currentPeriodDueDate = null;
+        
+        // Calculate status if:
+        // 1. There's an existing return, OR
+        // 2. Reporting is required (includes business area overrides), OR
+        // 3. Business area is in scope and has an override (even if period is excluded)
+        var shouldCalculateStatus = currentReturn != null || 
+                                   reportingRequired || 
+                                   (isBusinessAreaInScope && businessAreaReporting);
+        
+        if (currentReturn != null)
+        {
+            status = _returnStatusService.CalculateReturnStatus(
+                currentReturn.Year, 
+                currentReturn.Month, 
+                currentReturn.SubmittedDate);
+                
+            totalMetrics = currentReturn.MetricValues?.Count ?? 0;
+            completedMetrics = currentReturn.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
+            currentPeriodDueDate = _returnStatusService.GetReturnDueDate(currentReturn.Year, currentReturn.Month);
+        }
+        else if (shouldCalculateStatus)
+        {
+            // Check if this period has started yet
+            var periodStart = new DateTime(currentYear, currentMonth, 1);
+            if (periodStart >= new DateTime(2025, 10, 1))
+            {
+                status = _returnStatusService.CalculateReturnStatus(currentYear, currentMonth, null);
+                currentPeriodDueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+            }
+        }
+        
+        // Find the user's role for this product
+        // Check product_contacts first, then check service_owner and other role fields
+        string? userRole = null;
+        List<string> roles = new List<string>();
+        
+        if (!string.IsNullOrEmpty(userEmail))
+        {
+            // Check product_contacts
+            if (product.ProductContacts != null)
+            {
+                var userContact = product.ProductContacts.FirstOrDefault(pc => 
+                    pc.UsersPermissionsUser != null && 
+                    !string.IsNullOrEmpty(pc.UsersPermissionsUser.Email) &&
+                    pc.UsersPermissionsUser.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
+                
+                if (!string.IsNullOrEmpty(userContact?.Role))
+                {
+                    roles.Add(userContact.Role);
+                }
+            }
+            
+            // Check service_owner (relation to entra-user)
+            if (product.ServiceOwner != null && 
+                !string.IsNullOrEmpty(product.ServiceOwner.EmailAddress) &&
+                product.ServiceOwner.EmailAddress.Equals(userEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                roles.Add("Service Owner");
+            }
+        }
+        
+        // Combine roles if user has multiple
+        userRole = roles.Any() ? string.Join(", ", roles) : null;
+        
+        return new ProductReturnStatusViewModel
+        {
+            Product = product,
+            CurrentPeriodYear = currentYear,
+            CurrentPeriodMonth = currentMonth,
+            Status = status,
+            CompletedMetrics = completedMetrics,
+            TotalMetrics = totalMetrics,
+            UserRole = userRole,
+            IsReportingRequired = reportingRequired,
+            ReportingSuspensionReason = suspensionReason,
+            NextReportingPeriod = nextReportingPeriod,
+            NextReportingPeriodDueDate = nextReportingPeriodDueDate,
+            IsBusinessAreaInScope = isBusinessAreaInScope,
+            CurrentPeriodDueDate = currentPeriodDueDate,
+            IsPeriodExcluded = periodExcluded,
+            HasBusinessAreaOverride = businessAreaReporting
+        };
+    }
+
     private (bool IsValid, string? ErrorMessage) ValidateMetricValue(string value, PerformanceMetric metric)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -828,6 +1026,227 @@ public class ProductReportingController : Controller
             _logger.LogError(ex, "Error validating metric value");
             return (true, null); // Allow if validation rules can't be parsed
         }
+    }
+
+    // GET: ProductReporting/ReportingDates
+    public async Task<IActionResult> ReportingDates()
+    {
+        // Get the current user's email
+        var userEmail = User.Identity?.Name;
+        
+        // Fetch user's products - both from product_contacts and service_owner
+        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId)
+        var userProducts = productsByContact
+            .Concat(productsByServiceOwner)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .ToList();
+        
+        // Get current reporting period (previous month)
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // Load eligibility cache
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        
+        // Get all returns for current period
+        var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
+        var userReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
+        // Create view models for user's products to calculate counts
+        var userProductStatuses = new List<ProductReturnStatusViewModel>();
+        foreach (var product in userProducts)
+        {
+            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            if (vm != null)
+            {
+                userProductStatuses.Add(vm);
+            }
+        }
+        
+        // Calculate counts for navigation badges
+        var tasksCount = userProductStatuses.Count(p => 
+            (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
+            (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
+        var yourProductsCount = userProductStatuses.Count;
+        
+        // Get all products count (Active only)
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var activeProducts = allProducts
+            .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var allFipsIds = activeProducts
+            .Where(p => !string.IsNullOrEmpty(p.FipsId))
+            .Select(p => p.FipsId!)
+            .ToList();
+        var allReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+        
+        var allProductStatuses = new List<ProductReturnStatusViewModel>();
+        foreach (var product in activeProducts)
+        {
+            var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            if (vm != null)
+            {
+                allProductStatuses.Add(vm);
+            }
+        }
+        var allProductsCount = allProductStatuses.Count;
+        
+        var startDate = new DateTime(2025, 10, 1); // Reporting started in October 2025
+        var endDate = now.AddMonths(12); // Show next 12 months
+        
+        // Get all active due date overrides
+        var overrides = await _context.PerformanceReportingDueDateOverrides
+            .Where(o => o.IsActive)
+            .ToDictionaryAsync(o => (o.ReportingYear, o.ReportingMonth), o => o);
+        
+        // Build list of reporting periods with their due dates
+        var reportingPeriods = new List<(int Year, int Month, DateTime DueDate, bool HasOverride, string? OverrideReason)>();
+        
+        for (var date = startDate; date <= endDate; date = date.AddMonths(1))
+        {
+            var year = date.Year;
+            var month = date.Month;
+            
+            // Check if there's an override
+            var hasOverride = overrides.TryGetValue((year, month), out var overrideValue);
+            
+            // Calculate due date (will use override if exists, otherwise default rule)
+            var dueDate = _returnStatusService.GetReturnDueDate(year, month);
+            
+            reportingPeriods.Add((
+                year,
+                month,
+                dueDate,
+                hasOverride,
+                overrideValue?.Reason
+            ));
+        }
+        
+        // Get active period exclusions
+        var periodExclusions = await _context.PerformanceReportingPeriodExclusions
+            .Where(e => e.IsActive)
+            .OrderBy(e => e.Year)
+            .ThenBy(e => e.Month)
+            .ToListAsync();
+        
+        // Get active business area configs
+        var businessAreaConfigs = await _context.PerformanceReportingBusinessAreaConfigs
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.BusinessAreaName)
+            .ThenBy(c => c.ApplicableFromYear)
+            .ThenBy(c => c.ApplicableFromMonth)
+            .ToListAsync();
+        
+        ViewBag.ReportingPeriods = reportingPeriods;
+        ViewBag.DefaultRule = "Returns are due by the 3rd working day of the following month";
+        ViewBag.PeriodExclusions = periodExclusions;
+        ViewBag.BusinessAreaConfigs = businessAreaConfigs;
+        ViewBag.TasksCount = tasksCount;
+        ViewBag.YourProductsCount = yourProductsCount;
+        ViewBag.AllProductsCount = allProductsCount;
+        
+        return View("~/Views/ProductReporting/PerformanceMetrics/ReportingDates.cshtml");
+    }
+
+    // GET: ProductReporting/WhatYouNeedToReport
+    public async Task<IActionResult> WhatYouNeedToReport()
+    {
+        // Get the current user's email
+        var userEmail = User.Identity?.Name;
+        
+        // Fetch user's products for counts
+        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId)
+        var userProducts = productsByContact
+            .Concat(productsByServiceOwner)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .ToList();
+        
+        // Get current reporting period (previous month)
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // Load eligibility cache
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        
+        // Get all returns for current period
+        var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
+        var userReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
+        // Create view models for user's products to calculate counts
+        var userProductStatuses = new List<ProductReturnStatusViewModel>();
+        foreach (var product in userProducts)
+        {
+            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            if (vm != null)
+            {
+                userProductStatuses.Add(vm);
+            }
+        }
+        
+        // Calculate counts for navigation badges
+        var tasksCount = userProductStatuses.Count(p => 
+            (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
+            (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
+        var yourProductsCount = userProductStatuses.Count;
+        
+        // Get all products count (Active only)
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var activeProducts = allProducts
+            .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var allFipsIds = activeProducts
+            .Where(p => !string.IsNullOrEmpty(p.FipsId))
+            .Select(p => p.FipsId!)
+            .ToList();
+        var allReturns = await _context.ProductReturns
+            .Include(pr => pr.MetricValues)
+            .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+        
+        var allProductStatuses = new List<ProductReturnStatusViewModel>();
+        foreach (var product in activeProducts)
+        {
+            var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            if (vm != null)
+            {
+                allProductStatuses.Add(vm);
+            }
+        }
+        var allProductsCount = allProductStatuses.Count;
+        
+        // Get all active performance metrics
+        var metrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+        
+        ViewBag.Metrics = metrics;
+        ViewBag.TasksCount = tasksCount;
+        ViewBag.YourProductsCount = yourProductsCount;
+        ViewBag.AllProductsCount = allProductsCount;
+        
+        return View("~/Views/ProductReporting/PerformanceMetrics/WhatYouNeedToReport.cshtml");
     }
 
     #endregion

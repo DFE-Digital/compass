@@ -4,12 +4,478 @@
 
 @{
     ViewData["Title"] = "COMPASS Dashboard";
+    var currentUser = Model.CurrentUser;
+    var hasProjects = Model.MyProjects.Any();
+    var hasProducts = Model.MyProducts.Any();
+    var hasStandards = Model.MyDdtStandards.Any();
+    var totalItems = Model.MyProjects.Count + Model.MyProducts.Count + Model.MyDdtStandards.Count;
+    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count;
 }
+
+@await Html.PartialAsync("_DashboardStyles")
 
 @section Styles {
     <style>
-        .dashboard-static {
+
+        .user-roles-panel {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .user-roles-panel .badge {
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+        }
+
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, #ffffff, #f8f9fa);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+        }
+
+        .stat-card:hover {
+            border-color: #667eea;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .stat-card.stat-danger {
+            border-left: 4px solid #dc2626;
+        }
+
+        .stat-card.stat-danger:hover {
+            border-left-color: #dc2626;
+        }
+
+        .stat-card.stat-warning {
+            border-left: 4px solid #d97706;
+        }
+
+        .stat-card.stat-warning:hover {
+            border-left-color: #d97706;
+        }
+
+        .stat-card.stat-primary {
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-card.stat-primary:hover {
+            border-left-color: #667eea;
+        }
+
+        .stat-card .stat-value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .stat-card .stat-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-top: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card.stat-danger .stat-value {
+            color: #dc2626;
+        }
+
+        .stat-card.stat-warning .stat-value {
+            color: #d97706;
+        }
+
+        .stat-card.stat-primary .stat-value {
+            color: #667eea;
+        }
+
+        .stat-card .stat-link-hint {
+            color: #9ca3af;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            display: block;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover .stat-link-hint {
+            opacity: 1;
+        }
+
+        .work-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .work-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .work-section-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .work-section-header .view-all-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .work-section-header .view-all-link:hover {
+            text-decoration: underline;
+        }
+
+        .work-items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .work-items-list {
+            display: none;
+        }
+
+        .work-items-list.active {
+            display: block;
+        }
+
+        .work-items-grid.active {
+            display: grid;
+        }
+
+        .work-items-grid:not(.active) {
+            display: none;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .view-toggle-btn {
+            background: white;
+            border: 1px solid #e5e7eb;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6b7280;
+        }
+
+        .view-toggle-btn:hover {
+            background: #f9fafb;
+            border-color: #005ea5;
+            color: #005ea5;
+        }
+
+        .view-toggle-btn.active {
+            background: #005ea5;
+            border-color: #005ea5;
+            color: white;
+        }
+
+        .work-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .work-items-table thead {
+            background: #f9fafb;
+        }
+
+        .work-items-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .work-items-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .work-items-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .work-items-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .work-items-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .work-items-table a {
+            color: #1f2937;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .work-items-table a:hover {
+            color: #005ea5;
+            text-decoration: underline;
+        }
+
+        .work-item-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            background: linear-gradient(145deg, #ffffff, #f9fafb);
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .work-item-card::after {
+            content: '→';
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            font-size: 1.5rem;
+            color: #9ca3af;
+            opacity: 0;
+            transition: all 0.3s ease;
+            transform: translateX(-10px);
+        }
+
+        .work-item-card:hover {
+            border-color: #667eea;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .work-item-card:hover::after {
+            opacity: 1;
+            transform: translateX(0);
+            color: #667eea;
+        }
+
+        .work-item-card h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+            padding-right: 2rem;
+            transition: color 0.3s ease;
+        }
+
+        .work-item-card:hover h4 {
+            color: #667eea;
+        }
+
+        .work-item-description {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.875rem;
+            color: #6b7280;
+            line-height: 1.5;
+            padding-right: 2rem;
+        }
+
+        .work-item-project {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 500;
+            padding-right: 2rem;
+        }
+
+        .work-item-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .work-item-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .work-item-meta-label {
+            font-weight: 600;
+            color: #6b7280;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .work-item-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-width: 0;
+        }
+
+        .work-item-meta-item .badge {
+            font-weight: 500;
+            align-self: flex-start;
+        }
+
+        .work-item-meta-item .text-muted {
+            align-self: flex-start;
+        }
+
+        .work-item-meta-item .text-muted {
+            align-self: flex-start;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 1rem;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .task-item:last-child {
+            border-bottom: none;
+        }
+
+        .task-item.priority-high {
+            border-left: 4px solid #dc2626;
+        }
+
+        .task-item.priority-medium {
+            border-left: 4px solid #d97706;
+        }
+
+        .task-item.priority-low {
+            border-left: 4px solid #16a34a;
+        }
+
+        .task-content {
+            flex: 1;
+        }
+
+        .task-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .task-title a {
+            color: #1f2937;
+            text-decoration: none;
+        }
+
+        .task-title a:hover {
+            color: #667eea;
+        }
+
+        .task-meta {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .tabs-container {
+            border-bottom: 2px solid #f3f4f6;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6b7280;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab-button:hover {
+            color: #667eea;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .leadership-panel {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            padding: 1.5rem;
+            background: linear-gradient(160deg, rgba(39, 76, 255, 0.08), rgba(39, 76, 255, 0));
+            margin-bottom: 2rem;
+        }
+
+        .mission-card, .outcome-card {
+            border: 1px solid rgba(15, 30, 90, 0.12);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #ffffff;
         }
 
         .metric-pill {
@@ -32,64 +498,31 @@
             font-size: 0.95rem;
         }
 
-        .static-table thead th {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #7a819b;
-            border-top: 0;
-        }
-
-        .static-table td {
-            vertical-align: middle;
-        }
-
-        .leadership-panel {
-            border-radius: 16px;
-            border: 1px solid rgba(15, 30, 90, 0.12);
-            padding: 1.5rem;
-            background: linear-gradient(160deg, rgba(39, 76, 255, 0.08), rgba(39, 76, 255, 0));
-        }
-
-        .leadership-panel .badge {
-            text-transform: none;
-            font-weight: 500;
-        }
-
-        .enterprise-section {
-            margin-bottom: 2rem;
-        }
-
-        .mission-card, .outcome-card {
-            border: 1px solid rgba(15, 30, 90, 0.12);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: #ffffff;
-        }
-
-        .mission-card h5, .outcome-card h5 {
-            margin-bottom: 0.5rem;
-            font-size: 1rem;
-        }
-
-        .mission-card p, .outcome-card p {
-            margin-bottom: 0.25rem;
-            color: #5c6480;
-            font-size: 0.9rem;
+        @@media (max-width: 768px) {
+            .quick-stats {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 }
 
 @functions {
+    string GetTimeBasedGreeting()
+    {
+        var hour = DateTime.Now.Hour;
+        if (hour < 12)
+            return "Good morning";
+        else if (hour < 17)
+            return "Good afternoon";
+        else
+            return "Good evening";
+    }
+
     string GetRagBadgeClass(string ragStatus)
     {
         if (string.IsNullOrWhiteSpace(ragStatus))
-        {
             return "badge badge-secondary";
-        }
         
-        // Normalize the status - handle both "Amber-Green" and "Amber/Green" formats
         var normalized = ragStatus.Trim()
             .Replace(" / ", "-")
             .Replace("/", "-")
@@ -98,11 +531,11 @@
         
         return normalized switch
         {
-            "Green" => "badge badge-green",
-            "Amber-Green" => "badge badge-amber-green",
-            "Amber" => "badge badge-amber",
-            "Amber-Red" => "badge badge-amber-red",
-            "Red" => "badge badge-red",
+            "Green" => "badge badge-success",
+            "Amber-Green" => "badge badge-warning",
+            "Amber" => "badge badge-warning",
+            "Amber-Red" => "badge badge-danger",
+            "Red" => "badge badge-danger",
             _ => "badge badge-secondary"
         };
     }
@@ -110,16 +543,14 @@
     string GetPriorityBadgeClass(string priorityName)
     {
         if (string.IsNullOrWhiteSpace(priorityName))
-        {
             return "badge badge-secondary";
-        }
 
         var normalized = priorityName.Trim().ToLowerInvariant();
         return normalized switch
         {
-            "high" => "badge badge-red",
-            "medium" => "badge badge-amber",
-            "low" => "badge badge-green",
+            "high" => "badge badge-danger",
+            "medium" => "badge badge-warning",
+            "low" => "badge badge-success",
             _ => "badge badge-secondary"
         };
     }
@@ -130,6 +561,57 @@
                !string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) &&
                !string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase) &&
                !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    string GetRoleBadgeClass(LeadershipRoleTier role)
+    {
+        return role switch
+        {
+            LeadershipRoleTier.PermanentSecretary => "badge badge-primary",
+            LeadershipRoleTier.DirectorGeneral => "badge badge-info",
+            LeadershipRoleTier.CLevel => "badge badge-info",
+            LeadershipRoleTier.DeputyDirectorOrSro => "badge badge-success",
+            LeadershipRoleTier.HeadOfProfession => "badge badge-success",
+            LeadershipRoleTier.PortfolioLead => "badge badge-secondary",
+            _ => "badge badge-secondary"
+        };
+    }
+
+    string GetRoleLabel(LeadershipRoleTier role)
+    {
+        return role switch
+        {
+            LeadershipRoleTier.PermanentSecretary => "Permanent Secretary",
+            LeadershipRoleTier.DirectorGeneral => "Director General",
+            LeadershipRoleTier.CLevel => "C-Level",
+            LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
+            LeadershipRoleTier.HeadOfProfession => "Head of Profession",
+            LeadershipRoleTier.PortfolioLead => "Portfolio Lead / G6",
+            _ => role.ToString()
+        };
+    }
+
+    string GetBusinessAreaOverviewTitle()
+    {
+        if (!Model.HighestLeadershipRole.HasValue)
+        {
+            return "Business area overview";
+        }
+
+        return Model.HighestLeadershipRole.Value switch
+        {
+            LeadershipRoleTier.HeadOfProfession => "Head of profession",
+            LeadershipRoleTier.CLevel => !string.IsNullOrWhiteSpace(Model.CurrentUser.JobTitle) 
+                ? Model.CurrentUser.JobTitle 
+                : "C-level",
+            LeadershipRoleTier.DeputyDirectorOrSro => Model.LeadershipBusinessAreas.Any()
+                ? string.Join(", ", Model.LeadershipBusinessAreas.Take(3))
+                : "Deputy director",
+            LeadershipRoleTier.PortfolioLead => "Portfolio lead",
+            LeadershipRoleTier.DirectorGeneral => "Director general",
+            LeadershipRoleTier.PermanentSecretary => "Permanent secretary",
+            _ => "Business area overview"
+        };
     }
 }
 
@@ -150,12 +632,12 @@
             </div>
         }
 
-        @if (Context.RequestServices.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().IsDevelopment())
+        @if (HostEnvironment.IsDevelopment())
         {
             var currentTestRole = Context.Request.Cookies["TestDashboardRole"];
             var currentTestUserId = Context.Request.Cookies["TestDashboardUserId"];
             var isTestMode = !string.IsNullOrEmpty(currentTestRole) || !string.IsNullOrEmpty(currentTestUserId);
-            <div class="alert alert-info alert-dismissible fade show mb-4" style="background-color: #e7f3ff; border-color: #b3d9ff;">
+            <div class="alert alert-info alert-dismissible fade show mb-4">
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                     <div class="flex-grow-1 mb-2 mb-md-0">
                         <strong>🧪 Test mode:</strong> View dashboard as different user roles or users
@@ -191,839 +673,848 @@
             </div>
         }
 
-        @{
-            var highestRoleLabel = Model.HighestLeadershipRole switch
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+                <h1>@GetTimeBasedGreeting(), @Model.FirstName!</h1>
+                <p>Here's an overview of your work, assignments, and responsibilities.</p>
+            @if (Model.IsBusinessAreaLeader)
             {
-                LeadershipRoleTier.PermanentSecretary => "Permanent Secretary",
-                LeadershipRoleTier.DirectorGeneral => "Director General",
-                LeadershipRoleTier.CLevel => "C-Level",
-                LeadershipRoleTier.DeputyDirectorOrSro => "Deputy Director / SRO",
-                LeadershipRoleTier.HeadOfProfession => "Head of Profession",
-                LeadershipRoleTier.PortfolioLead => "Portfolio lead / G6",
-                _ => "Leadership overview"
-            };
-        }
+                <div class="dashboard-header-role-info" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                    <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; color: white;">@GetBusinessAreaOverviewTitle()</div>
+                    @if (Model.LeadershipBusinessAreas.Any())
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                @foreach (var area in Model.LeadershipBusinessAreas.Take(3))
+                                {
+                                <span class="badge" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white; font-weight: 500;">@area</span>
+                                }
+                                @if (Model.LeadershipBusinessAreas.Count > 3)
+                                {
+                                    <button type="button" class="badge border-0" style="cursor: pointer; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3) !important; color: white; font-weight: 500;" data-toggle="modal" data-target="#allBusinessAreasModal">
+                                        +@(Model.LeadershipBusinessAreas.Count - 3) more
+                                    </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
 
-        @if (Model.IsEnterpriseLeader)
+        <!-- Quick Stats -->
+        <div class="dashboard-summary-cards">
+            @if (Model.OverdueMilestones.Any())
+            {
+                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-danger" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.OverdueMilestones?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">Overdue Milestones</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                </a>
+            }
+            
+            @if (Model.AssignedActions.Any())
+            {
+                <a href="@Url.Action("Index", "Raid", new { viewType = "actions" })" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.AssignedActions?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">Assigned Actions</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-tasks"></i></div>
+                </a>
+            }
+            
+            @if (Model.HighPriorityIssues.Any())
+            {
+                <a href="@Url.Action("Index", "Raid", new { viewType = "issues" })" class="dashboard-card bg-danger" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.HighPriorityIssues?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">High Priority Issues</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-bug"></i></div>
+                </a>
+            }
+            
+            @if (Model.MyProjects.Any())
+            {
+                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.MyProjects?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">My Projects</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-project-diagram"></i></div>
+                </a>
+            }
+            
+            @if (Model.WatchedProjects.Any())
+            {
+                <a href="@Url.Action("Index", "Project")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.WatchedProjects?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">Watched Projects</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-eye"></i></div>
+                </a>
+            }
+            
+            @if (Model.MyProducts.Any())
+            {
+                <a href="@Url.Action("Index", "Products")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.MyProducts?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">My Products</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-box"></i></div>
+                </a>
+            }
+            
+            @if (Model.MyDdtStandards.Any())
+            {
+                <a href="@Url.Action("Dashboard", "DdtStandards")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit;">
+                    <div class="dashboard-card-value">@(Model.MyDdtStandards?.Count ?? 0)</div>
+                    <div class="dashboard-card-label">My DDT Standards</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-book"></i></div>
+                </a>
+            }
+        </div>
+
+        <!-- Leadership Views -->
+        @if (Model.IsEnterpriseLeader || Model.IsBusinessAreaLeader)
         {
-            <!-- Enterprise-wide view for Permanent Secretary, Director General, C-Level -->
-            <div class="card shadow-sm mb-4 dashboard-static">
-                <div class="card-body">
-                    <h2 class="h4 mb-4">Enterprise overview</h2>
-                    
+            @if (Model.IsEnterpriseLeader)
+            {
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2><i class="fas fa-building"></i> Enterprise Overview</h2>
+                    </div>
                     <div class="row mb-4">
-                        <div class="col-sm-6 col-lg-3 mb-3">
+                        <div class="col-md-3 mb-3">
                             <div class="metric-pill">
                                 <strong>@Model.EnterpriseMetrics.TotalAtRiskProjects</strong>
-                                <span>At risk projects</span>
+                                <span>At Risk Projects</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.EnterpriseMetrics.TotalOpenIssues</strong>
+                                <span>Open Issues</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.EnterpriseMetrics.TotalOpenRisks</strong>
+                                <span>Open Risks</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-pill">
+                                <strong>@Model.EnterpriseMetrics.ActiveMissionsCount</strong>
+                                <span>Active Missions</span>
                             </div>
                         </div>
                     </div>
-
-                    <div class="row">
-                        <div class="col-lg-6 mb-4">
-                            <h3 class="h6 text-uppercase text-muted mb-3">Active missions</h3>
-                            @if (Model.ActiveMissions.Any())
-                            {
-                                @foreach (var mission in Model.ActiveMissions.Take(10))
-                                {
-                                    <div class="mission-card">
-                                        <h5>@mission.Title</h5>
-                                        @if (!string.IsNullOrWhiteSpace(mission.Description))
-                                        {
-                                            <p>@mission.Description</p>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(mission.Theme))
-                                        {
-                                            <p><small class="text-muted">Theme: @mission.Theme</small></p>
-                                        }
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <p class="text-muted">No active missions found.</p>
-                            }
-                        </div>
-
-                        <div class="col-lg-6 mb-4">
-                            <h3 class="h6 text-uppercase text-muted mb-3">Priority outcomes</h3>
-                            @if (Model.PriorityOutcomes.Any())
-                            {
-                                @foreach (var outcome in Model.PriorityOutcomes.Take(10))
-                                {
-                                    <div class="outcome-card">
-                                        <h5>@outcome.Title</h5>
-                                        @if (!string.IsNullOrWhiteSpace(outcome.Description))
-                                        {
-                                            <p>@outcome.Description</p>
-                                        }
-                                        @if (outcome.Mission != null)
-                                        {
-                                            <p><small class="text-muted">Mission: @outcome.Mission.Title</small></p>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(outcome.RagStatus))
-                                        {
-                                            <span class="badge badge-@(outcome.RagStatus.ToLower() == "red" ? "danger" : outcome.RagStatus.ToLower() == "amber" ? "warning" : "success")">@outcome.RagStatus</span>
-                                        }
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <p class="text-muted">No priority outcomes found.</p>
-                            }
-                        </div>
-                    </div>
-
                     @if (Model.EnterpriseAtRiskProjects.Any())
                     {
-                        <div class="row mt-4">
-                            <div class="col-12">
-                                <div class="card border-danger mb-4">
-                                    <div class="card-header bg-danger text-white">
-                                        <h3 class="card-title mb-0">
-                                            <i class="fas fa-exclamation-triangle mr-2"></i>
-                                            At Risk Projects (@Model.EnterpriseAtRiskProjects.Count)
-                                        </h3>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover mb-0">
-                                                <thead class="thead-light">
-                                                    <tr>
-                                                        <th scope="col" style="width: 30%;">Project</th>
-                                                        <th scope="col" style="width: 10%;">RAG</th>
-                                                        <th scope="col" style="width: 15%;">Priority</th>
-                                                        <th scope="col" style="width: 15%;">Business area</th>
-                                                        <th scope="col" style="width: 15%;">Primary contact</th>
-                                                        <th scope="col" style="width: 15%;">Service owner</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var project in Model.EnterpriseAtRiskProjects.Take(20))
-                                                    {
-                                                        <tr>
-                                                            <td>
-                                                                <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold">
-                                                                    @project.Title
-                                                                </a>
-                                                                @if (project.IsFlagship)
-                                                                {
-                                                                    <span class="badge badge-info ml-2">Flagship</span>
-                                                                }
-                                                            </td>
-                                                            <td>
-                                                                @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                                {
-                                                                    <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span class="badge badge-secondary">Not set</span>
-                                                                }
-                                                            </td>
-                                                            <td>
-                                                                @if (project.DeliveryPriority != null)
-                                                                {
-                                                                    <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span class="text-muted">Not set</span>
-                                                                }
-                                                            </td>
-                                                            <td>@(project.BusinessArea ?? "-")</td>
-                                                            <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
-                                                            <td>
-                                                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
-                                                                {
-                                                                    var displayedOwners = project.ServiceOwners.Take(2).ToList();
-                                                                    @foreach (var so in displayedOwners)
-                                                                    {
-                                                                        <div>@(so.User?.Name ?? so.User?.Email ?? "-")</div>
-                                                                    }
-                                                                    if (project.ServiceOwners.Count > 2)
-                                                                    {
-                                                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
-                                                                    }
-                                                                }
-                                                                else
-                                                                {
-                                                                    <span class="text-muted">-</span>
-                                                                }
-                                                            </td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        @if (Model.EnterpriseAtRiskProjects.Count > 20)
-                                        {
-                                            <div class="card-footer bg-light">
-                                                <p class="mb-0 text-muted">
-                                                    <small>Showing 20 of @Model.EnterpriseAtRiskProjects.Count at risk projects</small>
-                                                </p>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="alert alert-danger">
+                            <strong><i class="fas fa-exclamation-triangle mr-2"></i>@Model.EnterpriseAtRiskProjects.Count At Risk Projects</strong>
+                            <a href="#at-risk-projects" class="ml-2">View details →</a>
                         </div>
                     }
                 </div>
-            </div>
+            }
+
         }
 
-        @if (Model.IsBusinessAreaLeader)
-        {
-            <!-- Business area leadership view for Deputy Director/SRO and Portfolio Lead/G6 -->
-            <div class="card shadow-sm mb-4 dashboard-static">
-                <div class="card-body"> <span class="text-muted">@highestRoleLabel</span>
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                   
-                        <h1 class="h2 mb-0">Overview</h1>
-                        @if (Model.LeadershipBusinessAreas.Any())
-                        {
-                            <div class="leadership-panel">
-                                <small class="text-muted d-block mb-1">Business areas</small>
-                                @{
-                                    var visibleAreas = Model.LeadershipBusinessAreas.Take(2).ToList();
-                                    var remainingCount = Model.LeadershipBusinessAreas.Count - 2;
-                                }
-                                @foreach (var area in visibleAreas)
-                                {
-                                    <span class="badge badge-primary mr-1">@area</span>
-                                }
-                                @if (remainingCount > 0)
-                                {
-                                    <span class="badge badge-secondary mr-1">+ @remainingCount more</span>
-                                }
-                            </div>
-                        }
-                    </div>
-                    
-                    @{
-                        var atRiskProjects = Model.OversightProjects
-                            .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                    }
-                    
-                    <div class="row mb-4">
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@Model.LeadershipMetrics.WatchedDeliverables</strong>
-                                <span>Deliverables in your business areas</span>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@atRiskProjects.Count</strong>
-                                <span>At risk projects</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if (Model.OversightProjects.Any())
-                    {
-                        <div class="row">
-                            <div class="col-12">
-                                <div class="card mb-4 collapsed-card" id="oversight-projects-panel">
-                                    <div class="card-header">
-                                        <h3 class="card-title mb-0">@Model.OversightProjects.Count @(Model.OversightProjects.Count == 1 ? "deliverable" : "deliverables") in your business areas</h3>
-                                        <div class="card-tools">
-                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                                <i class="fas fa-plus" aria-hidden="true"></i>
-                                                <span class="sr-only">Toggle deliverables</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <div class="table-responsive">
-                                            <table class="table table-sm static-table sortable-table mb-0" id="oversight-projects-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th style="width: 24%;" class="sortable" data-column="Project" tabindex="0" role="button" aria-label="Sort by Project">
-                                                                Project
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 11%;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">
-                                                                Priority
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 9%;" class="sortable" data-column="RAG" tabindex="0" role="button" aria-label="Sort by RAG">
-                                                                RAG
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 14%;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business area">
-                                                                Business area
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 15%;" class="sortable text-right" data-column="UpcomingMilestones" tabindex="0" role="button" aria-label="Sort by Milestones">
-                                                                Upcoming milestones
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                            <th style="width: 12%;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary contact">
-                                                                Primary contact
-                                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach (var project in Model.OversightProjects)
-                                                        {
-                                                            var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                                            
-                                                            <tr data-project-title="@project.Title" 
-                                                                data-priority="@(project.DeliveryPriority?.Name ?? "Not set")"
-                                                                data-rag="@(project.RagStatus ?? "Not set")"
-                                                                data-business-area="@(project.BusinessArea ?? "")"
-                                                                data-upcoming-milestones="@upcomingMilestones"
-                                                                data-primary-contact="@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "")">
-                                                                <td>
-                                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a>
-                                                                    @if (project.IsFlagship)
-                                                                    {
-                                                                        <span class="badge badge-info ml-2">Flagship</span>
-                                                                    }
-                                                                </td>
-                                                                <td>
-                                                                    @if (project.DeliveryPriority != null)
-                                                                    {
-                                                                        <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="text-muted">Not set</span>
-                                                                    }
-                                                                </td>
-                                                                <td>
-                                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                                    {
-                                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="badge badge-secondary">Not set</span>
-                                                                    }
-                                                                </td>
-                                                                <td>@(project.BusinessArea ?? "-")</td>
-                                                                <td class="text-right">@upcomingMilestones</td>
-                                                                <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                        </div>
-                                        @if (Model.OversightProjects.Count > 10)
-                                        {
-                                            <div class="p-3 border-top">
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        Showing <span id="oversightProjectsShowingStart">1</span> to <span id="oversightProjectsShowingEnd">@Math.Min(10, Model.OversightProjects.Count)</span> of <strong id="oversightProjectsTotalCount">@Model.OversightProjects.Count</strong> deliverables
-                                                    </div>
-                                                    <ul class="pagination pagination-sm m-0" id="oversightProjectsPaginationControls">
-                                                        <!-- Pagination buttons will be generated by JavaScript -->
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-
-                        @if (atRiskProjects.Any())
-                        {
-                            <div class="row mt-4">
-                                <div class="col-12">
-                                    <div class="card border-danger mb-4">
-                                        <div class="card-header bg-danger text-white">
-                                            <h3 class="card-title mb-0">
-                                                <i class="fas fa-exclamation-triangle mr-2"></i>
-                                                At Risk Projects (@atRiskProjects.Count)
-                                            </h3>
-                                        </div>
-                                        <div class="card-body p-0">
-                                            <div class="table-responsive">
-                                                <table class="table table-hover mb-0">
-                                                    <thead class="thead-light">
-                                                        <tr>
-                                                            <th scope="col" style="width: 30%;">Project</th>
-                                                            <th scope="col" style="width: 10%;">RAG</th>
-                                                            <th scope="col" style="width: 15%;">Priority</th>
-                                                            <th scope="col" style="width: 15%;">Business area</th>
-                                                            <th scope="col" style="width: 15%;">Primary contact</th>
-                                                            <th scope="col" style="width: 15%;">Service owner</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach (var project in atRiskProjects.Take(20))
-                                                        {
-                                                            <tr>
-                                                                <td>
-                                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="font-weight-bold">
-                                                                        @project.Title
-                                                                    </a>
-                                                                    @if (project.IsFlagship)
-                                                                    {
-                                                                        <span class="badge badge-info ml-2">Flagship</span>
-                                                                    }
-                                                                </td>
-                                                                <td>
-                                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                                    {
-                                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="badge badge-secondary">Not set</span>
-                                                                    }
-                                                                </td>
-                                                                <td>
-                                                                    @if (project.DeliveryPriority != null)
-                                                                    {
-                                                                        <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="text-muted">Not set</span>
-                                                                    }
-                                                                </td>
-                                                                <td>@(project.BusinessArea ?? "-")</td>
-                                                                <td>@(project.PrimaryContactUser?.Name ?? project.PrimaryContactUser?.Email ?? "-")</td>
-                                                                <td>
-                                                                    @if (project.ServiceOwners != null && project.ServiceOwners.Any())
-                                                                    {
-                                                                        var displayedOwners = project.ServiceOwners.Take(2).ToList();
-                                                                        @foreach (var so in displayedOwners)
-                                                                        {
-                                                                            <div>@(so.User?.Name ?? so.User?.Email ?? "-")</div>
-                                                                        }
-                                                                        if (project.ServiceOwners.Count > 2)
-                                                                        {
-                                                                            <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
-                                                                        }
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="text-muted">-</span>
-                                                                    }
-                                                                </td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            @if (atRiskProjects.Count > 20)
-                                            {
-                                                <div class="card-footer bg-light">
-                                                    <p class="mb-0 text-muted">
-                                                        <small>Showing 20 of @atRiskProjects.Count at risk projects</small>
-                                                    </p>
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-info">
-                            <p class="mb-0">No projects found in your assigned business areas.</p>
-                        </div>
-                    }
+        <!-- My Work Section -->
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-briefcase"></i> My work</h2>
+                <div class="view-toggle">
+                    <button class="view-toggle-btn active" data-view="cards" title="Card view">
+                        <i class="fas fa-th"></i> Cards
+                    </button>
+                    <button class="view-toggle-btn" data-view="list" title="List view">
+                        <i class="fas fa-list"></i> List
+                    </button>
                 </div>
             </div>
-        }
 
-        <!-- All users: Assigned items summary -->
-        <div class="card shadow-sm mb-4 dashboard-static">
-            <div class="card-body">
-                <h1 class="h4 mb-4">Assigned to me</h1>
-                
-                @{
-                    var staticMetrics = new[]
-                    {
-                        (Label: "Milestones this fortnight", Count: Model.MilestonesDueThisWeek?.Count ?? 0)
-                    };
-                    var myProjectRows = (Model.MyProjects ?? Array.Empty<Project>()).Take(6).ToList();
+            <div class="tabs-container">
+                <button class="tab-button active" data-tab="tasks">Tasks (@taskCount)</button>
+                <button class="tab-button" data-tab="projects">Projects (@Model.MyProjects.Count)</button>
+                <button class="tab-button" data-tab="watching">Watching (@Model.WatchedProjects.Count)</button>
+                <button class="tab-button" data-tab="products">Products (@Model.MyProducts.Count)</button>
+                <button class="tab-button" data-tab="standards">DDT Standards (@Model.MyDdtStandards.Count)</button>
+            </div>
+
+            <!-- Tasks Tab -->
+            <div id="tab-tasks" class="tab-content active">
+                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <h3>No tasks</h3>
+                        <p>You're all caught up! There are no overdue milestones, assigned actions, or high priority issues.</p>
+                    </div>
                 }
-
-                <div class="row mb-4">
-                    @foreach (var metric in staticMetrics)
-                    {
-                        <div class="col-sm-6 col-lg-3 mb-3">
-                            <div class="metric-pill">
-                                <strong>@metric.Count</strong>
-                                <span>@metric.Label</span>
-                            </div>
-                        </div>
-                    }
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <h3 class="h6 text-uppercase text-muted mb-3">My projects</h3>
-                        @if (!myProjectRows.Any())
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var milestone in Model.OverdueMilestones.Take(10))
                         {
-                            <p class="text-muted mb-0">You are not listed on any project teams yet.</p>
+                            <a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })" class="work-item-card">
+                                <h4>@milestone.Name</h4>
+                                @if (milestone.Project != null)
+                                {
+                                    <p class="work-item-project">@milestone.Project.Title</p>
+                                }
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge badge-danger">Overdue milestone</span>
+                                        <span class="text-muted">Due: @milestone.DueDate.ToString("dd MMMM yyyy")</span>
+                                    </div>
+                                </div>
+                            </a>
                         }
-                        else
+
+                        @foreach (var action in Model.AssignedActions.Take(10))
                         {
-                            <div class="table-responsive">
-                                <table class="table table-sm static-table">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">Project</th>
-                                            <th scope="col">Priority</th>
-                                            <th scope="col">RAG</th>
-                                            <th scope="col">Business area</th>
-                                            <th scope="col">Upcoming milestones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var project in myProjectRows)
+                            <a href="@Url.Action("Details", "Action", new { id = action.Id })" class="work-item-card">
+                                <h4>@action.Title</h4>
+                                @if (action.Project != null)
+                                {
+                                    <p class="work-item-project">@action.Project.Title</p>
+                                }
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge badge-warning">Action</span>
+                                        @if (action.PriorityLookup != null)
                                         {
-                                            var upcomingMilestones = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
-                                            <tr>
-                                                <td>
-                                                    <a href="@Url.Action("Details", "Project", new { id = project.Id })">@project.Title</a>
-                                                    @if (project.IsFlagship)
-                                                    {
-                                                        <span class="badge badge-info ml-2">Flagship</span>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (project.DeliveryPriority != null)
-                                                    {
-                                                        <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">Not set</span>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (!string.IsNullOrEmpty(project.RagStatus))
-                                                    {
-                                                        <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-secondary">Not set</span>
-                                                    }
-                                                </td>
-                                                <td>@(project.BusinessArea ?? "-")</td>
-                                                <td>@upcomingMilestones</td>
-                                            </tr>
+                                            <span class="@GetPriorityBadgeClass(action.PriorityLookup.Label)">@action.PriorityLookup.Label</span>
                                         }
-                                    </tbody>
-                                </table>
-                            </div>
+                                        @if (action.DueDate.HasValue)
+                                        {
+                                            <span class="text-muted">Due: @action.DueDate.Value.ToString("dd MMMM yyyy")</span>
+                                        }
+                                    </div>
+                                </div>
+                            </a>
+                        }
+
+                        @foreach (var issue in Model.HighPriorityIssues.Take(10))
+                        {
+                            <a href="@Url.Action("Details", "Issue", new { id = issue.Id })" class="work-item-card">
+                                <h4>@issue.Title</h4>
+                                @if (issue.Project != null)
+                                {
+                                    <p class="work-item-project">@issue.Project.Title</p>
+                                }
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge badge-danger">High priority issue</span>
+                                        @if (!string.IsNullOrEmpty(issue.Severity))
+                                        {
+                                            <span class="badge badge-danger">@issue.Severity</span>
+                                        }
+                                    </div>
+                                </div>
+                            </a>
                         }
                     </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Project</th>
+                                    <th>Type</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var milestone in Model.OverdueMilestones.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })">@milestone.Name</a></td>
+                                        <td>@(milestone.Project?.Title ?? "-")</td>
+                                        <td><span class="badge badge-danger">Overdue milestone</span></td>
+                                        <td>@milestone.DueDate.ToString("dd MMMM yyyy")</td>
+                                        <td><span class="badge badge-danger">Overdue</span></td>
+                                    </tr>
+                                }
+                                @foreach (var action in Model.AssignedActions.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("Details", "Action", new { id = action.Id })">@action.Title</a></td>
+                                        <td>@(action.Project?.Title ?? "-")</td>
+                                        <td><span class="badge badge-warning">Action</span></td>
+                                        <td>@(action.DueDate?.ToString("dd MMMM yyyy") ?? "-")</td>
+                                        <td>@if (action.PriorityLookup != null) { <span class="@GetPriorityBadgeClass(action.PriorityLookup.Label)">@action.PriorityLookup.Label</span> }</td>
+                                    </tr>
+                                }
+                                @foreach (var issue in Model.HighPriorityIssues.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a></td>
+                                        <td>@(issue.Project?.Title ?? "-")</td>
+                                        <td><span class="badge badge-danger">High priority issue</span></td>
+                                        <td>-</td>
+                                        <td>@if (!string.IsNullOrEmpty(issue.Severity)) { <span class="badge badge-danger">@issue.Severity</span> }</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (taskCount > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Index", "Raid")" class="btn btn-outline-primary">View all @taskCount tasks →</a>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Projects Tab -->
+            <div id="tab-projects" class="tab-content">
+                @if (!hasProjects)
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3>No projects assigned</h3>
+                        <p>You're not currently listed on any project teams.</p>
+                        <a href="@Url.Action("Index", "Project")" class="btn btn-primary mt-2">Browse Projects</a>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var project in Model.MyProjects.Take(10))
+                        {
+                            <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="work-item-card">
+                                <h4>
+                                    @project.Title
+                                    @if (project.IsFlagship)
+                                    {
+                                        <span class="badge badge-info ml-2">Flagship</span>
+                                    }
+                                </h4>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">RAG Status</span>
+                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                            </div>
+                                        }
+                                        @if (project.DeliveryPriority != null)
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Priority</span>
+                                                <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(project.BusinessArea))
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Business Area</span>
+                                                <span class="text-muted">@project.BusinessArea</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    @{
+                                        var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                    }
+                                    @if (upcomingCount > 0)
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Upcoming Milestones</span>
+                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </a>
+                        }
+                    </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th>RAG Status</th>
+                                    <th>Priority</th>
+                                    <th>Business Area</th>
+                                    <th>Upcoming Milestones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in Model.MyProjects.Take(10))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                @project.Title
+                                                @if (project.IsFlagship)
+                                                {
+                                                    <span class="badge badge-info ml-2">Flagship</span>
+                                                }
+                                            </a>
+                                        </td>
+                                        <td>@if (!string.IsNullOrEmpty(project.RagStatus)) { <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span> }</td>
+                                        <td>@if (project.DeliveryPriority != null) { <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span> }</td>
+                                        <td>@(project.BusinessArea ?? "-")</td>
+                                        <td>
+                                            @{
+                                                var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                            }
+                                            @if (upcomingCount > 0)
+                                            {
+                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.MyProjects.Count > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Index", "Project")" class="btn btn-outline-primary">View all @Model.MyProjects.Count projects →</a>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Watching Tab -->
+            <div id="tab-watching" class="tab-content">
+                @if (!Model.WatchedProjects.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👁️</div>
+                        <h3>No watched projects</h3>
+                        <p>You're not currently watching any projects. Add projects to your watchlist to track them here.</p>
+                        <a href="@Url.Action("Index", "Project")" class="btn btn-primary mt-2">Browse Projects</a>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var project in Model.WatchedProjects.Take(10))
+                        {
+                            <a href="@Url.Action("Details", "Project", new { id = project.Id })" class="work-item-card">
+                                <h4>
+                                    @project.Title
+                                    @if (project.IsFlagship)
+                                    {
+                                        <span class="badge badge-info ml-2">Flagship</span>
+                                    }
+                                </h4>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">RAG Status</span>
+                                                <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span>
+                                            </div>
+                                        }
+                                        @if (project.DeliveryPriority != null)
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Priority</span>
+                                                <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(project.BusinessArea))
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Business Area</span>
+                                                <span class="text-muted">@project.BusinessArea</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    @{
+                                        var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                    }
+                                    @if (upcomingCount > 0)
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Upcoming Milestones</span>
+                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </a>
+                        }
+                    </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th>RAG Status</th>
+                                    <th>Priority</th>
+                                    <th>Business Area</th>
+                                    <th>Upcoming Milestones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in Model.WatchedProjects.Take(10))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Project", new { id = project.Id })">
+                                                @project.Title
+                                                @if (project.IsFlagship)
+                                                {
+                                                    <span class="badge badge-info ml-2">Flagship</span>
+                                                }
+                                            </a>
+                                        </td>
+                                        <td>@if (!string.IsNullOrEmpty(project.RagStatus)) { <span class="@GetRagBadgeClass(project.RagStatus)">@project.RagStatus</span> }</td>
+                                        <td>@if (project.DeliveryPriority != null) { <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span> }</td>
+                                        <td>@(project.BusinessArea ?? "-")</td>
+                                        <td>
+                                            @{
+                                                var upcomingCount = project.Milestones?.Count(m => !m.IsDeleted && m.DueDate >= DateTime.Today && m.DueDate <= DateTime.Today.AddDays(14)) ?? 0;
+                                            }
+                                            @if (upcomingCount > 0)
+                                            {
+                                                <span class="badge badge-info"><i class="fas fa-flag"></i> @upcomingCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.WatchedProjects.Count > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Index", "Project")" class="btn btn-outline-primary">View all @Model.WatchedProjects.Count watched projects →</a>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Products Tab -->
+            <div id="tab-products" class="tab-content">
+                @if (!hasProducts)
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🛠️</div>
+                        <h3>No products assigned</h3>
+                        <p>You're not currently listed as a contact for any products.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var product in Model.MyProducts.Take(10))
+                        {
+                            <a href="@Url.Action("Dashboard", "Products", new { id = product.FipsId })" class="work-item-card">
+                                <h4>@product.Title</h4>
+                                @if (!string.IsNullOrEmpty(product.ShortDescription))
+                                {
+                                    <p class="work-item-description">@(product.ShortDescription.Length > 150 ? product.ShortDescription.Substring(0, 150) + "..." : product.ShortDescription)</p>
+                                }
+                                <div class="work-item-meta">
+                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">FIPS ID</span>
+                                                <span class="badge badge-info">@product.FipsId</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </a>
+                        }
+                    </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>FIPS ID</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model.MyProducts.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("Dashboard", "Products", new { id = product.FipsId })">@product.Title</a></td>
+                                        <td>@if (!string.IsNullOrEmpty(product.FipsId)) { <span class="badge badge-info">@product.FipsId</span> } else { <span class="text-muted">-</span> }</td>
+                                        <td>@(product.ShortDescription?.Length > 100 ? product.ShortDescription.Substring(0, 100) + "..." : product.ShortDescription ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.MyProducts.Count > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Index", "Products")" class="btn btn-outline-primary">View all @Model.MyProducts.Count products →</a>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Standards Tab -->
+            <div id="tab-standards" class="tab-content">
+                @if (!hasStandards)
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <h3>No DDT Standards assigned</h3>
+                        <p>You're not currently listed as an owner or contact for any DDT standards.</p>
+                        <a href="@Url.Action("Index", "DdtStandards")" class="btn btn-primary mt-2">Browse Standards</a>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var standard in Model.MyDdtStandards.Take(10))
+                        {
+                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })" class="work-item-card">
+                                <h4>@standard.Title</h4>
+                                @if (!string.IsNullOrEmpty(standard.Summary))
+                                {
+                                    <p class="work-item-description">@(standard.Summary.Length > 150 ? standard.Summary.Substring(0, 150) + "..." : standard.Summary)</p>
+                                }
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        @if (standard.IsPublished)
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Status</span>
+                                                <span class="badge badge-success">Published</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Status</span>
+                                                <span class="badge badge-warning">@standard.Stage</span>
+                                            </div>
+                                        }
+                                        @if (Model.MyOwnedDdtStandards.Any(s => s.Id == standard.Id))
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Role</span>
+                                                <span class="badge badge-primary">Owner</span>
+                                            </div>
+                                        }
+                                        else if (Model.MyContactDdtStandards.Any(s => s.Id == standard.Id))
+                                        {
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Role</span>
+                                                <span class="badge badge-info">Contact</span>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (standard.Categories.Any())
+                                    {
+                                        <div class="work-item-meta-row">
+                                            <div class="work-item-meta-item">
+                                                <span class="work-item-meta-label">Category</span>
+                                                <span class="text-muted">@string.Join(", ", standard.Categories.Take(2).Select(c => c.Category?.Name))</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </a>
+                        }
+                    </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Standard</th>
+                                    <th>Status</th>
+                                    <th>Role</th>
+                                    <th>Category</th>
+                                    <th>Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var standard in Model.MyDdtStandards.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })">@standard.Title</a></td>
+                                        <td>
+                                            @if (standard.IsPublished)
+                                            {
+                                                <span class="badge badge-success">Published</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-warning">@standard.Stage</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (Model.MyOwnedDdtStandards.Any(s => s.Id == standard.Id))
+                                            {
+                                                <span class="badge badge-primary">Owner</span>
+                                            }
+                                            else if (Model.MyContactDdtStandards.Any(s => s.Id == standard.Id))
+                                            {
+                                                <span class="badge badge-info">Contact</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>@(standard.Categories.Any() ? string.Join(", ", standard.Categories.Take(2).Select(c => c.Category?.Name)) : "-")</td>
+                                        <td>@(standard.Summary?.Length > 100 ? standard.Summary.Substring(0, 100) + "..." : standard.Summary ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.MyDdtStandards.Count > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Index", "DdtStandards")" class="btn btn-outline-primary">View all @Model.MyDdtStandards.Count standards →</a>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- Business Areas Modal -->
+@if (Model.IsBusinessAreaLeader && Model.LeadershipBusinessAreas.Any() && Model.LeadershipBusinessAreas.Count > 3)
+{
+    <div class="modal fade" id="allBusinessAreasModal" tabindex="-1" role="dialog" aria-labelledby="allBusinessAreasModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="allBusinessAreasModalLabel">All Business Areas (@Model.LeadershipBusinessAreas.Count)</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">You are assigned to the following business areas:</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        @foreach (var area in Model.LeadershipBusinessAreas)
+                        {
+                            <span class="badge badge-primary" style="font-size: 0.875rem; padding: 0.5rem 0.75rem;">@area</span>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
     </div>
-</section>
+}
 
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         (function() {
-            // ========================================
-            // Table Sorting and Pagination
-            // ========================================
-            var pageSize = 10;
-            var oversightProjectsCurrentPage = 1;
-            var oversightProjectsAllRows = [];
-            var currentSort = { column: null, direction: 'asc' };
-            var oversightProjectsCount = @Model.OversightProjects.Count;
-            
-            function initOversightProjectsTable() {
-                var table = document.getElementById('oversight-projects-table');
-                if (!table) {
-                    return;
-                }
-                
-                var tbody = table.querySelector('tbody');
-                if (!tbody) {
-                    return;
-                }
-                
-                oversightProjectsAllRows = Array.from(tbody.querySelectorAll('tr'));
-                
-                if (oversightProjectsAllRows.length === 0) {
-                    return;
-                }
-                
-                initSorting(table);
-                
-                // Only paginate if we have more than 10 projects
-                if (oversightProjectsCount > 10) {
-                    paginateOversightProjects();
-                } else {
-                    // Show all rows if 10 or fewer
-                    oversightProjectsAllRows.forEach(function(row) {
-                        row.style.display = '';
-                    });
-                }
-            }
-            
-            function initSorting(table) {
-                var sortableHeaders = table.querySelectorAll('.sortable');
-                
-                sortableHeaders.forEach(function(header) {
-                    header.style.cursor = 'pointer';
-                    
-                    header.addEventListener('click', function(e) {
-                        handleSort(e, header);
-                    });
-                    
-                    header.addEventListener('keypress', function(e) {
-                        if (e.which === 13 || e.which === 32) {
-                            e.preventDefault();
-                            handleSort(e, header);
-                        }
-                    });
-                });
-            }
-            
-            function handleSort(e, header) {
-                var column = header.getAttribute('data-column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(column, direction);
-                currentSort = { column: column, direction: direction };
-            }
-            
-            function updateSortIcons(column, direction) {
-                var table = document.getElementById('oversight-projects-table');
-                var allHeaders = table.querySelectorAll('.sortable i');
-                
-                // Reset all icons
-                allHeaders.forEach(function(icon) {
-                    icon.className = 'fas fa-sort float-right';
-                    icon.style.opacity = '0.3';
-                });
-                
-                // Update active column icon
-                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
-                if (activeHeader) {
-                    var icon = activeHeader.querySelector('i');
-                    if (icon) {
-                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
-                        icon.style.opacity = '1';
-                    }
-                }
-            }
-            
-            function paginateOversightProjects() {
-                var totalProjects = oversightProjectsAllRows.length;
-                var totalPages = Math.ceil(totalProjects / pageSize);
-                
-                // Reset to page 1 if current page is beyond total pages
-                if (oversightProjectsCurrentPage > totalPages && totalPages > 0) {
-                    oversightProjectsCurrentPage = 1;
-                }
-                
-                // Hide all rows first
-                oversightProjectsAllRows.forEach(function(row) {
-                    row.style.display = 'none';
-                });
-                
-                // Show only rows for current page
-                var startIndex = (oversightProjectsCurrentPage - 1) * pageSize;
-                var endIndex = Math.min(startIndex + pageSize, totalProjects);
-                
-                for (var i = startIndex; i < endIndex; i++) {
-                    oversightProjectsAllRows[i].style.display = '';
-                }
-                
-                // Update pagination info
-                var showingStart = document.getElementById('oversightProjectsShowingStart');
-                var showingEnd = document.getElementById('oversightProjectsShowingEnd');
-                if (showingStart) {
-                    showingStart.textContent = totalProjects > 0 ? startIndex + 1 : 0;
-                }
-                if (showingEnd) {
-                    showingEnd.textContent = endIndex;
-                }
-                
-                // Always generate pagination controls if we have more than 10 projects
-                if (totalProjects > 10) {
-                    generateOversightProjectsPagination(totalPages, totalProjects);
-                }
-            }
-            
-            function generateOversightProjectsPagination(totalPages, totalProjects) {
-                var paginationControls = document.getElementById('oversightProjectsPaginationControls');
-                if (!paginationControls) {
-                    console.error('Pagination controls element not found');
-                    return;
-                }
-                
-                // Only generate pagination if we have more than one page
-                if (totalPages <= 1) {
-                    paginationControls.innerHTML = '';
-                    return;
-                }
-                
-                var paginationHtml = '';
-                
-                // Previous button
-                paginationHtml += '<li class="page-item ' + (oversightProjectsCurrentPage === 1 ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (oversightProjectsCurrentPage - 1) + '">Previous</a>';
-                paginationHtml += '</li>';
-                
-                // Page numbers
-                var startPage = Math.max(1, oversightProjectsCurrentPage - 2);
-                var endPage = Math.min(totalPages, oversightProjectsCurrentPage + 2);
-                
-                if (startPage > 1) {
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
-                    if (startPage > 2) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                }
-                
-                for (var i = startPage; i <= endPage; i++) {
-                    paginationHtml += '<li class="page-item ' + (i === oversightProjectsCurrentPage ? 'active' : '') + '">';
-                    paginationHtml += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
-                    paginationHtml += '</li>';
-                }
-                
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                    }
-                    paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>';
-                }
-                
-                // Next button
-                paginationHtml += '<li class="page-item ' + (oversightProjectsCurrentPage === totalPages ? 'disabled' : '') + '">';
-                paginationHtml += '<a class="page-link" href="#" data-page="' + (oversightProjectsCurrentPage + 1) + '">Next</a>';
-                paginationHtml += '</li>';
-                
-                paginationControls.innerHTML = paginationHtml;
-                
-                // Bind click events using event delegation (remove old listener first)
-                var oldHandler = paginationControls._paginationHandler;
-                if (oldHandler) {
-                    paginationControls.removeEventListener('click', oldHandler);
-                }
-                
-                var clickHandler = function(e) {
-                    var link = e.target.closest('.page-link');
-                    if (link && !link.closest('.disabled')) {
-                        e.preventDefault();
-                        var page = parseInt(link.getAttribute('data-page'));
-                        var totalPages = Math.ceil(oversightProjectsAllRows.length / pageSize);
-                        if (!isNaN(page) && page > 0 && page <= totalPages) {
-                            oversightProjectsCurrentPage = page;
-                            paginateOversightProjects();
-                        }
-                    }
-                };
-                
-                paginationControls._paginationHandler = clickHandler;
-                paginationControls.addEventListener('click', clickHandler);
-            }
-            
-            function sortTable(column, direction) {
-                var table = document.getElementById('oversight-projects-table');
-                var tbody = table.querySelector('tbody');
-                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
-                    return th.getAttribute('data-column') === column;
-                });
-                
-                oversightProjectsAllRows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var aCell = a.querySelectorAll('td')[colIndex];
-                    var bCell = b.querySelectorAll('td')[colIndex];
-                    
-                    // Get values from data attributes for numeric columns
-                    if (column === 'UpcomingMilestones') {
-                        aVal = parseInt(a.getAttribute('data-upcoming-milestones')) || 0;
-                        bVal = parseInt(b.getAttribute('data-upcoming-milestones')) || 0;
-                    } else if (column === 'PrimaryContact') {
-                        // Sort by data attribute or cell text
-                        aVal = a.getAttribute('data-primary-contact') || aCell.textContent.trim();
-                        bVal = b.getAttribute('data-primary-contact') || bCell.textContent.trim();
-                        aVal = (aVal || '').toLowerCase();
-                        bVal = (bVal || '').toLowerCase();
-                    } else if (column === 'Project') {
-                        // Sort by link text
-                        var aLink = aCell.querySelector('a');
-                        var bLink = bCell.querySelector('a');
-                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
-                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
-                    } else if (column === 'Priority') {
-                        // Sort by data attribute or badge text
-                        aVal = a.getAttribute('data-priority') || aCell.textContent.trim();
-                        bVal = b.getAttribute('data-priority') || bCell.textContent.trim();
-                        aVal = aVal.toLowerCase();
-                        bVal = bVal.toLowerCase();
-                    } else if (column === 'RAG') {
-                        // Sort by data attribute or badge text
-                        aVal = a.getAttribute('data-rag') || aCell.textContent.trim();
-                        bVal = b.getAttribute('data-rag') || bCell.textContent.trim();
-                        aVal = aVal.toLowerCase();
-                        bVal = bVal.toLowerCase();
-                    } else if (column === 'BusinessArea') {
-                        // Sort by data attribute or cell text
-                        aVal = a.getAttribute('data-business-area') || aCell.textContent.trim();
-                        bVal = b.getAttribute('data-business-area') || bCell.textContent.trim();
-                        aVal = (aVal || '').toLowerCase();
-                        bVal = (bVal || '').toLowerCase();
-                    } else {
-                        // Sort by cell text
-                        aVal = aCell.textContent.trim().toLowerCase();
-                        bVal = bCell.textContent.trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                // Rebuild tbody with sorted rows
-                tbody.innerHTML = '';
-                oversightProjectsAllRows.forEach(function(row) {
-                    tbody.appendChild(row);
-                });
-                
-                // Update sort icons
-                updateSortIcons(column, direction);
-                
-                // Re-paginate if needed
-                if (oversightProjectsCount > 10) {
-                    oversightProjectsCurrentPage = 1;
-                    paginateOversightProjects();
-                }
-            }
-            
-            // Initialize table when DOM is ready
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initOversightProjectsTable);
-            } else {
-                // DOM is already ready
-                setTimeout(initOversightProjectsTable, 100);
+            // Get saved view preference or default to 'cards'
+            function getViewPreference() {
+                return localStorage.getItem('homeWorkViewPreference') || 'cards';
             }
 
-            // ========================================
+            function saveViewPreference(view) {
+                localStorage.setItem('homeWorkViewPreference', view);
+            }
+
+            function toggleView(view) {
+                // Update toggle buttons
+                document.querySelectorAll('.view-toggle-btn').forEach(function(btn) {
+                    btn.classList.remove('active');
+                    if (btn.getAttribute('data-view') === view) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                // Update all tab views
+                document.querySelectorAll('.tab-content').forEach(function(tab) {
+                    var cardsView = tab.querySelector('.work-items-grid[data-view="cards"]');
+                    var listView = tab.querySelector('.work-items-list[data-view="list"]');
+                    
+                    if (cardsView && listView) {
+                        if (view === 'cards') {
+                            cardsView.classList.add('active');
+                            listView.classList.remove('active');
+                        } else {
+                            cardsView.classList.remove('active');
+                            listView.classList.add('active');
+                        }
+                    }
+                });
+
+                saveViewPreference(view);
+            }
+
+            // Initialize view from preference
+            var initialView = getViewPreference();
+            toggleView(initialView);
+
+            // View toggle buttons
+            document.querySelectorAll('.view-toggle-btn').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    var view = this.getAttribute('data-view');
+                    toggleView(view);
+                });
+            });
+
+            // Tab switching
+            document.querySelectorAll('.tab-button').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    var tabName = this.getAttribute('data-tab');
+                    
+                    // Remove active class from all buttons and tabs
+                    document.querySelectorAll('.tab-button').forEach(function(btn) {
+                        btn.classList.remove('active');
+                    });
+                    document.querySelectorAll('.tab-content').forEach(function(tab) {
+                        tab.classList.remove('active');
+                    });
+                    
+                    // Add active class to clicked button and corresponding tab
+                    this.classList.add('active');
+                    document.getElementById('tab-' + tabName).classList.add('active');
+                });
+            });
+
             // Test User Selector (Development Only)
-            // ========================================
             function loadTestUsers() {
                 var testUserSelect = document.getElementById('testUserSelect');
                 if (!testUserSelect) {
@@ -1033,7 +1524,6 @@
                 fetch('@Url.Action("GetTestUsers", "Home")')
                     .then(function(response) {
                         if (!response.ok) {
-                            // If the endpoint fails, just log and continue
                             console.warn('Test users endpoint returned status:', response.status);
                             return [];
                         }
@@ -1041,7 +1531,6 @@
                     })
                     .then(function(users) {
                         if (!users || users.length === 0) {
-                            // If no users returned, add a disabled option
                             var option = document.createElement('option');
                             option.value = '0';
                             option.textContent = 'No users available';
@@ -1063,7 +1552,6 @@
                     })
                     .catch(function(error) {
                         console.error('Error loading test users:', error);
-                        // Add a disabled option to indicate the error
                         var option = document.createElement('option');
                         option.value = '0';
                         option.textContent = 'Unable to load users';
@@ -1072,7 +1560,6 @@
                     });
             }
 
-            // Load users when DOM is ready
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', loadTestUsers);
             } else {

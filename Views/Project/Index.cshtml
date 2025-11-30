@@ -1,9 +1,17 @@
 @using System.Linq
 @model Compass.ViewModels.ProjectIndexViewModel
+@inject Compass.Services.IMonthlyUpdateService MonthlyUpdateService
 
 @{
     ViewData["Title"] = "Work";
+    var dueCount = ViewBag.MonthlyUpdateDueCount as int? ?? 0;
+    var lateCount = ViewBag.MonthlyUpdateLateCount as int? ?? 0;
+    var inProgressCount = ViewBag.MonthlyUpdateInProgressCount as int? ?? 0;
+    var submittedCount = ViewBag.MonthlyUpdateSubmittedCount as int? ?? 0;
+    var reportingPeriod = ViewBag.CurrentReportingMonthName as string ?? "Current Period";
 }
+
+@await Html.PartialAsync("_DashboardStyles")
 
 @section Breadcrumbs {
     <style>
@@ -13,7 +21,7 @@
         }
     </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
@@ -22,20 +30,19 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-3 align-items-center">
-            <div class="col-lg-8 col-md-7 col-sm-12">
-                <h1 class="m-0">Work reporting</h1>
-            </div>
-            @if (ViewBag.HasAdminRole == true)
-            {
-                <div class="col-lg-4 col-md-5 col-sm-12 text-md-right">
-                    <a asp-action="Create" class="btn btn-success">Create entry</a>
-                </div>
-            }
-        </div>
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+        <h1>Work reporting</h1>
+        <p>Manage and track your work items and monthly updates</p>
     </div>
+    @if (ViewBag.IsCentralOpsAdmin == true)
+    {
+        <div style="margin-top: 0;">
+            <a asp-action="Create" class="btn btn-success">
+                <i class="fas fa-plus"></i> Create entry
+            </a>
+        </div>
+    }
 </div>
 
 <section class="content">
@@ -52,6 +59,38 @@
             <div class="alert alert-danger alert-dismissible fade show">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
                 @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (Model.UserProjects.Any())
+        {
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-calendar-check"></i> Monthly Updates - @reportingPeriod</h2>
+                    <p class="dashboard-section-description">Status of monthly updates for your work items</p>
+                </div>
+                <div class="dashboard-summary-cards mb-4">
+                    <div class="dashboard-card bg-warning">
+                        <div class="dashboard-card-value">@dueCount</div>
+                        <div class="dashboard-card-label">Due</div>
+                        <div class="dashboard-card-icon"><i class="fas fa-clock"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-danger">
+                        <div class="dashboard-card-value">@lateCount</div>
+                        <div class="dashboard-card-label">Late</div>
+                        <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-info">
+                        <div class="dashboard-card-value">@inProgressCount</div>
+                        <div class="dashboard-card-label">In Progress</div>
+                        <div class="dashboard-card-icon"><i class="fas fa-spinner"></i></div>
+                    </div>
+                    <div class="dashboard-card bg-success">
+                        <div class="dashboard-card-value">@submittedCount</div>
+                        <div class="dashboard-card-label">Submitted</div>
+                        <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                </div>
             </div>
         }
 
@@ -206,7 +245,7 @@
 
                             <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a asp-action="Index" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                                <a asp-action="Index" asp-route-clearFilters="true" class="btn btn-default btn-sm btn-block">Clear all filters</a>
                             </div>
                         </form>
                         
@@ -221,94 +260,82 @@
                                 <strong class="d-block mb-2">Active Filters:</strong>
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Search: @ViewBag.CurrentSearch</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                        businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = "",
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">RAG: @ViewBag.CurrentRagStatus</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = "",
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Area: @ViewBag.CurrentBusinessArea</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            phase = ViewBag.CurrentPhase, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = "",
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Phase: @ViewBag.CurrentPhase</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            flagship = ViewBag.CurrentFlagship,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = "",
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
                                 {
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No")</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase,
-                                            priority = currentPriorityId
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = "",
+                                        priority = currentPriorityId
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                                 @if (currentPriorityId.HasValue)
                                 {
                                     var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge badge-info">Priority: @(currentPriority?.Name ?? currentPriorityId.ToString())</span>
-                                        <a href="@Url.Action("Index", new { 
-                                            search = ViewBag.CurrentSearch, 
-                                            ragStatus = ViewBag.CurrentRagStatus, 
-                                            businessArea = ViewBag.CurrentBusinessArea, 
-                                            phase = ViewBag.CurrentPhase,
-                                            flagship = ViewBag.CurrentFlagship 
-                                        })" class="text-danger" title="Remove filter">
-                                            <i class="fas fa-times"></i>
-                                        </a>
-                                    </div>
+                                    <a href="@Url.Action("Index", new { 
+                                        search = ViewBag.CurrentSearch, 
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase,
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = (int?)null
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
+                                        Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    </a>
                                 }
                             </div>
                         }
@@ -330,6 +357,7 @@
                             ViewData["TableClass"] = "user-projects-table";
                             ViewData["ShowPagination"] = false;
                             ViewData["PaginationIdPrefix"] = "userProjects";
+                            ViewData["ShowMonthlyUpdateStatus"] = true;
                         }
                         <partial name="_ProjectTable" model="Model.UserProjects" view-data="ViewData" />
                     </div>
@@ -347,6 +375,7 @@
                             ViewData["TableClass"] = "watched-projects-table";
                             ViewData["ShowPagination"] = false;
                             ViewData["PaginationIdPrefix"] = "watchedProjects";
+                            ViewData["ShowMonthlyUpdateStatus"] = false;
                         }
                         <partial name="_ProjectTable" model="Model.WatchedProjects" view-data="ViewData" />
                     </div>
@@ -354,13 +383,21 @@
                 
 
                 <!-- All Work Items Section -->
-                <div class="card mb-4">
+                <div class="card mb-4 collapsed-card">
                     <div class="card-header">
                         <h3 class="card-title">
-                            All work items
+                            @{
+                                var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                                                !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                                                (ViewBag.CurrentPriority as int?).HasValue;
+                            }
+                            @(hasFilters ? "Filtered view of work items" : "All work items")
                         </h3>
                          <div class="card-tools">
-                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse All Work Items section"><i class="fas fa-minus" aria-hidden="true"></i>
+                  <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse All Work Items section"><i class="fas fa-plus" aria-hidden="true"></i>
                   </button>
                 </div>
                     </div>
@@ -375,6 +412,7 @@
                         ViewData["TotalPages"] = Model.TotalPages;
                         ViewData["HasPreviousPage"] = Model.HasPreviousPage;
                         ViewData["HasNextPage"] = Model.HasNextPage;
+                        ViewData["ShowMonthlyUpdateStatus"] = true;
                         <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
                     }
                     else
@@ -682,6 +720,18 @@
                     } else if (column === 'Flagship') {
                         aVal = $(a).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
                         bVal = $(b).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
+                    } else if (column === 'MonthlyUpdateStatus') {
+                        // Sort by status priority: Not started (1) < In progress (2) < Late (3) < Submitted (4)
+                        var statusOrder = {
+                            'not started': 1,
+                            'in progress': 2,
+                            'late': 3,
+                            'submitted': 4
+                        };
+                        var aStatus = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        var bStatus = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                        aVal = statusOrder[aStatus] || 0;
+                        bVal = statusOrder[bStatus] || 0;
                     } else {
                         aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
                         bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
