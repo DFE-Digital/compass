@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Compass.Attributes;
 using Compass.Data;
 using Compass.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -162,6 +163,193 @@ public class DdtStandardsController : ControllerBase
     }
 
     /// <summary>
+    /// Get DDT Standards by stage with optional filtering
+    /// </summary>
+    [HttpGet("by-stage")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetStandardsByStage(
+        [FromQuery] string stage,
+        [FromQuery] string? search = null,
+        [FromQuery] string? category = null,
+        [FromQuery] int? creatorId = null,
+        [FromQuery] int? ownerId = null,
+        [FromQuery] int? contactId = null,
+        [FromQuery] bool? legalStandard = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        if (string.IsNullOrWhiteSpace(stage))
+        {
+            return BadRequest(new
+            {
+                error = new
+                {
+                    code = "MISSING_STAGE",
+                    message = "Stage parameter is required"
+                }
+            });
+        }
+
+        if (pageSize > 100) pageSize = 100;
+        if (page < 1) page = 1;
+
+        // Map view names to stage names (for backward compatibility)
+        var stageMap = new Dictionary<string, string>
+        {
+            { "drafts", "Draft" },
+            { "draft", "Draft" },
+            { "in-review", "For Approval" },
+            { "for-approval", "Awaiting Publication" },
+            { "published", "Published" },
+            { "unpublished", "Unpublished" }
+        };
+
+        var stageName = stageMap.ContainsKey(stage.ToLowerInvariant()) 
+            ? stageMap[stage.ToLowerInvariant()] 
+            : stage; // Use as-is if not in map
+
+        // Validate stage name
+        var validStages = new[] { "Draft", "For Approval", "Awaiting Publication", "Published", "Unpublished" };
+        if (!validStages.Contains(stageName))
+        {
+            return BadRequest(new
+            {
+                error = new
+                {
+                    code = "INVALID_STAGE",
+                    message = $"Invalid stage. Valid stages are: {string.Join(", ", validStages)}"
+                }
+            });
+        }
+
+        // Base query for all standards in this stage
+        var query = _context.DdtStandards
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Stage == stageName)
+            .AsQueryable();
+
+        // For Published stage, also require IsPublished == true
+        if (stageName == "Published")
+        {
+            query = query.Where(s => s.IsPublished);
+        }
+
+        // Load related data for display
+        query = query
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup);
+
+        // Apply filters
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(s => 
+                s.Title.Contains(search) || 
+                (s.Summary != null && s.Summary.Contains(search)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            query = query.Where(s => s.Categories.Any(c => c.Category.Name == category));
+        }
+
+        if (creatorId.HasValue)
+        {
+            query = query.Where(s => s.CreatorUserId == creatorId.Value);
+        }
+
+        if (ownerId.HasValue)
+        {
+            query = query.Where(s => s.Owners.Any(o => o.UserId == ownerId.Value));
+        }
+
+        if (contactId.HasValue)
+        {
+            query = query.Where(s => s.Contacts.Any(c => c.UserId == contactId.Value));
+        }
+
+        if (legalStandard.HasValue)
+        {
+            query = query.Where(s => s.LegalStandard == legalStandard.Value);
+        }
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+        var standards = await query
+            .OrderByDescending(s => s.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(s => new
+            {
+                s.Id,
+                s.StandardUuid,
+                s.LegacyId,
+                s.Title,
+                s.Slug,
+                s.Summary,
+                s.Version,
+                s.PreviousVersion,
+                s.Stage,
+                s.IsPublished,
+                s.PublishedAt,
+                s.FirstPublished,
+                s.LastUpdated,
+                s.DraftCreated,
+                s.LegalStandard,
+                s.LegalBasis,
+                s.ValidityPeriod,
+                s.GovernanceApproval,
+                s.IsModified,
+                Creator = s.CreatorUser != null ? new
+                {
+                    s.CreatorUser.Id,
+                    s.CreatorUser.Name,
+                    s.CreatorUser.Email
+                } : null,
+                Owners = s.Owners.Select(o => new
+                {
+                    o.User.Id,
+                    o.User.Name,
+                    o.User.Email,
+                    o.Role
+                }).ToList(),
+                Contacts = s.Contacts.Select(c => new
+                {
+                    c.User.Id,
+                    c.User.Name,
+                    c.User.Email
+                }).ToList(),
+                Categories = s.Categories.Select(c => c.Category.Name).ToList(),
+                SubCategories = s.SubCategories.Select(sc => sc.SubCategory.Name).ToList(),
+                Phases = s.Phases.Where(p => p.Enabled).Select(p => new
+                {
+                    p.PhaseLookup.Id,
+                    p.PhaseLookup.Name
+                }).ToList(),
+                s.CreatedAt,
+                s.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            data = standards,
+            pagination = new
+            {
+                currentPage = page,
+                pageSize,
+                totalPages,
+                totalRecords
+            },
+            stage = stageName
+        });
+    }
+
+    /// <summary>
     /// Get a single DDT Standard by ID
     /// </summary>
     [HttpGet("{id}")]
@@ -192,6 +380,158 @@ public class DdtStandardsController : ControllerBase
             });
         }
 
+        return FormatStandardResponse(standard);
+    }
+
+    /// <summary>
+    /// Get a DDT Standard by UUID
+    /// </summary>
+    [HttpGet("uuid/{uuid}")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetStandardByUuid(string uuid)
+    {
+        var standard = await _context.DdtStandards
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories)
+            .Include(s => s.SubCategories)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
+            .Include(s => s.ValidationRules)
+            .FirstOrDefaultAsync(s => s.StandardUuid == uuid && !s.IsDeleted);
+
+        if (standard == null)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Standard with UUID {uuid} not found"
+                }
+            });
+        }
+
+        return await GetStandard(standard.Id);
+    }
+
+    /// <summary>
+    /// Get a published DDT Standard by ID (only returns published versions)
+    /// </summary>
+    [HttpGet("by-id/{id}")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetPublishedStandardById(int id)
+    {
+        var standard = await _context.DdtStandards
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories)
+            .Include(s => s.SubCategories)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
+            .Include(s => s.ValidationRules)
+            .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
+            .Include(s => s.Comments).ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted && s.IsPublished && s.Stage == "Published");
+
+        if (standard == null)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Published standard with ID {id} not found"
+                }
+            });
+        }
+
+        return FormatStandardResponse(standard);
+    }
+
+    /// <summary>
+    /// Get a published DDT Standard by Legacy ID (only returns published versions)
+    /// If multiple published standards exist with the same Legacy ID, returns the latest version
+    /// </summary>
+    [HttpGet("by-legacy-id/{legacyId}")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetPublishedStandardByLegacyId(string legacyId)
+    {
+        var standards = await _context.DdtStandards
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories)
+            .Include(s => s.SubCategories)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
+            .Include(s => s.ValidationRules)
+            .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
+            .Include(s => s.Comments).ThenInclude(c => c.User)
+            .Where(s => s.LegacyId == legacyId && !s.IsDeleted && s.IsPublished && s.Stage == "Published")
+            .ToListAsync();
+
+        if (!standards.Any())
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Published standard with Legacy ID {legacyId} not found"
+                }
+            });
+        }
+
+        // If multiple published standards exist, return the one with the highest version
+        var standard = standards.OrderByDescending(s => ParseVersion(s.Version)).First();
+
+        return FormatStandardResponse(standard);
+    }
+
+    /// <summary>
+    /// Get a published DDT Standard by Slug (only returns published versions)
+    /// If multiple published standards exist with the same slug, returns the latest version
+    /// </summary>
+    [HttpGet("by-slug/{slug}")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetPublishedStandardBySlug(string slug)
+    {
+        var standards = await _context.DdtStandards
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories)
+            .Include(s => s.SubCategories)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
+            .Include(s => s.ValidationRules)
+            .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
+            .Include(s => s.Comments).ThenInclude(c => c.User)
+            .Where(s => s.Slug == slug && !s.IsDeleted && s.IsPublished && s.Stage == "Published")
+            .ToListAsync();
+
+        if (!standards.Any())
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Published standard with slug {slug} not found"
+                }
+            });
+        }
+
+        // If multiple published standards exist, return the one with the highest version
+        var standard = standards.OrderByDescending(s => ParseVersion(s.Version)).First();
+
+        return FormatStandardResponse(standard);
+    }
+
+    /// <summary>
+    /// Helper method to format standard response
+    /// </summary>
+    private IActionResult FormatStandardResponse(DdtStandard standard)
+    {
         return Ok(new
         {
             standard.Id,
@@ -296,38 +636,6 @@ public class DdtStandardsController : ControllerBase
     }
 
     /// <summary>
-    /// Get a DDT Standard by UUID
-    /// </summary>
-    [HttpGet("uuid/{uuid}")]
-    [RequireApiPermission("DdtStandards", "read")]
-    public async Task<IActionResult> GetStandardByUuid(string uuid)
-    {
-        var standard = await _context.DdtStandards
-            .Include(s => s.CreatorUser)
-            .Include(s => s.Owners).ThenInclude(o => o.User)
-            .Include(s => s.Contacts).ThenInclude(c => c.User)
-            .Include(s => s.Categories)
-            .Include(s => s.SubCategories)
-            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
-            .Include(s => s.ValidationRules)
-            .FirstOrDefaultAsync(s => s.StandardUuid == uuid && !s.IsDeleted);
-
-        if (standard == null)
-        {
-            return NotFound(new
-            {
-                error = new
-                {
-                    code = "NOT_FOUND",
-                    message = $"Standard with UUID {uuid} not found"
-                }
-            });
-        }
-
-        return await GetStandard(standard.Id);
-    }
-
-    /// <summary>
     /// Create a new DDT Standard
     /// </summary>
     [HttpPost]
@@ -378,6 +686,7 @@ public class DdtStandardsController : ControllerBase
             RelatedGuidance = dto.RelatedGuidance,
             Stage = "Draft",
             Version = "0.1.0",
+            LegacyReference = await GenerateLegacyReferenceAsync(),
             DraftCreated = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -712,8 +1021,473 @@ public class DdtStandardsController : ControllerBase
     }
 
     /// <summary>
+    /// Submit a standard for review
+    /// </summary>
+    [HttpPost("{id}/SubmitForReview")]
+    [RequireApiPermission("DdtStandards", "update")]
+    public async Task<IActionResult> SubmitForReview(int id)
+    {
+        var standard = await _context.DdtStandards
+            .Include(s => s.Products)
+            .Include(s => s.Exceptions)
+            .Include(s => s.ParentStandard)
+                .ThenInclude(p => p.Products)
+            .Include(s => s.ParentStandard)
+                .ThenInclude(p => p.Exceptions)
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+
+        if (standard == null)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Standard with ID {id} not found"
+                }
+            });
+        }
+
+        if (standard.Stage != "Draft")
+        {
+            return BadRequest(new
+            {
+                error = new
+                {
+                    code = "INVALID_STAGE",
+                    message = "Only draft standards can be submitted for review."
+                }
+            });
+        }
+
+        // Only increment version if this is a new submission (not a resubmission after rejection)
+        // and if it has a parent standard (was created from "Make a change")
+        bool shouldIncrementVersion = standard.ParentStandardId.HasValue && 
+                                      standard.ParentStandard != null &&
+                                      !standard.Version.Contains("-resubmit");
+
+        if (shouldIncrementVersion)
+        {
+            var parentStandard = standard.ParentStandard;
+            var versionParts = parentStandard.Version.Split('.');
+            
+            if (versionParts.Length == 3 && 
+                int.TryParse(versionParts[0], out var major) &&
+                int.TryParse(versionParts[1], out var minor) &&
+                int.TryParse(versionParts[2], out var patch))
+            {
+                // Check what changed to determine version increment
+                bool productsChanged = false;
+                bool exceptionsChanged = false;
+                bool descriptionChanged = false;
+                bool otherChanged = false;
+
+                // Compare products
+                var parentProductIds = parentStandard.Products.Select(p => p.StandardProductId).OrderBy(x => x).ToList();
+                var currentProductIds = standard.Products.Select(p => p.StandardProductId).OrderBy(x => x).ToList();
+                if (!parentProductIds.SequenceEqual(currentProductIds))
+                {
+                    productsChanged = true;
+                }
+
+                // Compare exceptions
+                var parentExceptionIds = await _context.DdtStandardExceptions
+                    .Where(e => e.DdtStandardId == parentStandard.Id && e.Status == "Active")
+                    .Select(e => e.Id)
+                    .OrderBy(x => x)
+                    .ToListAsync();
+                var currentExceptionIds = await _context.DdtStandardExceptions
+                    .Where(e => e.DdtStandardId == standard.Id && e.Status == "Active")
+                    .Select(e => e.Id)
+                    .OrderBy(x => x)
+                    .ToListAsync();
+                if (!parentExceptionIds.SequenceEqual(currentExceptionIds))
+                {
+                    exceptionsChanged = true;
+                }
+
+                // Compare description (Summary field)
+                if (parentStandard.Summary != standard.Summary)
+                {
+                    descriptionChanged = true;
+                }
+
+                // Check for other changes
+                if (parentStandard.Purpose != standard.Purpose ||
+                    parentStandard.HowToMeet != standard.HowToMeet ||
+                    parentStandard.Criteria != standard.Criteria ||
+                    parentStandard.Governance != standard.Governance ||
+                    parentStandard.LegalBasis != standard.LegalBasis ||
+                    parentStandard.RelatedGuidance != standard.RelatedGuidance ||
+                    parentStandard.Title != standard.Title)
+                {
+                    otherChanged = true;
+                }
+
+                // Increment version based on change type
+                if (productsChanged || exceptionsChanged)
+                {
+                    major++;
+                    minor = 0;
+                    patch = 0;
+                }
+                else if (descriptionChanged)
+                {
+                    patch++;
+                }
+                else if (otherChanged)
+                {
+                    minor++;
+                    patch = 0;
+                }
+
+                var newVersion = $"{major}.{minor}.{patch}";
+                standard.PreviousVersion = standard.Version;
+                standard.Version = newVersion;
+            }
+        }
+
+        standard.Stage = "Under Review";
+        standard.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Standard submitted for review successfully",
+            standard = new
+            {
+                standard.Id,
+                standard.Title,
+                standard.Version,
+                standard.Stage,
+                standard.UpdatedAt
+            }
+        });
+    }
+
+    /// <summary>
+    /// Get all published DDT Standards (convenience endpoint)
+    /// This endpoint is equivalent to /api/v1/DdtStandards/by-stage?stage=published
+    /// Public endpoint - no authentication required
+    /// </summary>
+    [HttpGet]
+    [Route("/api/DdtStandards/Published")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPublishedStandards(
+        [FromQuery] string? search = null,
+        [FromQuery] string? category = null,
+        [FromQuery] int? creatorId = null,
+        [FromQuery] int? ownerId = null,
+        [FromQuery] int? contactId = null,
+        [FromQuery] bool? legalStandard = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        // Use the by-stage endpoint logic for consistency
+        return await GetStandardsByStage("Published", search, category, creatorId, ownerId, contactId, legalStandard, page, pageSize);
+    }
+
+    /// <summary>
+    /// Get all exemptions (exceptions) for DDT Standards
+    /// </summary>
+    [HttpGet]
+    [Route("/api/DdtStandards/Exceptions")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetExemptions(
+        [FromQuery] int? standardId = null,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        if (pageSize > 100) pageSize = 100;
+        if (page < 1) page = 1;
+
+        var query = _context.DdtStandardExceptions
+            .AsNoTracking()
+            .Include(e => e.DdtStandard)
+            .Include(e => e.StandardProduct)
+            .Include(e => e.GrantedByUser)
+            .Include(e => e.CreatedByUser)
+            .AsQueryable();
+
+        // Apply filters
+        if (standardId.HasValue)
+        {
+            query = query.Where(e => e.DdtStandardId == standardId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query = query.Where(e => e.Status == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(e => 
+                e.Title.Contains(search) || 
+                (e.Description != null && e.Description.Contains(search)) ||
+                (e.Reason != null && e.Reason.Contains(search)));
+        }
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+        var exemptions = await query
+            .OrderByDescending(e => e.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                e.Description,
+                e.Reason,
+                e.Status,
+                e.GrantedAt,
+                e.ExpiresAt,
+                e.Notes,
+                Standard = new
+                {
+                    e.DdtStandard.Id,
+                    e.DdtStandard.Title,
+                    e.DdtStandard.Slug,
+                    e.DdtStandard.Version
+                },
+                Product = e.StandardProduct != null ? new
+                {
+                    e.StandardProduct.Id,
+                    e.StandardProduct.Name
+                } : null,
+                FipsProductId = e.FipsProductId,
+                GrantedBy = e.GrantedByUser != null ? new
+                {
+                    e.GrantedByUser.Id,
+                    e.GrantedByUser.Name,
+                    e.GrantedByUser.Email
+                } : null,
+                CreatedBy = e.CreatedByUser != null ? new
+                {
+                    e.CreatedByUser.Id,
+                    e.CreatedByUser.Name,
+                    e.CreatedByUser.Email
+                } : null,
+                e.CreatedAt,
+                e.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            data = exemptions,
+            pagination = new
+            {
+                currentPage = page,
+                pageSize,
+                totalPages,
+                totalRecords
+            }
+        });
+    }
+
+    /// <summary>
+    /// Get all approved products for DDT Standards
+    /// </summary>
+    [HttpGet]
+    [Route("/api/DdtStandards/ApprovedProducts")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetApprovedProducts(
+        [FromQuery] string? search = null,
+        [FromQuery] string? approvalStatus = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        if (pageSize > 100) pageSize = 100;
+        if (page < 1) page = 1;
+
+        var query = _context.StandardProducts
+            .AsNoTracking()
+            .Include(sp => sp.CreatedByUser)
+            .Include(sp => sp.ReviewedByUser)
+            .AsQueryable();
+
+        // Apply filters
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(sp => 
+                sp.Name.Contains(search) || 
+                (sp.Description != null && sp.Description.Contains(search)) ||
+                (sp.Provider != null && sp.Provider.Contains(search)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(approvalStatus))
+        {
+            query = query.Where(sp => sp.ApprovalStatus == approvalStatus);
+        }
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+        var products = await query
+            .OrderBy(sp => sp.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(sp => new
+            {
+                sp.Id,
+                sp.Name,
+                sp.Description,
+                sp.Provider,
+                sp.Version,
+                sp.ApprovalStatus,
+                CreatedBy = sp.CreatedByUser != null ? new
+                {
+                    sp.CreatedByUser.Id,
+                    sp.CreatedByUser.Name,
+                    sp.CreatedByUser.Email
+                } : null,
+                ReviewedBy = sp.ReviewedByUser != null ? new
+                {
+                    sp.ReviewedByUser.Id,
+                    sp.ReviewedByUser.Name,
+                    sp.ReviewedByUser.Email
+                } : null,
+                sp.CreatedAt,
+                sp.UpdatedAt
+            })
+            .ToListAsync();
+
+        // Get standards for each product (only published)
+        var productIds = products.Select(p => p.Id).ToList();
+        var productStandards = await _context.DdtStandardProducts
+            .AsNoTracking()
+            .Include(dsp => dsp.DdtStandard)
+            .Where(dsp => productIds.Contains(dsp.StandardProductId) && 
+                         dsp.DdtStandard.IsPublished && 
+                         dsp.DdtStandard.Stage == "Published" && 
+                         !dsp.DdtStandard.IsDeleted)
+            .ToListAsync();
+
+        var productsWithStandards = products.Select(p => new
+        {
+            p.Id,
+            p.Name,
+            p.Description,
+            p.Provider,
+            p.Version,
+            p.ApprovalStatus,
+            p.CreatedBy,
+            p.ReviewedBy,
+            p.CreatedAt,
+            p.UpdatedAt,
+            Standards = new
+            {
+                Approved = productStandards
+                    .Where(ps => ps.StandardProductId == p.Id && ps.ProductType == "Approved")
+                    .Select(ps => new
+                    {
+                        ps.DdtStandard.Id,
+                        ps.DdtStandard.Title,
+                        ps.DdtStandard.Slug,
+                        ps.DdtStandard.Version
+                    })
+                    .OrderBy(s => s.Title)
+                    .ToList(),
+                Tolerated = productStandards
+                    .Where(ps => ps.StandardProductId == p.Id && ps.ProductType == "Tolerated")
+                    .Select(ps => new
+                    {
+                        ps.DdtStandard.Id,
+                        ps.DdtStandard.Title,
+                        ps.DdtStandard.Slug,
+                        ps.DdtStandard.Version
+                    })
+                    .OrderBy(s => s.Title)
+                    .ToList()
+            }
+        }).ToList();
+
+        return Ok(new
+        {
+            data = productsWithStandards,
+            pagination = new
+            {
+                currentPage = page,
+                pageSize,
+                totalPages,
+                totalRecords
+            }
+        });
+    }
+
+    /// <summary>
     /// Generate URL-friendly slug from title
     /// </summary>
+    /// <summary>
+    /// Generate LegacyReference for a standard
+    /// Format: STD-{number}
+    /// For new standards, find the highest number and increment
+    /// </summary>
+    private async Task<string> GenerateLegacyReferenceAsync()
+    {
+        // For new standards, find the highest LegacyReference number and increment
+        var allLegacyReferences = await _context.DdtStandards
+            .AsNoTracking()
+            .Where(s => !string.IsNullOrEmpty(s.LegacyReference) && s.LegacyReference.StartsWith("STD-"))
+            .Select(s => s.LegacyReference)
+            .ToListAsync();
+
+        int maxNumber = 0;
+        foreach (var refStr in allLegacyReferences)
+        {
+            if (refStr != null && refStr.StartsWith("STD-"))
+            {
+                var numberPart = refStr.Substring(4); // Remove "STD-"
+                if (int.TryParse(numberPart, out var number) && number > maxNumber)
+                {
+                    maxNumber = number;
+                }
+            }
+        }
+
+        return $"STD-{maxNumber + 1}";
+    }
+
+    /// <summary>
+    /// Parse semantic version string (e.g., "1.0.5") into a comparable tuple
+    /// Returns (major, minor, patch) for sorting purposes
+    /// </summary>
+    private static (int major, int minor, int patch) ParseVersion(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return (0, 0, 0);
+        }
+
+        var parts = version.Trim().Split('.');
+        if (parts.Length >= 3 &&
+            int.TryParse(parts[0], out var major) &&
+            int.TryParse(parts[1], out var minor) &&
+            int.TryParse(parts[2], out var patch))
+        {
+            return (major, minor, patch);
+        }
+        else if (parts.Length == 2 &&
+                 int.TryParse(parts[0], out major) &&
+                 int.TryParse(parts[1], out minor))
+        {
+            return (major, minor, 0);
+        }
+        else if (parts.Length == 1 &&
+                 int.TryParse(parts[0], out major))
+        {
+            return (major, 0, 0);
+        }
+
+        // If parsing fails, return (0, 0, 0) which will sort lowest
+        return (0, 0, 0);
+    }
+
     private static string GenerateSlug(string title)
     {
         if (string.IsNullOrWhiteSpace(title))

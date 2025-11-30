@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Compass.Data;
 using Compass.Models;
 using Compass.ViewModels;
+using Compass.Services;
 using System.Security.Claims;
 
 namespace Compass.Controllers;
@@ -13,11 +14,13 @@ public class TasksController : Controller
 {
     private readonly CompassDbContext _context;
     private readonly ILogger<TasksController> _logger;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
 
-    public TasksController(CompassDbContext context, ILogger<TasksController> logger)
+    public TasksController(CompassDbContext context, ILogger<TasksController> logger, IMonthlyUpdateService monthlyUpdateService)
     {
         _context = context;
         _logger = logger;
+        _monthlyUpdateService = monthlyUpdateService;
     }
 
     public async Task<IActionResult> Index()
@@ -51,6 +54,7 @@ public class TasksController : Controller
                 .Include(p => p.Directorates)
                 .Include(p => p.BudgetOwners)
                 .Include(p => p.PrimaryContactUser)
+                .Include(p => p.MonthlyUpdates)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -189,6 +193,56 @@ public class TasksController : Controller
                         ActionUrl = Url.Action("Details", "Project", new { id = project.Id, tab = "overview" }) ?? "#",
                         ProjectOverviewUrl = projectOverviewUrl
                     });
+                }
+            }
+
+            // Check for outstanding monthly updates (due or late) for current and previous months
+            var now = DateTime.UtcNow;
+            var currentYear = now.Year;
+            var currentMonth = now.Month;
+            
+            // Calculate previous month
+            var previousMonth = currentMonth == 1 ? 12 : currentMonth - 1;
+            var previousYear = currentMonth == 1 ? currentYear - 1 : currentYear;
+            
+            // Check both current and previous months
+            var monthsToCheck = new[] { 
+                (Year: currentYear, Month: currentMonth),
+                (Year: previousYear, Month: previousMonth)
+            };
+
+            foreach (var project in userProjects)
+            {
+                var deliveryCode = $"DFE-DDT-{project.Id}";
+                var projectOverviewUrl = Url.Action("Details", "Project", new { id = project.Id, tab = "overview" }) ?? "#";
+
+                foreach (var (year, month) in monthsToCheck)
+                {
+                    var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
+                    var status = _monthlyUpdateService.CalculateUpdateStatus(year, month, update?.SubmittedAt);
+                    
+                    // Add task if update is due or late
+                    if (status == UpdateSubmissionStatus.Due || status == UpdateSubmissionStatus.Late)
+                    {
+                        var periodName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+                        var actionUrl = update != null
+                            ? Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = project.Id, year = year, month = month }) ?? "#"
+                            : Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = project.Id, year = year, month = month }) ?? "#";
+                        
+                        var taskDescription = status == UpdateSubmissionStatus.Late
+                            ? $"Submit monthly update for {periodName} (late)"
+                            : $"Submit monthly update for {periodName} (due)";
+
+                        tasks.Add(new ProjectTask
+                        {
+                            ProjectId = project.Id,
+                            ProjectTitle = project.Title,
+                            ProjectCode = deliveryCode,
+                            TaskDescription = taskDescription,
+                            ActionUrl = actionUrl,
+                            ProjectOverviewUrl = projectOverviewUrl
+                        });
+                    }
                 }
             }
 

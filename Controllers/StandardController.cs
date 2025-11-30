@@ -250,70 +250,10 @@ namespace Compass.Controllers
                 return RedirectToAction("Published");
             }
         }
-        public async Task<IActionResult> Service(string search, string category, string stage)
+        public IActionResult Service(string search, string category, string stage)
         {
-            try
-            {
-                var standards = await _standardsCmsApiService.GetStandardsAsync(
-                    published: true,
-                    search: search,
-                    cacheDuration: TimeSpan.FromMinutes(5)
-                );
-
-                var serviceStandards = standards
-                    .Where(s =>
-                        (s.Categories?.Any(c =>
-                            c.Title.Contains("GV", StringComparison.OrdinalIgnoreCase) ||
-                            c.Title.Contains("Service", StringComparison.OrdinalIgnoreCase)) ?? false) ||
-                        (s.Stage?.Title?.Contains("Service", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                        (!string.IsNullOrWhiteSpace(s.Title) && s.Title.Contains("Service Standard", StringComparison.OrdinalIgnoreCase))
-                    )
-                    .ToList();
-
-                if (!string.IsNullOrWhiteSpace(category))
-                {
-                    serviceStandards = serviceStandards
-                        .Where(s => s.Categories?.Any(c => string.Equals(c.Title, category, StringComparison.OrdinalIgnoreCase)) == true)
-                        .ToList();
-                }
-
-                if (!string.IsNullOrWhiteSpace(stage))
-                {
-                    serviceStandards = serviceStandards
-                        .Where(s => s.Stage != null && string.Equals(s.Stage.Title, stage, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                }
-
-                var categories = serviceStandards
-                    .SelectMany(s => s.Categories ?? new List<StandardCategoryDto>())
-                    .Select(c => c.Title)
-                    .Where(t => !string.IsNullOrWhiteSpace(t))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                var stages = serviceStandards
-                    .Where(s => s.Stage != null && !string.IsNullOrWhiteSpace(s.Stage.Title))
-                    .Select(s => s.Stage!.Title)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                ViewBag.CurrentSearch = search;
-                ViewBag.CurrentCategory = category;
-                ViewBag.CurrentStage = stage;
-                ViewBag.Categories = categories;
-                ViewBag.Stages = stages;
-                ViewBag.TotalResults = serviceStandards.Count;
-
-                return View(serviceStandards);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading service standards");
-                TempData["ErrorMessage"] = "An error occurred while loading service standards.";
-                return View(new List<StandardDto>());
-            }
+            // Redirect to the new Service Standards dashboard
+            return RedirectToAction("Index", "ServiceStandards");
         }
 
     }

@@ -279,6 +279,7 @@ builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
+builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
 
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
@@ -468,6 +469,15 @@ using (var scope = app.Services.CreateScope())
         
         // Seed RBAC initial data (groups, features, super admin)
         await SeedRbacInitialDataAsync(context);
+        
+        // Seed Service Standards (GOV.UK Service Standards 1-14)
+        await SeedServiceStandardsAsync(context);
+        
+        // Seed DDaT Professions
+        await SeedDdatProfessionsAsync(context);
+        
+        // Seed Technology Code of Practice
+        await SeedTechnologyCodeOfPracticeAsync(context);
         
         Console.WriteLine("Compass database initialized successfully");
     }
@@ -698,6 +708,160 @@ static async Task SeedStatementTemplatesAsync(Compass.Data.CompassDbContext cont
         await context.SaveChangesAsync();
         Console.WriteLine("✓ Statement templates seeded successfully");
     }
+}
+
+static async Task SeedServiceStandardsAsync(Compass.Data.CompassDbContext context)
+{
+    // Check if Service Standards already exist
+    if (await context.ServiceStandards.AnyAsync())
+    {
+        Console.WriteLine("Service Standards already seeded, skipping...");
+        return;
+    }
+
+    Console.WriteLine("Seeding GOV.UK Service Standards...");
+
+    var standards = new[]
+    {
+        new Compass.Models.ServiceStandard { StandardNumber = 1, Title = "Understand users and their needs", Slug = "understand-users-needs", Summary = "Research to develop a deep knowledge of who the users are and what that means for the design of the service.", DisplayOrder = 1, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 2, Title = "Solve a whole problem for users", Slug = "solve-whole-problem", Summary = "Work towards creating a service that solves one whole problem for users, working across organisational boundaries.", DisplayOrder = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 3, Title = "Provide a joined up experience across all channels", Slug = "joined-up-experience", Summary = "Provide a consistent experience wherever users encounter your service, including online, phone, paper and face to face.", DisplayOrder = 3, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 4, Title = "Make the service simple to use", Slug = "make-service-simple", Summary = "Build a service that's simple, intuitive and comprehensible. And test it with users to make sure it works for them.", DisplayOrder = 4, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 5, Title = "Make sure everyone can use the service", Slug = "everyone-can-use", Summary = "Build a service that's accessible to all users, including those who use assistive technologies.", DisplayOrder = 5, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 6, Title = "Have a multidisciplinary team", Slug = "multidisciplinary-team", Summary = "Put in place a sustainable multidisciplinary team that can design, build and operate the service.", DisplayOrder = 6, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 7, Title = "Use agile ways of working", Slug = "agile-ways-working", Summary = "Use agile, iterative and user-centred methods. Keep improving the service based on user research and feedback.", DisplayOrder = 7, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 8, Title = "Iterate and improve frequently", Slug = "iterate-improve", Summary = "Make sure you have the capacity, resources and technical flexibility to iterate and improve the service frequently.", DisplayOrder = 8, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 9, Title = "Create a secure service which protects users' privacy", Slug = "secure-service", Summary = "Evaluate what data the service will be collecting, storing and providing. Assess the privacy implications and put appropriate controls in place.", DisplayOrder = 9, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 10, Title = "Define what success looks like and publish performance data", Slug = "define-success", Summary = "Identify performance indicators for the service, collect performance data and publish it so users can see how the service is performing.", DisplayOrder = 10, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 11, Title = "Choose the right tools and technology", Slug = "right-tools-technology", Summary = "Choose tools and technology that let you create a high quality service in a cost effective way. Minimise the cost of changing direction in future.", DisplayOrder = 11, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 12, Title = "Make new source code open", Slug = "open-source-code", Summary = "Make all new source code open and reusable, and publish it under appropriate licences.", DisplayOrder = 12, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 13, Title = "Use and contribute to open standards, common components and patterns", Slug = "open-standards", Summary = "Use open standards and common government platforms where available. When this isn't possible, create new ones and make them open.", DisplayOrder = 13, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.ServiceStandard { StandardNumber = 14, Title = "Operate a reliable service", Slug = "reliable-service", Summary = "Make sure your service can be operated reliably and can be continuously improved based on user needs.", DisplayOrder = 14, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
+    };
+
+    context.ServiceStandards.AddRange(standards);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Seeded {standards.Length} Service Standards successfully");
+}
+
+static async Task SeedDdatProfessionsAsync(Compass.Data.CompassDbContext context)
+{
+    // Check if DDaT Professions already exist
+    if (await context.DdatProfessions.AnyAsync())
+    {
+        Console.WriteLine("DDaT Professions already seeded, skipping...");
+        return;
+    }
+
+    Console.WriteLine("Seeding DDaT Professions from Government Digital and Data Profession Capability Framework...");
+
+    var professions = new[]
+    {
+        // Architecture roles
+        new Compass.Models.DdatProfession { Name = "Business architect", Slug = "business-architect", RoleGroup = "Architecture roles", Description = "Business architects design and guide business architecture to align technology with business strategy.", DisplayOrder = 10, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data architect", Slug = "data-architect", RoleGroup = "Architecture roles", Description = "Data architects design and guide data architecture to ensure data is managed effectively across the organisation.", DisplayOrder = 20, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Enterprise architect", Slug = "enterprise-architect", RoleGroup = "Architecture roles", Description = "Enterprise architects design and guide enterprise architecture to align technology with business strategy across the organisation.", DisplayOrder = 30, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Network architect", Slug = "network-architect", RoleGroup = "Architecture roles", Description = "Network architects design and guide network architecture to ensure reliable and secure network infrastructure.", DisplayOrder = 40, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Security architect", Slug = "security-architect", RoleGroup = "Architecture roles", Description = "Security architects design and guide security architecture to protect systems and data.", DisplayOrder = 50, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Solution architect", Slug = "solution-architect", RoleGroup = "Architecture roles", Description = "Solution architects design and guide solution architecture to meet specific business needs.", DisplayOrder = 60, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Technical architect", Slug = "technical-architect", RoleGroup = "Architecture roles", Description = "Technical architects design and guide technical architecture to ensure systems are built using appropriate technologies.", DisplayOrder = 70, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // Chief digital and data roles
+        new Compass.Models.DdatProfession { Name = "Chief data officer", Slug = "chief-data-officer", RoleGroup = "Chief digital and data roles", Description = "Chief data officers lead data strategy and governance across the organisation.", DisplayOrder = 100, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Chief digital and information officer", Slug = "chief-digital-information-officer", RoleGroup = "Chief digital and data roles", Description = "Chief digital and information officers lead digital transformation and information management strategy.", DisplayOrder = 110, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Chief information security officer", Slug = "chief-information-security-officer", RoleGroup = "Chief digital and data roles", Description = "Chief information security officers lead information security strategy and governance.", DisplayOrder = 120, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Chief technology officer", Slug = "chief-technology-officer", RoleGroup = "Chief digital and data roles", Description = "Chief technology officers lead technology strategy and innovation across the organisation.", DisplayOrder = 130, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // Data roles
+        new Compass.Models.DdatProfession { Name = "Analytics engineer", Slug = "analytics-engineer", RoleGroup = "Data roles", Description = "Analytics engineers build and maintain data analytics infrastructure and pipelines.", DisplayOrder = 200, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data analyst", Slug = "data-analyst", RoleGroup = "Data roles", Description = "Data analysts analyse data to provide insights and support decision-making.", DisplayOrder = 210, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data engineer", Slug = "data-engineer", RoleGroup = "Data roles", Description = "Data engineers design and build systems for collecting, storing and processing data.", DisplayOrder = 220, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data ethicist", Slug = "data-ethicist", RoleGroup = "Data roles", Description = "Data ethicists ensure ethical use of data and algorithms in government services.", DisplayOrder = 230, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data governance manager", Slug = "data-governance-manager", RoleGroup = "Data roles", Description = "Data governance managers establish and maintain data governance frameworks and policies.", DisplayOrder = 240, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Data scientist", Slug = "data-scientist", RoleGroup = "Data roles", Description = "Data scientists use advanced analytics and machine learning to extract insights from data.", DisplayOrder = 250, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Digital evaluator", Slug = "digital-evaluator", RoleGroup = "Data roles", Description = "Digital evaluators assess the impact and effectiveness of digital services and products.", DisplayOrder = 260, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Machine learning engineer", Slug = "machine-learning-engineer", RoleGroup = "Data roles", Description = "Machine learning engineers design, build and deploy machine learning models and systems.", DisplayOrder = 270, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Performance analyst", Slug = "performance-analyst", RoleGroup = "Data roles", Description = "Performance analysts measure and analyse service performance to drive improvements.", DisplayOrder = 280, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // IT operations roles
+        new Compass.Models.DdatProfession { Name = "Application operations engineer", Slug = "application-operations-engineer", RoleGroup = "IT operations roles", Description = "Application operations engineers maintain and support applications in production environments.", DisplayOrder = 300, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Business relationship manager", Slug = "business-relationship-manager", RoleGroup = "IT operations roles", Description = "Business relationship managers build relationships between IT and business stakeholders.", DisplayOrder = 310, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Change and release manager", Slug = "change-release-manager", RoleGroup = "IT operations roles", Description = "Change and release managers coordinate changes to IT systems and manage releases.", DisplayOrder = 320, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Command and control centre manager", Slug = "command-control-centre-manager", RoleGroup = "IT operations roles", Description = "Command and control centre managers oversee IT operations centres and incident response.", DisplayOrder = 330, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "End user computing engineer", Slug = "end-user-computing-engineer", RoleGroup = "IT operations roles", Description = "End user computing engineers support and maintain end user devices and software.", DisplayOrder = 340, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Incident manager", Slug = "incident-manager", RoleGroup = "IT operations roles", Description = "Incident managers coordinate response to IT incidents and service disruptions.", DisplayOrder = 350, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Infrastructure engineer", Slug = "infrastructure-engineer", RoleGroup = "IT operations roles", Description = "Infrastructure engineers design, build and maintain IT infrastructure.", DisplayOrder = 360, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Infrastructure operations engineer", Slug = "infrastructure-operations-engineer", RoleGroup = "IT operations roles", Description = "Infrastructure operations engineers operate and maintain IT infrastructure systems.", DisplayOrder = 370, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "IT service manager", Slug = "it-service-manager", RoleGroup = "IT operations roles", Description = "IT service managers ensure IT services meet business needs and service level agreements.", DisplayOrder = 380, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Problem manager", Slug = "problem-manager", RoleGroup = "IT operations roles", Description = "Problem managers identify and resolve root causes of recurring IT incidents.", DisplayOrder = 390, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Service desk manager", Slug = "service-desk-manager", RoleGroup = "IT operations roles", Description = "Service desk managers oversee IT service desk operations and support teams.", DisplayOrder = 400, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Service transition manager", Slug = "service-transition-manager", RoleGroup = "IT operations roles", Description = "Service transition managers coordinate the transition of services into live operations.", DisplayOrder = 410, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // Product and delivery roles
+        new Compass.Models.DdatProfession { Name = "Business analyst", Slug = "business-analyst", RoleGroup = "Product and delivery roles", Description = "Business analysts help organisations improve their processes, products, services and software.", DisplayOrder = 500, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Delivery manager", Slug = "delivery-manager", RoleGroup = "Product and delivery roles", Description = "Delivery managers are responsible for ensuring teams deliver products and services successfully.", DisplayOrder = 510, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Digital portfolio manager", Slug = "digital-portfolio-manager", RoleGroup = "Product and delivery roles", Description = "Digital portfolio managers oversee portfolios of digital products and services.", DisplayOrder = 520, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Product manager", Slug = "product-manager", RoleGroup = "Product and delivery roles", Description = "Product managers are responsible for the success of a product or service.", DisplayOrder = 530, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Programme delivery manager", Slug = "programme-delivery-manager", RoleGroup = "Product and delivery roles", Description = "Programme delivery managers coordinate delivery of complex programmes across multiple teams.", DisplayOrder = 540, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Service owner", Slug = "service-owner", RoleGroup = "Product and delivery roles", Description = "Service owners are accountable for the end-to-end delivery and operation of services.", DisplayOrder = 550, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // Quality assurance testing (QAT) roles
+        new Compass.Models.DdatProfession { Name = "Quality assurance test analyst", Slug = "quality-assurance-test-analyst", RoleGroup = "Quality assurance testing (QAT) roles", Description = "Quality assurance test analysts test software to ensure it meets quality standards.", DisplayOrder = 600, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Test engineer", Slug = "test-engineer", RoleGroup = "Quality assurance testing (QAT) roles", Description = "Test engineers design and implement automated testing solutions.", DisplayOrder = 610, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Test manager", Slug = "test-manager", RoleGroup = "Quality assurance testing (QAT) roles", Description = "Test managers lead testing teams and ensure quality assurance processes are effective.", DisplayOrder = 620, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // Software development roles
+        new Compass.Models.DdatProfession { Name = "Development operations (DevOps) engineer", Slug = "devops-engineer", RoleGroup = "Software development roles", Description = "DevOps engineers bridge development and operations to enable continuous delivery.", DisplayOrder = 700, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Frontend developer", Slug = "frontend-developer", RoleGroup = "Software development roles", Description = "Frontend developers build user-facing interfaces for web applications.", DisplayOrder = 710, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Software developer", Slug = "software-developer", RoleGroup = "Software development roles", Description = "Software developers design, build, test and maintain software systems.", DisplayOrder = 720, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        
+        // User-centred design roles
+        new Compass.Models.DdatProfession { Name = "Accessibility specialist", Slug = "accessibility-specialist", RoleGroup = "User-centred design roles", Description = "Accessibility specialists ensure services are accessible to all users, including those with disabilities.", DisplayOrder = 800, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Content designer", Slug = "content-designer", RoleGroup = "User-centred design roles", Description = "Content designers make sure users get the information they need in a clear and accessible way.", DisplayOrder = 810, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Content strategist", Slug = "content-strategist", RoleGroup = "User-centred design roles", Description = "Content strategists develop content strategies to meet user and business needs.", DisplayOrder = 820, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Graphic designer", Slug = "graphic-designer", RoleGroup = "User-centred design roles", Description = "Graphic designers create visual designs for digital services and products.", DisplayOrder = 830, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Interaction designer", Slug = "interaction-designer", RoleGroup = "User-centred design roles", Description = "Interaction designers design the way users interact with services.", DisplayOrder = 840, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Service designer", Slug = "service-designer", RoleGroup = "User-centred design roles", Description = "Service designers design end-to-end services that meet user needs and business objectives.", DisplayOrder = 850, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "Technical writer", Slug = "technical-writer", RoleGroup = "User-centred design roles", Description = "Technical writers create clear and accessible technical documentation for users and developers.", DisplayOrder = 860, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.DdatProfession { Name = "User researcher", Slug = "user-researcher", RoleGroup = "User-centred design roles", Description = "User researchers help teams understand users' needs, behaviours, and motivations.", DisplayOrder = 870, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
+    };
+
+    context.DdatProfessions.AddRange(professions);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Seeded {professions.Length} DDaT Professions successfully");
+}
+
+static async Task SeedTechnologyCodeOfPracticeAsync(Compass.Data.CompassDbContext context)
+{
+    // Check if Technology Code of Practice points already exist
+    if (await context.TechnologyCodeOfPractice.AnyAsync())
+    {
+        Console.WriteLine("Technology Code of Practice already seeded, skipping...");
+        return;
+    }
+
+    Console.WriteLine("Seeding Technology Code of Practice...");
+
+    var points = new[]
+    {
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 1, Title = "Define user needs", Slug = "define-user-needs", Summary = "Understand your users and their needs. Develop knowledge of your users and what that means for your technology project or programme.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/define-user-needs", DisplayOrder = 1, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 2, Title = "Make things accessible and inclusive", Slug = "make-things-accessible", Summary = "Make sure your technology, infrastructure and systems are accessible and inclusive for all users.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-things-accessible", DisplayOrder = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 3, Title = "Be open and use open source", Slug = "be-open-use-open-source", Summary = "Publish your code and use open source software to improve transparency, flexibility and accountability.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/be-open-and-use-open-source", DisplayOrder = 3, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 4, Title = "Make use of open standards", Slug = "make-use-of-open-standards", Summary = "Build technology that uses open standards to ensure your technology works and communicates with other technology, and can easily be upgraded and expanded.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-use-of-open-standards", DisplayOrder = 4, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 5, Title = "Use cloud first", Slug = "use-cloud-first", Summary = "Consider using public cloud solutions first as stated in the Cloud First policy.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/use-cloud-first", DisplayOrder = 5, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 6, Title = "Make things secure", Slug = "make-things-secure", Summary = "Keep systems and data safe with the appropriate level of security.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-things-secure", DisplayOrder = 6, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 7, Title = "Make privacy integral", Slug = "make-privacy-integral", Summary = "Make sure users rights are protected by integrating privacy as an essential part of your system.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-privacy-integral", DisplayOrder = 7, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 8, Title = "Share, reuse and collaborate", Slug = "share-reuse-collaborate", Summary = "Avoid duplicating effort and unnecessary costs by collaborating across government and sharing and reusing technology, data, and services.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/share-reuse-and-collaborate", DisplayOrder = 8, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 9, Title = "Integrate and adapt technology", Slug = "integrate-adapt-technology", Summary = "Your technology should work with existing technologies, processes and infrastructure in your organisation, and adapt to future demands.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/integrate-and-adapt-technology", DisplayOrder = 9, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 10, Title = "Make better use of data", Slug = "make-better-use-of-data", Summary = "Use data more effectively by improving your technology, infrastructure and processes.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-better-use-of-data", DisplayOrder = 10, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 11, Title = "Define your purchasing strategy", Slug = "define-purchasing-strategy", Summary = "Your purchasing strategy must show you've considered commercial and technology aspects, and contractual limitations.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/define-your-purchasing-strategy", DisplayOrder = 11, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 12, Title = "Make your technology sustainable", Slug = "make-technology-sustainable", Summary = "Increase sustainability throughout the lifecycle of your technology.", GuidanceUrl = "https://www.gov.uk/guidance/the-technology-code-of-practice/make-your-technology-sustainable", DisplayOrder = 12, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+        new Compass.Models.TechnologyCodeOfPractice { PointNumber = 13, Title = "Meet the Service Standard", Slug = "meet-service-standard", Summary = "If you're building a service as part of your technology project or programme you will also need to meet the Service Standard.", GuidanceUrl = "https://www.gov.uk/service-manual/service-standard", DisplayOrder = 13, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
+    };
+
+    context.TechnologyCodeOfPractice.AddRange(points);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Seeded {points.Length} Technology Code of Practice points successfully");
 }
 
 static async Task RunDataMigration(WebApplicationBuilder builder)
