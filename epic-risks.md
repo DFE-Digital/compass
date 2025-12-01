@@ -1,6 +1,0 @@
-- Feature: Create and Manage Risks (full task checklist and acceptance criteria)
-- Feature: Multi-Select Risk Types (full task checklist and acceptance criteria)
-- Feature: Risk Tier Classification (full task checklist and acceptance criteria)
-- Feature: Risk Assessment with Impact and Likelihood (full task checklist and acceptance criteria)
-- Feature: Risk Status Management (full task checklist and acceptance criteria)
-- Feature: Link Risks to Products (full task checklist and acceptance criteria)
