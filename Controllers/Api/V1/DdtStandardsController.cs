@@ -360,8 +360,8 @@ public class DdtStandardsController : ControllerBase
             .Include(s => s.CreatorUser)
             .Include(s => s.Owners).ThenInclude(o => o.User)
             .Include(s => s.Contacts).ThenInclude(c => c.User)
-            .Include(s => s.Categories)
-            .Include(s => s.SubCategories)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
             .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
             .Include(s => s.ValidationRules)
             .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
@@ -426,8 +426,8 @@ public class DdtStandardsController : ControllerBase
             .Include(s => s.CreatorUser)
             .Include(s => s.Owners).ThenInclude(o => o.User)
             .Include(s => s.Contacts).ThenInclude(c => c.User)
-            .Include(s => s.Categories)
-            .Include(s => s.SubCategories)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
             .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
             .Include(s => s.ValidationRules)
             .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
@@ -461,8 +461,8 @@ public class DdtStandardsController : ControllerBase
             .Include(s => s.CreatorUser)
             .Include(s => s.Owners).ThenInclude(o => o.User)
             .Include(s => s.Contacts).ThenInclude(c => c.User)
-            .Include(s => s.Categories)
-            .Include(s => s.SubCategories)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
             .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
             .Include(s => s.ValidationRules)
             .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
@@ -500,8 +500,8 @@ public class DdtStandardsController : ControllerBase
             .Include(s => s.CreatorUser)
             .Include(s => s.Owners).ThenInclude(o => o.User)
             .Include(s => s.Contacts).ThenInclude(c => c.User)
-            .Include(s => s.Categories)
-            .Include(s => s.SubCategories)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
             .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
             .Include(s => s.ValidationRules)
             .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
@@ -576,8 +576,24 @@ public class DdtStandardsController : ControllerBase
                 c.User.Name,
                 c.User.Email
             }).ToList(),
-            Categories = standard.Categories.Select(c => c.Category.Name).ToList(),
-            SubCategories = standard.SubCategories.Select(sc => sc.SubCategory.Name).ToList(),
+            Categories = standard.Categories
+                .Where(c => c.Category != null)
+                .Select(c => new
+                {
+                    Id = c.Category!.Id,
+                    Name = c.Category.Name,
+                    Description = c.Category.Description,
+                    SubCategories = standard.SubCategories
+                        .Where(sc => sc.SubCategory != null && sc.SubCategory.CategoryId == c.Category.Id)
+                        .Select(sc => new
+                        {
+                            Id = sc.SubCategory!.Id,
+                            Name = sc.SubCategory.Name,
+                            Description = sc.SubCategory.Description
+                        })
+                        .ToList()
+                })
+                .ToList(),
             Phases = standard.Phases.Where(p => p.Enabled).Select(p => new
             {
                 p.PhaseLookup.Id,
@@ -1186,6 +1202,43 @@ public class DdtStandardsController : ControllerBase
         // Use the by-stage endpoint logic for consistency
         return await GetStandardsByStage("Published", search, category, creatorId, ownerId, contactId, legalStandard, page, pageSize);
     }
+
+    /// <summary>
+    /// Get a published DDT Standard by ID
+    /// Only returns published standards - requires bearer token authentication
+    /// </summary>
+    [HttpGet]
+    [Route("/api/DdtStandards/{id:int}")]
+    [RequireApiPermission("DdtStandards", "read")]
+    public async Task<IActionResult> GetPublishedStandardByIdPublic(int id)
+    {
+        var standard = await _context.DdtStandards
+            .Include(s => s.CreatorUser)
+            .Include(s => s.Owners).ThenInclude(o => o.User)
+            .Include(s => s.Contacts).ThenInclude(c => c.User)
+            .Include(s => s.Categories).ThenInclude(c => c.Category)
+            .Include(s => s.SubCategories).ThenInclude(sc => sc.SubCategory)
+            .Include(s => s.Phases).ThenInclude(p => p.PhaseLookup)
+            .Include(s => s.ValidationRules)
+            .Include(s => s.Versions).ThenInclude(v => v.CreatedByUser)
+            .Include(s => s.Comments).ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted && s.IsPublished && s.Stage == "Published");
+
+        if (standard == null)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "NOT_FOUND",
+                    message = $"Published standard with ID {id} not found"
+                }
+            });
+        }
+
+        return FormatStandardResponse(standard);
+    }
+
 
     /// <summary>
     /// Get all exemptions (exceptions) for DDT Standards
