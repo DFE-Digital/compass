@@ -17,19 +17,18 @@
     var currentYear = currentDate.Year;
     var currentMonth = currentDate.Month;
     
+    // Calculate previous month (the period we should normally show)
+    var previousMonth = currentMonth == 1 ? 12 : currentMonth - 1;
+    var previousYear = currentMonth == 1 ? currentYear - 1 : currentYear;
+    
     // Calculate current period's due date
     var currentPeriodDueDate = MonthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
     
-    // Calculate next period and its due date
-    var nextMonth = currentMonth == 12 ? 1 : currentMonth + 1;
-    var nextYear = currentMonth == 12 ? currentYear + 1 : currentYear;
-    var nextPeriodDueDate = MonthlyUpdateService.GetMonthlyUpdateDueDate(nextYear, nextMonth);
-    
-    // Check if we're within 10 days of the next period's due date
-    // If so, switch to showing the next period (since current period can still be submitted late)
-    var daysUntilNextPeriodDueDate = (nextPeriodDueDate - currentDate).Days;
-    var applicableYear = daysUntilNextPeriodDueDate <= 10 ? nextYear : currentYear;
-    var applicableMonth = daysUntilNextPeriodDueDate <= 10 ? nextMonth : currentMonth;
+    // Check if we're within 10 days of the current period's due date
+    // If so, switch to showing the current period (since we're approaching the deadline)
+    var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+    var applicableYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : previousYear;
+    var applicableMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : previousMonth;
     var applicableMonthName = new DateTime(applicableYear, applicableMonth, 1).ToString("MMMM");
     var updateStatusHeader = $"{applicableMonthName} update";
 }
