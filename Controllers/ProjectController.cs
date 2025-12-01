@@ -400,8 +400,21 @@ namespace Compass.Controllers
 
             // Calculate monthly update counts for user's projects
             var now = DateTime.UtcNow;
-            var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-            var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+            var reportYear = now.Year;
+            var reportMonth = now.Month;
+            
+            // Calculate previous month (the period we should normally show)
+            var previousMonth = reportMonth == 1 ? 12 : reportMonth - 1;
+            var previousYear = reportMonth == 1 ? reportYear - 1 : reportYear;
+            
+            // Calculate current period's due date
+            var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+            
+            // Check if we're within 10 days of the current period's due date
+            // If so, switch to showing the current period (since we're approaching the deadline)
+            var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - now).Days;
+            var currentYear = daysUntilCurrentPeriodDueDate <= 10 ? reportYear : previousYear;
+            var currentMonth = daysUntilCurrentPeriodDueDate <= 10 ? reportMonth : previousMonth;
             
             var dueCount = 0;
             var lateCount = 0;
