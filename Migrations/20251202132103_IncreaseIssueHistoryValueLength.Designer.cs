@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251202132103_IncreaseIssueHistoryValueLength")]
+    partial class IncreaseIssueHistoryValueLength
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -8548,72 +8551,6 @@ namespace Compass.Migrations
                     b.ToTable("StatementTemplates");
                 });
 
-            modelBuilder.Entity("Compass.Models.StatementVerificationRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AdminNotes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CompletedBy")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("EmailSentAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("EmailSentToAdmin")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailSentToRequestor")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("IsCompleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ProductAccessibilityId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RequestNotes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RequestedBy")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("RequestorEmail")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool?>("VerificationResult")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductAccessibilityId");
-
-                    b.ToTable("StatementVerificationRequests");
-                });
-
             modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
                 {
                     b.Property<Guid>("SurveyInstanceId")
@@ -11346,17 +11283,6 @@ namespace Compass.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("Compass.Models.StatementVerificationRequest", b =>
-                {
-                    b.HasOne("Compass.Models.ProductAccessibility", "ProductAccessibility")
-                        .WithMany("VerificationRequests")
-                        .HasForeignKey("ProductAccessibilityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ProductAccessibility");
-                });
-
             modelBuilder.Entity("Compass.Models.SurveyInstance", b =>
                 {
                     b.HasOne("Compass.Models.FipsService", "Service")
@@ -11748,8 +11674,6 @@ namespace Compass.Migrations
                     b.Navigation("ContactMethods");
 
                     b.Navigation("Issues");
-
-                    b.Navigation("VerificationRequests");
                 });
 
             modelBuilder.Entity("Compass.Models.ProductReturn", b =>

@@ -1,0 +1,64 @@
+@model Compass.Models.ProductDto
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
+    var fipsProductUrl = !string.IsNullOrWhiteSpace(Model?.FipsId) 
+        ? $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}" 
+        : null;
+}
+
+@if (Model == null)
+{
+    <div class="card project-summary-card mb-4">
+        <div class="card-body">
+            <p class="mb-0 text-muted">Product details are not available.</p>
+        </div>
+    </div>
+}
+else
+{
+    var primaryContact = Model.ProductContacts?.FirstOrDefault(pc => !string.IsNullOrWhiteSpace(pc.ContactEmail) || !string.IsNullOrWhiteSpace(pc.ContactName) || pc.UsersPermissionsUser != null);
+
+    <div class="card project-summary-card mb-4">
+        <div class="card-header">
+            <h3 class="card-title mb-0">Product overview</h3>
+        </div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush project-summary-list">
+                <li class="list-group-item">
+                    <small class="text-muted d-block">Title</small>
+                    <a asp-controller="Accessibility"
+                       asp-action="Details"
+                       asp-route-fipsId="@Model.FipsId"
+                       class="font-weight-semibold">@Model.Title</a>
+                </li>
+                <li class="list-group-item">
+                    <small class="text-muted d-block">FIPS ID</small>
+                    <span class="font-weight-medium">@Model.FipsId</span>
+                    @if (!string.IsNullOrWhiteSpace(fipsProductUrl))
+                    {
+                        <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer" class="ml-2">
+                            View in FIPS
+                        </a>
+                    }
+                </li>
+                @if (!string.IsNullOrWhiteSpace(Model.Phase))
+                {
+                    <li class="list-group-item">
+                        <small class="text-muted d-block">Phase</small>
+                        <span>@Model.Phase</span>
+                    </li>
+                }
+                @if (primaryContact != null)
+                {
+                    <li class="list-group-item">
+                        <small class="text-muted d-block">Primary contact</small>
+                        <div>@(primaryContact.ContactName ?? primaryContact.LegacyName ?? primaryContact.UsersPermissionsUser?.Username ?? "Not set")</div>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
