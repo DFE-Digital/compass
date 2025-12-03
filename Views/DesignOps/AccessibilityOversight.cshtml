@@ -19,6 +19,9 @@
     var retestRequests = ViewBag.RetestRequests as List<Compass.Models.AccessibilityRetestRequest> ?? new List<Compass.Models.AccessibilityRetestRequest>();
     var retestRequestsCount = ViewBag.RetestRequestsCount as int? ?? 0;
     
+    var verificationRequests = ViewBag.VerificationRequests as List<Compass.Models.StatementVerificationRequest> ?? new List<Compass.Models.StatementVerificationRequest>();
+    var verificationRequestsCount = ViewBag.VerificationRequestsCount as int? ?? 0;
+    
     var issuesWithUpcomingDueDates = ViewBag.IssuesWithUpcomingDueDates as List<Compass.Models.AccessibilityIssue> ?? new List<Compass.Models.AccessibilityIssue>();
     var issuesWithUpcomingDueDatesCount = ViewBag.IssuesWithUpcomingDueDatesCount as int? ?? 0;
     
@@ -141,6 +144,11 @@
                     <div class="dashboard-card-value">@retestRequestsCount</div>
                     <div class="dashboard-card-label">Issue Retest Requests</div>
                     <div class="dashboard-card-icon"><i class="fas fa-redo"></i></div>
+                </a>
+                <a href="@Url.Action("VerificationRequests", "DesignOps")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit; display: block;">
+                    <div class="dashboard-card-value">@verificationRequestsCount</div>
+                    <div class="dashboard-card-label">Verification Requests</div>
+                    <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
                 </a>
                 <a href="@Url.Action("OpenIssues", "DesignOps")" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit; display: block;">
                     <div class="dashboard-card-value">@totalOpenIssues</div>
@@ -274,6 +282,51 @@
                                         <td>
                                             <a href="@Url.Action("Details", "Accessibility", new { fipsId = request.AccessibilityIssue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-sm btn-primary">
                                                 <i class="fas fa-eye"></i> View
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Verification Requests -->
+        @if (verificationRequests.Any())
+        {
+            <div class="dashboard-section mb-4">
+                <div class="dashboard-section-header">
+                    <h2><i class="fas fa-check-circle"></i> Verification Requests</h2>
+                    <p class="dashboard-section-description">Pending statement verification requests requiring action</p>
+                </div>
+                <div class="card">
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Requested By</th>
+                                    <th>Requested Date</th>
+                                    <th>Statement URL</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var request in verificationRequests.Take(20))
+                                {
+                                    var statementUrl = $"https://accessibility-statements.education.gov.uk/s/{request.ProductAccessibility.FipsId}";
+                                    <tr>
+                                        <td><strong>@request.ProductAccessibility.ProductName</strong><br><small class="text-muted">@request.ProductAccessibility.FipsId</small></td>
+                                        <td>@request.RequestedBy</td>
+                                        <td>@request.RequestedAt.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            <a href="@statementUrl" target="_blank" rel="noopener noreferrer">@statementUrl</a>
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("VerificationRequests", "DesignOps")" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-check"></i> Verify
                                             </a>
                                         </td>
                                     </tr>
@@ -436,7 +489,7 @@
                                 {
                                     var riskBadgeClass = area.RiskLevel == "high" ? "badge-danger" : 
                                                         area.RiskLevel == "medium" ? "badge-warning" : "badge-success";
-                                    <tr class="@(area.RiskLevel == "high" ? "table-danger" : area.RiskLevel == "medium" ? "table-warning" : "")">
+                                    <tr>
                                         <td><strong>@area.BusinessArea</strong></td>
                                         <td>@area.TotalProducts</td>
                                         <td>@area.EnrolledProducts</td>

@@ -98,6 +98,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<WcagCriterion> WcagCriteria { get; set; }
     public DbSet<IssueWcagCriterion> IssueWcagCriteria { get; set; }
     public DbSet<AccessibilityRetestRequest> AccessibilityRetestRequests { get; set; }
+    public DbSet<StatementVerificationRequest> StatementVerificationRequests { get; set; }
     public DbSet<AccessibilityEmailConfiguration> AccessibilityEmailConfigurations { get; set; }
     public DbSet<StatementTemplate> StatementTemplates { get; set; }
     
@@ -1387,6 +1388,20 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiRequestLog>()
             .HasIndex(arl => arl.IsSuccess);
+
+        // AccessibilityIssue configuration
+        modelBuilder.Entity<AccessibilityIssue>()
+            .Property(ai => ai.IssueDescription)
+            .HasColumnType("nvarchar(max)");
+
+        // IssueHistory configuration - allow unlimited length for OldValue and NewValue
+        modelBuilder.Entity<IssueHistory>()
+            .Property(ih => ih.OldValue)
+            .HasColumnType("nvarchar(max)");
+
+        modelBuilder.Entity<IssueHistory>()
+            .Property(ih => ih.NewValue)
+            .HasColumnType("nvarchar(max)");
 
         // Accessibility retest request configuration
         modelBuilder.Entity<AccessibilityRetestRequest>()

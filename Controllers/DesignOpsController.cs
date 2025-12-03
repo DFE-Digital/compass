@@ -37,6 +37,10 @@ public class DesignOpsController : Controller
             var pendingRetestCount = await _context.AccessibilityRetestRequests
                 .CountAsync(rr => rr.IsCompleted == null);
             
+            // Get pending verification requests count
+            var pendingVerificationCount = await _context.StatementVerificationRequests
+                .CountAsync(vr => vr.IsCompleted == null);
+            
             // Get all enrolled products with issues
             var enrolledProducts = await _context.ProductAccessibilities
                 .Include(pa => pa.Issues.Where(i => !i.IsDeleted))
@@ -56,6 +60,7 @@ public class DesignOpsController : Controller
                 : 0;
             
             ViewBag.PendingRetestCount = pendingRetestCount;
+            ViewBag.PendingVerificationCount = pendingVerificationCount;
             ViewBag.OpenIssuesCount = openIssuesCount;
             ViewBag.EnrolledProductsCount = enrolledProductsCount;
             ViewBag.TotalProducts = totalProducts;
@@ -129,6 +134,13 @@ public class DesignOpsController : Controller
                     .ThenInclude(i => i.ProductAccessibility)
                 .Where(rr => !rr.IsCompleted.HasValue)
                 .OrderBy(rr => rr.RequestedAt)
+                .ToListAsync();
+            
+            // Verification requests
+            var verificationRequests = await _context.StatementVerificationRequests
+                .Include(vr => vr.ProductAccessibility)
+                .Where(vr => !vr.IsCompleted.HasValue)
+                .OrderBy(vr => vr.RequestedAt)
                 .ToListAsync();
             
             // Issues with upcoming due dates (next 30 days)
@@ -252,6 +264,9 @@ public class DesignOpsController : Controller
             ViewBag.RetestRequests = retestRequests;
             ViewBag.RetestRequestsCount = retestRequests.Count;
             
+            ViewBag.VerificationRequests = verificationRequests;
+            ViewBag.VerificationRequestsCount = verificationRequests.Count;
+            
             ViewBag.IssuesWithUpcomingDueDates = issuesWithUpcomingDueDates;
             ViewBag.IssuesWithUpcomingDueDatesCount = issuesWithUpcomingDueDates.Count;
             
@@ -335,6 +350,54 @@ public class DesignOpsController : Controller
         }
     }
 
+    // GET: DesignOps/AccessibilityOversight/VerificationRequests
+    public async Task<IActionResult> VerificationRequests()
+    {
+        try
+        {
+            ViewData["Title"] = "Statement Verification Requests - Oversight";
+            
+            var verificationRequests = await _context.StatementVerificationRequests
+                .Include(vr => vr.ProductAccessibility)
+                .Where(vr => !vr.IsCompleted.HasValue)
+                .OrderBy(vr => vr.RequestedAt)
+                .ToListAsync();
+            
+            // Fetch product URLs from CMS
+            var productUrls = new Dictionary<string, string>();
+            foreach (var request in verificationRequests)
+            {
+                if (!string.IsNullOrEmpty(request.ProductAccessibility.FipsId))
+                {
+                    try
+                    {
+                        var product = await _productsApiService.GetProductByFipsIdAsync(request.ProductAccessibility.FipsId);
+                        if (product != null && !string.IsNullOrEmpty(product.ProductUrl))
+                        {
+                            productUrls[request.ProductAccessibility.FipsId] = product.ProductUrl;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error fetching product URL for {FipsId}", request.ProductAccessibility.FipsId);
+                    }
+                }
+            }
+            
+            ViewBag.VerificationRequests = verificationRequests;
+            ViewBag.VerificationRequestsCount = verificationRequests.Count;
+            ViewBag.ProductUrls = productUrls;
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading Verification Requests");
+            TempData["ErrorMessage"] = "An error occurred while loading verification requests. Please try again.";
+            return View();
+        }
+    }
+
     // GET: DesignOps/AccessibilityOversight/ValidatedStatements
     public async Task<IActionResult> ValidatedStatements()
     {
@@ -357,6 +420,113 @@ public class DesignOpsController : Controller
             _logger.LogError(ex, "Error loading Validated Statements");
             TempData["ErrorMessage"] = "An error occurred while loading validated statements. Please try again.";
             return View();
+        }
+    }
+
+    // POST: DesignOps/VerifyStatement
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> VerifyStatement(int requestId, string? adminNotes)
+    {
+        try
+        {
+            var request = await _context.StatementVerificationRequests
+                .Include(vr => vr.ProductAccessibility)
+                .FirstOrDefaultAsync(vr => vr.Id == requestId);
+
+            if (request == null)
+            {
+                TempData["ErrorMessage"] = "Verification request not found.";
+                return RedirectToAction(nameof(VerificationRequests));
+            }
+
+            // Mark request as completed and verified
+            request.IsCompleted = true;
+            request.VerificationResult = true;
+            request.AdminNotes = adminNotes;
+            request.CompletedBy = User.Identity?.Name;
+            request.CompletedAt = DateTime.UtcNow;
+            request.UpdatedAt = DateTime.UtcNow;
+
+            // Update ProductAccessibility
+            var productAccessibility = request.ProductAccessibility;
+            productAccessibility.StatementInstalled = true;
+            productAccessibility.VerifiedBy = User.Identity?.Name;
+            productAccessibility.VerifiedAt = DateTime.UtcNow;
+            productAccessibility.StatementVerificationMethod = "Manual";
+            productAccessibility.UpdatedAt = DateTime.UtcNow;
+            productAccessibility.UpdatedBy = User.Identity?.Name;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Statement installation verified for {productAccessibility.ProductName}.";
+            return RedirectToAction(nameof(VerificationRequests));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error verifying statement for request {RequestId}", requestId);
+            TempData["ErrorMessage"] = "An error occurred while verifying the statement. Please try again.";
+            return RedirectToAction(nameof(VerificationRequests));
+        }
+    }
+
+    // POST: DesignOps/RejectVerification
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectVerification(int requestId, string adminNotes, bool requestAgain = false)
+    {
+        try
+        {
+            var request = await _context.StatementVerificationRequests
+                .Include(vr => vr.ProductAccessibility)
+                .FirstOrDefaultAsync(vr => vr.Id == requestId);
+
+            if (request == null)
+            {
+                TempData["ErrorMessage"] = "Verification request not found.";
+                return RedirectToAction(nameof(VerificationRequests));
+            }
+
+            // Mark request as completed but not verified
+            request.IsCompleted = true;
+            request.VerificationResult = false;
+            request.AdminNotes = adminNotes;
+            request.CompletedBy = User.Identity?.Name;
+            request.CompletedAt = DateTime.UtcNow;
+            request.UpdatedAt = DateTime.UtcNow;
+
+            // If requesting again, create a new verification request
+            if (requestAgain)
+            {
+                var newRequest = new StatementVerificationRequest
+                {
+                    ProductAccessibilityId = request.ProductAccessibilityId,
+                    RequestedBy = request.RequestedBy,
+                    RequestorEmail = request.RequestorEmail,
+                    RequestedAt = DateTime.UtcNow,
+                    RequestNotes = $"Re-requested after rejection. Previous admin notes: {adminNotes}",
+                    IsCompleted = null,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.StatementVerificationRequests.Add(newRequest);
+            }
+
+            await _context.SaveChangesAsync();
+
+            var message = requestAgain 
+                ? $"Verification rejected and new request created for {request.ProductAccessibility.ProductName}."
+                : $"Verification rejected for {request.ProductAccessibility.ProductName}.";
+
+            TempData["SuccessMessage"] = message;
+            return RedirectToAction(nameof(VerificationRequests));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rejecting verification for request {RequestId}", requestId);
+            TempData["ErrorMessage"] = "An error occurred while rejecting the verification. Please try again.";
+            return RedirectToAction(nameof(VerificationRequests));
         }
     }
 
