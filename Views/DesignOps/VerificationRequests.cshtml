@@ -1,0 +1,220 @@
+@{
+    ViewData["Title"] = "Statement Verification Requests - Oversight";
+    
+    var verificationRequests = ViewBag.VerificationRequests as List<Compass.Models.StatementVerificationRequest> ?? new List<Compass.Models.StatementVerificationRequest>();
+    var verificationRequestsCount = ViewBag.VerificationRequestsCount as int? ?? 0;
+    var productUrls = ViewBag.ProductUrls as Dictionary<string, string> ?? new Dictionary<string, string>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Dashboard", "DesignOps")" style="color: #005ea5; text-decoration: none;">Design Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("AccessibilityOversight", "DesignOps")" style="color: #005ea5; text-decoration: none;">Accessibility Issues and Statements</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Verification Requests</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <h1>Statement Verification Requests</h1>
+    <p>Pending verification requests requiring action</p>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="dashboard-section mb-4">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-check-circle"></i> Pending Verification Requests</h2>
+                <p class="dashboard-section-description">Total: @verificationRequestsCount requests</p>
+            </div>
+            @if (verificationRequests.Any())
+            {
+                <div class="card">
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Installed Location</th>
+                                    <th>Statement URL</th>
+                                    <th>Requested By</th>
+                                    <th>Requested Date</th>
+                                    <th>Request Notes</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var request in verificationRequests)
+                                {
+                                    var statementUrl = $"https://accessibility-statements.education.gov.uk/s/{request.ProductAccessibility.FipsId}";
+                                    string? productUrl = null;
+                                    if (productUrls.ContainsKey(request.ProductAccessibility.FipsId))
+                                    {
+                                        productUrl = productUrls[request.ProductAccessibility.FipsId];
+                                    }
+                                    <tr>
+                                        <td>
+                                            <strong>@request.ProductAccessibility.ProductName</strong><br>
+                                            <small class="text-muted">@request.ProductAccessibility.FipsId</small>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(productUrl))
+                                            {
+                                                <a href="@productUrl" target="_blank" rel="noopener noreferrer">@productUrl</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a href="@statementUrl" target="_blank" rel="noopener noreferrer">@statementUrl</a>
+                                        </td>
+                                        <td>
+                                            @request.RequestedBy
+                                            @if (!string.IsNullOrEmpty(request.RequestorEmail))
+                                            {
+                                                <br><small class="text-muted">@request.RequestorEmail</small>
+                                            }
+                                        </td>
+                                        <td>@request.RequestedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(request.RequestNotes))
+                                            {
+                                                <text>@(request.RequestNotes.Length > 100 ? request.RequestNotes.Substring(0, 100) + "..." : request.RequestNotes)</text>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    Actions
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-right">
+                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#verifyModal_@request.Id">
+                                                        <i class="fas fa-check"></i> Statement installation verified (manually)
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#notVerifiedModal_@request.Id">
+                                                        <i class="fas fa-times"></i> Statement not verified
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <p class="text-muted mb-0">No pending verification requests.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@* Modals for verification actions *@
+@foreach (var request in verificationRequests)
+{
+    <!-- Verify Modal -->
+    <div class="modal fade" id="verifyModal_@request.Id" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Verify Statement Installation</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form method="post" action="@Url.Action("VerifyStatement", "DesignOps")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="requestId" value="@request.Id" />
+                    <div class="modal-body">
+                        <p>Are you sure you want to mark this statement installation as verified?</p>
+                        <p><strong>Product:</strong> @request.ProductAccessibility.ProductName (@request.ProductAccessibility.FipsId)</p>
+                        <div class="form-group">
+                            <label for="adminNotes_@request.Id">Admin Notes (optional):</label>
+                            <textarea class="form-control" id="adminNotes_@request.Id" name="adminNotes" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Verify Installation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Not Verified Modal -->
+    <div class="modal fade" id="notVerifiedModal_@request.Id" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Statement Not Verified</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form method="post" action="@Url.Action("RejectVerification", "DesignOps")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="requestId" value="@request.Id" />
+                    <div class="modal-body">
+                        <p>Provide feedback to the requestor and request verification again.</p>
+                        <p><strong>Product:</strong> @request.ProductAccessibility.ProductName (@request.ProductAccessibility.FipsId)</p>
+                        <div class="form-group">
+                            <label for="adminNotes_reject_@request.Id">Comments for Requestor <span class="text-danger">*</span>:</label>
+                            <textarea class="form-control" id="adminNotes_reject_@request.Id" name="adminNotes" rows="4" required></textarea>
+                            <small class="form-text text-muted">These comments will be sent to the requestor.</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="requestAgain_@request.Id" name="requestAgain" value="true" checked>
+                            <label class="form-check-label" for="requestAgain_@request.Id">
+                                Request verification again
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning">Send to Requestor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
