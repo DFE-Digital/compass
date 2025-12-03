@@ -321,78 +321,114 @@
                     </div>
                 </div>
 
+                <!-- Add Milestone Update -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Add Update</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-controller="Milestone" asp-action="AddUpdate" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="milestoneId" value="@Model.Id" />
+                            
+                            <div class="form-group">
+                                <label for="updateDetails">Update Details <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="updateDetails" name="updateDetails" rows="4" required placeholder="Enter update details..."></textarea>
+                                <small class="form-text text-muted">Describe the progress or changes made to this milestone.</small>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="newStatus">Status (Optional)</label>
+                                        <select class="form-control" id="newStatus" name="newStatus">
+                                            <option value="">Keep current status</option>
+                                            <option value="not_started">Not Started</option>
+                                            <option value="planned">Planned</option>
+                                            <option value="in_progress">In Progress</option>
+                                            <option value="at_risk">At Risk</option>
+                                            <option value="complete">Complete</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                        <small class="form-text text-muted">Optionally update the milestone status.</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="newProgress">Progress % (Optional)</label>
+                                        <input type="number" class="form-control" id="newProgress" name="newProgress" min="0" max="100" placeholder="0-100">
+                                        <small class="form-text text-muted">Optionally update the milestone progress percentage.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add Update
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
 
-                <!-- Milestone Updates History -->
+                <!-- Milestone Updates List -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title mb-0">Milestone updates history</h3>
+                        <h3 class="card-title mb-0">Updates</h3>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        @if (Model.MilestoneUpdates.Any())
+                    <div class="card-body">
+                        @{
+                            var updates = Model.MilestoneUpdates?.OrderByDescending(u => u.UpdatedAt).ToList() ?? new List<MilestoneUpdate>();
+                        }
+                        @if (updates.Any())
                         {
-                            <table class="table table-hover milestone-updates-table">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Update Details</th>
-                                        <th>Status Change</th>
-                                        <th>Progress Change</th>
-                                        <th>Updated By</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var update in Model.MilestoneUpdates.OrderByDescending(u => u.UpdatedAt))
-                                    {
-                                        <tr>
-                                            <td>
-                                                <strong>@update.UpdatedAt.ToString("dd MMM yyyy")</strong>
-                                                <br><small class="text-muted">@update.UpdatedAt.ToString("HH:mm")</small>
-                                            </td>
-                                            <td>@update.UpdateDetails</td>
-                                            <td>
+                            <div class="list-group">
+                                @foreach (var update in updates)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">@update.UpdateDetails</h6>
+                                                <small class="text-muted">
+                                                    @update.UpdatedAt.ToString("dd MMMM yyyy 'at' HH:mm")
+                                                    @if (!string.IsNullOrEmpty(update.UpdatedByName) || !string.IsNullOrEmpty(update.UpdatedByEmail))
+                                                    {
+                                                        <span> by </span>
+                                                        <strong>@(!string.IsNullOrEmpty(update.UpdatedByName) ? update.UpdatedByName : update.UpdatedByEmail)</strong>
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
+                                        @if ((!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus)) || 
+                                             (update.PreviousProgress.HasValue && update.NewProgress.HasValue))
+                                        {
+                                            <div class="mt-2">
                                                 @if (!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus))
                                                 {
-                                                    <span class="badge badge-secondary">@update.PreviousStatus.Replace("_", " ")</span>
-                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <span class="badge badge-secondary mr-1">@update.PreviousStatus.Replace("_", " ")</span>
+                                                    <i class="fas fa-arrow-right mx-1 text-muted"></i>
                                                     <span class="badge badge-@(update.NewStatus == "complete" ? "success" : update.NewStatus == "at_risk" ? "warning" : update.NewStatus == "in_progress" ? "info" : "secondary")">@update.NewStatus.Replace("_", " ")</span>
                                                 }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td>
                                                 @if (update.PreviousProgress.HasValue && update.NewProgress.HasValue)
                                                 {
+                                                    @if (!string.IsNullOrEmpty(update.PreviousStatus) && !string.IsNullOrEmpty(update.NewStatus))
+                                                    {
+                                                        <span class="mx-2">|</span>
+                                                    }
+                                                    <span class="text-muted">Progress: </span>
                                                     <span>@update.PreviousProgress%</span>
-                                                    <i class="fas fa-arrow-right mx-1"></i>
+                                                    <i class="fas fa-arrow-right mx-1 text-muted"></i>
                                                     <span class="font-weight-bold">@update.NewProgress%</span>
                                                 }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(update.UpdatedByName))
-                                                {
-                                                    @update.UpdatedByName
-                                                }
-                                                else
-                                                {
-                                                    @update.UpdatedByEmail
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         }
                         else
                         {
-                            <div class="p-4">
-                                <p class="text-muted mb-0">No updates recorded.</p>
-                            </div>
+                            <p class="text-muted mb-0">No updates have been added yet. Use the form above to add the first update.</p>
                         }
                     </div>
                 </div>
