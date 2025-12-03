@@ -47,6 +47,9 @@ namespace Compass.Models
         public int? LegacyId { get; set; } // Legacy product ID from old accessibility issues and statement service
         
         // Navigation properties
+        public ICollection<StatementVerificationRequest> VerificationRequests { get; set; } = new List<StatementVerificationRequest>();
+        
+        // Navigation properties
         public ICollection<ContactMethod> ContactMethods { get; set; } = new List<ContactMethod>();
         public ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
         public ICollection<AccessibilityIssue> Issues { get; set; } = new List<AccessibilityIssue>();
