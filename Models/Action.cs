@@ -32,6 +32,9 @@ public class Action
     [MaxLength(50)]
     public string? FipsId { get; set; }
 
+    [MaxLength(100)]
+    public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
+
     [Required]
     [MaxLength(200)]
     public string Title { get; set; } = string.Empty;
