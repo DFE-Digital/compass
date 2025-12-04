@@ -1,0 +1,154 @@
+@model IEnumerable<Compass.Models.Project>
+@{
+    var year = ViewBag.Year as int? ?? 0;
+    var month = ViewBag.Month as int? ?? 0;
+    var status = ViewBag.Status as string ?? "";
+    var monthName = ViewBag.MonthName as string ?? "";
+    var filteredProjects = Model?.ToList() ?? new List<Compass.Models.Project>();
+}
+
+<div class="card mt-3" id="monthlyUpdateStatusProjectsCard">
+    <div class="card-header">
+        <h3 class="card-title">Projects - @status (@filteredProjects.Count) - @monthName</h3>
+        <button type="button" class="btn btn-sm btn-secondary float-right" onclick="closeMonthlyUpdateStatusProjects()">
+            <i class="fas fa-times"></i> Close
+        </button>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover mb-0 sortable-table">
+            <thead>
+                <tr>
+                    <th style="width: 250px;" class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
+                    <th style="width: 100px;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
+                    <th style="width: 120px;" class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
+                    <th style="width: 150px;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
+                    <th style="width: 150px;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
+                    <th style="width: 200px;" class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner">Service Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (filteredProjects != null && filteredProjects.Any())
+                {
+                    @foreach (var project in filteredProjects)
+                    {
+                        <tr>
+                            <td>
+                                <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: bold; color: #005ea5; text-decoration: none;">@project.Title</a>
+                                <br />
+                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                            </td>
+                            <td>
+                                @if (project.DeliveryPriority != null && !string.IsNullOrEmpty(project.DeliveryPriority.Name))
+                                {
+                                    var priorityClass = project.DeliveryPriority.Name.ToLower() switch {
+                                        var p when p.Contains("critical") => "badge-danger",
+                                        var p when p.Contains("high") => "badge-danger",
+                                        var p when p.Contains("medium") => "badge-warning",
+                                        var p when p.Contains("low") => "badge-secondary",
+                                        _ => "badge-secondary"
+                                    };
+                                    <span class="badge @priorityClass">@project.DeliveryPriority.Name</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(project.RagStatus))
+                                {
+                                    var normalized = project.RagStatus.Trim()
+                                        .Replace(" / ", "-")
+                                        .Replace("/", "-")
+                                        .Replace(" /", "-")
+                                        .Replace("/ ", "-");
+                                    
+                                    // Capitalize first letter of each word for consistency
+                                    var parts = normalized.Split('-');
+                                    for (int i = 0; i < parts.Length; i++)
+                                    {
+                                        if (parts[i].Length > 0)
+                                        {
+                                            parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+                                        }
+                                    }
+                                    var displayRagStatus = string.Join("-", parts);
+                                    
+                                    var ragClass = displayRagStatus switch {
+                                        "Red" => "badge badge-red",
+                                        "Amber-Red" => "badge badge-amber-red",
+                                        "Amber" => "badge badge-amber",
+                                        "Amber-Green" => "badge badge-amber-green",
+                                        "Green" => "badge badge-green",
+                                        _ => "badge badge-secondary"
+                                    };
+                                    <span class="@ragClass">@displayRagStatus</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                            <td>
+                                @if (project.PrimaryContactUser != null)
+                                {
+                                    @project.PrimaryContactUser.Name
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                {
+                                    var serviceOwners = project.ServiceOwners.Where(so => so.User != null).Take(2).ToList();
+                                    @foreach (var so in serviceOwners)
+                                    {
+                                        <div>@so.User.Name</div>
+                                    }
+                                    @if (project.ServiceOwners.Count > 2)
+                                    {
+                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">No projects found with this status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+    function closeMonthlyUpdateStatusProjects() {
+        var card = document.getElementById('monthlyUpdateStatusProjectsCard');
+        if (card) {
+            card.remove();
+        }
+    }
+    
+    // Initialize sortable table when this partial is loaded
+    // Use setTimeout to ensure DOM is fully updated
+    setTimeout(function() {
+        if (typeof initializeSortableTable === 'function') {
+            var table = $('#monthlyUpdateStatusProjectsCard').find('.sortable-table');
+            if (table.length > 0) {
+                initializeSortableTable(table);
+            }
+        }
+    }, 50);
+</script>
+

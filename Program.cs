@@ -130,6 +130,16 @@ if (args.Length > 0 && args[0] == "--migrate-data")
     return;
 }
 
+// Check for populate product document IDs command
+if (args.Length > 0 && args[0] == "--populate-product-document-ids")
+{
+    var environment = args.Length > 1 && args[1] == "--environment" && args.Length > 2 
+        ? args[2] 
+        : "Development";
+    await Compass.PopulateProductDocumentId.RunAsync(environment);
+    return;
+}
+
 // Check for Azure SQL → Azure SQL environment migration
 if (args.Length > 0 && args[0] == "--migrate-sql")
 {

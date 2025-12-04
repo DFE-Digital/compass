@@ -665,9 +665,13 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         // Configure ProductReturn
+        // Note: Index is non-unique initially to allow NULLs during migration
+        // Will be made unique after data migration populates DocumentIds
         modelBuilder.Entity<ProductReturn>()
-            .HasIndex(pr => new { pr.FipsId, pr.Year, pr.Month })
-            .IsUnique();
+            .HasIndex(pr => new { pr.ProductDocumentId, pr.Year, pr.Month });
+
+        modelBuilder.Entity<ProductReturn>()
+            .HasIndex(pr => pr.FipsId);
 
         modelBuilder.Entity<ProductReturn>()
             .HasMany(pr => pr.MetricValues)
@@ -702,6 +706,11 @@ public partial class CompassDbContext : DbContext
             .HasIndex(prbac => prbac.IsActive);
 
         // Configure PerformanceReportingProductExclusion
+        // Note: Index is non-unique initially to allow NULLs during migration
+        // Will be made unique after data migration populates DocumentIds
+        modelBuilder.Entity<PerformanceReportingProductExclusion>()
+            .HasIndex(prpe => prpe.ProductDocumentId);
+
         modelBuilder.Entity<PerformanceReportingProductExclusion>()
             .HasIndex(prpe => prpe.FipsId);
 
@@ -709,7 +718,7 @@ public partial class CompassDbContext : DbContext
             .HasIndex(prpe => prpe.IsActive);
 
         modelBuilder.Entity<PerformanceReportingProductExclusion>()
-            .HasIndex(prpe => new { prpe.FipsId, prpe.IsActive });
+            .HasIndex(prpe => new { prpe.ProductDocumentId, prpe.IsActive });
 
         // Configure PerformanceReportingPeriodExclusion
         modelBuilder.Entity<PerformanceReportingPeriodExclusion>()
@@ -806,6 +815,9 @@ public partial class CompassDbContext : DbContext
             .HasIndex(r => r.FipsId);
 
         modelBuilder.Entity<Risk>()
+            .HasIndex(r => r.ProductDocumentId);
+
+        modelBuilder.Entity<Risk>()
             .HasIndex(r => r.Status);
 
         modelBuilder.Entity<Risk>()
@@ -829,6 +841,9 @@ public partial class CompassDbContext : DbContext
             .HasIndex(i => i.FipsId);
 
         modelBuilder.Entity<Issue>()
+            .HasIndex(i => i.ProductDocumentId);
+
+        modelBuilder.Entity<Issue>()
             .HasIndex(i => i.Status);
 
         modelBuilder.Entity<Issue>()
@@ -849,6 +864,9 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Milestone>()
             .HasIndex(m => m.FipsId);
+
+        modelBuilder.Entity<Milestone>()
+            .HasIndex(m => m.ProductDocumentId);
 
         modelBuilder.Entity<Milestone>()
             .HasIndex(m => m.Status);
@@ -892,6 +910,10 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Kpi>()
             .Property(k => k.EntityType)
             .HasMaxLength(20);
+
+        modelBuilder.Entity<Kpi>()
+            .Property(k => k.ProductDocumentId)
+            .HasMaxLength(100);
 
         modelBuilder.Entity<Kpi>()
             .Property(k => k.ProductFipsId)
@@ -938,6 +960,9 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Kpi>()
             .HasIndex(k => k.Active);
+
+        modelBuilder.Entity<Kpi>()
+            .HasIndex(k => k.ProductDocumentId);
 
         modelBuilder.Entity<Kpi>()
             .Property(k => k.TargetValue)
@@ -1031,6 +1056,9 @@ public partial class CompassDbContext : DbContext
             .HasIndex(a => a.FipsId);
 
         modelBuilder.Entity<Models.Action>()
+            .HasIndex(a => a.ProductDocumentId);
+
+        modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.AssignedToEmail);
 
         modelBuilder.Entity<Models.Action>()
@@ -1075,6 +1103,9 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Decision>()
             .HasIndex(d => d.FipsId);
+
+        modelBuilder.Entity<Decision>()
+            .HasIndex(d => d.ProductDocumentId);
 
         modelBuilder.Entity<Decision>()
             .HasIndex(d => d.Status);
@@ -1388,6 +1419,15 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiRequestLog>()
             .HasIndex(arl => arl.IsSuccess);
+
+        // ProductAccessibility configuration
+        // Note: Index is non-unique initially to allow NULLs during migration
+        // Will be made unique after data migration populates DocumentIds
+        modelBuilder.Entity<ProductAccessibility>()
+            .HasIndex(pa => pa.ProductDocumentId);
+
+        modelBuilder.Entity<ProductAccessibility>()
+            .HasIndex(pa => pa.FipsId);
 
         // AccessibilityIssue configuration
         modelBuilder.Entity<AccessibilityIssue>()
@@ -1879,6 +1919,9 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectProduct>()
             .HasIndex(pp => pp.ProjectId);
+
+        modelBuilder.Entity<ProjectProduct>()
+            .HasIndex(pp => pp.ProductDocumentId);
 
         modelBuilder.Entity<ProjectProduct>()
             .HasIndex(pp => pp.ProductFipsId);

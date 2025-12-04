@@ -15,15 +15,18 @@ public class MilestonesUpdatesSuccessesController : Controller
     private readonly CompassDbContext _context;
     private readonly ILogger<MilestonesUpdatesSuccessesController> _logger;
     private readonly IMonthlyUpdateService _monthlyUpdateService;
+    private readonly IPermissionService _permissionService;
 
     public MilestonesUpdatesSuccessesController(
         CompassDbContext context,
         ILogger<MilestonesUpdatesSuccessesController> logger,
-        IMonthlyUpdateService monthlyUpdateService)
+        IMonthlyUpdateService monthlyUpdateService,
+        IPermissionService permissionService)
     {
         _context = context;
         _logger = logger;
         _monthlyUpdateService = monthlyUpdateService;
+        _permissionService = permissionService;
     }
 
     public async Task<IActionResult> Milestones(int? projectId)
@@ -131,15 +134,16 @@ public class MilestonesUpdatesSuccessesController : Controller
         }
 
         var project = await _context.Projects
-            .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
-            .Include(p => p.Milestones)
-            .Include(p => p.ProjectContacts)
             .Include(p => p.SeniorResponsibleOfficers)
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
             .Include(p => p.PrimaryContactUser)
+            .Include(p => p.RagHistory)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.DirectorateLookup)
+            .Include(p => p.Milestones)
+            .Include(p => p.ProjectContacts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
         if (project == null)
         {
@@ -195,6 +199,12 @@ public class MilestonesUpdatesSuccessesController : Controller
         }
 
         var project = await _context.Projects
+            .Include(p => p.SeniorResponsibleOfficers)
+                .ThenInclude(sro => sro.User)
+            .Include(p => p.ServiceOwners)
+                .ThenInclude(so => so.User)
+            .Include(p => p.PrimaryContactUser)
+            .Include(p => p.RagHistory)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.Directorates)
                 .ThenInclude(d => d.DirectorateLookup)
@@ -742,6 +752,21 @@ public class MilestonesUpdatesSuccessesController : Controller
             return false;
         }
 
+        // Check if user is Central Ops Admin or Super Admin - they can submit any return
+        try
+        {
+            var isSuperAdmin = await _permissionService.IsSuperAdminAsync(userEmail);
+            var isCentralOpsAdmin = await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+            if (isSuperAdmin || isCentralOpsAdmin)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // If permission check fails, continue with normal checks
+        }
+
         // Get the current user from database
         var currentUser = await _context.Users
             .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower());
@@ -790,7 +815,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SubmitMonthlyUpdate(int? projectId, int? year, int? month)
+    public async Task<IActionResult> SubmitMonthlyUpdate(int? projectId, int? year, int? month, string? ragStatus, string? ragJustification, string? pathToGreen, bool isNilReturn = false)
     {
         if (!projectId.HasValue || !year.HasValue || !month.HasValue)
         {
@@ -803,6 +828,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
             .Include(p => p.PrimaryContactUser)
+            .Include(p => p.RagHistory)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
         if (project == null)
@@ -813,28 +839,84 @@ public class MilestonesUpdatesSuccessesController : Controller
         // Check if user can submit
         if (!await CanUserSubmitMonthlyUpdate(project))
         {
-            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, and Primary Contacts can submit.";
-            return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, Primary Contacts, and Central Operations admins can submit.";
+            // Determine redirect action based on whether update exists
+            var existingUpdateForRedirect = await _context.ProjectMonthlyUpdates
+                .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
+            var redirectActionForError = existingUpdateForRedirect != null ? "EditUpdate" : "CreateUpdate";
+            return RedirectToAction(redirectActionForError, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        // Get or create the monthly update
+        // Get or create the monthly update first to determine redirect action
         var monthlyUpdate = await _context.ProjectMonthlyUpdates
             .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
 
+        // Determine redirect action based on whether update exists
+        var redirectAction = monthlyUpdate != null ? "EditUpdate" : "CreateUpdate";
+
+        // Validate RAG status
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            TempData["ErrorMessage"] = "RAG status is required before submitting the monthly update.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        var oldRagStatus = project.RagStatus;
+        var ragChanged = oldRagStatus != ragStatus;
+        var isNotGreen = ragStatus != "Green";
+
+        // Validate justification if RAG changed or not green
+        if ((ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
+        {
+            TempData["ErrorMessage"] = "RAG justification is required when RAG status has changed or is not Green.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        // Validate path to green if not green
+        if (isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
+        {
+            TempData["ErrorMessage"] = "Path to Green is required when RAG status is not Green.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        }
+
+        // Get or create monthly update
         if (monthlyUpdate == null)
         {
-            TempData["ErrorMessage"] = "No monthly update found. Please add at least one update entry before submitting.";
-            return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+            monthlyUpdate = new ProjectMonthlyUpdate
+            {
+                ProjectId = projectId.Value,
+                Year = year.Value,
+                Month = month.Value,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.ProjectMonthlyUpdates.Add(monthlyUpdate);
+            await _context.SaveChangesAsync();
         }
 
         // Check if there are any narratives
         var narrativeCount = await _context.MonthlyUpdateNarratives
             .CountAsync(n => n.ProjectMonthlyUpdateId == monthlyUpdate.Id);
 
-        if (narrativeCount == 0)
+        // Handle nil return
+        if (isNilReturn && narrativeCount == 0)
         {
-            TempData["ErrorMessage"] = "Cannot submit monthly update with no entries. Please add at least one update entry before submitting.";
-            return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+            // Create a nil return narrative
+            var nilReturnNarrative = new MonthlyUpdateNarrative
+            {
+                ProjectMonthlyUpdateId = monthlyUpdate.Id,
+                Narrative = "No update provided this month",
+                CreatedAt = DateTime.UtcNow,
+                CreatedByName = User.Identity?.Name ?? "Unknown",
+                CreatedByEmail = User.Identity?.Name ?? "Unknown"
+            };
+            _context.MonthlyUpdateNarratives.Add(nilReturnNarrative);
+            await _context.SaveChangesAsync();
+            narrativeCount = 1;
+        }
+        else if (!isNilReturn && narrativeCount == 0)
+        {
+            TempData["ErrorMessage"] = "Cannot submit monthly update with no entries. Please add at least one update entry before submitting, or submit a nil return.";
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
         // Check if reporting window has closed
@@ -842,22 +924,58 @@ public class MilestonesUpdatesSuccessesController : Controller
         if (DateTime.UtcNow > dueDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer submit monthly updates.";
-            return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+            return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
+
+        // Update RAG status if changed
+        if (ragChanged)
+        {
+            // Create RAG history entry
+            var ragHistory = new ProjectRagHistory
+            {
+                ProjectId = projectId.Value,
+                RagStatus = ragStatus,
+                Justification = ragJustification,
+                PathToGreen = pathToGreen,
+                ChangedAt = DateTime.UtcNow,
+                ChangedByEmail = User.Identity?.Name ?? "Unknown",
+                ChangedByName = User.Identity?.Name ?? "Unknown"
+            };
+            _context.ProjectRagHistories.Add(ragHistory);
+        }
+
+        // Update project RAG status
+        project.RagStatus = ragStatus;
+        project.RagJustification = ragJustification;
+        if (isNotGreen)
+        {
+            project.PathToGreen = pathToGreen;
+        }
+        else
+        {
+            project.PathToGreen = null; // Clear path to green if status is Green
+        }
+        project.UpdatedAt = DateTime.UtcNow;
 
         // Set submitted date if not already set
         if (!monthlyUpdate.SubmittedAt.HasValue)
         {
             monthlyUpdate.SubmittedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            
+            // Note: RAG status change notifications are handled by the ProjectController.UpdateRagStatus method
+            // when the RAG status is updated through the project details page. Since we're updating RAG here
+            // as part of monthly update submission, we'll skip the notification to avoid duplicate notifications.
+            
             TempData["SuccessMessage"] = "Monthly update submitted successfully.";
         }
         else
         {
+            await _context.SaveChangesAsync();
             TempData["InfoMessage"] = "This monthly update has already been submitted.";
         }
 
-        return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
+        return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
     }
 
     [HttpPost]

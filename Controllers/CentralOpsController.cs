@@ -8,6 +8,7 @@ using Compass.Services;
 using Compass.ViewModels;
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
+using ClosedXML.Excel;
 
 namespace Compass.Controllers;
 
@@ -65,6 +66,47 @@ public class BusinessAreaMonthlyUpdateStats
     public double PreviousMonthSubmittedPercent { get; set; }
     public int CurrentMonthSubmitted { get; set; }
     public double CurrentMonthSubmittedPercent { get; set; }
+}
+
+public class BusinessAreaMonthlyData
+{
+    public string BusinessAreaName { get; set; } = string.Empty;
+    public int TotalProjects { get; set; }
+    public int SubmittedCount { get; set; }
+    public List<Project> Projects { get; set; } = new List<Project>();
+}
+
+public class BusinessAreaRiskSummary
+{
+    public string BusinessAreaName { get; set; } = string.Empty;
+    public int TotalProjects { get; set; }
+    public int RedCount { get; set; }
+    public int AmberRedCount { get; set; }
+    public int CriticalPriorityCount { get; set; }
+    public int HighPriorityCount { get; set; }
+    public int DelayedMilestonesCount { get; set; }
+    
+    // Computed properties for backward compatibility
+    public int RedAmberRedCount => RedCount + AmberRedCount;
+    public int CriticalHighPriorityCount => CriticalPriorityCount + HighPriorityCount;
+}
+
+public class RagExceptionReport
+{
+    public int ProjectId { get; set; }
+    public string ProjectCode { get; set; } = string.Empty;
+    public string ProjectTitle { get; set; } = string.Empty;
+    public string? BusinessArea { get; set; }
+    public string? PrimaryContact { get; set; }
+    public string RagStatus { get; set; } = string.Empty;
+    public string ExceptionType { get; set; } = string.Empty;
+    public string ExceptionDescription { get; set; } = string.Empty;
+    public int OverdueMilestonesCount { get; set; }
+    public int DelayedMilestonesCount { get; set; }
+    public int AtRiskMilestonesCount { get; set; }
+    public int TotalMilestonesCount { get; set; }
+    public int OnTrackMilestonesCount { get; set; }
+    public int CompleteMilestonesCount { get; set; }
 }
 
 public class MilestoneWithProject
@@ -138,17 +180,20 @@ public class CentralOpsController : Controller
     private readonly ILogger<CentralOpsController> _logger;
     private readonly IUserDirectoryService _userDirectoryService;
     private readonly IMonthlyUpdateService _monthlyUpdateService;
+    private readonly IProductsApiService _productsApiService;
 
     public CentralOpsController(
         CompassDbContext context,
         ILogger<CentralOpsController> logger,
         IUserDirectoryService userDirectoryService,
-        IMonthlyUpdateService monthlyUpdateService)
+        IMonthlyUpdateService monthlyUpdateService,
+        IProductsApiService productsApiService)
     {
         _context = context;
         _logger = logger;
         _userDirectoryService = userDirectoryService;
         _monthlyUpdateService = monthlyUpdateService;
+        _productsApiService = productsApiService;
     }
 
     private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
@@ -234,8 +279,558 @@ public class CentralOpsController : Controller
     }
 
 
-    // GET: CentralOps/Dashboard
-    public async Task<IActionResult> Dashboard()
+    // GET: CentralOps/Dashboard - Redirect to Summary
+    public IActionResult Dashboard()
+    {
+        return RedirectToAction("Summary");
+    }
+
+    // GET: CentralOps/Summary
+    public async Task<IActionResult> Summary()
+    {
+        try
+        {
+            // Get all projects
+            var allProjects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.MonthlyUpdates)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            // Determine current reporting period using 10-day rule
+            var currentDate = DateTime.UtcNow;
+            var currentYear = currentDate.Year;
+            var currentMonth = currentDate.Month;
+            
+            var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+            var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+            
+            // Apply 10-day rule: if within 10 days of current period due date, use current period
+            var reportYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : (currentMonth == 1 ? currentYear - 1 : currentYear);
+            var reportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+            
+            // Calculate stats for the current reporting period
+            var currentReportingPeriodStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+
+            // Count active work items
+            var activeWorkItems = allProjects.Count(p => p.Status == "Active");
+
+            // Count Red and Amber-Red items separately
+            var redCount = allProjects.Count(p => {
+                if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                var normalized = NormalizeRagStatus(p.RagStatus);
+                return normalized == "Red";
+            });
+            var amberRedCount = allProjects.Count(p => {
+                if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                var normalized = NormalizeRagStatus(p.RagStatus);
+                return normalized == "Amber-Red";
+            });
+            var redAndAmberRedItems = redCount + amberRedCount;
+
+            // Count Critical and High priority items
+            var criticalPriorityCount = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical"));
+            var highPriorityCount = allProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical"));
+
+            // Count open milestones (not deleted, not complete, not cancelled)
+            var openMilestones = await _context.Milestones
+                .Where(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled")
+                .CountAsync();
+
+            // Get all milestones for delayed calculation
+            var allMilestones = await _context.Milestones
+                .Include(m => m.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled")
+                .ToListAsync();
+
+            var delayedMilestones = allMilestones
+                .Where(m => m.DueDate < currentDate)
+                .ToList();
+
+            // Calculate business area risk data
+            var businessAreaRiskData = new List<BusinessAreaRiskSummary>();
+            var businessAreas = allProjects
+                .Where(p => p.BusinessAreaLookup != null)
+                .Select(p => p.BusinessAreaLookup!)
+                .GroupBy(ba => ba.Id)
+                .Select(g => g.First())
+                .ToList();
+
+            // Add "Not assigned" if there are projects without business area
+            var notAssignedProjects = allProjects.Where(p => p.BusinessAreaLookup == null).ToList();
+            if (notAssignedProjects.Any())
+            {
+                businessAreaRiskData.Add(new BusinessAreaRiskSummary
+                {
+                    BusinessAreaName = "Not assigned",
+                    TotalProjects = notAssignedProjects.Count,
+                    RedCount = notAssignedProjects.Count(p => {
+                        if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                        var normalized = NormalizeRagStatus(p.RagStatus);
+                        return normalized == "Red";
+                    }),
+                    AmberRedCount = notAssignedProjects.Count(p => {
+                        if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                        var normalized = NormalizeRagStatus(p.RagStatus);
+                        return normalized == "Amber-Red";
+                    }),
+                    CriticalPriorityCount = notAssignedProjects.Count(p => 
+                        p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    HighPriorityCount = notAssignedProjects.Count(p => 
+                        p.DeliveryPriority != null && 
+                        p.DeliveryPriority.Name.ToLower().Contains("high") && 
+                        !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    DelayedMilestonesCount = delayedMilestones.Count(m => m.Project?.BusinessAreaLookup == null)
+                });
+            }
+
+            foreach (var businessArea in businessAreas)
+            {
+                var areaProjects = allProjects.Where(p => p.BusinessAreaLookup?.Id == businessArea.Id).ToList();
+                var areaProjectIds = areaProjects.Select(p => p.Id).ToList();
+                
+                businessAreaRiskData.Add(new BusinessAreaRiskSummary
+                {
+                    BusinessAreaName = businessArea.Name,
+                    TotalProjects = areaProjects.Count,
+                    RedCount = areaProjects.Count(p => {
+                        if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                        var normalized = NormalizeRagStatus(p.RagStatus);
+                        return normalized == "Red";
+                    }),
+                    AmberRedCount = areaProjects.Count(p => {
+                        if (string.IsNullOrEmpty(p.RagStatus)) return false;
+                        var normalized = NormalizeRagStatus(p.RagStatus);
+                        return normalized == "Amber-Red";
+                    }),
+                    CriticalPriorityCount = areaProjects.Count(p => 
+                        p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    HighPriorityCount = areaProjects.Count(p => 
+                        p.DeliveryPriority != null && 
+                        p.DeliveryPriority.Name.ToLower().Contains("high") && 
+                        !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    DelayedMilestonesCount = delayedMilestones.Count(m => m.ProjectId.HasValue && areaProjectIds.Contains(m.ProjectId.Value))
+                });
+            }
+
+            // Order by risk score (Red/Amber-Red count + Critical/High Priority count + Delayed Milestones count)
+            businessAreaRiskData = businessAreaRiskData
+                .OrderByDescending(ba => ba.RedAmberRedCount + ba.CriticalHighPriorityCount + ba.DelayedMilestonesCount)
+                .ThenByDescending(ba => ba.RedCount)
+                .ThenByDescending(ba => ba.AmberRedCount)
+                .ThenByDescending(ba => ba.CriticalPriorityCount)
+                .ThenByDescending(ba => ba.HighPriorityCount)
+                .ThenByDescending(ba => ba.DelayedMilestonesCount)
+                .ToList();
+
+            ViewBag.ActiveWorkItems = activeWorkItems;
+            ViewBag.TotalWorkItems = allProjects.Count;
+            ViewBag.RedAndAmberRedItems = redAndAmberRedItems;
+            ViewBag.RedCount = redCount;
+            ViewBag.AmberRedCount = amberRedCount;
+            ViewBag.CriticalPriorityCount = criticalPriorityCount;
+            ViewBag.HighPriorityCount = highPriorityCount;
+            ViewBag.OpenMilestones = openMilestones;
+            ViewBag.BusinessAreaRiskData = businessAreaRiskData;
+            ViewBag.CurrentReportingPeriodStats = currentReportingPeriodStats;
+            ViewBag.ReportYear = reportYear;
+            ViewBag.ReportMonth = reportMonth;
+            ViewBag.MonthName = new DateTime(reportYear, reportMonth, 1).ToString("MMMM yyyy");
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading Central Operations summary");
+            TempData["ErrorMessage"] = "An error occurred while loading the summary. Please try again.";
+            return View();
+        }
+    }
+
+    // GET: CentralOps/MonthlyReporting
+    public async Task<IActionResult> MonthlyReporting(int? year, int? month, string? status)
+    {
+        try
+        {
+            // Get all projects with related data
+            var allProjects = await _context.Projects
+                .Include(p => p.MonthlyUpdates)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            // Determine current reporting period using 10-day rule
+            var currentDate = DateTime.UtcNow;
+            var currentYear = currentDate.Year;
+            var currentMonth = currentDate.Month;
+            
+            var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+            var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+            
+            // Apply 10-day rule: if within 10 days of current period due date, use current period
+            var reportYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : (currentMonth == 1 ? currentYear - 1 : currentYear);
+            var reportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+
+            // Use provided year/month if specified, otherwise use determined period
+            var filterYear = year ?? reportYear;
+            var filterMonth = month ?? reportMonth;
+            
+            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(filterYear, filterMonth);
+
+            // Calculate stats for the reporting period
+            var periodStats = CalculateMonthlyUpdateStats(allProjects, filterYear, filterMonth, _monthlyUpdateService);
+
+            // Group projects by status for the current reporting period
+            var statusGroups = new Dictionary<string, List<Project>>
+            {
+                { "Submitted", new List<Project>() },
+                { "Late", new List<Project>() },
+                { "In Progress", new List<Project>() },
+                { "Not Started", new List<Project>() }
+            };
+
+            foreach (var project in allProjects)
+            {
+                var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == filterYear && u.Month == filterMonth);
+                string projectStatus;
+
+                // If update exists and has been submitted
+                if (update != null && update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "Submitted";
+                }
+                // Check if the due date has passed (regardless of whether update exists)
+                else if (currentDate > dueDate)
+                {
+                    projectStatus = "Late";
+                }
+                // If update exists but not submitted and due date hasn't passed
+                else if (update != null && !update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "In Progress";
+                }
+                // No update exists and due date hasn't passed
+                else
+                {
+                    projectStatus = "Not Started";
+                }
+
+                if (statusGroups.ContainsKey(projectStatus))
+                {
+                    statusGroups[projectStatus].Add(project);
+                }
+            }
+
+            // Sort projects within each group
+            foreach (var group in statusGroups.Values)
+            {
+                group.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Group projects by business area for the current reporting period
+            var businessAreaGroups = new Dictionary<string, BusinessAreaMonthlyData>();
+            
+            // Get all business areas
+            var businessAreas = allProjects
+                .Where(p => p.BusinessAreaLookup != null)
+                .Select(p => p.BusinessAreaLookup!)
+                .GroupBy(ba => ba.Id)
+                .Select(g => g.First())
+                .ToList();
+
+            // Add "Not assigned" if there are projects without business area
+            var notAssignedProjects = allProjects.Where(p => p.BusinessAreaLookup == null).ToList();
+            if (notAssignedProjects.Any())
+            {
+                businessAreaGroups.Add("Not assigned", new BusinessAreaMonthlyData
+                {
+                    BusinessAreaName = "Not assigned",
+                    TotalProjects = notAssignedProjects.Count,
+                    SubmittedCount = notAssignedProjects.Count(p =>
+                    {
+                        var update = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == filterYear && u.Month == filterMonth);
+                        return update != null && update.SubmittedAt.HasValue;
+                    }),
+                    Projects = notAssignedProjects.OrderBy(p => p.Title).ToList()
+                });
+            }
+
+            foreach (var businessArea in businessAreas)
+            {
+                var areaProjects = allProjects.Where(p => p.BusinessAreaLookup?.Id == businessArea.Id).ToList();
+                var submittedProjects = areaProjects.Where(p =>
+                {
+                    var update = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == filterYear && u.Month == filterMonth);
+                    return update != null && update.SubmittedAt.HasValue;
+                }).ToList();
+
+                businessAreaGroups.Add(businessArea.Name, new BusinessAreaMonthlyData
+                {
+                    BusinessAreaName = businessArea.Name,
+                    TotalProjects = areaProjects.Count,
+                    SubmittedCount = submittedProjects.Count,
+                    Projects = areaProjects.OrderBy(p => p.Title).ToList()
+                });
+            }
+
+            ViewBag.PeriodStats = periodStats;
+            ViewBag.StatusGroups = statusGroups;
+            ViewBag.BusinessAreaGroups = businessAreaGroups;
+            ViewBag.ReportYear = filterYear;
+            ViewBag.ReportMonth = filterMonth;
+            ViewBag.MonthName = new DateTime(filterYear, filterMonth, 1).ToString("MMMM yyyy");
+            ViewBag.DueDate = dueDate;
+
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly reporting");
+            TempData["ErrorMessage"] = "An error occurred while loading monthly reporting. Please try again.";
+            return View();
+        }
+    }
+
+    // GET: CentralOps/RagAndRisk
+    public async Task<IActionResult> RagAndRisk()
+    {
+        try
+        {
+            // Get all projects with milestones and related data
+            var allProjects = await _context.Projects
+                .Include(p => p.Milestones)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            // Count projects by RAG status and group projects
+            var ragCounts = new Dictionary<string, int>
+            {
+                { "Red", 0 },
+                { "Amber-Red", 0 },
+                { "Amber", 0 },
+                { "Amber-Green", 0 },
+                { "Green", 0 },
+                { "Not set", 0 }
+            };
+
+            var ragGroups = new Dictionary<string, List<Project>>
+            {
+                { "Red", new List<Project>() },
+                { "Amber-Red", new List<Project>() },
+                { "Amber", new List<Project>() },
+                { "Amber-Green", new List<Project>() },
+                { "Green", new List<Project>() },
+                { "Not set", new List<Project>() }
+            };
+
+            foreach (var project in allProjects)
+            {
+                var normalized = NormalizeRagStatus(project.RagStatus);
+                if (string.IsNullOrEmpty(normalized))
+                {
+                    ragCounts["Not set"]++;
+                    ragGroups["Not set"].Add(project);
+                }
+                else if (ragCounts.ContainsKey(normalized))
+                {
+                    ragCounts[normalized]++;
+                    ragGroups[normalized].Add(project);
+                }
+            }
+
+            // Sort projects within each group
+            foreach (var group in ragGroups.Values)
+            {
+                group.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Calculate exception reporting
+            var exceptions = CalculateRagExceptions(allProjects);
+
+            ViewBag.RagCounts = ragCounts;
+            ViewBag.RagGroups = ragGroups;
+            ViewBag.TotalProjects = allProjects.Count;
+            ViewBag.Exceptions = exceptions;
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAG and Risk");
+            TempData["ErrorMessage"] = "An error occurred while loading RAG and Risk. Please try again.";
+            return View();
+        }
+    }
+
+    private List<RagExceptionReport> CalculateRagExceptions(List<Project> projects)
+    {
+        var exceptions = new List<RagExceptionReport>();
+        var currentDate = DateTime.UtcNow.Date;
+
+        foreach (var project in projects)
+        {
+            var activeMilestones = project.Milestones?
+                .Where(m => !m.IsDeleted && m.Status != "complete" && m.Status != "cancelled")
+                .ToList() ?? new List<Milestone>();
+
+            if (!activeMilestones.Any())
+            {
+                // No active milestones, skip exception checking
+                continue;
+            }
+
+            var overdueMilestones = activeMilestones
+                .Where(m => m.DueDate.Date < currentDate)
+                .ToList();
+
+            var delayedMilestones = activeMilestones
+                .Where(m => m.Status == "delayed")
+                .ToList();
+
+            var atRiskMilestones = activeMilestones
+                .Where(m => m.Status == "at_risk")
+                .ToList();
+
+            var onTrackMilestones = activeMilestones
+                .Where(m => m.Status == "on_track")
+                .ToList();
+
+            var completeMilestones = project.Milestones?
+                .Where(m => !m.IsDeleted && m.Status == "complete")
+                .ToList() ?? new List<Milestone>();
+
+            var ragStatus = NormalizeRagStatus(project.RagStatus) ?? "Not set";
+            var hasProblemMilestones = overdueMilestones.Any() || delayedMilestones.Any() || atRiskMilestones.Any();
+            
+            // Check if all milestones are healthy (on_track or complete, with no problems)
+            var totalMilestones = project.Milestones?.Count(m => !m.IsDeleted) ?? 0;
+            var healthyMilestonesCount = onTrackMilestones.Count + completeMilestones.Count;
+            var allMilestonesHealthy = !hasProblemMilestones && 
+                                       totalMilestones > 0 && 
+                                       healthyMilestonesCount == totalMilestones;
+
+            // Exception 1: Green/Amber-Green RAG but has overdue/delayed/at_risk milestones
+            if ((ragStatus == "Green" || ragStatus == "Amber-Green") && hasProblemMilestones)
+            {
+                var exceptionType = ragStatus == "Green" ? "Green RAG with Problem Milestones" : "Amber-Green RAG with Problem Milestones";
+                var description = BuildExceptionDescription(overdueMilestones, delayedMilestones, atRiskMilestones);
+
+                exceptions.Add(new RagExceptionReport
+                {
+                    ProjectId = project.Id,
+                    ProjectCode = project.ProjectCode ?? $"DFE-DDT-{project.Id}",
+                    ProjectTitle = project.Title,
+                    BusinessArea = project.BusinessAreaLookup?.Name,
+                    PrimaryContact = project.PrimaryContactUser != null 
+                        ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                        : null,
+                    RagStatus = ragStatus,
+                    ExceptionType = exceptionType,
+                    ExceptionDescription = description,
+                    OverdueMilestonesCount = overdueMilestones.Count,
+                    DelayedMilestonesCount = delayedMilestones.Count,
+                    AtRiskMilestonesCount = atRiskMilestones.Count,
+                    TotalMilestonesCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0,
+                    OnTrackMilestonesCount = onTrackMilestones.Count,
+                    CompleteMilestonesCount = completeMilestones.Count
+                });
+            }
+
+            // Exception 2: Red RAG but all milestones are healthy (on_track or complete, no overdue/delayed/at_risk)
+            if (ragStatus == "Red" && allMilestonesHealthy)
+            {
+                exceptions.Add(new RagExceptionReport
+                {
+                    ProjectId = project.Id,
+                    ProjectCode = project.ProjectCode ?? $"DFE-DDT-{project.Id}",
+                    ProjectTitle = project.Title,
+                    BusinessArea = project.BusinessAreaLookup?.Name,
+                    PrimaryContact = project.PrimaryContactUser != null 
+                        ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                        : null,
+                    RagStatus = ragStatus,
+                    ExceptionType = "Red RAG with Healthy Milestones",
+                    ExceptionDescription = $"Project has Red RAG status but all milestones are on track or complete with no overdue, delayed, or at-risk milestones.",
+                    OverdueMilestonesCount = 0,
+                    DelayedMilestonesCount = 0,
+                    AtRiskMilestonesCount = 0,
+                    TotalMilestonesCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0,
+                    OnTrackMilestonesCount = onTrackMilestones.Count,
+                    CompleteMilestonesCount = completeMilestones.Count
+                });
+            }
+
+            // Exception 3: Amber-Green RAG but has delayed milestones
+            if (ragStatus == "Amber-Green" && delayedMilestones.Any())
+            {
+                // Only add if not already added in Exception 1
+                if (!exceptions.Any(e => e.ProjectId == project.Id))
+                {
+                    exceptions.Add(new RagExceptionReport
+                    {
+                        ProjectId = project.Id,
+                        ProjectCode = project.ProjectCode ?? $"DFE-DDT-{project.Id}",
+                        ProjectTitle = project.Title,
+                        BusinessArea = project.BusinessAreaLookup?.Name,
+                        PrimaryContact = project.PrimaryContactUser != null 
+                            ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                            : null,
+                        RagStatus = ragStatus,
+                        ExceptionType = "Amber-Green RAG with Delayed Milestones",
+                        ExceptionDescription = $"Project has Amber-Green RAG status but has {delayedMilestones.Count} delayed milestone(s).",
+                        OverdueMilestonesCount = overdueMilestones.Count,
+                        DelayedMilestonesCount = delayedMilestones.Count,
+                        AtRiskMilestonesCount = atRiskMilestones.Count,
+                        TotalMilestonesCount = project.Milestones?.Count(m => !m.IsDeleted) ?? 0,
+                        OnTrackMilestonesCount = onTrackMilestones.Count,
+                        CompleteMilestonesCount = completeMilestones.Count
+                    });
+                }
+            }
+        }
+
+        return exceptions.OrderByDescending(e => e.RagStatus == "Red" ? 1 : 0)
+                        .ThenByDescending(e => e.OverdueMilestonesCount + e.DelayedMilestonesCount + e.AtRiskMilestonesCount)
+                        .ToList();
+    }
+
+    private string BuildExceptionDescription(List<Milestone> overdue, List<Milestone> delayed, List<Milestone> atRisk)
+    {
+        var parts = new List<string>();
+
+        if (overdue.Any())
+        {
+            parts.Add($"{overdue.Count} overdue milestone(s)");
+        }
+
+        if (delayed.Any())
+        {
+            parts.Add($"{delayed.Count} delayed milestone(s)");
+        }
+
+        if (atRisk.Any())
+        {
+            parts.Add($"{atRisk.Count} at-risk milestone(s)");
+        }
+
+        return $"Project has {string.Join(", ", parts)}.";
+    }
+
+    // GET: CentralOps/RagStatus
+    public async Task<IActionResult> RagStatus(string ragStatus)
     {
         try
         {
@@ -246,164 +841,298 @@ public class CentralOpsController : Controller
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
-                .Include(p => p.MonthlyUpdates)
                 .Where(p => !p.IsDeleted)
                 .ToListAsync();
 
-            _logger.LogInformation("Dashboard: Loaded {Count} projects from database", allProjects.Count);
-            
-            if (allProjects.Count == 0)
+            // Filter projects by RAG status
+            List<Project> filteredProjects;
+            if (string.IsNullOrEmpty(ragStatus))
             {
-                _logger.LogWarning("Dashboard: No projects found in database. This might indicate a data issue.");
+                // "Not set" - projects with no RAG status
+                filteredProjects = allProjects
+                    .Where(p => string.IsNullOrWhiteSpace(p.RagStatus))
+                    .OrderBy(p => p.Title)
+                    .ToList();
+            }
+            else
+            {
+                filteredProjects = allProjects
+                    .Where(p => NormalizeRagStatus(p.RagStatus) == ragStatus)
+                    .OrderBy(p => p.Title)
+                    .ToList();
             }
 
-            // Summary by Priority
-            var prioritySummary = allProjects
-                .GroupBy(p => p.DeliveryPriority != null ? p.DeliveryPriority.Name : "Not set")
-                .Select(g => new PrioritySummaryItem
-                {
-                    Priority = g.Key,
-                    Count = g.Count()
-                })
-                .OrderByDescending(x => x.Priority)
-                .ToList();
-
-            // Summary by RAG
-            var ragSummary = allProjects
-                .Where(p => !string.IsNullOrEmpty(p.RagStatus))
-                .GroupBy(p => NormalizeRagStatus(p.RagStatus) ?? "Not set")
-                .Select(g => new RagSummaryItem
-                {
-                    Rag = g.Key,
-                    Count = g.Count()
-                })
-                .OrderByDescending(x => x.Rag == "Red" ? 4 : x.Rag == "Amber-Red" ? 3 : x.Rag == "Amber" ? 2 : x.Rag == "Amber-Green" ? 1 : x.Rag == "Green" ? 0 : -1)
-                .ToList();
-
-            // Most at risk projects (Red, Amber-Red RAG, or High/Critical priority, or overdue target dates)
-            var mostAtRisk = allProjects
-                .Where(p => 
-                    {
-                        var normalizedRag = NormalizeRagStatus(p.RagStatus);
-                        var isHighPriority = p.DeliveryPriority != null && 
-                            (p.DeliveryPriority.Name.ToLower().Contains("high") || 
-                             p.DeliveryPriority.Name.ToLower().Contains("critical"));
-                        return (normalizedRag == "Red" || normalizedRag == "Amber-Red") ||
-                               isHighPriority ||
-                               (p.TargetDeliveryDate.HasValue && p.TargetDeliveryDate.Value < DateTime.UtcNow && p.Status == "Active");
-                    })
-                .OrderByDescending(p => 
-                    {
-                        var normalizedRag = NormalizeRagStatus(p.RagStatus);
-                        var isHighPriority = p.DeliveryPriority != null && 
-                            (p.DeliveryPriority.Name.ToLower().Contains("high") || 
-                             p.DeliveryPriority.Name.ToLower().Contains("critical"));
-                        if (normalizedRag == "Red") return 5;
-                        if (normalizedRag == "Amber-Red") return 4;
-                        if (isHighPriority) return 3;
-                        if (normalizedRag == "Amber") return 2;
-                        return 1;
-                    })
-                .ThenBy(p => p.TargetDeliveryDate)
-                .ToList();
-
-            // Calculate Monthly Update Completion Status
-            var currentDate = DateTime.UtcNow;
-            var currentYear = currentDate.Year;
-            var currentMonth = currentDate.Month;
-            
-            // Previous month
-            var previousMonth = currentMonth == 1 ? 12 : currentMonth - 1;
-            var previousYear = currentMonth == 1 ? currentYear - 1 : currentYear;
-
-            // Summary by Business Area - sorted alphabetically
-            var businessAreaSummary = allProjects
-                .Where(p => p.BusinessAreaLookup != null)
-                .GroupBy(p => p.BusinessAreaLookup!.Name)
-                .Select(g => {
-                    var areaProjects = g.ToList();
-                    var prevMonthStats = CalculateMonthlyUpdateStats(areaProjects, previousYear, previousMonth, _monthlyUpdateService);
-                    var currentMonthStats = CalculateMonthlyUpdateStats(areaProjects, currentYear, currentMonth, _monthlyUpdateService);
-                    
-                    return new BusinessAreaSummaryItem
-                    {
-                        BusinessArea = g.Key,
-                        Count = g.Count(),
-                        RedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
-                        AmberRedCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
-                        AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
-                        AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
-                        GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
-                        RagNotSetCount = g.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
-                        CriticalPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                        HighPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                        MediumPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
-                        LowPriorityCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
-                        PriorityNotSetCount = g.Count(p => p.DeliveryPriority == null),
-                        BlockedCount = 0, // Projects don't have a blocked status
-                        PreviousMonthSubmittedPercent = areaProjects.Count > 0 ? (prevMonthStats.Submitted * 100.0) / areaProjects.Count : 0,
-                        CurrentMonthSubmittedPercent = areaProjects.Count > 0 ? (currentMonthStats.Submitted * 100.0) / areaProjects.Count : 0,
-                        PreviousMonthSubmitted = prevMonthStats.Submitted,
-                        CurrentMonthSubmitted = currentMonthStats.Submitted
-                    };
-                })
-                .OrderBy(x => x.BusinessArea)
-                .ToList();
-
-            // Add "Not assigned" row for projects without a business area
-            var unassignedProjects = allProjects.Where(p => p.BusinessAreaLookup == null).ToList();
-            if (unassignedProjects.Any())
-            {
-                var unassignedPrevMonthStats = CalculateMonthlyUpdateStats(unassignedProjects, previousYear, previousMonth, _monthlyUpdateService);
-                var unassignedCurrentMonthStats = CalculateMonthlyUpdateStats(unassignedProjects, currentYear, currentMonth, _monthlyUpdateService);
-                
-                var unassignedSummary = new BusinessAreaSummaryItem
-                {
-                    BusinessArea = "Not assigned",
-                    Count = unassignedProjects.Count,
-                    RedCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Red"),
-                    AmberRedCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Red"),
-                    AmberCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber"),
-                    AmberGreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Amber-Green"),
-                    GreenCount = unassignedProjects.Count(p => NormalizeRagStatus(p.RagStatus) == "Green"),
-                    RagNotSetCount = unassignedProjects.Count(p => string.IsNullOrWhiteSpace(p.RagStatus)),
-                    CriticalPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                    HighPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
-                    MediumPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium")),
-                    LowPriorityCount = unassignedProjects.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low")),
-                    PriorityNotSetCount = unassignedProjects.Count(p => p.DeliveryPriority == null),
-                    BlockedCount = 0,
-                    PreviousMonthSubmittedPercent = unassignedProjects.Count > 0 ? (unassignedPrevMonthStats.Submitted * 100.0) / unassignedProjects.Count : 0,
-                    CurrentMonthSubmittedPercent = unassignedProjects.Count > 0 ? (unassignedCurrentMonthStats.Submitted * 100.0) / unassignedProjects.Count : 0,
-                    PreviousMonthSubmitted = unassignedPrevMonthStats.Submitted,
-                    CurrentMonthSubmitted = unassignedCurrentMonthStats.Submitted
-                };
-                businessAreaSummary.Add(unassignedSummary);
-            }
-            
-            // Calculate stats for previous month
-            var previousMonthStats = CalculateMonthlyUpdateStats(allProjects, previousYear, previousMonth, _monthlyUpdateService);
-            
-            // Calculate stats for current month
-            var currentMonthStats = CalculateMonthlyUpdateStats(allProjects, currentYear, currentMonth, _monthlyUpdateService);
-
-            ViewBag.PrioritySummary = prioritySummary;
-            ViewBag.RagSummary = ragSummary;
-            ViewBag.MostAtRisk = mostAtRisk;
-            ViewBag.BusinessAreaSummary = businessAreaSummary;
-            ViewBag.ActiveWorkItems = allProjects.Count(p => p.Status == "Active");
-            ViewBag.AllProjects = allProjects.OrderBy(p => p.Title).ToList();
-            ViewBag.PreviousMonthStats = previousMonthStats;
-            ViewBag.CurrentMonthStats = currentMonthStats;
-            ViewBag.PreviousMonthName = new DateTime(previousYear, previousMonth, 1).ToString("MMMM yyyy");
-            ViewBag.CurrentMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
+            ViewBag.RagStatus = ragStatus;
+            ViewBag.FilteredProjects = filteredProjects;
+            ViewBag.TotalCount = filteredProjects.Count;
 
             return View();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading Central Operations dashboard");
-            TempData["ErrorMessage"] = "An error occurred while loading the dashboard. Please try again.";
+            _logger.LogError(ex, "Error loading RAG status for {RagStatus}", ragStatus);
+            TempData["ErrorMessage"] = "An error occurred while loading RAG status. Please try again.";
+            return RedirectToAction("RagAndRisk");
+        }
+    }
+
+    // GET: CentralOps/RagStatusPartial - Returns partial view for AJAX loading
+    public async Task<IActionResult> RagStatusPartial(string? ragStatus = null)
+    {
+        try
+        {
+            // Get all projects
+            var allProjects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            // Filter projects by RAG status
+            List<Project> filteredProjects;
+            string displayStatus;
+            
+            if (string.IsNullOrEmpty(ragStatus) || ragStatus == "Not set")
+            {
+                // "Not set" - projects with no RAG status
+                filteredProjects = allProjects
+                    .Where(p => string.IsNullOrWhiteSpace(p.RagStatus))
+                    .OrderBy(p => p.Title)
+                    .ToList();
+                displayStatus = "Not set";
+            }
+            else
+            {
+                filteredProjects = allProjects
+                    .Where(p => NormalizeRagStatus(p.RagStatus) == ragStatus)
+                    .OrderBy(p => p.Title)
+                    .ToList();
+                displayStatus = ragStatus;
+            }
+
+            ViewBag.RagStatus = ragStatus;
+            ViewBag.DisplayStatus = displayStatus;
+            ViewBag.FilteredProjects = filteredProjects;
+            ViewBag.TotalCount = filteredProjects.Count;
+
+            return PartialView("_RagStatusProjects", filteredProjects);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAG status partial for {RagStatus}", ragStatus);
+            return PartialView("_RagStatusProjects", new List<Project>());
+        }
+    }
+
+    // GET: CentralOps/AllWork
+    public async Task<IActionResult> AllWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, bool clearFilters = false)
+    {
+        try
+        {
+            // Session keys for filters
+            const string sessionKeySearch = "AllWork_Search";
+            const string sessionKeyRagStatus = "AllWork_RagStatus";
+            const string sessionKeyBusinessArea = "AllWork_BusinessArea";
+            const string sessionKeyPhase = "AllWork_Phase";
+            const string sessionKeyFlagship = "AllWork_Flagship";
+            const string sessionKeyPriority = "AllWork_Priority";
+
+            // Clear filters from session if requested
+            if (clearFilters)
+            {
+                HttpContext.Session.Remove(sessionKeySearch);
+                HttpContext.Session.Remove(sessionKeyRagStatus);
+                HttpContext.Session.Remove(sessionKeyBusinessArea);
+                HttpContext.Session.Remove(sessionKeyPhase);
+                HttpContext.Session.Remove(sessionKeyFlagship);
+                HttpContext.Session.Remove(sessionKeyPriority);
+                search = null;
+                ragStatus = null;
+                businessArea = null;
+                phase = null;
+                flagship = null;
+                priority = null;
+            }
+            else
+            {
+                var requestQuery = Request.Query;
+                var hasSearchParam = requestQuery.ContainsKey("search");
+                var hasRagStatusParam = requestQuery.ContainsKey("ragStatus");
+                var hasBusinessAreaParam = requestQuery.ContainsKey("businessArea");
+                var hasPhaseParam = requestQuery.ContainsKey("phase");
+                var hasFlagshipParam = requestQuery.ContainsKey("flagship");
+                var hasPriorityParam = requestQuery.ContainsKey("priority");
+
+                // Handle search filter
+                if (hasSearchParam)
+                {
+                    if (string.IsNullOrEmpty(search))
+                        HttpContext.Session.Remove(sessionKeySearch);
+                    else
+                        HttpContext.Session.SetString(sessionKeySearch, search);
+                }
+                else
+                {
+                    search = HttpContext.Session.GetString(sessionKeySearch);
+                }
+
+                // Handle RAG Status filter
+                if (hasRagStatusParam)
+                {
+                    if (string.IsNullOrEmpty(ragStatus))
+                        HttpContext.Session.Remove(sessionKeyRagStatus);
+                    else
+                        HttpContext.Session.SetString(sessionKeyRagStatus, ragStatus);
+                }
+                else
+                {
+                    ragStatus = HttpContext.Session.GetString(sessionKeyRagStatus);
+                }
+
+                // Handle Business Area filter
+                if (hasBusinessAreaParam)
+                {
+                    if (string.IsNullOrEmpty(businessArea))
+                        HttpContext.Session.Remove(sessionKeyBusinessArea);
+                    else
+                        HttpContext.Session.SetString(sessionKeyBusinessArea, businessArea);
+                }
+                else
+                {
+                    businessArea = HttpContext.Session.GetString(sessionKeyBusinessArea);
+                }
+
+                // Handle Phase filter
+                if (hasPhaseParam)
+                {
+                    if (string.IsNullOrEmpty(phase))
+                        HttpContext.Session.Remove(sessionKeyPhase);
+                    else
+                        HttpContext.Session.SetString(sessionKeyPhase, phase);
+                }
+                else
+                {
+                    phase = HttpContext.Session.GetString(sessionKeyPhase);
+                }
+
+                // Handle Flagship filter
+                if (hasFlagshipParam)
+                {
+                    if (string.IsNullOrEmpty(flagship))
+                        HttpContext.Session.Remove(sessionKeyFlagship);
+                    else
+                        HttpContext.Session.SetString(sessionKeyFlagship, flagship);
+                }
+                else
+                {
+                    flagship = HttpContext.Session.GetString(sessionKeyFlagship);
+                }
+
+                // Handle Priority filter
+                if (hasPriorityParam)
+                {
+                    if (!priority.HasValue)
+                        HttpContext.Session.Remove(sessionKeyPriority);
+                    else
+                        HttpContext.Session.SetInt32(sessionKeyPriority, priority.Value);
+                }
+                else
+                {
+                    priority = HttpContext.Session.GetInt32(sessionKeyPriority);
+                }
+            }
+
+            // Build query
+            var query = _context.Projects
+                .Where(p => !p.IsDeleted)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .AsQueryable();
+
+            // Apply search filter
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+            }
+
+            // Apply RAG Status filter
+            if (!string.IsNullOrEmpty(ragStatus))
+            {
+                query = query.Where(p => NormalizeRagStatus(p.RagStatus) == ragStatus);
+            }
+
+            // Apply Business Area filter
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                query = query.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+
+            // Apply Phase filter
+            if (!string.IsNullOrEmpty(phase))
+            {
+                query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+            }
+
+            // Apply Flagship filter
+            if (!string.IsNullOrEmpty(flagship))
+            {
+                var isFlagship = flagship == "true";
+                query = query.Where(p => p.IsFlagship == isFlagship);
+            }
+
+            // Apply Priority filter
+            if (priority.HasValue)
+            {
+                query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+
+            // Get filtered projects
+            var allProjects = await query
+                .OrderBy(p => p.Title)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Populate ViewBag for filter dropdowns and current filter values
+            ViewBag.CurrentSearch = search;
+            ViewBag.CurrentRagStatus = ragStatus;
+            ViewBag.CurrentBusinessArea = businessArea;
+            ViewBag.CurrentPhase = phase;
+            ViewBag.CurrentFlagship = flagship;
+            ViewBag.CurrentPriority = priority;
+
+            // Get filter options
+            ViewBag.BusinessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => ba.Name)
+                .Distinct()
+                .ToListAsync();
+
+            ViewBag.Phases = await _productsApiService.GetPhasesAsync();
+            
+            ViewBag.DeliveryPriorities = await _context.DeliveryPriorities
+                .Where(dp => dp.IsActive)
+                .OrderBy(dp => dp.SortOrder)
+                .ThenBy(dp => dp.Name)
+                .AsNoTracking()
+                .ToListAsync();
+
+            ViewBag.AllProjects = allProjects;
+
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading all work");
+            TempData["ErrorMessage"] = "An error occurred while loading all work. Please try again.";
             return View();
         }
     }
@@ -520,9 +1249,79 @@ public class CentralOpsController : Controller
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading monthly update status for {Year}-{Month}, status: {Status}", year, month, status);
-            TempData["ErrorMessage"] = "An error occurred while loading the monthly update status. Please try again.";
-            return RedirectToAction(nameof(Dashboard));
+            _logger.LogError(ex, "Error loading monthly update status for {Year}/{Month}/{Status}", year, month, status);
+            TempData["ErrorMessage"] = "An error occurred while loading monthly update status. Please try again.";
+            return RedirectToAction("MonthlyReporting");
+        }
+    }
+
+    // GET: CentralOps/MonthlyUpdateStatusPartial - Returns partial view for AJAX loading
+    public async Task<IActionResult> MonthlyUpdateStatusPartial(int year, int month, string status)
+    {
+        try
+        {
+            // Get all projects with monthly updates
+            var allProjects = await _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.MonthlyUpdates)
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
+            var currentDate = DateTime.UtcNow;
+
+            // Filter projects by status
+            var filteredProjects = new List<Project>();
+            
+            foreach (var project in allProjects)
+            {
+                var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == year && u.Month == month);
+                string projectStatus;
+
+                // If update exists and has been submitted
+                if (update != null && update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "Submitted";
+                }
+                // Check if the due date has passed (regardless of whether update exists)
+                else if (currentDate > dueDate)
+                {
+                    projectStatus = "Late";
+                }
+                // If update exists but not submitted and due date hasn't passed
+                else if (update != null && !update.SubmittedAt.HasValue)
+                {
+                    projectStatus = "In Progress";
+                }
+                // No update exists and due date hasn't passed
+                else
+                {
+                    projectStatus = "Not Started";
+                }
+
+                if (projectStatus.Equals(status, StringComparison.OrdinalIgnoreCase))
+                {
+                    filteredProjects.Add(project);
+                }
+            }
+
+            ViewBag.Year = year;
+            ViewBag.Month = month;
+            ViewBag.Status = status;
+            ViewBag.MonthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+            ViewBag.DueDate = dueDate;
+            ViewBag.FilteredProjects = filteredProjects.OrderBy(p => p.Title).ToList();
+
+            return PartialView("_MonthlyUpdateStatusProjects", filteredProjects.OrderBy(p => p.Title).ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly update status partial for {Year}/{Month}/{Status}", year, month, status);
+            return PartialView("_MonthlyUpdateStatusProjects", new List<Project>());
         }
     }
 
@@ -633,6 +1432,682 @@ public class CentralOpsController : Controller
             _logger.LogError(ex, "Error loading projects for management");
             TempData["ErrorMessage"] = "An error occurred while loading projects. Please try again.";
             return View(new List<Project>());
+        }
+    }
+
+    // GET: CentralOps/ExportManageWork
+    public async Task<IActionResult> ExportManageWork(
+        string? search,
+        string? businessArea,
+        string? priority,
+        string? rag,
+        string? status)
+    {
+        try
+        {
+            // Use the same query logic as ManageWork
+            var query = _context.Projects
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.RiskAppetiteLookup)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.ProjectProducts)
+                .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.Milestones)
+                .Include(p => p.ProjectMissions)
+                    .ThenInclude(pm => pm.Mission)
+                .Where(p => !p.IsDeleted);
+
+            // Apply filters (same as ManageWork)
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(p => 
+                    p.Title.Contains(search) ||
+                    (p.ProjectCode != null && p.ProjectCode.Contains(search)) ||
+                    (p.Aim != null && p.Aim.Contains(search)));
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                query = query.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+
+            if (!string.IsNullOrEmpty(priority))
+            {
+                query = query.Where(p => p.DeliveryPriority != null && p.DeliveryPriority.Name == priority);
+            }
+
+            if (!string.IsNullOrEmpty(rag))
+            {
+                query = query.Where(p => p.RagStatus == rag);
+            }
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(p => p.Status == status);
+            }
+
+            var projects = await query
+                .OrderBy(p => p.Title)
+                .AsNoTracking()
+                .ToListAsync();
+
+            if (!projects.Any())
+            {
+                TempData["ErrorMessage"] = "No projects found to export.";
+                return RedirectToAction("ManageWork", new { search, businessArea, priority, rag, status });
+            }
+
+            // Load dependencies for each project
+            foreach (var project in projects)
+            {
+                project.DependenciesAsSource = await _context.Dependencies
+                    .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                project.DependenciesAsTarget = await _context.Dependencies
+                    .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // Populate dependency titles
+                foreach (var dep in project.DependenciesAsSource)
+                {
+                    dep.SourceEntityTitle = project.Title;
+                    dep.TargetEntityTitle = await GetEntityTitle(dep.TargetEntityType, dep.TargetEntityId);
+                }
+                foreach (var dep in project.DependenciesAsTarget)
+                {
+                    dep.TargetEntityTitle = project.Title;
+                    dep.SourceEntityTitle = await GetEntityTitle(dep.SourceEntityType, dep.SourceEntityId);
+                }
+            }
+
+            // Find maximum number of SROs to determine column count
+            var maxSroCount = projects.Max(p => p.SeniorResponsibleOfficers?.Count ?? 0);
+            maxSroCount = Math.Max(maxSroCount, 1); // At least 1 column
+
+            // Create workbook
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Work");
+
+            // Build headers
+            var headers = new List<string>
+            {
+                "Project Code",
+                "Title",
+                "Business Area",
+                "Phase",
+                "Status",
+                "Primary Contact",
+                "Start Date",
+                "End Date",
+                "Activity Type",
+                "Risk Appetite",
+                "Current Priority",
+                "Current RAG",
+                "Subject to Spend Control"
+            };
+
+            // Add SRO columns (multiple if needed)
+            for (int i = 1; i <= maxSroCount; i++)
+            {
+                headers.Add($"SRO {i}");
+            }
+
+            headers.AddRange(new[]
+            {
+                "Service Owner",
+                "Directorates",
+                "Linked Products",
+                "Dependencies In",
+                "Dependencies Out",
+                "Strategic Alignment",
+                "Governance",
+                "Team",
+                "Milestones"
+            });
+
+            // Add headers to worksheet
+            for (int col = 0; col < headers.Count; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            // Add data rows
+            int currentRow = 2;
+            foreach (var project in projects)
+            {
+                int col = 1;
+
+                worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
+                worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.PhaseLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.Status ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.PrimaryContactUser != null 
+                    ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                    : string.Empty;
+                
+                worksheet.Cell(currentRow, col++).Value = project.StartDate;
+                if (project.StartDate.HasValue)
+                {
+                    worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                }
+                
+                worksheet.Cell(currentRow, col++).Value = project.TargetDeliveryDate;
+                if (project.TargetDeliveryDate.HasValue)
+                {
+                    worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                }
+                
+                worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
+                    ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
+                    : string.Empty;
+
+                // Add SROs (multiple columns)
+                var sros = project.SeniorResponsibleOfficers?.OrderBy(sro => sro.CreatedAt).ToList() ?? new List<ProjectSeniorResponsibleOfficer>();
+                for (int i = 0; i < maxSroCount; i++)
+                {
+                    if (i < sros.Count)
+                    {
+                        var sro = sros[i];
+                        worksheet.Cell(currentRow, col++).Value = sro.User != null 
+                            ? $"{sro.User.Name} ({sro.User.Email})" 
+                            : string.Empty;
+                    }
+                    else
+                    {
+                        worksheet.Cell(currentRow, col++).Value = string.Empty;
+                    }
+                }
+
+                // Service Owner
+                var serviceOwners = project.ServiceOwners?
+                    .Select(so => so.User != null ? $"{so.User.Name} ({so.User.Email})" : string.Empty)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
+
+                // Directorates
+                var directorates = project.Directorates?
+                    .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                    .Where(d => !string.IsNullOrEmpty(d))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+
+                // Linked Products
+                var products = project.ProjectProducts?
+                    .Select(pp => pp.ProductTitle ?? string.Empty)
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", products);
+
+                // Dependencies In
+                var dependenciesIn = project.DependenciesAsTarget?
+                    .Select(d => $"{d.SourceEntityTitle} ({d.DependencyType ?? "N/A"})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesIn);
+
+                // Dependencies Out
+                var dependenciesOut = project.DependenciesAsSource?
+                    .Select(d => $"{d.TargetEntityTitle} ({d.DependencyType ?? "N/A"})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
+
+                // Strategic Alignment
+                var strategicItems = new List<string>();
+                if (!string.IsNullOrEmpty(project.StrategicObjectives))
+                {
+                    strategicItems.Add($"Objectives: {project.StrategicObjectives}");
+                }
+                if (project.ProjectMissions?.Any() == true)
+                {
+                    var missions = project.ProjectMissions
+                        .Select(pm => pm.Mission?.Title ?? string.Empty)
+                        .Where(m => !string.IsNullOrEmpty(m));
+                    strategicItems.Add($"Missions: {string.Join(", ", missions)}");
+                }
+                worksheet.Cell(currentRow, col++).Value = string.Join(" | ", strategicItems);
+
+                // Governance (PMO Contacts)
+                var pmoContacts = project.PmoContacts?
+                    .Select(pc => pc.User != null ? $"{pc.User.Name} ({pc.User.Email})" : string.Empty)
+                    .Where(pc => !string.IsNullOrEmpty(pc))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", pmoContacts);
+
+                // Team
+                var teamMembers = project.ProjectContacts?
+                    .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || pc.TeamStatus == "current")
+                    .Select(pc => pc.User != null 
+                        ? $"{pc.User.Name} ({pc.Role})" 
+                        : $"{pc.Name} ({pc.Role})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", teamMembers);
+
+                // Milestones
+                var milestones = project.Milestones?
+                    .Where(m => !m.IsDeleted)
+                    .Select(m => $"{m.Name} ({m.Status}) - Due: {m.DueDate:dd/MM/yyyy}")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join(" | ", milestones);
+
+                currentRow++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            
+            // Wrap text for longer columns
+            var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (wrapColumns.Contains(headers[i]))
+                {
+                    worksheet.Column(i + 1).Style.Alignment.WrapText = true;
+                }
+            }
+
+            worksheet.SheetView.FreezeRows(1);
+
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"manage-work-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting manage work to Excel");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("ManageWork", new { search, businessArea, priority, rag, status });
+        }
+    }
+
+    // GET: CentralOps/ExportAllWork
+    public async Task<IActionResult> ExportAllWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+    {
+        try
+        {
+            // Session keys for filters (same as AllWork)
+            const string sessionKeySearch = "AllWork_Search";
+            const string sessionKeyRagStatus = "AllWork_RagStatus";
+            const string sessionKeyBusinessArea = "AllWork_BusinessArea";
+            const string sessionKeyPhase = "AllWork_Phase";
+            const string sessionKeyFlagship = "AllWork_Flagship";
+            const string sessionKeyPriority = "AllWork_Priority";
+
+            // Get filter values from session if not provided in query string
+            if (string.IsNullOrEmpty(search))
+                search = HttpContext.Session.GetString(sessionKeySearch);
+            if (string.IsNullOrEmpty(ragStatus))
+                ragStatus = HttpContext.Session.GetString(sessionKeyRagStatus);
+            if (string.IsNullOrEmpty(businessArea))
+                businessArea = HttpContext.Session.GetString(sessionKeyBusinessArea);
+            if (string.IsNullOrEmpty(phase))
+                phase = HttpContext.Session.GetString(sessionKeyPhase);
+            if (string.IsNullOrEmpty(flagship))
+                flagship = HttpContext.Session.GetString(sessionKeyFlagship);
+            if (!priority.HasValue)
+                priority = HttpContext.Session.GetInt32(sessionKeyPriority);
+
+            // Build query with all necessary includes (same as ExportManageWork)
+            var query = _context.Projects
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ActivityTypeLookup)
+                .Include(p => p.RiskAppetiteLookup)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.Directorates)
+                    .ThenInclude(d => d.DirectorateLookup)
+                .Include(p => p.ProjectProducts)
+                .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.Milestones)
+                .Include(p => p.ProjectMissions)
+                    .ThenInclude(pm => pm.Mission)
+                .Where(p => !p.IsDeleted);
+
+            // Apply filters (same as AllWork)
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(p => p.Title.Contains(search) || (p.ProjectCode != null && p.ProjectCode.Contains(search)));
+            }
+
+            if (!string.IsNullOrEmpty(ragStatus))
+            {
+                query = query.Where(p => NormalizeRagStatus(p.RagStatus) == ragStatus);
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                query = query.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+
+            if (!string.IsNullOrEmpty(phase))
+            {
+                query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+            }
+
+            if (!string.IsNullOrEmpty(flagship))
+            {
+                var isFlagship = flagship == "true";
+                query = query.Where(p => p.IsFlagship == isFlagship);
+            }
+
+            if (priority.HasValue)
+            {
+                query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+
+            var projects = await query
+                .OrderBy(p => p.Title)
+                .AsNoTracking()
+                .ToListAsync();
+
+            if (!projects.Any())
+            {
+                TempData["ErrorMessage"] = "No projects found to export.";
+                return RedirectToAction("AllWork", new { search, ragStatus, businessArea, phase, flagship, priority });
+            }
+
+            // Load dependencies for each project
+            foreach (var project in projects)
+            {
+                project.DependenciesAsSource = await _context.Dependencies
+                    .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                project.DependenciesAsTarget = await _context.Dependencies
+                    .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // Populate dependency titles
+                foreach (var dep in project.DependenciesAsSource)
+                {
+                    dep.SourceEntityTitle = project.Title;
+                    dep.TargetEntityTitle = await GetEntityTitle(dep.TargetEntityType, dep.TargetEntityId);
+                }
+                foreach (var dep in project.DependenciesAsTarget)
+                {
+                    dep.TargetEntityTitle = project.Title;
+                    dep.SourceEntityTitle = await GetEntityTitle(dep.SourceEntityType, dep.SourceEntityId);
+                }
+            }
+
+            // Find maximum number of SROs to determine column count
+            var maxSroCount = projects.Max(p => p.SeniorResponsibleOfficers?.Count ?? 0);
+            maxSroCount = Math.Max(maxSroCount, 1); // At least 1 column
+
+            // Create workbook
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("All Work");
+
+            // Build headers
+            var headers = new List<string>
+            {
+                "Project Code",
+                "Title",
+                "Business Area",
+                "Phase",
+                "Status",
+                "Primary Contact",
+                "Start Date",
+                "End Date",
+                "Activity Type",
+                "Risk Appetite",
+                "Current Priority",
+                "Current RAG",
+                "Subject to Spend Control"
+            };
+
+            // Add SRO columns (multiple if needed)
+            for (int i = 1; i <= maxSroCount; i++)
+            {
+                headers.Add($"SRO {i}");
+            }
+
+            headers.AddRange(new[]
+            {
+                "Service Owner",
+                "Directorates",
+                "Linked Products",
+                "Dependencies In",
+                "Dependencies Out",
+                "Strategic Alignment",
+                "Governance",
+                "Team",
+                "Milestones"
+            });
+
+            // Add headers to worksheet
+            for (int col = 0; col < headers.Count; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            // Add data rows
+            int currentRow = 2;
+            foreach (var project in projects)
+            {
+                int col = 1;
+
+                worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
+                worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.PhaseLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.Status ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.PrimaryContactUser != null 
+                    ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                    : string.Empty;
+                
+                worksheet.Cell(currentRow, col++).Value = project.StartDate;
+                if (project.StartDate.HasValue)
+                {
+                    worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                }
+                
+                worksheet.Cell(currentRow, col++).Value = project.TargetDeliveryDate;
+                if (project.TargetDeliveryDate.HasValue)
+                {
+                    worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                }
+                
+                worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
+                    ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
+                    : string.Empty;
+
+                // Add SROs (multiple columns)
+                var sros = project.SeniorResponsibleOfficers?.OrderBy(sro => sro.CreatedAt).ToList() ?? new List<ProjectSeniorResponsibleOfficer>();
+                for (int i = 0; i < maxSroCount; i++)
+                {
+                    if (i < sros.Count)
+                    {
+                        var sro = sros[i];
+                        worksheet.Cell(currentRow, col++).Value = sro.User != null 
+                            ? $"{sro.User.Name} ({sro.User.Email})" 
+                            : string.Empty;
+                    }
+                    else
+                    {
+                        worksheet.Cell(currentRow, col++).Value = string.Empty;
+                    }
+                }
+
+                // Service Owner
+                var serviceOwners = project.ServiceOwners?
+                    .Select(so => so.User != null ? $"{so.User.Name} ({so.User.Email})" : string.Empty)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
+
+                // Directorates
+                var directorates = project.Directorates?
+                    .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                    .Where(d => !string.IsNullOrEmpty(d))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+
+                // Linked Products
+                var products = project.ProjectProducts?
+                    .Select(pp => pp.ProductTitle ?? string.Empty)
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", products);
+
+                // Dependencies In
+                var dependenciesIn = project.DependenciesAsTarget?
+                    .Select(d => $"{d.SourceEntityTitle} ({d.DependencyType ?? "N/A"})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesIn);
+
+                // Dependencies Out
+                var dependenciesOut = project.DependenciesAsSource?
+                    .Select(d => $"{d.TargetEntityTitle} ({d.DependencyType ?? "N/A"})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
+
+                // Strategic Alignment
+                var strategicItems = new List<string>();
+                if (!string.IsNullOrEmpty(project.StrategicObjectives))
+                {
+                    strategicItems.Add($"Objectives: {project.StrategicObjectives}");
+                }
+                if (project.ProjectMissions?.Any() == true)
+                {
+                    var missions = project.ProjectMissions
+                        .Select(pm => pm.Mission?.Title ?? string.Empty)
+                        .Where(m => !string.IsNullOrEmpty(m));
+                    strategicItems.Add($"Missions: {string.Join(", ", missions)}");
+                }
+                worksheet.Cell(currentRow, col++).Value = string.Join(" | ", strategicItems);
+
+                // Governance (PMO Contacts)
+                var pmoContacts = project.PmoContacts?
+                    .Select(pc => pc.User != null ? $"{pc.User.Name} ({pc.User.Email})" : string.Empty)
+                    .Where(pc => !string.IsNullOrEmpty(pc))
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", pmoContacts);
+
+                // Team
+                var teamMembers = project.ProjectContacts?
+                    .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || pc.TeamStatus == "current")
+                    .Select(pc => pc.User != null 
+                        ? $"{pc.User.Name} ({pc.Role})" 
+                        : $"{pc.Name} ({pc.Role})")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join("; ", teamMembers);
+
+                // Milestones
+                var milestones = project.Milestones?
+                    .Where(m => !m.IsDeleted)
+                    .Select(m => $"{m.Name} ({m.Status}) - Due: {m.DueDate:dd/MM/yyyy}")
+                    .ToList() ?? new List<string>();
+                worksheet.Cell(currentRow, col++).Value = string.Join(" | ", milestones);
+
+                currentRow++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            
+            // Wrap text for longer columns
+            var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (wrapColumns.Contains(headers[i]))
+                {
+                    worksheet.Column(i + 1).Style.Alignment.WrapText = true;
+                }
+            }
+
+            worksheet.SheetView.FreezeRows(1);
+
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"all-work-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting all work to Excel");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("AllWork", new { search, ragStatus, businessArea, phase, flagship, priority });
+        }
+    }
+
+    private async Task<string> GetEntityTitle(string entityType, int entityId)
+    {
+        try
+        {
+            return entityType switch
+            {
+                "Project" => await _context.Projects
+                    .Where(p => p.Id == entityId)
+                    .Select(p => p.Title)
+                    .FirstOrDefaultAsync() ?? "Unknown Project",
+                "Milestone" => await _context.Milestones
+                    .Where(m => m.Id == entityId)
+                    .Select(m => m.Name)
+                    .FirstOrDefaultAsync() ?? "Unknown Milestone",
+                "Issue" => await _context.Issues
+                    .Where(i => i.Id == entityId)
+                    .Select(i => i.Title)
+                    .FirstOrDefaultAsync() ?? "Unknown Issue",
+                "Risk" => await _context.Risks
+                    .Where(r => r.Id == entityId)
+                    .Select(r => r.Title)
+                    .FirstOrDefaultAsync() ?? "Unknown Risk",
+                "Action" => await _context.Actions
+                    .Where(a => a.Id == entityId)
+                    .Select(a => a.Title)
+                    .FirstOrDefaultAsync() ?? "Unknown Action",
+                _ => $"Unknown {entityType}"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting entity title for {EntityType} {EntityId}", entityType, entityId);
+            return $"Unknown {entityType}";
         }
     }
 

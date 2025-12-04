@@ -59,8 +59,11 @@ public class Kpi
     [ForeignKey(nameof(ProjectId))]
     public Project? Project { get; set; }
 
+    [MaxLength(100)]
+    public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
+
     [MaxLength(50)]
-    public string? ProductFipsId { get; set; }
+    public string? ProductFipsId { get; set; } // Product FIPS ID (legacy, kept for backwards compatibility)
 
     public int? ObjectiveId { get; set; }
 

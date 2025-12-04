@@ -846,7 +846,7 @@ public class HomeController : Controller
                 PriorityBadgeClass = status == ReturnStatus.Late ? "badge badge-danger" : "badge badge-warning",
                 DueDate = dueDate,
                 LinkLabel = "Open performance metrics",
-                LinkUrl = Url.Action("PerformanceMetrics", "ProductReporting", new { fipsId = product.FipsId }) ?? "#"
+                LinkUrl = Url.Action("PerformanceMetrics", "ProductReporting", new { documentId = product.DocumentId ?? product.FipsId }) ?? "#"
             });
         }
 
