@@ -623,6 +623,73 @@ public class DdtReportsController : Controller
         }
     }
 
+    // GET: DdtReports/FipsNewEntries
+    public async Task<IActionResult> FipsNewEntries()
+    {
+        try
+        {
+            var allProducts = await _productsApiService.GetAllProductsAsync(null);
+            var newProducts = allProducts
+                .Where(p => p.State?.Equals("New", StringComparison.OrdinalIgnoreCase) == true)
+                .OrderBy(p => p.Title)
+                .ToList();
+
+            var completionItems = newProducts
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            var averageCompletion = completionItems.Any()
+                ? completionItems.Average(p => p.CompletionPercentage)
+                : 0;
+
+            var businessAreaCompletions = completionItems
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
+                .Select(g => new BusinessAreaCompletion
+                {
+                    BusinessArea = g.Key,
+                    ProductCount = g.Count(),
+                    AverageCompletionPercentage = g.Average(p => p.CompletionPercentage)
+                })
+                .OrderByDescending(ba => ba.AverageCompletionPercentage)
+                .ToList();
+
+            var zeroCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage) < 0.0001);
+            var fullCompletionCount = completionItems.Count(p => Math.Abs(p.CompletionPercentage - 100) < 0.0001);
+
+            var completedPhaseCount = completionItems.Count(p => p.HasPhase);
+            var completedBusinessAreaCount = completionItems.Count(p => p.HasBusinessArea);
+            var completedProductUrlCount = completionItems.Count(p => p.HasProductUrl);
+
+            var phaseCategoryValues = await _productsApiService.GetPhaseCategoryValuesAsync();
+            var businessAreaCategoryValues = await _productsApiService.GetBusinessAreaCategoryValuesAsync();
+            var userGroupCategoryValues = await _productsApiService.GetUserGroupCategoryValuesAsync();
+
+            var viewModel = new FipsCompletionViewModel
+            {
+                Products = completionItems,
+                AverageCompletionPercentage = averageCompletion,
+                BusinessAreaCompletions = businessAreaCompletions,
+                ZeroCompletionCount = zeroCompletionCount,
+                FullCompletionCount = fullCompletionCount,
+                CompletedPhaseCount = completedPhaseCount,
+                CompletedBusinessAreaCount = completedBusinessAreaCount,
+                CompletedUrlCount = completedProductUrlCount
+            };
+            
+            ViewBag.PhaseCategoryValues = phaseCategoryValues;
+            ViewBag.BusinessAreaCategoryValues = businessAreaCategoryValues;
+            ViewBag.UserGroupCategoryValues = userGroupCategoryValues;
+            
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating FIPS new entries report");
+            TempData["ErrorMessage"] = "An error occurred while generating the report. Please try again.";
+            return View(new FipsCompletionViewModel());
+        }
+    }
+
     // GET: DdtReports/DeliverablesCompletion
     public async Task<IActionResult> DeliverablesCompletion()
     {
@@ -862,6 +929,103 @@ public class DdtReportsController : Controller
             HasSpendControl = hasSpendControl,
             CompletionPercentage = completionPercentage
         };
+    }
+
+    // GET: DdtReports/ExportFipsNewEntries
+    [HttpGet]
+    public async Task<IActionResult> ExportFipsNewEntries()
+    {
+        try
+        {
+            var allProducts = await _productsApiService.GetAllProductsAsync(null);
+            var newProducts = allProducts
+                .Where(p => p.State?.Equals("New", StringComparison.OrdinalIgnoreCase) == true)
+                .OrderBy(p => p.Title)
+                .ToList();
+
+            var completionItems = newProducts
+                .Select(CreateProductCompletionItem)
+                .ToList();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("FIPS New Entries");
+
+            var headers = new[]
+            {
+                "Product title",
+                "FIPS ID",
+                "State",
+                "Phase",
+                "Has phase",
+                "Business area",
+                "Has business area",
+                "Contacts count",
+                "Contacts",
+                "Senior responsible officer",
+                "Information asset owner",
+                "Delivery manager",
+                "Product URL",
+                "Has product URL",
+                "User groups",
+                "User groups count",
+                "Completion %"
+            };
+
+            for (var column = 0; column < headers.Length; column++)
+            {
+                var cell = worksheet.Cell(1, column + 1);
+                cell.Value = headers[column];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            var currentRow = 2;
+
+            foreach (var item in completionItems)
+            {
+                worksheet.Cell(currentRow, 1).Value = item.ProductTitle;
+                worksheet.Cell(currentRow, 2).Value = item.FipsId;
+                worksheet.Cell(currentRow, 3).Value = item.State;
+                worksheet.Cell(currentRow, 4).Value = item.PhaseName ?? string.Empty;
+                worksheet.Cell(currentRow, 5).Value = item.HasPhase ? "Yes" : "No";
+                worksheet.Cell(currentRow, 6).Value = item.BusinessArea;
+                worksheet.Cell(currentRow, 7).Value = item.HasBusinessArea ? "Yes" : "No";
+                worksheet.Cell(currentRow, 8).Value = item.ContactsCount;
+                worksheet.Cell(currentRow, 9).Value = item.ContactDetails.Any()
+                    ? string.Join(Environment.NewLine, item.ContactDetails)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
+                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                    ? string.Join(", ", item.UserGroupNames)
+                    : string.Empty;
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+
+                currentRow++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            worksheet.Column(9).Style.Alignment.WrapText = true;
+            worksheet.SheetView.FreezeRows(1);
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"fips-new-entries-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting FIPS new entries to Excel");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("FipsNewEntries");
+        }
     }
 
     [HttpGet]
@@ -1733,7 +1897,7 @@ public class DdtReportsController : Controller
     // POST: DdtReports/UpdateProductState
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProductState(string fipsId, string state)
+    public async Task<IActionResult> UpdateProductState(string fipsId, string state, string? returnUrl = null)
     {
         try
         {
@@ -1753,12 +1917,31 @@ public class DdtReportsController : Controller
                 TempData["ErrorMessage"] = "Failed to update product state. Please try again.";
             }
             
+            // Redirect to the appropriate view based on returnUrl or default to FipsCompletion
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            
+            // Default redirect based on state - if setting to Active, likely came from New Entries
+            if (state.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction("FipsNewEntries");
+            }
+            
             return RedirectToAction("FipsCompletion");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating product state for {FipsId}", fipsId);
             TempData["ErrorMessage"] = "An error occurred while updating the product state.";
+            
+            // Try to redirect back to the calling view
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            
             return RedirectToAction("FipsCompletion");
         }
     }

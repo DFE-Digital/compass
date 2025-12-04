@@ -53,7 +53,8 @@ namespace Compass.Controllers
                             (p.Phase != null && p.Phase.Contains(q, StringComparison.OrdinalIgnoreCase))))
                 .Take(10)
                 .Select(p => new {
-                    fipsId = p.FipsId,
+                    documentId = p.DocumentId ?? p.FipsId, // Use DocumentId as primary identifier
+                    fipsId = p.FipsId, // Keep for backwards compatibility
                     title = p.Title,
                     phase = p.Phase
                 })
@@ -102,8 +103,8 @@ namespace Compass.Controllers
                     .LoadAsync();
             }
 
-            // Get total products from CMS
-            var cmsProducts = await _productsApiService.GetProductsAsync();
+            // Get total products from CMS (for "all-products" tab, we'll get all products regardless of state)
+            var cmsProducts = await _productsApiService.GetAllProductsAsync();
             var totalProducts = cmsProducts?.Count ?? 0;
 
             // Calculate summary statistics
@@ -164,7 +165,7 @@ namespace Compass.Controllers
                     .Count(pa => userProductFipsIds.Contains(pa.FipsId));
             }
 
-            // Calculate "All" Products count (all enrolled products)
+            // Calculate "All" Products count (will be recalculated after we determine enrolled CMS products)
             var allProductsCount = allProducts.Count;
 
             // Calculate "Your" Issues count (open issues for user-assigned products)
@@ -232,10 +233,10 @@ namespace Compass.Controllers
                 }
                 else
                 {
-                    // For "all-products", get all products
+                    // For "all-products", get all products regardless of state
                     if (cmsProducts == null)
                     {
-                        cmsProducts = await _productsApiService.GetProductsAsync();
+                        cmsProducts = await _productsApiService.GetAllProductsAsync();
                     }
                 }
                 
@@ -362,7 +363,8 @@ namespace Compass.Controllers
 
                     var productViewModel = new
                     {
-                        FipsId = cmsProduct.FipsId,
+                        DocumentId = cmsProduct.DocumentId ?? cmsProduct.FipsId, // Use DocumentId as primary identifier
+                        FipsId = cmsProduct.FipsId, // Keep for backwards compatibility
                         ProductName = cmsProduct.Title,
                         Phase = cmsProduct.Phase,
                         IsEnrolled = isEnrolled,
@@ -375,8 +377,12 @@ namespace Compass.Controllers
                         LastAudit = lastAudit
                     };
 
-                    // Since we're already filtering to user-assigned products, all products shown are "My Products"
-                    var isMyProduct = !string.IsNullOrEmpty(currentUserEmail);
+                    // Check if this product is assigned to the current user
+                    // For "your-products" tab, cmsProducts is already filtered to user-assigned products
+                    // For "all-products" tab, we need to check if the product is in the user's assigned list
+                    var isMyProduct = isYourProducts || 
+                        (!string.IsNullOrEmpty(currentUserEmail) && 
+                         userProductFipsIds.Contains(cmsProduct.FipsId ?? string.Empty));
 
                     if (isEnrolled)
                     {
@@ -496,6 +502,14 @@ namespace Compass.Controllers
                     .Where(pa => enrolledFipsIds.Contains(pa.FipsId))
                     .OrderBy(pa => pa.ProductName)
                     .ToList();
+                
+                // Recalculate "All" Products count for "all-products" tab to match what's displayed
+                // This ensures the badge count matches the actual enrolled CMS products shown
+                if (tab == "all-products")
+                {
+                    allProductsCount = enrolledProductViewModels.Count;
+                    ViewBag.AllProductsCount = allProductsCount;
+                }
                 
                 return View("~/Views/Apps/Accessibility/Index.cshtml", enrolledProductAccessibilities);
             }
@@ -842,22 +856,28 @@ namespace Compass.Controllers
             return View("~/Views/Apps/Accessibility/AllIssues.cshtml", allIssues);
         }
 
-        // GET: Accessibility/Details/{fipsId}?tab=overview
-        public async Task<IActionResult> Details(string fipsId, string tab = "overview")
+        // GET: Accessibility/Details/{documentId}?tab=overview
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> Details(string documentId, string tab = "overview")
         {
-            // Get CMS product info first
+            // Get CMS product info first - try to find by DocumentId (primary) or FipsId (legacy)
             var cmsProducts = await _productsApiService.GetProductsAsync();
-            var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == fipsId);
+            var productInfo = cmsProducts?.FirstOrDefault(p => 
+                p.DocumentId == documentId || p.FipsId == documentId);
             
             if (productInfo == null)
             {
                 return NotFound();
             }
             
+            // Use DocumentId for database lookup (primary identifier)
+            var productDocumentId = productInfo.DocumentId ?? documentId;
             var productAccessibility = await _context.ProductAccessibilities
                 .Include(pa => pa.ContactMethods.Where(cm => cm.IsActive))
                 .Include(pa => pa.AuditHistories.Where(ah => !ah.IsDeleted))
-                .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                .FirstOrDefaultAsync(pa => 
+                    (pa.ProductDocumentId == productDocumentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                    && !pa.IsDeleted);
             
             // If product not enrolled, show enrollment option
             if (productAccessibility == null)
@@ -986,8 +1006,9 @@ namespace Compass.Controllers
             return View("~/Views/Apps/Accessibility/Details.cshtml", productAccessibility);
         }
 
-        // GET: Accessibility/ViewIssue/{id}?fipsId={fipsId}
-        public async Task<IActionResult> ViewIssue(int id, string fipsId)
+        // GET: Accessibility/ViewIssue/{id}?documentId={documentId}
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> ViewIssue(int id, string documentId)
         {
             var issue = await _context.AccessibilityIssues
                 .Include(i => i.ProductAccessibility)
@@ -1002,26 +1023,31 @@ namespace Compass.Controllers
                 return NotFound();
             }
             
-            // Verify the issue belongs to the correct product
-            if (issue.ProductAccessibility.FipsId != fipsId)
+            // Verify the issue belongs to the correct product (check by DocumentId or FipsId)
+            var productDocumentId = issue.ProductAccessibility.ProductDocumentId ?? issue.ProductAccessibility.FipsId;
+            if (productDocumentId != documentId && issue.ProductAccessibility.FipsId != documentId)
             {
                 return NotFound();
             }
             
             // Get CMS product info for sidebar
             var cmsProducts = await _productsApiService.GetProductsAsync();
-            var cmsProduct = cmsProducts?.FirstOrDefault(p => p.FipsId == fipsId);
+            var cmsProduct = cmsProducts?.FirstOrDefault(p => 
+                p.DocumentId == documentId || p.FipsId == documentId);
             
-            ViewBag.FipsId = fipsId;
+            ViewBag.DocumentId = documentId;
+            ViewBag.FipsId = issue.ProductAccessibility.FipsId; // Keep for backwards compatibility
             ViewBag.ProductName = issue.ProductAccessibility.ProductName;
             ViewBag.CmsProduct = cmsProduct;
             return View("~/Views/Apps/Accessibility/IssueDetails.cshtml", issue);
         }
 
         // GET: Accessibility/Enroll
-        public async Task<IActionResult> Enroll(string? fipsId)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> Enroll(string? documentId)
         {
-            ViewBag.FipsId = fipsId;
+            ViewBag.DocumentId = documentId;
+            ViewBag.FipsId = documentId; // Keep for backwards compatibility
             
             // Get CMS products for autocomplete
             ViewBag.CmsProducts = await _productsApiService.GetProductsAsync();
@@ -1036,24 +1062,52 @@ namespace Compass.Controllers
         {
             try
             {
-                // Check if product already enrolled
+                // Get product info from CMS first to get DocumentId
+                // Support both documentId (from form) and fipsId (legacy)
+                var documentIdFromForm = Request.Form["documentId"].ToString();
+                var fipsIdFromForm = productAccessibility.FipsId ?? Request.Form["fipsId"].ToString();
+                
+                var cmsProducts = await _productsApiService.GetProductsAsync();
+                var productInfo = cmsProducts?.FirstOrDefault(p => 
+                    (!string.IsNullOrEmpty(documentIdFromForm) && (p.DocumentId == documentIdFromForm || p.FipsId == documentIdFromForm)) ||
+                    (!string.IsNullOrEmpty(fipsIdFromForm) && (p.FipsId == fipsIdFromForm || p.DocumentId == fipsIdFromForm)));
+                
+                if (productInfo == null)
+                {
+                    TempData["ErrorMessage"] = "Product not found in CMS.";
+                    return View(productAccessibility);
+                }
+                
+                // Set ProductDocumentId (primary identifier)
+                if (string.IsNullOrEmpty(productInfo.DocumentId))
+                {
+                    TempData["ErrorMessage"] = "Product DocumentId is required but not found in CMS.";
+                    return View(productAccessibility);
+                }
+                productAccessibility.ProductDocumentId = productInfo.DocumentId;
+                
+                // Check if product already enrolled (by DocumentId or FipsId for backwards compatibility)
                 var existing = await _context.ProductAccessibilities
-                    .FirstOrDefaultAsync(pa => pa.FipsId == productAccessibility.FipsId && !pa.IsDeleted);
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == productAccessibility.ProductDocumentId || 
+                         (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == productAccessibility.FipsId)) 
+                        && !pa.IsDeleted);
                 
                 if (existing != null)
                 {
                     TempData["ErrorMessage"] = "This product is already enrolled in the accessibility management service.";
-                    return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId });
+                    return RedirectToAction(nameof(Details), new { documentId = productAccessibility.ProductDocumentId ?? productAccessibility.FipsId });
                 }
-                
-                // Get product info from CMS
-                var cmsProducts = await _productsApiService.GetProductsAsync();
-                var productInfo = cmsProducts?.FirstOrDefault(p => p.FipsId == productAccessibility.FipsId);
                 
                 if (productInfo != null)
                 {
                     productAccessibility.ProductName = productInfo.Title;
                     productAccessibility.ProductPhase = productInfo.Phase;
+                    // Ensure FipsId is set for backwards compatibility
+                    if (string.IsNullOrEmpty(productAccessibility.FipsId) && !string.IsNullOrEmpty(productInfo.FipsId))
+                    {
+                        productAccessibility.FipsId = productInfo.FipsId;
+                    }
                 }
                 
                 productAccessibility.EnrolledAt = DateTime.UtcNow;
@@ -1081,7 +1135,7 @@ namespace Compass.Controllers
                 }
                 
                 TempData["SuccessMessage"] = "Product enrolled successfully in accessibility management service.";
-                return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId });
+                return RedirectToAction(nameof(Details), new { documentId = productAccessibility.ProductDocumentId ?? productAccessibility.FipsId });
             }
             catch (Exception ex)
             {
@@ -1094,12 +1148,17 @@ namespace Compass.Controllers
         // POST: Accessibility/UpdateSettings
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateSettings(string fipsId, int slaResponseDays, string complaintsEmail)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> UpdateSettings(string documentId, int slaResponseDays, string complaintsEmail)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
-                var productAccessibility = await _context.ProductAccessibilities
-                    .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                // Try to find by DocumentId first, then FipsId for backwards compatibility
+                productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
                 
                 if (productAccessibility == null)
                 {
@@ -1121,17 +1180,20 @@ namespace Compass.Controllers
                 TempData["ErrorMessage"] = "An error occurred while updating settings.";
             }
             
-            return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/AddContactMethod
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddContactMethod(int productAccessibilityId, string fipsId, string type, string detail, string? description, int sortOrder)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> AddContactMethod(int productAccessibilityId, string documentId, string type, string detail, string? description, int sortOrder)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
-                var productAccessibility = await _context.ProductAccessibilities
+                productAccessibility = await _context.ProductAccessibilities
                     .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
                 
                 if (productAccessibility == null)
@@ -1154,24 +1216,33 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Contact method added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding contact method");
                 TempData["ErrorMessage"] = "An error occurred while adding contact method.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+                if (productAccessibility == null)
+                {
+                    productAccessibility = await _context.ProductAccessibilities
+                        .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                }
             }
+            
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/DeleteContactMethod
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteContactMethod(int id, string fipsId)
+        // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+        public async Task<IActionResult> DeleteContactMethod(int id, string documentId)
         {
+            ProductAccessibility? productAccessibility = null;
             try
             {
                 var contactMethod = await _context.ContactMethods
+                    .Include(cm => cm.ProductAccessibility)
                     .FirstOrDefaultAsync(cm => cm.Id == id);
                 
                 if (contactMethod == null)
@@ -1179,18 +1250,27 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
+                productAccessibility = contactMethod.ProductAccessibility;
                 _context.ContactMethods.Remove(contactMethod);
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Contact method deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting contact method");
                 TempData["ErrorMessage"] = "An error occurred while deleting contact method.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "settings" });
+                if (productAccessibility == null)
+                {
+                    var contactMethod = await _context.ContactMethods
+                        .Include(cm => cm.ProductAccessibility)
+                        .FirstOrDefaultAsync(cm => cm.Id == id);
+                    productAccessibility = contactMethod?.ProductAccessibility;
+                }
             }
+            
+            var productDocId = productAccessibility?.ProductDocumentId ?? documentId;
+            return RedirectToAction(nameof(Details), new { documentId = productDocId, tab = "settings" });
         }
 
         // POST: Accessibility/AddAudit

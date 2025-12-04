@@ -16,8 +16,11 @@ public class ProjectProduct
     public Project Project { get; set; } = null!;
 
     [Required]
+    [MaxLength(100)]
+    public string ProductDocumentId { get; set; } = string.Empty; // Product DocumentID from CMS (primary identifier)
+
     [MaxLength(50)]
-    public string ProductFipsId { get; set; } = string.Empty;
+    public string? ProductFipsId { get; set; } // Product FIPS ID (legacy, kept for backwards compatibility)
 
     [Required]
     [MaxLength(200)]

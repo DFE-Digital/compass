@@ -245,49 +245,65 @@ public class ProductReportingController : Controller
         return View("~/Views/ProductReporting/PerformanceMetrics/ReportOtherProduct.cshtml", eligibleProducts);
     }
 
-    // GET: ProductReporting/ProductHistory/FIPS123
-    public async Task<IActionResult> ProductHistory(string fipsId)
+    // GET: ProductReporting/ProductHistory/{documentId}
+    // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+    public async Task<IActionResult> ProductHistory(string documentId)
     {
-        if (string.IsNullOrEmpty(fipsId))
+        if (string.IsNullOrEmpty(documentId))
         {
             return NotFound();
         }
 
-        var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+        // Try to get product by DocumentId first, then FipsId for backwards compatibility
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => 
+            p.DocumentId == documentId || p.FipsId == documentId);
+        
         if (product == null)
         {
             return NotFound();
         }
 
+        // Use DocumentId for database operations (primary identifier)
+        var productDocumentId = product.DocumentId ?? documentId;
+        
         // Get or create returns starting from October 2025 and 1 upcoming month
-        var returns = await GetOrCreateReturns(fipsId, 1);
+        var returns = await GetOrCreateReturns(productDocumentId, product.FipsId, 1);
 
         ViewBag.Product = product;
         return View("~/Views/ProductReporting/PerformanceMetrics/History.cshtml", returns);
     }
 
-    // GET: ProductReporting/SubmitMetrics/FIPS123/2025/10
-    public async Task<IActionResult> SubmitMetrics(string fipsId, int year, int month)
+    // GET: ProductReporting/SubmitMetrics/{documentId}/2025/10
+    // Supports both DocumentId (primary) and FipsId (legacy) for backwards compatibility
+    public async Task<IActionResult> SubmitMetrics(string documentId, int year, int month)
     {
-        if (string.IsNullOrEmpty(fipsId))
+        if (string.IsNullOrEmpty(documentId))
         {
             return NotFound();
         }
 
-        var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+        // Try to get product by DocumentId first, then FipsId for backwards compatibility
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => 
+            p.DocumentId == documentId || p.FipsId == documentId);
+        
         if (product == null)
         {
             return NotFound();
         }
 
+        // Use DocumentId for database operations (primary identifier)
+        var productDocumentId = product.DocumentId ?? documentId;
+
         // Get or create the return
-        var productReturn = await GetOrCreateReturn(fipsId, year, month);
+        var productReturn = await GetOrCreateReturn(productDocumentId, product.FipsId, year, month);
 
         // Check if return is in a state that allows editing
         if (productReturn.Status == ReturnStatus.Submitted)
         {
             TempData["ErrorMessage"] = "This return has already been submitted and cannot be edited.";
-            return RedirectToAction(nameof(ProductHistory), new { fipsId });
+            return RedirectToAction(nameof(ProductHistory), new { documentId = productDocumentId });
         }
 
         if (productReturn.Status == ReturnStatus.Upcoming)
@@ -327,7 +343,7 @@ public class ProductReportingController : Controller
         var productTypes = new List<string>();
         if (product.CategoryValues != null)
         {
-            _logger.LogInformation("Product {FipsId} has {Count} category values", fipsId, product.CategoryValues.Count);
+            _logger.LogInformation("Product {DocumentId} has {Count} category values", productDocumentId, product.CategoryValues.Count);
             foreach (var cv in product.CategoryValues)
             {
                 _logger.LogInformation("  Category: {Name} (Type: {TypeName})", cv.Name, cv.CategoryType?.Name);
@@ -340,16 +356,16 @@ public class ProductReportingController : Controller
                 
             if (productTypes.Any())
             {
-                _logger.LogInformation("Product {FipsId} has Types: {Types}", fipsId, string.Join(", ", productTypes));
+                _logger.LogInformation("Product {DocumentId} has Types: {Types}", productDocumentId, string.Join(", ", productTypes));
             }
             else
             {
-                _logger.LogWarning("Product {FipsId} does not have any Type categories assigned", fipsId);
+                _logger.LogWarning("Product {DocumentId} does not have any Type categories assigned", productDocumentId);
             }
         }
         else
         {
-            _logger.LogWarning("Product {FipsId} has no CategoryValues", fipsId);
+            _logger.LogWarning("Product {DocumentId} has no CategoryValues", productDocumentId);
         }
 
         // Filter by type - only include metrics where ANY of the product's types match ANY of the metric's applicable types
@@ -443,7 +459,8 @@ public class ProductReportingController : Controller
         
         var previousReturn = await _context.ProductReturns
             .Include(pr => pr.MetricValues)
-            .FirstOrDefaultAsync(pr => pr.FipsId == fipsId && 
+            .FirstOrDefaultAsync(pr => (pr.ProductDocumentId == productDocumentId || 
+                                       (string.IsNullOrEmpty(pr.ProductDocumentId) && pr.FipsId == product.FipsId)) &&
                                       pr.Year == previousYear && 
                                       pr.Month == previousMonth);
         
@@ -605,7 +622,7 @@ public class ProductReportingController : Controller
         if (incompleteCount > 0)
         {
             TempData["ErrorMessage"] = $"Cannot submit: {incompleteCount} metric(s) still need to be completed";
-            return RedirectToAction(nameof(SubmitMetrics), new { fipsId = productReturn.FipsId, year = productReturn.Year, month = productReturn.Month });
+            return RedirectToAction(nameof(SubmitMetrics), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "", year = productReturn.Year, month = productReturn.Month });
         }
 
         try
@@ -618,13 +635,13 @@ public class ProductReportingController : Controller
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Return for {productReturn.Month:D2}/{productReturn.Year} has been submitted successfully";
-            return RedirectToAction(nameof(ProductHistory), new { fipsId = productReturn.FipsId });
+            return RedirectToAction(nameof(ProductHistory), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error submitting return");
             TempData["ErrorMessage"] = "An error occurred while submitting the return";
-            return RedirectToAction(nameof(SubmitMetrics), new { fipsId = productReturn.FipsId, year = productReturn.Year, month = productReturn.Month });
+            return RedirectToAction(nameof(SubmitMetrics), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "", year = productReturn.Year, month = productReturn.Month });
         }
     }
 
@@ -646,7 +663,7 @@ public class ProductReportingController : Controller
         if (productReturn.Status != ReturnStatus.Submitted)
         {
             TempData["ErrorMessage"] = "This return has not been submitted yet";
-            return RedirectToAction(nameof(ProductHistory), new { fipsId = productReturn.FipsId });
+            return RedirectToAction(nameof(ProductHistory), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "" });
         }
 
         try
@@ -660,25 +677,28 @@ public class ProductReportingController : Controller
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Return for {new DateTime(productReturn.Year, productReturn.Month, 1).ToString("MMMM yyyy")} has been unsubmitted and is now available for editing";
-            return RedirectToAction(nameof(ProductHistory), new { fipsId = productReturn.FipsId });
+            return RedirectToAction(nameof(ProductHistory), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error unsubmitting return");
             TempData["ErrorMessage"] = "An error occurred while unsubmitting the return";
-            return RedirectToAction(nameof(ProductHistory), new { fipsId = productReturn.FipsId });
+            return RedirectToAction(nameof(ProductHistory), new { documentId = productReturn.ProductDocumentId ?? productReturn.FipsId ?? "" });
         }
     }
 
     #region Helper Methods
 
-    private async Task<List<ProductReturn>> GetOrCreateReturns(string fipsId, int upcomingMonths)
+    private async Task<List<ProductReturn>> GetOrCreateReturns(string productDocumentId, string? fipsId, int upcomingMonths)
     {
         var returns = new List<ProductReturn>();
         var now = DateTime.UtcNow;
 
-        // Get product to check business area
-        var product = await _productsApiService.GetProductByFipsIdAsync(fipsId);
+        // Get product to check business area - try by DocumentId first, then FipsId
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => 
+            p.DocumentId == productDocumentId || p.FipsId == productDocumentId || p.FipsId == fipsId);
+        
         var businessArea = product?.CategoryValues?
             .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
             ?.Name;
@@ -701,8 +721,10 @@ public class ProductReportingController : Controller
              date = date.AddMonths(1))
         {
             // Check if reporting is required (using cached data - NO database query)
+            // Use fipsId for eligibility check (legacy compatibility)
+            var checkId = fipsId ?? productDocumentId;
             var reportingRequired = _eligibilityService.IsReportingRequired(
-                fipsId, 
+                checkId, 
                 businessArea, 
                 date.Year, 
                 date.Month,
@@ -714,11 +736,14 @@ public class ProductReportingController : Controller
                 continue;
             }
             
+            // Try to find by ProductDocumentId first, then FipsId for backwards compatibility
             var existingReturn = await _context.ProductReturns
                 .Include(pr => pr.MetricValues)
                     .ThenInclude(mv => mv.PerformanceMetric)
                 .AsSplitQuery()
-                .FirstOrDefaultAsync(pr => pr.FipsId == fipsId && pr.Year == date.Year && pr.Month == date.Month);
+                .FirstOrDefaultAsync(pr => 
+                    (pr.ProductDocumentId == productDocumentId || (string.IsNullOrEmpty(pr.ProductDocumentId) && pr.FipsId == fipsId)) 
+                    && pr.Year == date.Year && pr.Month == date.Month);
 
             if (existingReturn != null)
             {
@@ -729,7 +754,8 @@ public class ProductReportingController : Controller
             {
                 var newReturn = new ProductReturn
                 {
-                    FipsId = fipsId,
+                    ProductDocumentId = productDocumentId,
+                    FipsId = fipsId, // Keep for backwards compatibility
                     Year = date.Year,
                     Month = date.Month,
                     Status = _returnStatusService.CalculateReturnStatus(date.Year, date.Month, null)
@@ -741,20 +767,31 @@ public class ProductReportingController : Controller
         return returns.OrderByDescending(r => r.Year).ThenByDescending(r => r.Month).ToList();
     }
 
-    private async Task<ProductReturn> GetOrCreateReturn(string fipsId, int year, int month)
+    private async Task<ProductReturn> GetOrCreateReturn(string productDocumentId, string? fipsId, int year, int month)
     {
+        // Try to find by ProductDocumentId first, then FipsId for backwards compatibility
         var existingReturn = await _context.ProductReturns
-            .FirstOrDefaultAsync(pr => pr.FipsId == fipsId && pr.Year == year && pr.Month == month);
+            .FirstOrDefaultAsync(pr => 
+                (pr.ProductDocumentId == productDocumentId || (string.IsNullOrEmpty(pr.ProductDocumentId) && pr.FipsId == fipsId)) 
+                && pr.Year == year && pr.Month == month);
 
         if (existingReturn != null)
         {
+            // Update ProductDocumentId if it was missing
+            if (string.IsNullOrEmpty(existingReturn.ProductDocumentId) && !string.IsNullOrEmpty(productDocumentId))
+            {
+                existingReturn.ProductDocumentId = productDocumentId;
+                await _context.SaveChangesAsync();
+            }
+            
             existingReturn.Status = _returnStatusService.CalculateReturnStatus(year, month, existingReturn.SubmittedDate);
             return existingReturn;
         }
 
         var newReturn = new ProductReturn
         {
-            FipsId = fipsId,
+            ProductDocumentId = productDocumentId,
+            FipsId = fipsId, // Keep for backwards compatibility
             Year = year,
             Month = month,
             Status = _returnStatusService.CalculateReturnStatus(year, month, null)
@@ -1039,42 +1076,44 @@ public class ProductReportingController : Controller
         var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
         
-        // PERFORMANCE OPTIMIZATION: Load all data in parallel and only fetch what's needed
-        // Fetch user's products in parallel with database queries
+        // PERFORMANCE OPTIMIZATION: Load API calls in parallel, but execute database queries sequentially
+        // to avoid DbContext concurrency issues
+        // Fetch user's products in parallel (these are API calls, not DB queries)
         var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
-        var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
-        var overridesTask = _context.PerformanceReportingDueDateOverrides
+        
+        // Wait for API calls to complete (these don't use DbContext)
+        await Task.WhenAll(
+            userProductsByContactTask,
+            userProductsByServiceOwnerTask);
+        
+        // Get results from API calls
+        var productsByContact = await userProductsByContactTask;
+        var productsByServiceOwner = await userProductsByServiceOwnerTask;
+        
+        // Execute database queries sequentially to avoid DbContext concurrency issues
+        // LoadEligibilityCacheAsync makes database queries, so it must complete before other DB queries
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        
+        // Now execute other database queries sequentially
+        // Use AsNoTracking() for read-only queries to improve performance
+        var overrides = await _context.PerformanceReportingDueDateOverrides
+            .AsNoTracking()
             .Where(o => o.IsActive)
             .ToDictionaryAsync(o => (o.ReportingYear, o.ReportingMonth), o => o);
-        var periodExclusionsTask = _context.PerformanceReportingPeriodExclusions
+        var periodExclusions = await _context.PerformanceReportingPeriodExclusions
+            .AsNoTracking()
             .Where(e => e.IsActive)
             .OrderBy(e => e.Year)
             .ThenBy(e => e.Month)
             .ToListAsync();
-        var businessAreaConfigsTask = _context.PerformanceReportingBusinessAreaConfigs
+        var businessAreaConfigs = await _context.PerformanceReportingBusinessAreaConfigs
+            .AsNoTracking()
             .Where(c => c.IsActive)
             .OrderBy(c => c.BusinessAreaName)
             .ThenBy(c => c.ApplicableFromYear)
             .ThenBy(c => c.ApplicableFromMonth)
             .ToListAsync();
-        
-        // Wait for all parallel operations
-        await Task.WhenAll(
-            userProductsByContactTask,
-            userProductsByServiceOwnerTask,
-            eligibilityCacheTask,
-            overridesTask,
-            periodExclusionsTask,
-            businessAreaConfigsTask);
-        
-        // Get results
-        var productsByContact = await userProductsByContactTask;
-        var productsByServiceOwner = await userProductsByServiceOwnerTask;
-        var eligibilityCache = await eligibilityCacheTask;
-        var overrides = await overridesTask;
-        var periodExclusions = await periodExclusionsTask;
-        var businessAreaConfigs = await businessAreaConfigsTask;
         
         // Combine and deduplicate user's products
         var userProducts = productsByContact
@@ -1173,28 +1212,31 @@ public class ProductReportingController : Controller
         var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
         
-        // PERFORMANCE OPTIMIZATION: Load all data in parallel
-        // Fetch user's products in parallel with database queries
+        // PERFORMANCE OPTIMIZATION: Load API calls in parallel, but execute database queries sequentially
+        // to avoid DbContext concurrency issues
+        // Fetch user's products in parallel (these are API calls, not DB queries)
         var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
         var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
-        var metricsTask = _context.PerformanceMetrics
-            .Where(m => !m.IsDisabled)
-            .OrderBy(m => m.Identifier)
-            .ToListAsync();
         
-        // Wait for all parallel operations
+        // Wait for API calls to complete
         await Task.WhenAll(
             userProductsByContactTask,
             userProductsByServiceOwnerTask,
-            eligibilityCacheTask,
-            metricsTask);
+            eligibilityCacheTask);
         
-        // Get results
+        // Get results from API calls
         var productsByContact = await userProductsByContactTask;
         var productsByServiceOwner = await userProductsByServiceOwnerTask;
         var eligibilityCache = await eligibilityCacheTask;
-        var metrics = await metricsTask;
+        
+        // Execute database queries sequentially to avoid DbContext concurrency issues
+        // Use AsNoTracking() for read-only queries to improve performance
+        var metrics = await _context.PerformanceMetrics
+            .AsNoTracking()
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
         
         // Combine and deduplicate user's products
         var userProducts = productsByContact
@@ -1207,6 +1249,7 @@ public class ProductReportingController : Controller
         // Calculate counts efficiently (only for user's products, not all products)
         var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
         
+        // Execute database queries sequentially to avoid DbContext concurrency issues
         // Only fetch returns without MetricValues (not needed for counts)
         var userReturns = await _context.ProductReturns
             .AsNoTracking()
@@ -1236,6 +1279,7 @@ public class ProductReportingController : Controller
                 (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late));
         }
         
+        // Execute database queries sequentially to avoid DbContext concurrency issues
         // PERFORMANCE OPTIMIZATION: Get all products count efficiently
         // Count distinct products that have returns for the current period
         // This is a simple count query that doesn't require loading all product data

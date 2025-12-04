@@ -36,7 +36,7 @@
                     <small class="text-muted d-block">RAG status</small>
                     @if (!string.IsNullOrWhiteSpace(Model.RagStatus))
                     {
-                        <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                        <span class="@GetRagBadgeClass(Model.RagStatus)">@FormatRagStatusText(Model.RagStatus)</span>
                     }
                     else
                     {
@@ -126,7 +126,18 @@
             .Replace(" /", "-")
             .Replace("/ ", "-");
         
-        return normalized switch
+        // Capitalize first letter of each word for consistency
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        var displayRagStatus = string.Join("-", parts);
+        
+        return displayRagStatus switch
         {
             "Green" => "badge badge-green",
             "Amber-Green" => "badge badge-amber-green",
@@ -135,6 +146,32 @@
             "Red" => "badge badge-red",
             _ => "badge badge-secondary"
         };
+    }
+    
+    string FormatRagStatusText(string ragStatus)
+    {
+        if (string.IsNullOrWhiteSpace(ragStatus))
+        {
+            return ragStatus;
+        }
+
+        // Normalize to always use "Amber-Green" and "Amber-Red" format
+        var normalized = ragStatus.Trim()
+            .Replace(" / ", "-")
+            .Replace("/", "-")
+            .Replace(" /", "-")
+            .Replace("/ ", "-");
+        
+        // Capitalize first letter of each word for consistency
+        var parts = normalized.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+            {
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + (parts[i].Length > 1 ? parts[i].Substring(1).ToLowerInvariant() : "");
+            }
+        }
+        return string.Join("-", parts);
     }
 }
 

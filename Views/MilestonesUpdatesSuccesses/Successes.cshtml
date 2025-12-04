@@ -2,16 +2,10 @@
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
-    ViewData["Title"] = "Weekly Successes";
+    ViewData["Title"] = "Significant successes";
     var deliveryCode = ViewBag.ProjectCode as string ?? $"DFE-DDT-{Model.Id}";
     var isRaidEnabled = Configuration.GetValue<bool>("FeatureFlags:EnableRAIDManagement", false);
     var returnUrl = Url.Action("Details", "Project", new { id = Model.Id });
-    
-    // Helper function to get week start (Monday)
-    Func<DateTime, DateTime> getWeekStart = (date) => {
-        var daysSinceMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-        return date.AddDays(-daysSinceMonday).Date;
-    };
     
     // Combine all successes and create a unified list
     var allSuccesses = new List<dynamic>();
@@ -19,7 +13,6 @@
     // Add weekly successes
     foreach (var success in Model.WeeklySuccessUpdates)
     {
-        var weekStart = success.WeekStartDate;
         allSuccesses.Add(new {
             Id = success.Id,
             Type = "Weekly",
@@ -28,10 +21,6 @@
             CreatedByEmail = success.CreatedByEmail,
             CreatedAt = success.CreatedAt,
             IsReportedToSlt = success.IsReportedToSlt,
-            WeekStart = weekStart,
-            WeekEnd = success.WeekEndDate,
-            Year = success.Year,
-            WeekNumber = success.WeekNumber,
             SltResponse = success.SltResponse,
             SltRespondedByName = success.SltRespondedByName,
             SltRespondedByEmail = success.SltRespondedByEmail,
@@ -42,12 +31,6 @@
     // Add legacy successes
     foreach (var success in Model.Successes)
     {
-        var weekStart = getWeekStart(success.RecordedAt);
-        var weekEnd = weekStart.AddDays(6);
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        var calendar = culture.Calendar;
-        var weekNumber = calendar.GetWeekOfYear(success.RecordedAt, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
-        
         allSuccesses.Add(new {
             Id = success.Id,
             Type = "Legacy",
@@ -56,10 +39,6 @@
             CreatedByEmail = success.RecordedByEmail,
             CreatedAt = success.RecordedAt,
             IsReportedToSlt = success.IsReportedToSlt,
-            WeekStart = weekStart,
-            WeekEnd = weekEnd,
-            Year = success.RecordedAt.Year,
-            WeekNumber = weekNumber,
             SltResponse = success.SltResponse,
             SltRespondedByName = success.SltRespondedByName,
             SltRespondedByEmail = success.SltRespondedByEmail,
@@ -67,19 +46,8 @@
         });
     }
     
-    // Group by week and order by week start (newest first)
-    var successesByWeek = allSuccesses
-        .GroupBy(s => new { s.WeekStart, s.Year, s.WeekNumber })
-        .OrderByDescending(g => g.Key.WeekStart)
-        .ToList();
-    
-    // Get current week start
-    var today = DateTime.UtcNow.Date;
-    var currentWeekStart = getWeekStart(today);
-    
-    // Get last 6 weeks (including current week)
-    var recentWeeks = successesByWeek.Take(6).ToList();
-    var olderWeeks = successesByWeek.Skip(6).ToList();
+    // Order by created date (newest first)
+    var orderedSuccesses = allSuccesses.OrderByDescending(s => s.CreatedAt).ToList();
 }
 
 @section Breadcrumbs {
@@ -103,7 +71,7 @@
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Milestones</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Weekly Successes</li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Significant successes</li>
         </ol>
     </nav>
 }
@@ -159,35 +127,23 @@
                                 var isMusSectionActive = true;
                                 var currentMusAction = ViewContext.RouteData.Values["Action"]?.ToString();
                             }
-                            <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
-                               class="list-group-item list-group-item-action @(currentMusAction == "Milestones" ? "active" : "")">
-                                Milestones
-                                <span class="badge badge-light float-right">@(Model.Milestones?.Count ?? 0)</span>
-                            </a>
                             <a href="@Url.Action("Updates", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
                                class="list-group-item list-group-item-action @(currentMusAction == "Updates" ? "active" : "")">
                                 Monthly Updates
                             </a>
                             <a href="@Url.Action("Successes", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
                                class="list-group-item list-group-item-action @(currentMusAction == "Successes" ? "active" : "")">
-                                Weekly Successes
+                                Significant successes
                                 <span class="badge badge-light float-right">@submittedWeeklySuccessesCount</span>
                             </a>
                             <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "rag" })"
                                class="list-group-item list-group-item-action">
                                 RAG Tracking
                             </a>
-                            @if (hasDigitalDirectorate)
-                            {
-                                <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "deliveryphases" })"
-                                   class="list-group-item list-group-item-action">
-                                    Delivery phases
-                                </a>
-                            }
-                            <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "team" })"
-                               class="list-group-item list-group-item-action">
-                                Team
-                                <span class="badge badge-light float-right">@teamCount</span>
+                            <a href="@Url.Action("Milestones", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })"
+                               class="list-group-item list-group-item-action @(currentMusAction == "Milestones" ? "active" : "")">
+                                Milestones
+                                <span class="badge badge-light float-right">@(Model.Milestones?.Count ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "contactsandgovernance" })"
                                class="list-group-item list-group-item-action">
@@ -197,6 +153,18 @@
                                class="list-group-item list-group-item-action">
                                 Strategic Alignment
                             </a>
+                            <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "team" })"
+                               class="list-group-item list-group-item-action">
+                                Team
+                                <span class="badge badge-light float-right">@teamCount</span>
+                            </a>
+                            @if (hasDigitalDirectorate)
+                            {
+                                <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "deliveryphases" })"
+                                   class="list-group-item list-group-item-action">
+                                    Delivery phases
+                                </a>
+                            }
                             <a href="@Url.Action("Details", "Project", new { id = Model.Id, tab = "dependencies" })"
                                class="list-group-item list-group-item-action">
                                 Dependencies
@@ -257,396 +225,167 @@
 
             <!-- Right Column: Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @if (!successesByWeek.Any())
+                @if (TempData["SuccessMessage"] != null)
                 {
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <p class="text-muted mb-2">No success updates recorded yet.</p>
-                            <a href="@Url.Action("CreateWeeklySuccess", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })" class="text-block-link">Add the first success</a>
-                        </div>
+                    <div class="alert alert-success alert-dismissible fade show">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        @TempData["SuccessMessage"]
                     </div>
                 }
-                else
+                @if (TempData["ErrorMessage"] != null)
                 {
-                    // Separate current week from previous weeks
-                    var currentWeekGroup = recentWeeks.FirstOrDefault(w => w.Key.WeekStart == currentWeekStart);
-                    var previousWeeks = recentWeeks.Where(w => w.Key.WeekStart != currentWeekStart).ToList();
-                    
-                    // Helper function to format week period
-                    Func<DateTime, DateTime, string> formatWeekPeriod = (start, end) => {
-                        if (start.Month == end.Month && start.Year == end.Year)
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        @TempData["ErrorMessage"]
+                    </div>
+                }
+
+                <!-- Add Success Form -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-plus-circle mr-2"></i>Add Success</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="@Url.Action("AddSuccess", "Project")" id="addSuccessForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="Input.ProjectId" value="@Model.Id" />
+                            <div class="form-group">
+                                <label for="successDescription">Success description <span class="text-danger">*</span></label>
+                                <textarea id="successDescription" name="Input.SuccessDescription" class="form-control" rows="3" placeholder="Describe the significant success..." required></textarea>
+                                <small class="form-text text-muted">Enter a description of the significant success achieved.</small>
+                            </div>
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="isReportedToSlt" name="Input.IsReportedToSlt" value="true" />
+                                    <label class="form-check-label" for="isReportedToSlt">
+                                        Report to SLT
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">Check this box if this success should be included in the SLT weekly report.</small>
+                            </div>
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add Success
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Successes List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="fas fa-list mr-2"></i>Previous Successes</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (!orderedSuccesses.Any())
                         {
-                            return $"{start:dd MMM} - {end:dd MMM yyyy}";
-                        }
-                        else if (start.Year == end.Year)
-                        {
-                            return $"{start:dd MMM} - {end:dd MMM yyyy}";
+                            <div class="p-4 text-center text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3" style="opacity: 0.3;"></i>
+                                <p class="mb-0">No successes recorded yet. Add your first success above.</p>
+                            </div>
                         }
                         else
                         {
-                            return $"{start:dd MMM yyyy} - {end:dd MMM yyyy}";
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 sortable-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description" style="width: auto; min-width: 300px;">
+                                                Success
+                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                            </th>
+                                            <th class="sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By" style="width: auto; min-width: 150px;">
+                                                Recorded by
+                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                            </th>
+                                            <th class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date" style="width: auto; min-width: 120px;">
+                                                Date
+                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                            </th>
+                                            <th class="sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report" style="width: auto; min-width: 100px;">
+                                                SLT report
+                                                <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var success in orderedSuccesses)
+                                        {
+                                            var displayName = !string.IsNullOrWhiteSpace(success.CreatedByName)
+                                                ? success.CreatedByName
+                                                : success.CreatedByEmail ?? "Unknown";
+                                            var hasSltResponse = !string.IsNullOrWhiteSpace(success.SltResponse);
+                                            <tr class="@(hasSltResponse ? "table-row-with-response" : "")" data-success-id="@success.Id">
+                                                <td style="word-wrap: break-word; word-break: break-word;">
+                                                    <div>
+                                                        @if (success.Type == "Legacy")
+                                                        {
+                                                            <a href="@Url.Action("SuccessDetails", "Project", new { projectId = Model.Id, successId = success.Id })" title="@success.SuccessDescription">
+                                                                @success.SuccessDescription
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @success.SuccessDescription
+                                                        }
+                                                    </div>
+                                                </td>
+                                                <td style="white-space: nowrap;">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-user mr-1"></i>@displayName
+                                                    </small>
+                                                </td>
+                                                <td style="white-space: nowrap;">
+                                                    <small class="text-muted">@success.CreatedAt.ToString("d MMM yyyy")</small>
+                                                </td>
+                                                <td style="white-space: nowrap;">
+                                                    @if (success.IsReportedToSlt)
+                                                    {
+                                                        <span class="badge badge-success badge-sm">SLT</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                            @if (hasSltResponse)
+                                            {
+                                                <tr class="slt-response-row" style="background-color: #fff3cd;">
+                                                    <td colspan="4" style="padding-top: 0.5rem; padding-bottom: 0.75rem; border-top: none;">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="mr-2" style="color: #856404;">
+                                                                <i class="fas fa-comment-dots"></i>
+                                                            </div>
+                                                            <div style="flex: 1;">
+                                                                <div class="mb-1">
+                                                                    <strong style="color: #856404; font-size: 0.9rem;">SLT Response</strong>
+                                                                </div>
+                                                                <div style="color: #856404; word-wrap: break-word; margin-bottom: 0.5rem;">
+                                                                    @success.SltResponse
+                                                                </div>
+                                                                <div>
+                                                                    <small class="text-muted" style="color: #856404;">
+                                                                        @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
+                                                                        {
+                                                                            @success.SltRespondedByName
+                                                                            <span class="mx-1">•</span>
+                                                                        }
+                                                                        @if (success.SltRespondedAt != null)
+                                                                        {
+                                                                            @success.SltRespondedAt.Value.ToString("d MMM yyyy HH:mm")
+                                                                        }
+                                                                    </small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
-                    };
-                    
-                    // Current week card
-                    @if (currentWeekGroup != null)
-                    {
-                        var weekStart = currentWeekGroup.Key.WeekStart;
-                        var weekEnd = currentWeekGroup.First().WeekEnd;
-                        var weekPeriod = formatWeekPeriod(weekStart, weekEnd);
-                        var weekSuccesses = currentWeekGroup.OrderByDescending(s => s.CreatedAt).ToList();
-                        
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h3 class="card-title">Current week</h3>
-                                <div class="card-tools">
-                                    <a href="@Url.Action("CreateWeeklySuccess", "MilestonesUpdatesSuccesses", new { projectId = Model.Id })" class="text-block-link">Add update</a>
-                                </div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div>
-                                    <table class="table table-hover sortable-table mb-0" style="table-layout: auto; width: 100%;">
-                                        <thead>
-                                            <tr>
-                                                <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description" style="width: auto; min-width: 200px;">
-                                                    Success
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By" style="width: auto; min-width: 120px;">
-                                                    Recorded by
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date" style="width: auto; min-width: 100px;">
-                                                    Created
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report" style="width: auto; min-width: 100px;">
-                                                    DDT report
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var success in weekSuccesses)
-                                            {
-                                                var displayName = !string.IsNullOrWhiteSpace(success.CreatedByName)
-                                                    ? success.CreatedByName
-                                                    : success.CreatedByEmail ?? "Unknown";
-                                                var truncatedDescription = success.SuccessDescription?.Length > 175
-                                                    ? $"{success.SuccessDescription.Substring(0, 175).TrimEnd()}…"
-                                                    : success.SuccessDescription;
-                                                var hasSltResponse = !string.IsNullOrWhiteSpace(success.SltResponse);
-                                                <tr class="@(hasSltResponse ? "table-row-with-response" : "")" data-success-id="@success.Id">
-                                                    <td style="word-wrap: break-word; word-break: break-word;">
-                                                        <div style="max-width: 75%;">
-                                                            @if (success.Type == "Legacy")
-                                                            {
-                                                                <a href="@Url.Action("SuccessDetails", "Project", new { projectId = Model.Id, successId = success.Id })" title="@success.SuccessDescription">
-                                                                    @truncatedDescription
-                                                                </a>
-                                                            }
-                                                            else
-                                                            {
-                                                                @truncatedDescription
-                                                            }
-                                                        </div>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">
-                                                            <i class="fas fa-user mr-1"></i>@displayName
-                                                        </small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">@success.CreatedAt.ToString("d MMM yyyy")</small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        @if (success.IsReportedToSlt)
-                                                        {
-                                                            <span class="badge badge-success badge-sm">SLT</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                                @if (hasSltResponse)
-                                                {
-                                                    <tr class="slt-response-row" style="background-color: #fff3cd;">
-                                                        <td colspan="4" style="padding-top: 0.5rem; padding-bottom: 0.75rem; border-top: none;">
-                                                            <div class="d-flex align-items-start">
-                                                                <div class="mr-2" style="color: #856404;">
-                                                                    <i class="fas fa-comment-dots"></i>
-                                                                </div>
-                                                                <div style="flex: 1; max-width: 75%;">
-                                                                    <div class="mb-1">
-                                                                        <strong style="color: #856404; font-size: 0.9rem;">SLT Response</strong>
-                                                                    </div>
-                                                                    <div style="color: #856404; word-wrap: break-word; margin-bottom: 0.5rem;">
-                                                                        @success.SltResponse
-                                                                    </div>
-                                                                    <div>
-                                                                        <small class="text-muted" style="color: #856404;">
-                                                                            @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
-                                                                            {
-                                                                                @success.SltRespondedByName
-                                                                                <span class="mx-1">•</span>
-                                                                            }
-                                                                            @if (success.SltRespondedAt != null)
-                                                                            {
-                                                                                @success.SltRespondedAt.Value.ToString("d MMM yyyy HH:mm")
-                                                                            }
-                                                                        </small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                    
-                    // Previous weeks in collapsible cards
-                    @foreach (var weekGroup in previousWeeks)
-                    {
-                        var weekStart = weekGroup.Key.WeekStart;
-                        var weekEnd = weekGroup.First().WeekEnd;
-                        var weekPeriod = formatWeekPeriod(weekStart, weekEnd);
-                        var weekSuccesses = weekGroup.OrderByDescending(s => s.CreatedAt).ToList();
-                        
-                        <div class="card mb-4 collapsed-card">
-                            <div class="card-header">
-                                <h3 class="card-title">@weekPeriod</h3>
-                                <div class="card-tools">
-                                    <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse @weekPeriod section">
-                                        <i class="fas fa-plus" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body p-0" style="display: none;">
-                                <div class="table-responsive">
-                                    <table class="table table-hover text-nowrap sortable-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description" style="width: auto; min-width: 200px;">
-                                                    Success
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By" style="width: auto; min-width: 120px;">
-                                                    Recorded by
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date" style="width: auto; min-width: 100px;">
-                                                    Created
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report" style="width: auto; min-width: 100px;">
-                                                    DDT report
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var success in weekSuccesses)
-                                            {
-                                                var displayName = !string.IsNullOrWhiteSpace(success.CreatedByName)
-                                                    ? success.CreatedByName
-                                                    : success.CreatedByEmail ?? "Unknown";
-                                                var truncatedDescription = success.SuccessDescription?.Length > 175
-                                                    ? $"{success.SuccessDescription.Substring(0, 175).TrimEnd()}…"
-                                                    : success.SuccessDescription;
-                                                var hasSltResponse = !string.IsNullOrWhiteSpace(success.SltResponse);
-                                                <tr class="@(hasSltResponse ? "table-row-with-response" : "")" data-success-id="@success.Id">
-                                                    <td style="word-wrap: break-word; word-break: break-word;">
-                                                        <div style="max-width: 75%;">
-                                                            @if (success.Type == "Legacy")
-                                                            {
-                                                                <a href="@Url.Action("SuccessDetails", "Project", new { projectId = Model.Id, successId = success.Id })" title="@success.SuccessDescription">
-                                                                    @truncatedDescription
-                                                                </a>
-                                                            }
-                                                            else
-                                                            {
-                                                                @truncatedDescription
-                                                            }
-                                                        </div>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">
-                                                            <i class="fas fa-user mr-1"></i>@displayName
-                                                        </small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">@success.CreatedAt.ToString("d MMM yyyy")</small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        @if (success.IsReportedToSlt)
-                                                        {
-                                                            <span class="badge badge-success badge-sm">SLT</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                                @if (hasSltResponse)
-                                                {
-                                                    <tr class="slt-response-row" style="background-color: #fff3cd;">
-                                                        <td colspan="4" style="padding-top: 0.5rem; padding-bottom: 0.75rem; border-top: none;">
-                                                            <div class="d-flex align-items-start">
-                                                                <div class="mr-2" style="color: #856404;">
-                                                                    <i class="fas fa-comment-dots"></i>
-                                                                </div>
-                                                                <div style="flex: 1; max-width: 75%;">
-                                                                    <div class="mb-1">
-                                                                        <strong style="color: #856404; font-size: 0.9rem;">SLT Response</strong>
-                                                                    </div>
-                                                                    <div style="color: #856404; word-wrap: break-word; margin-bottom: 0.5rem;">
-                                                                        @success.SltResponse
-                                                                    </div>
-                                                                    <div>
-                                                                        <small class="text-muted" style="color: #856404;">
-                                                                            @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
-                                                                            {
-                                                                                @success.SltRespondedByName
-                                                                                <span class="mx-1">•</span>
-                                                                            }
-                                                                            @if (success.SltRespondedAt != null)
-                                                                            {
-                                                                                @success.SltRespondedAt.Value.ToString("d MMM yyyy HH:mm")
-                                                                            }
-                                                                        </small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                    
-                    // Older weeks card
-                    @if (olderWeeks.Any())
-                    {
-                        var allOlderSuccesses = olderWeeks.SelectMany(g => g.OrderByDescending(s => s.CreatedAt)).ToList();
-                        
-                        <div class="card mb-4 collapsed-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Older updates</h3>
-                                <div class="card-tools">
-                                    <button type="button" class="btn btn-tool" style="color: black !important;" data-card-widget="collapse" aria-label="Collapse Older updates section">
-                                        <i class="fas fa-plus" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body p-0" style="display: none;">
-                                <div class="table-responsive">
-                                    <table class="table table-hover text-nowrap sortable-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th class="sortable" data-column="Description" tabindex="0" role="button" aria-label="Sort by Description" style="width: auto; min-width: 200px;">
-                                                    Success
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="RecordedBy" tabindex="0" role="button" aria-label="Sort by Recorded By" style="width: auto; min-width: 120px;">
-                                                    Recorded by
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="CreatedAt" tabindex="0" role="button" aria-label="Sort by Created Date" style="width: auto; min-width: 100px;">
-                                                    Created
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                                <th class="sortable" data-column="IsReportedToSlt" tabindex="0" role="button" aria-label="Sort by DDT Report" style="width: auto; min-width: 100px;">
-                                                    DDT report
-                                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var success in allOlderSuccesses)
-                                            {
-                                                var displayName = !string.IsNullOrWhiteSpace(success.CreatedByName)
-                                                    ? success.CreatedByName
-                                                    : success.CreatedByEmail ?? "Unknown";
-                                                var truncatedDescription = success.SuccessDescription?.Length > 175
-                                                    ? $"{success.SuccessDescription.Substring(0, 175).TrimEnd()}…"
-                                                    : success.SuccessDescription;
-                                                var hasSltResponse = !string.IsNullOrWhiteSpace(success.SltResponse);
-                                                <tr class="@(hasSltResponse ? "table-row-with-response" : "")" data-success-id="@success.Id">
-                                                    <td style="word-wrap: break-word; word-break: break-word;">
-                                                        <div style="max-width: 75%;">
-                                                            @if (success.Type == "Legacy")
-                                                            {
-                                                                <a href="@Url.Action("SuccessDetails", "Project", new { projectId = Model.Id, successId = success.Id })" title="@success.SuccessDescription">
-                                                                    @truncatedDescription
-                                                                </a>
-                                                            }
-                                                            else
-                                                            {
-                                                                @truncatedDescription
-                                                            }
-                                                        </div>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">
-                                                            <i class="fas fa-user mr-1"></i>@displayName
-                                                        </small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        <small class="text-muted">@success.CreatedAt.ToString("d MMM yyyy")</small>
-                                                    </td>
-                                                    <td style="white-space: nowrap;">
-                                                        @if (success.IsReportedToSlt)
-                                                        {
-                                                            <span class="badge badge-success badge-sm">SLT</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                                @if (hasSltResponse)
-                                                {
-                                                    <tr class="slt-response-row" style="background-color: #fff3cd;">
-                                                        <td colspan="4" style="padding-top: 0.5rem; padding-bottom: 0.75rem; border-top: none;">
-                                                            <div class="d-flex align-items-start">
-                                                                <div class="mr-2" style="color: #856404;">
-                                                                    <i class="fas fa-comment-dots"></i>
-                                                                </div>
-                                                                <div style="flex: 1; max-width: 75%;">
-                                                                    <div class="mb-1">
-                                                                        <strong style="color: #856404; font-size: 0.9rem;">SLT Response</strong>
-                                                                    </div>
-                                                                    <div style="color: #856404; word-wrap: break-word; margin-bottom: 0.5rem;">
-                                                                        @success.SltResponse
-                                                                    </div>
-                                                                    <div>
-                                                                        <small class="text-muted" style="color: #856404;">
-                                                                            @if (!string.IsNullOrWhiteSpace(success.SltRespondedByName))
-                                                                            {
-                                                                                @success.SltRespondedByName
-                                                                                <span class="mx-1">•</span>
-                                                                            }
-                                                                            @if (success.SltRespondedAt != null)
-                                                                            {
-                                                                                @success.SltRespondedAt.Value.ToString("d MMM yyyy HH:mm")
-                                                                            }
-                                                                        </small>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -732,7 +471,7 @@
                             var bLink = bCell.querySelector('a');
                             aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
                             bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
-                        } else if (column === 'RecordedAt' || column === 'CreatedAt') {
+                        } else if (column === 'CreatedAt') {
                             var aDate = Date.parse(aCell.textContent.trim());
                             var bDate = Date.parse(bCell.textContent.trim());
                             aVal = isNaN(aDate) ? 0 : aDate;
@@ -809,4 +548,3 @@
         }
     }
 </style>
-
