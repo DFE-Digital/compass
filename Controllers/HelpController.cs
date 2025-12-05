@@ -6,8 +6,9 @@ namespace Compass.Controllers;
 [Authorize]
 public class HelpController : Controller
 {
-    public IActionResult Index()
+    public IActionResult Index(string? group = null)
     {
+        ViewBag.SelectedGroup = group ?? "work-reporting";
         return View();
     }
 

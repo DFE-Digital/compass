@@ -34,7 +34,19 @@ public class TrainingCourse
     public decimal? Cost { get; set; }
 
     [Column(TypeName = "nvarchar(max)")]
-    public string? ProfessionTags { get; set; } // JSON array or comma-separated
+    public string? ProfessionTags { get; set; } // Legacy field - kept for backward compatibility
+
+    /// <summary>
+    /// Primary professions - where this skill is specifically required
+    /// </summary>
+    [Column(TypeName = "nvarchar(max)")]
+    public string? PrimaryProfessionTags { get; set; } // Comma-separated profession names
+
+    /// <summary>
+    /// Secondary professions - useful for additional awareness training or career progression
+    /// </summary>
+    [Column(TypeName = "nvarchar(max)")]
+    public string? SecondaryProfessionTags { get; set; } // Comma-separated profession names
 
     [Column(TypeName = "nvarchar(max)")]
     public string? CapabilityTags { get; set; } // JSON array or comma-separated

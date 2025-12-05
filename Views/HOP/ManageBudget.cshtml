@@ -1,7 +1,12 @@
 @model Compass.Models.LearningBudget
+@using Compass.Models
 
 @{
-    ViewData["Title"] = "Manage budget";
+    ViewData["Title"] = "Manage budgets";
+    var allBudgets = ViewBag.AllBudgets as List<LearningBudget> ?? new List<LearningBudget>();
+    var selectedFY = ViewBag.SelectedFinancialYear as int? ?? Model.FinancialYear;
+    var currentFY = ViewBag.CurrentFY as int? ?? (DateTime.UtcNow.Month >= 4 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1);
+    var nextFY = ViewBag.NextFY as int? ?? currentFY + 1;
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -13,22 +18,12 @@
                 <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
             </li>
             <li class="breadcrumb-item">
-                <a asp-action="HOPDashboard" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">HOP dashboard</a>
-            </li>
-            <li class="breadcrumb-item">
                 <a asp-action="BudgetAndSpending" style="color: #005ea5; text-decoration: none;">Budget and spending</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page">Manage budget</li>
+            <li class="breadcrumb-item active" aria-current="page">Manage budgets</li>
         </ol>
     </nav>
 }
-
-<div class="dashboard-header">
-    <div>
-        <h1>Manage L&D budget</h1>
-        <p>Set the total L&D budget amount for Financial Year @Model.FinancialYear</p>
-    </div>
-</div>
 
 <section class="content">
     <div class="container-fluid">
@@ -47,7 +42,49 @@
             </div>
         }
 
-        <!-- Budget Summary -->
+        <!-- Navigation Bar -->
+        <nav class="navbar navbar-expand-lg navbar-light mb-3" style="background-color: #005ea5; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h6" style="color: white;">Budget and Spending</span>
+                <div class="navbar-nav flex-row">
+                    <a class="nav-link" 
+                       asp-action="BudgetAndSpending" asp-route-financialYear="@currentFY"
+                       style="color: rgba(255,255,255,0.8);">
+                        Current FY (@currentFY/@(currentFY + 1))
+                    </a>
+                    <a class="nav-link" 
+                       asp-action="BudgetAndSpending" asp-route-financialYear="@nextFY"
+                       style="color: rgba(255,255,255,0.8);">
+                        Next FY (@nextFY/@(nextFY + 1))
+                    </a>
+                    <a class="nav-link active font-weight-bold" 
+                       asp-action="ManageBudget"
+                       style="color: white;">
+                        Manage budgets
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <style>
+            .navbar-nav .nav-link {
+                padding: 0.5rem 1rem;
+                margin: 0 0.25rem;
+                border-radius: 0.25rem;
+                transition: background-color 0.2s ease;
+            }
+            
+            .navbar-nav .nav-link:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+                text-decoration: none;
+            }
+            
+            .navbar-nav .nav-link.active {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        </style>
+
+        <!-- Budget Summary Cards - Full Width -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card border-left-primary shadow h-100">
@@ -55,7 +92,7 @@
                         <div class="row no-gutters align-items-center">
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total budget</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(Model.TotalBudget.ToString("F2"))</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(Model.TotalBudget.ToString("N0"))</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
@@ -70,7 +107,7 @@
                         <div class="row no-gutters align-items-center">
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Spent</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Spent ?? 0).ToString("F2"))</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Spent ?? 0).ToString("N0"))</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -85,7 +122,7 @@
                         <div class="row no-gutters align-items-center">
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Forecasted ?? 0).ToString("F2"))</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Forecasted ?? 0).ToString("N0"))</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-calculator fa-2x text-gray-300"></i>
@@ -100,7 +137,7 @@
                         <div class="row no-gutters align-items-center">
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Remaining</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.Remaining ?? 0).ToString("F2"))</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.Remaining ?? 0).ToString("N0"))</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-chart-line fa-2x text-gray-300"></i>
@@ -111,42 +148,125 @@
             </div>
         </div>
 
-        <!-- Budget Form -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Set budget for Financial Year @Model.FinancialYear</h3>
-            </div>
-            <div class="card-body">
-                <form asp-action="UpdateBudget" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-
-                    <div class="form-group">
-                        <label for="totalBudget">Total budget amount (£) <span class="text-danger">*</span></label>
-                        <input type="number" 
-                               id="totalBudget" 
-                               name="totalBudget" 
-                               class="form-control" 
-                               value="@Model.TotalBudget" 
-                               step="0.01" 
-                               min="0" 
-                               required />
-                        <small class="form-text text-muted">Enter the total L&D budget for Financial Year @Model.FinancialYear</small>
-                        @if (ViewData.ModelState["TotalBudget"]?.Errors.Count > 0)
+        <div class="row">
+            <!-- Left Column: Budget List -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">All budgets</h3>
+                        <div class="card-tools">
+                            <a href="#" data-toggle="modal" data-target="#createBudgetModal">Add budget</a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (allBudgets.Any())
                         {
-                            <span class="text-danger d-block">@ViewData.ModelState["TotalBudget"].Errors.First().ErrorMessage</span>
+                            <div class="list-group list-group-flush">
+                                @foreach (var budget in allBudgets)
+                                {
+                                    <a asp-action="ManageBudget" asp-route-financialYear="@budget.FinancialYear" 
+                                       class="list-group-item list-group-item-action @(budget.FinancialYear == selectedFY ? "active" : "")">
+                                        FY @budget.FinancialYear / @((budget.FinancialYear + 1).ToString().Substring(2))
+                                    </a>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No budgets created yet.</p>
+                            </div>
                         }
                     </div>
+                </div>
+            </div>
 
-                    <div class="form-group">
-                        <button type="submit" class="btn btn-primary">Update budget</button>
-                        <a asp-action="BudgetAndSpending" class="btn btn-secondary">Cancel</a>
+            <!-- Right Column: Budget Details -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Budget Form -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Edit budget for Financial Year @Model.FinancialYear/@(Model.FinancialYear + 1)</h3>
                     </div>
-                </form>
+                    <div class="card-body">
+                        <form asp-action="UpdateBudget" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+
+                            <div class="form-group">
+                                <label for="totalBudget">Total budget amount (£) <span class="text-danger">*</span></label>
+                                <input type="number" 
+                                       id="totalBudget" 
+                                       name="totalBudget" 
+                                       class="form-control" 
+                                       value="@Model.TotalBudget" 
+                                       step="0.01" 
+                                       min="0" 
+                                       required />
+                                <small class="form-text text-muted">Enter the total L&D budget for Financial Year @Model.FinancialYear/@(Model.FinancialYear + 1)</small>
+                                @if (ViewData.ModelState["TotalBudget"]?.Errors.Count > 0)
+                                {
+                                    <span class="text-danger d-block">@ViewData.ModelState["TotalBudget"].Errors.First().ErrorMessage</span>
+                                }
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-success">Update budget</button>
+                                <a asp-action="BudgetAndSpending" class="btn btn-secondary">Back to spending</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </section>
+
+<!-- Create Budget Modal -->
+<div class="modal fade" id="createBudgetModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form asp-action="CreateBudget" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Create new budget</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newFinancialYear">Financial Year <span class="text-danger">*</span></label>
+                        <input type="number" 
+                               id="newFinancialYear" 
+                               name="financialYear" 
+                               class="form-control" 
+                               value="@(currentFY + 1)" 
+                               min="2020" 
+                               max="2100" 
+                               required />
+                        <small class="form-text text-muted">Enter the financial year (e.g., 2025 for FY 2025/2026)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="newTotalBudget">Total budget amount (£) <span class="text-danger">*</span></label>
+                        <input type="number" 
+                               id="newTotalBudget" 
+                               name="totalBudget" 
+                               class="form-control" 
+                               step="0.01" 
+                               min="0" 
+                               required />
+                        <small class="form-text text-muted">Enter the total L&D budget amount</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create budget</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <style>
     .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
@@ -156,4 +276,3 @@
     .text-gray-800 { color: #5a5c69 !important; }
     .text-gray-300 { color: #dddfeb !important; }
 </style>
-

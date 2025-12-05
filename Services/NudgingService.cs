@@ -61,12 +61,19 @@ public class NudgingService : INudgingService
 
         // Parse capability gaps
         var capabilityGaps = new List<string>();
-        if (!string.IsNullOrEmpty(profile.CapabilityGaps))
+        
+        // Use new CapabilityGaps collection if available
+        if (profile.CapabilityGaps != null && profile.CapabilityGaps.Any())
+        {
+            capabilityGaps.AddRange(profile.CapabilityGaps.Select(cg => cg.Description));
+        }
+        // Fallback to legacy string field
+        else if (!string.IsNullOrEmpty(profile.CapabilityGapsLegacy))
         {
             try
             {
                 // Try to parse as JSON array first
-                var gapsArray = JsonSerializer.Deserialize<string[]>(profile.CapabilityGaps);
+                var gapsArray = JsonSerializer.Deserialize<string[]>(profile.CapabilityGapsLegacy);
                 if (gapsArray != null)
                 {
                     capabilityGaps.AddRange(gapsArray);
@@ -75,7 +82,7 @@ public class NudgingService : INudgingService
             catch
             {
                 // If not JSON, treat as comma-separated
-                capabilityGaps.AddRange(profile.CapabilityGaps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                capabilityGaps.AddRange(profile.CapabilityGapsLegacy.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             }
         }
 

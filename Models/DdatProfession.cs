@@ -62,6 +62,11 @@ public class DdatProfession
     /// Service standards that apply to this profession
     /// </summary>
     public virtual ICollection<ServiceStandardProfession> ServiceStandardProfessions { get; set; } = new List<ServiceStandardProfession>();
+
+    /// <summary>
+    /// Skills associated with this profession
+    /// </summary>
+    public virtual ICollection<ProfessionSkill> ProfessionSkills { get; set; } = new List<ProfessionSkill>();
 }
 
 /// <summary>

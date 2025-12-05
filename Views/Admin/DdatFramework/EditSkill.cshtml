@@ -1,0 +1,212 @@
+@model Compass.Models.DdatFrameworkSkill
+@using Compass.Models
+
+@{
+    ViewData["Title"] = "Edit DDAT Framework Skill";
+    var capabilityLevels = ViewBag.CapabilityLevels as string[] ?? new[] { "Awareness", "Working", "Practitioner", "Expert" };
+    var grades = ViewBag.Grades as List<Grade> ?? new List<Grade>();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item"><a href="/" style="color: #005ea5;">Home</a></li>
+            <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index" style="color: #005ea5;">Admin</a></li>
+            <li class="breadcrumb-item"><a asp-action="DdatFrameworkSkills" style="color: #005ea5;">DDAT Framework Skills</a></li>
+            <li class="breadcrumb-item active">Edit Skill</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Edit DDAT Framework Skill</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <form asp-action="EditDdatFrameworkSkill" method="post" id="editSkillForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="FrameworkVersionId" />
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Skill Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label asp-for="SkillName">Skill Name <span class="text-danger">*</span></label>
+                        <input asp-for="SkillName" class="form-control" required />
+                        <span asp-validation-for="SkillName" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="SkillDescription">Skill Description</label>
+                        <textarea asp-for="SkillDescription" class="form-control" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="RolesThatRequireSkill">Roles that require this skill</label>
+                        <textarea asp-for="RolesThatRequireSkill" class="form-control" rows="2" 
+                                  placeholder="Comma-separated list of roles"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Capability Level Descriptions</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label asp-for="AwarenessDescription">Awareness</label>
+                        <textarea asp-for="AwarenessDescription" class="form-control" rows="4"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="WorkingDescription">Working</label>
+                        <textarea asp-for="WorkingDescription" class="form-control" rows="4"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="PractitionerDescription">Practitioner</label>
+                        <textarea asp-for="PractitionerDescription" class="form-control" rows="4"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="ExpertDescription">Expert</label>
+                        <textarea asp-for="ExpertDescription" class="form-control" rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Grade Mappings</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Map Civil Service grades to capability levels for this skill.</p>
+                    
+                    <div id="gradeMappingsContainer">
+                        @if (Model.GradeMappings.Any())
+                        {
+                            @foreach (var mapping in Model.GradeMappings)
+                            {
+                                <div class="row mb-2 grade-mapping-row">
+                                    <div class="col-md-5">
+                                        <select name="gradeMappings[].capabilityLevel" class="form-control" required>
+                                            @foreach (var level in capabilityLevels)
+                                            {
+                                                var isSelected = mapping.CapabilityLevel == level;
+                                                if (isSelected)
+                                                {
+                                                    <option value="@level" selected>@level</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@level">@level</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <select name="gradeMappings[].grade" class="form-control" required>
+                                            @foreach (var grade in grades)
+                                            {
+                                                var isSelected = mapping.Grade == grade.Code;
+                                                var displayText = !string.IsNullOrEmpty(grade.DisplayName) ? $"{grade.Code} - {grade.DisplayName}" : grade.Code;
+                                                if (isSelected)
+                                                {
+                                                    <option value="@grade.Code" selected>@displayText</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@grade.Code">@displayText</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-sm btn-danger remove-mapping-btn">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-primary" id="addMappingBtn">
+                        <i class="fas fa-plus"></i> Add Grade Mapping
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+                <a href="@Url.Action("DdatFrameworkSkillDetails", "Admin", new { id = Model.Id })" class="btn btn-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var mappingIndex = @(Model.GradeMappings.Count);
+            var capabilityLevels = @Html.Raw(Json.Serialize(capabilityLevels));
+            var grades = @Html.Raw(Json.Serialize(grades.Select(g => new { code = g.Code, displayName = g.DisplayName })));
+
+            $('#addMappingBtn').on('click', function() {
+                var html = '<div class="row mb-2 grade-mapping-row">' +
+                    '<div class="col-md-5">' +
+                    '<select name="gradeMappings[' + mappingIndex + '].capabilityLevel" class="form-control" required>' +
+                    capabilityLevels.map(function(level) {
+                        return '<option value="' + level + '">' + level + '</option>';
+                    }).join('') +
+                    '</select>' +
+                    '</div>' +
+                    '<div class="col-md-5">' +
+                    '<select name="gradeMappings[' + mappingIndex + '].grade" class="form-control" required>' +
+                    grades.map(function(grade) {
+                        var displayText = grade.displayName ? grade.code + ' - ' + grade.displayName : grade.code;
+                        return '<option value="' + grade.code + '">' + displayText + '</option>';
+                    }).join('') +
+                    '</select>' +
+                    '</div>' +
+                    '<div class="col-md-2">' +
+                    '<button type="button" class="btn btn-sm btn-danger remove-mapping-btn">' +
+                    '<i class="fas fa-trash"></i>' +
+                    '</button>' +
+                    '</div>' +
+                    '</div>';
+
+                $('#gradeMappingsContainer').append(html);
+                mappingIndex++;
+            });
+
+            $(document).on('click', '.remove-mapping-btn', function() {
+                $(this).closest('.grade-mapping-row').remove();
+            });
+        });
+    </script>
+}
+
