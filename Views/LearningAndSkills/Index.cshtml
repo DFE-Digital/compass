@@ -1,0 +1,181 @@
+@{
+    ViewData["Title"] = "Learning & Skills dashboard";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Learning & Skills</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Learning & Skills dashboard</h1>
+        <p>View all training activity across DfE</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total requests</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.TotalRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Pending requests</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.PendingRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total records</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.TotalRecords</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-history fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Completed</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.CompletedRecords</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Quick actions</h3>
+                    </div>
+                    <div class="card-body">
+                        <a asp-action="ProfessionRequests" class="btn btn-primary btn-block mb-2">
+                            <i class="fas fa-clipboard-check"></i> Review requests
+                        </a>
+                        <a asp-action="ViewLearning" class="btn btn-info btn-block mb-2">
+                            <i class="fas fa-eye"></i> View all learning
+                        </a>
+                        <a asp-action="ManageSkills" class="btn btn-success btn-block mb-2">
+                            <i class="fas fa-cogs"></i> Manage skills
+                        </a>
+                        <a asp-action="TrainingGaps" class="btn btn-warning btn-block">
+                            <i class="fas fa-exclamation-triangle"></i> Training gaps
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Recent requests</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.RecentRequests != null && ((List<Compass.Models.TrainingRequest>)ViewBag.RecentRequests).Any())
+                        {
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Course</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in (List<Compass.Models.TrainingRequest>)ViewBag.RecentRequests)
+                                    {
+                                        <tr>
+                                            <td>@(request.User?.Name ?? "Unknown")</td>
+                                            <td>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom")</td>
+                                            <td>
+                                                @switch (request.Status)
+                                                {
+                                                    case "Submitted":
+                                                        <span class="badge badge-info">Submitted</span>
+                                                        break;
+                                                    case "Approved":
+                                                        <span class="badge badge-success">Approved</span>
+                                                        break;
+                                                    case "Rejected":
+                                                        <span class="badge badge-danger">Rejected</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@request.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@request.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No recent requests</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+    .border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .text-gray-300 { color: #dddfeb !important; }
+</style>
+

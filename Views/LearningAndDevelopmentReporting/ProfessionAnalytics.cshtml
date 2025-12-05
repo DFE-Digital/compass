@@ -1,0 +1,110 @@
+@{
+    ViewData["Title"] = "Profession Analytics";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Reporting" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">L&D Reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Profession Analytics</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Profession Analytics</h1>
+        <p>Training activity breakdown by profession</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="get" class="form-inline">
+                            <label for="year" class="mr-2">Financial Year:</label>
+                            <select name="year" id="year" class="form-control mr-2" onchange="this.form.submit()">
+                                @for (int y = DateTime.UtcNow.Year - 2; y <= DateTime.UtcNow.Year + 1; y++)
+                                {
+                                    <option value="@y" selected="@(y == ViewBag.Year)">@y/@(y+1)</option>
+                                }
+                            </select>
+                            <label for="profession" class="mr-2 ml-3">Profession:</label>
+                            <select name="profession" id="profession" class="form-control mr-2" onchange="this.form.submit()">
+                                <option value="">All Professions</option>
+                                @foreach (var prof in (List<string>)ViewBag.Professions)
+                                {
+                                    <option value="@prof" selected="@(prof == ViewBag.SelectedProfession)">@prof</option>
+                                }
+                            </select>
+                            <a asp-action="Index" asp-route-year="@ViewBag.Year" class="btn btn-secondary">Back to Dashboard</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profession Data Table -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Profession Statistics</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Profession</th>
+                                        <th>Total Requests</th>
+                                        <th>Approved</th>
+                                        <th>Rejected</th>
+                                        <th>Pending</th>
+                                        <th>Total Spent</th>
+                                        <th>Average Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var prof in (dynamic)ViewBag.ProfessionData)
+                                    {
+                                        <tr>
+                                            <td><strong>@prof.Profession</strong></td>
+                                            <td>@prof.TotalRequests</td>
+                                            <td><span class="badge badge-success">@prof.ApprovedRequests</span></td>
+                                            <td><span class="badge badge-danger">@prof.RejectedRequests</span></td>
+                                            <td><span class="badge badge-info">@prof.PendingRequests</span></td>
+                                            <td>£@(((decimal)prof.TotalSpent).ToString("F2"))</td>
+                                            <td>
+                                                @if (prof.AverageRating > 0)
+                                                {
+                                                    <span>@prof.AverageRating.ToString("F1") / 5</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">N/A</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
