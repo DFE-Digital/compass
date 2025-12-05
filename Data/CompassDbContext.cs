@@ -118,6 +118,15 @@ public partial class CompassDbContext : DbContext
     public DbSet<GddRole> GddRoles { get; set; }
     public DbSet<Skill> Skills { get; set; }
     
+    // Learning & Development (L&D)
+    public DbSet<TrainingCourse> TrainingCourses { get; set; }
+    public DbSet<TrainingRecord> TrainingRecords { get; set; }
+    public DbSet<TrainingRequest> TrainingRequests { get; set; }
+    public DbSet<UserProfessionalProfile> UserProfessionalProfiles { get; set; }
+    public DbSet<HOPS> HOPS { get; set; }
+    public DbSet<TrainingNudge> TrainingNudges { get; set; }
+    public DbSet<LearningBudget> LearningBudgets { get; set; }
+    
     // Product Governance
     public DbSet<Objective> Objectives { get; set; }
     public DbSet<Risk> Risks { get; set; }
@@ -2277,6 +2286,135 @@ public partial class CompassDbContext : DbContext
         // DdatProfession configuration - ignore RoleGroup property until migration is created
         modelBuilder.Entity<DdatProfession>()
             .Ignore(d => d.RoleGroup);
+
+        // ========================================
+        // LEARNING & DEVELOPMENT (L&D) CONFIGURATION
+        // ========================================
+
+        // TrainingCourse configuration
+        modelBuilder.Entity<TrainingCourse>()
+            .HasIndex(tc => tc.Active);
+
+        modelBuilder.Entity<TrainingCourse>()
+            .HasIndex(tc => tc.Title);
+
+        modelBuilder.Entity<TrainingCourse>()
+            .HasIndex(tc => tc.Provider);
+
+        // TrainingRecord configuration
+        modelBuilder.Entity<TrainingRecord>()
+            .HasOne(tr => tr.User)
+            .WithMany()
+            .HasForeignKey(tr => tr.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TrainingRecord>()
+            .HasOne(tr => tr.Course)
+            .WithMany(tc => tc.TrainingRecords)
+            .HasForeignKey(tr => tr.CourseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TrainingRecord>()
+            .HasIndex(tr => tr.UserId);
+
+        modelBuilder.Entity<TrainingRecord>()
+            .HasIndex(tr => tr.CourseId);
+
+        modelBuilder.Entity<TrainingRecord>()
+            .HasIndex(tr => tr.Status);
+
+        modelBuilder.Entity<TrainingRecord>()
+            .HasIndex(tr => tr.DateAttended);
+
+        // TrainingRequest configuration
+        modelBuilder.Entity<TrainingRequest>()
+            .HasOne(tr => tr.User)
+            .WithMany()
+            .HasForeignKey(tr => tr.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasOne(tr => tr.Course)
+            .WithMany(tc => tc.TrainingRequests)
+            .HasForeignKey(tr => tr.CourseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasOne(tr => tr.Decision)
+            .WithMany()
+            .HasForeignKey(tr => tr.DecisionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasIndex(tr => tr.UserId);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasIndex(tr => tr.CourseId);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasIndex(tr => tr.Status);
+
+        modelBuilder.Entity<TrainingRequest>()
+            .HasIndex(tr => tr.CreatedAt);
+
+        // UserProfessionalProfile configuration
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasOne(upp => upp.User)
+            .WithMany()
+            .HasForeignKey(upp => upp.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasIndex(upp => upp.UserId)
+            .IsUnique();
+
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasIndex(upp => upp.Profession);
+
+        // HOPS configuration
+        modelBuilder.Entity<HOPS>()
+            .HasOne(h => h.User)
+            .WithMany()
+            .HasForeignKey(h => h.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<HOPS>()
+            .HasIndex(h => h.UserId);
+
+        modelBuilder.Entity<HOPS>()
+            .HasIndex(h => h.Profession);
+
+        modelBuilder.Entity<HOPS>()
+            .HasIndex(h => new { h.UserId, h.Profession })
+            .IsUnique();
+
+        // TrainingNudge configuration
+        modelBuilder.Entity<TrainingNudge>()
+            .HasOne(tn => tn.User)
+            .WithMany()
+            .HasForeignKey(tn => tn.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TrainingNudge>()
+            .HasOne(tn => tn.Course)
+            .WithMany()
+            .HasForeignKey(tn => tn.CourseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TrainingNudge>()
+            .HasIndex(tn => tn.UserId);
+
+        modelBuilder.Entity<TrainingNudge>()
+            .HasIndex(tn => new { tn.UserId, tn.IsActive });
+
+        // LearningBudget configuration
+        modelBuilder.Entity<LearningBudget>()
+            .HasIndex(lb => new { lb.FinancialYear, lb.IsActive })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1"); // Only one active budget per FY
+
+        modelBuilder.Entity<LearningBudget>()
+            .HasIndex(lb => lb.FinancialYear);
 
     }
 }

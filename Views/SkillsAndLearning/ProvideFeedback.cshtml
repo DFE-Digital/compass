@@ -1,0 +1,175 @@
+@model Compass.Models.TrainingRecord
+
+@{
+    ViewData["Title"] = "Provide feedback";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="LearningHistory" style="color: #005ea5; text-decoration: none;">Learning history</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Provide feedback</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Provide feedback</h1>
+        <p>Share your feedback on completed training</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Training details</h3>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Course:</dt>
+                    <dd class="col-sm-9"><strong>@(Model.Course?.Title ?? "Custom course")</strong></dd>
+
+                    @if (Model.DateAttended.HasValue)
+                    {
+                        <dt class="col-sm-3">Date attended:</dt>
+                        <dd class="col-sm-9">@Model.DateAttended.Value.ToString("dd MMM yyyy")</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Feedback form</h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="SubmitFeedback" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+
+                    <div class="form-group">
+                        <label>Overall rating <span class="text-danger">*</span></label>
+                        <div class="rating-input">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <label class="star-label" for="rating@i">
+                                    <input type="radio" id="rating@i" name="outcomeRating" value="@i" required />
+                                    <i class="fas fa-star"></i>
+                                </label>
+                            }
+                        </div>
+                        <small class="form-text text-muted">Required. Rate this training from 1 (poor) to 5 (excellent)</small>
+                        @if (ViewData.ModelState["OutcomeRating"]?.Errors.Count > 0)
+                        {
+                            <span class="text-danger">@ViewData.ModelState["OutcomeRating"].Errors.First().ErrorMessage</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label for="feedback">Feedback</label>
+                        <textarea id="feedback" name="feedback" class="form-control" rows="5" placeholder="Share your thoughts on the training, what you learned, and how it will help you in your role"></textarea>
+                        <small class="form-text text-muted">Optional but encouraged. Help others understand the value of this training.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="evidenceFile">Upload evidence file</label>
+                        <input type="file" id="evidenceFile" name="evidenceFile" class="form-control-file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                        <small class="form-text text-muted">Optional. Upload certificate or evidence of completion (max 10 MB). Allowed types: PDF, JPG, PNG, DOC, DOCX</small>
+                        @if (ViewData.ModelState["EvidenceFile"]?.Errors.Count > 0)
+                        {
+                            <span class="text-danger d-block">@ViewData.ModelState["EvidenceFile"].Errors.First().ErrorMessage</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label for="evidenceFileUrl">Or provide evidence file URL</label>
+                        <input type="url" id="evidenceFileUrl" name="evidenceFileUrl" class="form-control" placeholder="https://..." />
+                        <small class="form-text text-muted">Optional. Link to certificate or evidence of completion (if not uploading a file).</small>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.EvidenceFileUrl))
+                    {
+                        <div class="form-group">
+                            <label>Current evidence file</label>
+                            <div>
+                                <a href="@Model.EvidenceFileUrl" target="_blank" class="btn btn-sm btn-outline-info">
+                                    <i class="fas fa-file"></i> View current file
+                                </a>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Submit feedback</button>
+                        <a asp-action="LearningHistory" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .rating-input {
+        display: flex;
+        gap: 5px;
+    }
+    .star-label {
+        cursor: pointer;
+        font-size: 2rem;
+        color: #ddd;
+        transition: color 0.2s;
+    }
+    .star-label:hover,
+    .star-label:hover ~ .star-label {
+        color: #ffc107;
+    }
+    .star-label input[type="radio"] {
+        display: none;
+    }
+    .star-label input[type="radio"]:checked ~ i,
+    .star-label input[type="radio"]:checked ~ .star-label i {
+        color: #ffc107;
+    }
+    .star-label:has(input[type="radio"]:checked) ~ .star-label {
+        color: #ddd;
+    }
+</style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('.star-label').on('click', function() {
+                var rating = $(this).find('input').val();
+                $('.star-label').each(function(index) {
+                    if (index < rating) {
+                        $(this).find('i').addClass('text-warning').removeClass('text-muted');
+                    } else {
+                        $(this).find('i').removeClass('text-warning').addClass('text-muted');
+                    }
+                });
+            });
+        });
+    </script>
+}
+

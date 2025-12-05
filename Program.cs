@@ -288,6 +288,7 @@ builder.Services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddScoped<IProjectImportService, ProjectImportService>();
 builder.Services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<INudgingService, NudgingService>();
 builder.Services.AddScoped<INotificationRuleService, NotificationRuleService>();
 builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingService>();
 
@@ -412,11 +413,11 @@ app.Use(async (context, next) =>
     
     context.Response.Headers["Content-Security-Policy"] = 
         $"default-src 'self'; " +
-        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net; " +
+        $"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.datatables.net https://www.clarity.ms https://*.clarity.ms; " +
         $"style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.datatables.net; " +
         $"img-src 'self' data: https:; " +
         $"font-src 'self' data: https://rsms.me https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        $"connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
+        $"connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://www.clarity.ms https://*.clarity.ms; " +
         $"frame-ancestors 'none'; " +
         $"base-uri 'self'; " +
         $"form-action 'self'; " +
@@ -598,7 +599,8 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         new { Code = "accessibility", Name = "Accessibility", Description = "Accessibility management functionality" },
         new { Code = "surveys", Name = "Surveys", Description = "Survey management functionality" },
         new { Code = "enterprise_reporting", Name = "Enterprise Reporting", Description = "Enterprise reporting functionality" },
-        new { Code = "group_management", Name = "Group Management", Description = "Group and permission management functionality" }
+        new { Code = "group_management", Name = "Group Management", Description = "Group and permission management functionality" },
+        new { Code = "skills_and_learning", Name = "Skills and Learning", Description = "Skills and Learning (L&D) module for training management" }
     };
 
     foreach (var featureData in defaultFeatures)

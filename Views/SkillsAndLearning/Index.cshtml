@@ -1,0 +1,342 @@
+@{
+    ViewData["Title"] = "My skills and learning";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">My skills and learning</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>My skills and learning</h1>
+        <p>Browse training courses, request training, and track your learning history</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Browse courses</div>
+                                <div class="h6 mb-0 font-weight-bold text-gray-800">Training library</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-book fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <a asp-action="BrowseCourses" class="btn btn-primary btn-sm btn-block">Browse courses</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Request training</div>
+                                <div class="h6 mb-0 font-weight-bold text-gray-800">New request</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-plus-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <a asp-action="RequestTraining" class="btn btn-success btn-sm btn-block">Request training</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">My requests</div>
+                                <div class="h6 mb-0 font-weight-bold text-gray-800">@(ViewBag.MyRequests?.Count ?? 0) requests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <a asp-action="MyRequests" class="btn btn-info btn-sm btn-block">View requests</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Learning history</div>
+                                <div class="h6 mb-0 font-weight-bold text-gray-800">@(ViewBag.MyRecords?.Count ?? 0) records</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-history fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <a asp-action="LearningHistory" class="btn btn-warning btn-sm btn-block">View history</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Recent requests</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.MyRequests != null && ((List<Compass.Models.TrainingRequest>)ViewBag.MyRequests).Any())
+                        {
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in (List<Compass.Models.TrainingRequest>)ViewBag.MyRequests)
+                                    {
+                                        <tr>
+                                            <td>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</td>
+                                            <td>
+                                                @switch (request.Status)
+                                                {
+                                                    case "Draft":
+                                                        <span class="badge badge-secondary">Draft</span>
+                                                        break;
+                                                    case "Submitted":
+                                                        <span class="badge badge-info">Submitted</span>
+                                                        break;
+                                                    case "Approved":
+                                                        <span class="badge badge-success">Approved</span>
+                                                        break;
+                                                    case "Rejected":
+                                                        <span class="badge badge-danger">Rejected</span>
+                                                        break;
+                                                    case "On-hold":
+                                                        <span class="badge badge-warning">On-hold</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@request.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@request.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No recent requests</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Recent learning</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.MyRecords != null && ((List<Compass.Models.TrainingRecord>)ViewBag.MyRecords).Any())
+                        {
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var record in (List<Compass.Models.TrainingRecord>)ViewBag.MyRecords)
+                                    {
+                                        <tr>
+                                            <td>@(record.Course?.Title ?? "Custom course")</td>
+                                            <td>
+                                                @switch (record.Status)
+                                                {
+                                                    case "Booked":
+                                                        <span class="badge badge-info">Booked</span>
+                                                        break;
+                                                    case "Completed":
+                                                        <span class="badge badge-success">Completed</span>
+                                                        break;
+                                                    case "Cancelled":
+                                                        <span class="badge badge-danger">Cancelled</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">@record.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@((record.DateAttended ?? record.DateRequested)?.ToString("dd MMM yyyy") ?? "N/A")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No recent learning records</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Recommendations (Nudges) -->
+        @if (ViewBag.Nudges != null && ((List<Compass.Models.TrainingNudge>)ViewBag.Nudges).Any())
+        {
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card border-left-info">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-lightbulb"></i> Recommended training for you
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var nudge in (List<Compass.Models.TrainingNudge>)ViewBag.Nudges)
+                            {
+                                <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h5 class="alert-heading">
+                                                <i class="fas fa-graduation-cap"></i> @(nudge.Course?.Title ?? "Course")
+                                            </h5>
+                                            <p class="mb-2">
+                                                <strong>Why this is recommended:</strong> @nudge.Reason
+                                                @if (!string.IsNullOrEmpty(nudge.CapabilityGap))
+                                                {
+                                                    <br><small>Addresses capability gap: @nudge.CapabilityGap</small>
+                                                }
+                                            </p>
+                                            <div>
+                                                <form asp-action="AcceptNudge" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@nudge.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-success">
+                                                        <i class="fas fa-check"></i> Request this training
+                                                    </button>
+                                                </form>
+                                                <form asp-action="DismissNudge" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@nudge.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-secondary">
+                                                        <i class="fas fa-times"></i> Dismiss
+                                                    </button>
+                                                </form>
+                                                @if (nudge.Course != null)
+                                                {
+                                                    <a asp-action="CourseDetails" asp-route-id="@nudge.Course.Id" class="btn btn-sm btn-info">
+                                                        <i class="fas fa-info-circle"></i> View details
+                                                    </a>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Professional Profile -->
+        @if (ViewBag.UserProfile != null)
+        {
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Professional profile</h3>
+                            <div class="card-tools">
+                                <a asp-action="MyProfile" class="btn btn-sm btn-primary">Update profile</a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row">
+                                <dt class="col-sm-3">Profession:</dt>
+                                <dd class="col-sm-9">@(ViewBag.UserProfile.Profession ?? "Not set")</dd>
+                                <dt class="col-sm-3">Skills:</dt>
+                                <dd class="col-sm-9">@(ViewBag.UserProfile.Skills ?? "Not set")</dd>
+                                <dt class="col-sm-3">Capability gaps:</dt>
+                                <dd class="col-sm-9">@(ViewBag.UserProfile.CapabilityGaps ?? "None identified")</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
+

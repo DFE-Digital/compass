@@ -1,0 +1,407 @@
+@{
+    ViewData["Title"] = "L&D Reporting Dashboard";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">Skills and Learning</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">L&D Reporting</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Learning & Development Reporting</h1>
+        <p>Comprehensive analytics and insights for training activity</p>
+    </div>
+    <div>
+        <div class="btn-group">
+            <a asp-action="ExportReport" asp-route-year="@ViewBag.Year" class="btn btn-primary">
+                <i class="fas fa-download"></i> Export Report
+            </a>
+            <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown">
+                <span class="sr-only">Toggle Dropdown</span>
+            </button>
+            <div class="dropdown-menu">
+                <a class="dropdown-item" asp-action="ExportReport" asp-route-year="@ViewBag.Year" asp-route-reportType="spend">Export Spend Analysis</a>
+                <a class="dropdown-item" asp-action="ExportReport" asp-route-year="@ViewBag.Year" asp-route-reportType="requests">Export Request Analysis</a>
+                <a class="dropdown-item" asp-action="ExportReport" asp-route-year="@ViewBag.Year" asp-route-reportType="outcomes">Export Outcomes Analysis</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Year Selector -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="get" class="form-inline">
+                            <label for="year" class="mr-2">Financial Year:</label>
+                            <select name="year" id="year" class="form-control mr-2" onchange="this.form.submit()">
+                                @for (int y = DateTime.UtcNow.Year - 2; y <= DateTime.UtcNow.Year + 1; y++)
+                                {
+                                    <option value="@y" selected="@(y == ViewBag.Year)">@y/@(y+1)</option>
+                                }
+                            </select>
+                            <a asp-action="ProfessionAnalytics" asp-route-year="@ViewBag.Year" class="btn btn-info mr-2">
+                                <i class="fas fa-users"></i> Profession Analytics
+                            </a>
+                            <a asp-action="SpendAnalysis" asp-route-year="@ViewBag.Year" class="btn btn-info mr-2">
+                                <i class="fas fa-pound-sign"></i> Spend Analysis
+                            </a>
+                            <a asp-action="Outcomes" asp-route-year="@ViewBag.Year" class="btn btn-info">
+                                <i class="fas fa-star"></i> Outcomes & Satisfaction
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Requests</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.TotalRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Approved</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.ApprovedRequests</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Completed</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@ViewBag.CompletedRecords</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-graduation-cap fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Total Spent</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.TotalSpent ?? 0).ToString("F2"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Monthly Spending Trend</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="monthlySpendChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Monthly Requests Trend</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="monthlyRequestsChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profession Breakdown -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Requests by Profession</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="professionChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Outcome Ratings Distribution</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="ratingsChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Breakdown -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Request Status Breakdown</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="statusChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Top Providers by Spend</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Provider</th>
+                                        <th>Spend</th>
+                                        <th>Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (ViewBag.ProviderStats != null)
+                                    {
+                                        var providerStatsList = ViewBag.ProviderStats as System.Collections.IEnumerable;
+                                        if (providerStatsList != null)
+                                        {
+                                            foreach (dynamic provider in providerStatsList)
+                                            {
+                                                <tr>
+                                                    <td>@(provider.Provider ?? "Unknown")</td>
+                                                    <td>£@(((decimal)(provider.TotalSpend ?? 0)).ToString("F2"))</td>
+                                                    <td>@(provider.Count ?? 0)</td>
+                                                </tr>
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="3" class="text-muted">No provider data available.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Monthly Spend Chart
+            var monthlySpendData = @Html.Raw(Json.Serialize(ViewBag.MonthlySpend));
+            if (monthlySpendData && monthlySpendData.length > 0) {
+                var ctx = document.getElementById('monthlySpendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: monthlySpendData.map(m => new Date(2024, m.month - 1, 1).toLocaleDateString('en-GB', { month: 'short' })),
+                        datasets: [{
+                            label: 'Spend (£)',
+                            data: monthlySpendData.map(m => m.spend),
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '£' + value.toFixed(0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Monthly Requests Chart
+            var monthlyRequestsData = @Html.Raw(Json.Serialize(ViewBag.MonthlyRequests));
+            if (monthlyRequestsData && monthlyRequestsData.length > 0) {
+                var ctx2 = document.getElementById('monthlyRequestsChart').getContext('2d');
+                new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyRequestsData.map(m => new Date(2024, m.month - 1, 1).toLocaleDateString('en-GB', { month: 'short' })),
+                        datasets: [{
+                            label: 'Total Requests',
+                            data: monthlyRequestsData.map(m => m.count),
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Approved',
+                            data: monthlyRequestsData.map(m => m.approved),
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Profession Chart
+            var professionData = @Html.Raw(Json.Serialize(ViewBag.ProfessionStats));
+            if (professionData && professionData.length > 0) {
+                var ctx3 = document.getElementById('professionChart').getContext('2d');
+                new Chart(ctx3, {
+                    type: 'doughnut',
+                    data: {
+                        labels: professionData.map(p => p.profession),
+                        datasets: [{
+                            data: professionData.map(p => p.totalRequests),
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)',
+                                'rgba(153, 102, 255, 0.8)',
+                                'rgba(255, 159, 64, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+
+            // Ratings Chart
+            var ratingsData = @Html.Raw(Json.Serialize(ViewBag.OutcomeRatings));
+            if (ratingsData && ratingsData.length > 0) {
+                var ctx4 = document.getElementById('ratingsChart').getContext('2d');
+                new Chart(ctx4, {
+                    type: 'bar',
+                    data: {
+                        labels: ratingsData.map(r => r.rating + ' stars'),
+                        datasets: [{
+                            label: 'Count',
+                            data: ratingsData.map(r => r.count),
+                            backgroundColor: 'rgba(255, 206, 86, 0.8)',
+                            borderColor: 'rgba(255, 206, 86, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Status Chart
+            var statusData = @Html.Raw(Json.Serialize(ViewBag.StatusBreakdown));
+            if (statusData && statusData.length > 0) {
+                var ctx5 = document.getElementById('statusChart').getContext('2d');
+                new Chart(ctx5, {
+                    type: 'pie',
+                    data: {
+                        labels: statusData.map(s => s.status),
+                        datasets: [{
+                            data: statusData.map(s => s.count),
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)',
+                                'rgba(153, 102, 255, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+        });
+    </script>
+}
+
+<style>
+    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+    .border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .text-gray-300 { color: #dddfeb !important; }
+</style>
+
