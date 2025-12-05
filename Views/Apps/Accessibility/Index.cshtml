@@ -3,7 +3,7 @@
 @using System.Globalization
 
 @{
-    ViewData["Title"] = "Accessibility Management";
+    ViewData["Title"] = "Accessibility issues and statements";
     var summaryStats = ViewBag.SummaryStats as dynamic;
     var activeTab = ViewBag.ActiveTab as string ?? "products";
     
@@ -16,6 +16,7 @@
     var myProductsNonCompliant = ViewBag.MyProductsNonCompliant as int? ?? 0;
     var myProductsVerified = ViewBag.MyProductsVerified as int? ?? 0;
     var myProducts = ViewBag.MyProducts as List<dynamic> ?? new List<dynamic>();
+    var enrolledProducts = ViewBag.EnrolledProducts as List<dynamic> ?? new List<dynamic>();
     
     // Global statistics (for reference)
     var totalOpenIssues = (int)(summaryStats?.TotalOpenIssues ?? 0);
@@ -52,7 +53,7 @@
         <div class="dashboard-header">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
-                    <h1>Accessibility Management</h1>
+                    <h1>Accessibility issues and statements</h1>
                     <p>Manage accessibility issues and statements for your products</p>
                 </div>
                 <div>
@@ -393,11 +394,12 @@
             <div class="col-lg-9 col-md-8 col-12">
                 @if (activeTab == "your-products" || activeTab == "all-products")
                 {
-                    @if (myProducts.Any())
+                    var productsToDisplay = activeTab == "your-products" ? myProducts : enrolledProducts;
+                    @if (productsToDisplay.Any())
                     {
                         <div class="card mb-3">
                             <div class="card-header">
-                                <h3 class="card-title">@(activeTab == "your-products" ? "Your Products" : "All Products") (@myProducts.Count)</h3>
+                                <h3 class="card-title">@(activeTab == "your-products" ? "Your Products" : "All Products") (@productsToDisplay.Count)</h3>
                             </div>
                             <div class="card-body table-responsive p-0">
                                 <table class="table table-hover text-nowrap">
@@ -411,7 +413,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var product in myProducts)
+                                        @foreach (var product in productsToDisplay)
                                         {
                                             var productAccessibility = product.ProductAccessibility as Compass.Models.ProductAccessibility;
                                             var openIssues = (int)product.OpenIssuesCount;
@@ -423,10 +425,14 @@
                                             
                                             <tr>
                                                 <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = product.FipsId })">
+                                                    <a href="@Url.Action("Details", new { documentId = product.DocumentId ?? product.FipsId })">
                                                         <strong>@product.ProductName</strong>
                                                     </a>
-                                                    @if (!string.IsNullOrEmpty(product.FipsId))
+                                                    @if (!string.IsNullOrEmpty(product.DocumentId))
+                                                    {
+                                                        <br><small class="text-muted mr-2">@product.DocumentId</small>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(product.FipsId))
                                                     {
                                                         <br><small class="text-muted mr-2">@product.FipsId</small>
                                                     }
@@ -561,7 +567,7 @@
                                             
                                             <tr class="@(isOverdue ? "table-danger" : "")">
                                                 <td>
-                                                    <a href="@Url.Action("ViewIssue", new { id = issue.Id, fipsId = issue.ProductAccessibility.FipsId })">
+                                                    <a href="@Url.Action("ViewIssue", new { id = issue.Id, documentId = issue.ProductAccessibility.ProductDocumentId ?? issue.ProductAccessibility.FipsId })">
                                                         <strong>@issueTitle</strong>
                                                     </a>
                                                 </td>
@@ -682,7 +688,7 @@
                                             <tr>
                                                 <td>@audit.AuditDate.ToString("dd MMM yyyy")</td>
                                                 <td>
-                                                    <a href="@Url.Action("Details", new { fipsId = audit.ProductAccessibility.FipsId, tab = "audits" })">
+                                                    <a href="@Url.Action("Details", new { documentId = audit.ProductAccessibility.ProductDocumentId ?? audit.ProductAccessibility.FipsId, tab = "audits" })">
                                                         <strong>@audit.ProductAccessibility.ProductName</strong><br>
                                                         <small class="text-muted">@audit.ProductAccessibility.FipsId</small>
                                                     </a>
@@ -1044,6 +1050,7 @@
                         <div id="selectedProductTitle"></div>
                         <small class="text-muted" id="selectedProductDetails"></small>
                     </div>
+                    <input type="hidden" name="documentId" id="selectedProductDocumentId" />
                     <input type="hidden" name="fipsId" id="selectedProductFipsId" />
                 </div>
                 <div class="modal-footer">
@@ -1170,6 +1177,7 @@
             $input.val('');
             $resultsContainer.addClass('d-none').empty();
             $('#selectedProductDisplay').addClass('d-none');
+            $('#selectedProductDocumentId').val('');
             $('#selectedProductFipsId').val('');
             $('#enrollProductSubmitBtn').prop('disabled', true);
         });
@@ -1185,6 +1193,7 @@
         }
 
         results.forEach(function(product) {
+            var productId = product.documentId || product.fipsId;
             var isEnrolled = enrolledFipsIds.includes(product.fipsId);
             var $item = $('<div class="autocomplete-item"></div>');
             
@@ -1192,11 +1201,12 @@
                 $item.addClass('disabled');
             }
             
+            var displayId = product.documentId || product.fipsId;
             $item.html(
                 '<div class="autocomplete-name">' + product.title + 
                 (isEnrolled ? ' <span class="badge badge-success ml-2">Already enrolled</span>' : '') + 
                 '</div>' +
-                '<div class="autocomplete-details">' + product.fipsId + ' • ' + product.phase + '</div>'
+                '<div class="autocomplete-details">' + displayId + ' • ' + product.phase + '</div>'
             );
 
             if (!isEnrolled) {
@@ -1214,9 +1224,11 @@
 
     function selectProduct(product) {
         $('#productSearch').val(product.title);
-        $('#selectedProductFipsId').val(product.fipsId);
+        var productId = product.documentId || product.fipsId;
+        $('#selectedProductDocumentId').val(productId);
+        $('#selectedProductFipsId').val(product.fipsId || '');
         $('#selectedProductTitle').text(product.title);
-        $('#selectedProductDetails').text(product.fipsId + ' • ' + product.phase);
+        $('#selectedProductDetails').text((product.documentId || product.fipsId) + ' • ' + product.phase);
         $('#selectedProductDisplay').removeClass('d-none');
         $('#enrollProductSubmitBtn').prop('disabled', false);
     }

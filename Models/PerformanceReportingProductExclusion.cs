@@ -12,11 +12,17 @@ public class PerformanceReportingProductExclusion
     public int Id { get; set; }
     
     /// <summary>
-    /// FIPS ID of the product to exclude
+    /// DocumentID of the product to exclude (primary identifier)
     /// </summary>
     [Required]
+    [StringLength(100)]
+    public string ProductDocumentId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// FIPS ID of the product to exclude (legacy, kept for backwards compatibility)
+    /// </summary>
     [StringLength(50)]
-    public string FipsId { get; set; } = string.Empty;
+    public string? FipsId { get; set; }
     
     /// <summary>
     /// Optional: Product name (denormalized for easy reference)

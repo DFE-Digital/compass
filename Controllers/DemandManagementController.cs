@@ -441,6 +441,9 @@ namespace Compass.Controllers
         private static string GetMonthKey(DateTime date) => date.ToString("yyyy-MM");
 
     // GET: DemandManagement/CreateRequest
+    // GET: api/DemandManagement/CreateRequest
+    [Route("api/DemandManagement/CreateRequest")]
+    [HttpGet]
     public async Task<IActionResult> CreateRequest()
     {
         if (!IsDemandManagementEnabled())
@@ -465,10 +468,12 @@ namespace Compass.Controllers
         
         try
         {
-            // Get business areas from CMS (can run separately)
-            var businessAreasTask = GetBusinessAreasFromCmsAsync();
+            // Execute queries sequentially to avoid connection issues with the same DbContext
+            _logger.LogInformation("Loading business areas from database...");
+            var businessAreas = await GetBusinessAreasFromCmsAsync();
+            _logger.LogInformation("Loaded {Count} business areas", businessAreas.Count);
             
-            // Get missions from database (must be sequential with objectives)
+            // Get missions from database
             _logger.LogInformation("Loading missions from database...");
             var missions = await _context.Missions
                 .Where(m => !m.IsDeleted && m.Status == "Active")
@@ -477,7 +482,7 @@ namespace Compass.Controllers
                 .ToListAsync();
             _logger.LogInformation("Loaded {Count} missions", missions.Count);
             
-            // Get objectives from database (must be sequential with missions)
+            // Get objectives from database
             _logger.LogInformation("Loading objectives from database...");
             var objectives = await _context.Objectives
                 .Where(o => !o.IsDeleted && o.Status != "Closed")
@@ -485,10 +490,6 @@ namespace Compass.Controllers
                 .Select(o => new { o.Id, o.Title })
                 .ToListAsync();
             _logger.LogInformation("Loaded {Count} objectives", objectives.Count);
-
-            // Wait for business areas
-            var businessAreas = await businessAreasTask;
-            _logger.LogInformation("Loaded {Count} business areas", businessAreas.Count);
 
             ViewBag.BusinessAreas = businessAreas;
             ViewBag.Missions = missions;
