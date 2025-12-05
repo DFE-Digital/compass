@@ -10,6 +10,7 @@ using System.Linq;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Compass.Services;
 
 namespace Compass.Controllers
 {
@@ -19,6 +20,7 @@ namespace Compass.Controllers
         private readonly CompassDbContext _context;
         private readonly ILogger<DemandManagementController> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IPermissionService _permissionService;
 
         private static readonly IReadOnlyDictionary<string, int> RiskLevelPriority = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
@@ -30,17 +32,40 @@ namespace Compass.Controllers
         public DemandManagementController(
             CompassDbContext context, 
             ILogger<DemandManagementController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IPermissionService permissionService)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
+            _permissionService = permissionService;
         }
 
         // Check if Demand Management is enabled
         private bool IsDemandManagementEnabled()
         {
             return _configuration.GetValue<bool>("FeatureFlags:EnableDemandManagement", false);
+        }
+
+        // Helper method to check and set Central Ops admin status
+        private async Task<bool> CheckAndSetCentralOpsAdminAsync()
+        {
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            bool isCentralOpsAdmin = false;
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                try
+                {
+                    isCentralOpsAdmin = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+            ViewBag.IsCentralOpsAdmin = isCentralOpsAdmin;
+            return isCentralOpsAdmin;
         }
 
         private static string? NormaliseTriLevel(string? value)
@@ -146,9 +171,46 @@ namespace Compass.Controllers
             }
 
             var filteredByView = baseQuery;
-            if (!string.IsNullOrWhiteSpace(view) && !string.IsNullOrWhiteSpace(userEmail))
+            
+            // Check if user can view all requests (for default behavior)
+            bool canViewAllRequests = false;
+            if (!string.IsNullOrWhiteSpace(userEmail))
             {
-                if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
+                try
+                {
+                    canViewAllRequests = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin") ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "HOP");
+                    
+                    if (!canViewAllRequests)
+                    {
+                        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);
+                        if (user != null)
+                        {
+                            canViewAllRequests = await _context.UserBusinessAreaRoleAssignments
+                                .AnyAsync(a => a.UserId == user.Id);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+            
+            // Apply view filter - default to "mine" if no view specified and user can't view all
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                if (string.IsNullOrWhiteSpace(view))
+                {
+                    // Default to "mine" if user doesn't have permission to view all
+                    if (!canViewAllRequests)
+                    {
+                        filteredByView = filteredByView.Where(dr => dr.ApplicantEmail == userEmail);
+                    }
+                    // If user can view all and no view specified, show all (no filter)
+                }
+                else if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
                 {
                     filteredByView = filteredByView.Where(dr => dr.ApplicantEmail == userEmail);
                 }
@@ -156,6 +218,12 @@ namespace Compass.Controllers
                 {
                     filteredByView = filteredByView.Where(dr => dr.AssignedToEmail == userEmail);
                 }
+            }
+            else
+            {
+                // No user email - can't filter by view, default to empty results or all
+                // This shouldn't happen as we require authentication, but handle gracefully
+                filteredByView = baseQuery.Where(dr => false);
             }
 
             var filteredByPortfolio = filteredByView;
@@ -231,6 +299,9 @@ namespace Compass.Controllers
             ViewBag.MyRequestsCount = myRequestsCount;
             ViewBag.AssignedToMeCount = assignedToMeCount;
             ViewBag.UserEmail = userEmail;
+            ViewBag.CanViewAllRequests = canViewAllRequests;
+
+            await CheckAndSetCentralOpsAdminAsync();
 
             return View(requests);
         }
@@ -424,18 +495,216 @@ namespace Compass.Controllers
                 .OrderByDescending(dr => dr.TriageSubmittedAt ?? dr.UpdatedAt)
                 .ToListAsync();
 
+            // Get previous and next meetings
+            TriageMeetingSummaryViewModel? previousMeeting = null;
+            TriageMeetingSummaryViewModel? nextMeeting = null;
+            if (selectedMeetingId.HasValue)
+            {
+                var allMeetingsOrdered = meetingSummaries.OrderBy(m => m.StartAt).ToList();
+                var currentIndex = allMeetingsOrdered.FindIndex(m => m.Id == selectedMeetingId.Value);
+                if (currentIndex > 0)
+                {
+                    previousMeeting = allMeetingsOrdered[currentIndex - 1];
+                }
+                if (currentIndex >= 0 && currentIndex < allMeetingsOrdered.Count - 1)
+                {
+                    nextMeeting = allMeetingsOrdered[currentIndex + 1];
+                }
+            }
+
+            // Load requests for previous and next meetings
+            var meetingRequestsByMeetingId = new Dictionary<int, IReadOnlyCollection<DemandRequest>>();
+            if (previousMeeting != null || nextMeeting != null)
+            {
+                var meetingIdsToLoad = new List<int>();
+                if (previousMeeting != null) meetingIdsToLoad.Add(previousMeeting.Id);
+                if (nextMeeting != null) meetingIdsToLoad.Add(nextMeeting.Id);
+
+                var additionalRequests = await _context.DemandRequests
+                    .Where(dr => dr.IsSubmittedToTriage == true && meetingIdsToLoad.Contains(dr.TriageMeetingId!.Value))
+                    .Include(dr => dr.Prioritisation)
+                    .OrderByDescending(dr => dr.Prioritisation != null ? dr.Prioritisation.TotalPriorityScore : 0)
+                    .ThenBy(dr => dr.ProposedTitle)
+                    .ToListAsync();
+
+                foreach (var currentMeetingId in meetingIdsToLoad)
+                {
+                    var requests = additionalRequests.Where(r => r.TriageMeetingId == currentMeetingId).ToList();
+                    meetingRequestsByMeetingId[currentMeetingId] = requests.AsReadOnly();
+                }
+            }
+
+            // Check if user is Central Ops admin
+            bool isCentralOpsAdmin = false;
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                try
+                {
+                    isCentralOpsAdmin = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+
             var viewModel = new TriageViewModel
             {
                 Meetings = (filteredMeetings is List<TriageMeetingSummaryViewModel> list ? list : filteredMeetings.ToList()).AsReadOnly(),
+                AllMeetings = meetingSummaries.AsReadOnly(),
                 SelectedMeetingId = selectedMeetingId,
                 SelectedMeeting = selectedMeeting,
+                PreviousMeeting = previousMeeting,
+                NextMeeting = nextMeeting,
                 MeetingRequests = meetingRequests.AsReadOnly(),
                 AwaitingScheduling = awaitingScheduling.AsReadOnly(),
                 Months = monthSummaries.AsReadOnly(),
-                SelectedMonthKey = selectedMonthKey
+                SelectedMonthKey = selectedMonthKey,
+                MeetingRequestsByMeetingId = meetingRequestsByMeetingId
             };
 
+            ViewBag.IsCentralOpsAdmin = isCentralOpsAdmin;
+
             return View(viewModel);
+        }
+
+        // GET: DemandManagement/ManageMeetings
+        public async Task<IActionResult> ManageMeetings(int? meetingId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user is Central Ops admin
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            bool isCentralOpsAdmin = false;
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                try
+                {
+                    isCentralOpsAdmin = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+
+            if (!isCentralOpsAdmin)
+            {
+                return Forbid();
+            }
+
+            var meetings = await _context.TriageMeetings
+                .OrderByDescending(tm => tm.StartAt)
+                .ToListAsync();
+
+            TriageMeeting? selectedMeeting = null;
+            if (meetingId.HasValue)
+            {
+                selectedMeeting = await _context.TriageMeetings.FindAsync(meetingId.Value);
+            }
+
+            ViewBag.IsCentralOpsAdmin = isCentralOpsAdmin;
+            ViewBag.Meetings = meetings;
+            ViewBag.SelectedMeeting = selectedMeeting;
+
+            return View();
+        }
+
+        // POST: DemandManagement/SaveTriageMeeting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveTriageMeeting(int? meetingId, string title, string date, string startTime, string endTime, string? location, string? description, string? chairObjectId, string? chairEmail, string? chairName, bool isActive)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user is Central Ops admin
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            bool isCentralOpsAdmin = false;
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                try
+                {
+                    isCentralOpsAdmin = await _permissionService.IsSuperAdminAsync(userEmail) ||
+                                       await _permissionService.IsInGroupAsync(userEmail, "Central Operations Admin");
+                }
+                catch
+                {
+                    // Non-blocking: default to false
+                }
+            }
+
+            if (!isCentralOpsAdmin)
+            {
+                return Forbid();
+            }
+
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(date) || string.IsNullOrWhiteSpace(startTime) || string.IsNullOrWhiteSpace(endTime))
+            {
+                TempData["ErrorMessage"] = "Title, date, start time, and end time are required.";
+                return RedirectToAction("ManageMeetings", new { meetingId });
+            }
+
+            try
+            {
+                var startDateTime = DateTime.ParseExact($"{date} {startTime}", "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                var endDateTime = DateTime.ParseExact($"{date} {endTime}", "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+                if (endDateTime <= startDateTime)
+                {
+                    TempData["ErrorMessage"] = "End time must be after start time.";
+                    return RedirectToAction("ManageMeetings", new { meetingId });
+                }
+
+                TriageMeeting meeting;
+                if (meetingId.HasValue)
+                {
+                    meeting = await _context.TriageMeetings.FindAsync(meetingId.Value);
+                    if (meeting == null)
+                    {
+                        return NotFound();
+                    }
+                    meeting.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    meeting = new TriageMeeting
+                    {
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.TriageMeetings.Add(meeting);
+                }
+
+                meeting.Title = title;
+                meeting.StartAt = startDateTime;
+                meeting.EndAt = endDateTime;
+                meeting.Location = location;
+                meeting.Description = description;
+                meeting.ChairObjectId = chairObjectId;
+                meeting.ChairEmail = chairEmail;
+                meeting.ChairName = chairName;
+                meeting.IsActive = isActive;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = meetingId.HasValue ? "Meeting updated successfully." : "Meeting created successfully.";
+                return RedirectToAction("ManageMeetings", new { meetingId = meeting.Id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving triage meeting");
+                TempData["ErrorMessage"] = "An error occurred while saving the meeting.";
+                return RedirectToAction("ManageMeetings", new { meetingId });
+            }
         }
 
         private static string GetMonthKey(DateTime date) => date.ToString("yyyy-MM");
@@ -2491,59 +2760,6 @@ namespace Compass.Controllers
         // PRIORITISATION SECTION
         // ==========================================
 
-        // GET: DemandManagement/Prioritisation
-        public async Task<IActionResult> Prioritisation(string tier, string portfolio)
-        {
-            if (!IsDemandManagementEnabled())
-            {
-                return NotFound("Demand Management is not enabled.");
-            }
-
-            var query = _context.DemandRequests
-                .Include(dr => dr.Prioritisation)
-                .Include(dr => dr.Contacts)
-                .Where(dr => dr.Status == "Submitted" || dr.Status == "Under Review" || dr.Status == "Approved")
-                .AsQueryable();
-
-            // Apply tier filter
-            if (!string.IsNullOrEmpty(tier))
-            {
-                query = query.Where(dr => dr.Prioritisation != null && dr.Prioritisation.PriorityTier == tier);
-            }
-
-            // Apply portfolio filter
-            if (!string.IsNullOrEmpty(portfolio))
-            {
-                query = query.Where(dr => dr.PortfolioName == portfolio);
-            }
-
-            var requests = await query
-                .OrderByDescending(dr => dr.Prioritisation != null ? dr.Prioritisation.TotalPriorityScore : 0)
-                .ThenByDescending(dr => dr.SubmittedAt)
-                .ToListAsync();
-
-            // Get distinct tiers and portfolios for filters
-            ViewBag.Tiers = new List<string> 
-            { 
-                "Tier 1 – Critical", 
-                "Tier 2 – High", 
-                "Tier 3 – Medium", 
-                "Tier 4 – Low" 
-            };
-
-            ViewBag.Portfolios = await _context.DemandRequests
-                .Where(dr => !string.IsNullOrEmpty(dr.PortfolioName))
-                .Select(dr => dr.PortfolioName)
-                .Distinct()
-                .OrderBy(p => p)
-                .ToListAsync();
-
-            ViewBag.CurrentTier = tier;
-            ViewBag.CurrentPortfolio = portfolio;
-
-            return View(requests);
-        }
-
         // GET: DemandManagement/ScoreRequest/5
         public async Task<IActionResult> ScoreRequest(int? id)
         {
@@ -2698,7 +2914,7 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Prioritisation scoring has been saved successfully.";
-                return RedirectToAction(nameof(Prioritisation));
+                return RedirectToAction("Details", new { id = demandRequest.Id });
             }
             catch (Exception ex)
             {
@@ -2716,6 +2932,19 @@ namespace Compass.Controllers
         // ==========================================
 
         // GET: DemandManagement/Reporting
+        // GET: DemandManagement/Process
+        public async Task<IActionResult> Process()
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            return View();
+        }
+
         public async Task<IActionResult> Reporting()
         {
             if (!IsDemandManagementEnabled())

@@ -32,6 +32,19 @@ public class MonthlyUpdateService : IMonthlyUpdateService
         return GetNthWorkingDayOfMonth(followingYear, followingMonth, workingDayNumber);
     }
 
+    public DateTime GetMonthlyUpdateCloseDate(int year, int month)
+    {
+        // Calculate the next reporting period
+        var nextMonth = month == 12 ? 1 : month + 1;
+        var nextYear = month == 12 ? year + 1 : year;
+        
+        // Get the due date for the next reporting period
+        var nextPeriodDueDate = GetMonthlyUpdateDueDate(nextYear, nextMonth);
+        
+        // Close date is 10 days before the next period's due date
+        return nextPeriodDueDate.AddDays(-10);
+    }
+
     public UpdateSubmissionStatus CalculateUpdateStatus(int year, int month, DateTime? submittedDate)
     {
         if (submittedDate.HasValue)

@@ -1,0 +1,124 @@
+@model Compass.Models.DdatFrameworkRole
+
+@{
+    ViewData["Title"] = "DDAT Framework Role Details";
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item"><a href="/" style="color: #005ea5;">Home</a></li>
+            <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index" style="color: #005ea5;">Admin</a></li>
+            <li class="breadcrumb-item"><a asp-action="DdatFrameworkRoles" style="color: #005ea5;">DDAT Framework Roles</a></li>
+            <li class="breadcrumb-item active">Role Details</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Role - @Model.RoleLevel</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <a href="@Url.Action("DdatFrameworkRoles", "Admin", new { versionId = Model.FrameworkVersionId })" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Roles
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Role Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Role Family:</dt>
+                    <dd class="col-sm-9">@Model.RoleFamily</dd>
+
+                    <dt class="col-sm-3">Role:</dt>
+                    <dd class="col-sm-9"><strong>@Model.Role</strong></dd>
+
+                    <dt class="col-sm-3">Role Description:</dt>
+                    <dd class="col-sm-9">@(Model.RoleDescription ?? "No description")</dd>
+
+                    <dt class="col-sm-3">Role Level:</dt>
+                    <dd class="col-sm-9"><strong>@Model.RoleLevel</strong></dd>
+
+                    <dt class="col-sm-3">Role Level Description:</dt>
+                    <dd class="col-sm-9">@(Model.RoleLevelDescription ?? "No description")</dd>
+
+                    <dt class="col-sm-3">Role Type:</dt>
+                    <dd class="col-sm-9">@(Model.RoleType ?? "Standard")</dd>
+
+                    <dt class="col-sm-3">Framework Version:</dt>
+                    <dd class="col-sm-9">@Model.FrameworkVersion.VersionIdentifier</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Required Skills (@Model.RoleSkills.Count)</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                @if (Model.RoleSkills.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Skill Name</th>
+                                <th>Skill Level</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var roleSkill in Model.RoleSkills.OrderBy(rs => rs.SkillName).ThenBy(rs => rs.SkillLevel))
+                            {
+                                <tr>
+                                    <td><strong>@roleSkill.SkillName</strong></td>
+                                    <td>
+                                        <span class="badge badge-@(roleSkill.SkillLevel.ToLower() switch {
+                                            "awareness" => "secondary",
+                                            "working" => "info",
+                                            "practitioner" => "success",
+                                            "expert" => "warning",
+                                            _ => "secondary"
+                                        })">
+                                            @roleSkill.SkillLevel
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(roleSkill.SkillDescription))
+                                        {
+                                            <span title="@roleSkill.SkillDescription">
+                                                @(roleSkill.SkillDescription.Length > 150 ? roleSkill.SkillDescription.Substring(0, 150) + "..." : roleSkill.SkillDescription)
+                                            </span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(roleSkill.SkillLevelDescription))
+                                        {
+                                            <br />
+                                            <small class="text-muted">
+                                                <strong>@roleSkill.SkillLevel level:</strong> @roleSkill.SkillLevelDescription
+                                            </small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="text-muted p-3">No skills required for this role level.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+

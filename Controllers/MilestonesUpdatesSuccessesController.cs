@@ -167,9 +167,10 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(u => u.MonthlyUpdateNarratives)
             .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
 
-        // Check if reporting window has closed
+        // Check if reporting window has closed (10 days before next period's due date)
         var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        var canEdit = DateTime.UtcNow <= dueDate;
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        var canEdit = DateTime.UtcNow <= closeDate;
 
         // Check if current user can submit (must be SRO, Service Owner, or Primary Contact)
         var canSubmit = await CanUserSubmitMonthlyUpdate(project);
@@ -244,9 +245,10 @@ public class MilestonesUpdatesSuccessesController : Controller
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
         }
 
-        // Check if reporting window has closed
+        // Check if reporting window has closed (10 days before next period's due date)
         var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        var canEdit = DateTime.UtcNow <= dueDate;
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        var canEdit = DateTime.UtcNow <= closeDate;
 
         // Check if current user can submit (must be SRO, Service Owner, or Primary Contact)
         var canSubmit = await CanUserSubmitMonthlyUpdate(project);
@@ -263,6 +265,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         ViewBag.CanSubmit = canSubmit;
         ViewBag.CanEdit = canEdit;
         ViewBag.DueDate = dueDate;
+        ViewBag.CloseDate = closeDate;
         
         return View(update);
     }
@@ -369,18 +372,21 @@ public class MilestonesUpdatesSuccessesController : Controller
             ViewBag.IsFlagship = projectForView.IsFlagship;
 
             var dueDateForView = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-            var canEditForView = DateTime.UtcNow <= dueDateForView;
+            var closeDateForView = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+            var canEditForView = DateTime.UtcNow <= closeDateForView;
 
             ViewBag.Project = projectForView;
             ViewBag.ExistingUpdate = existingUpdate;
             ViewBag.CanEdit = canEditForView;
             ViewBag.DueDate = dueDateForView;
+            ViewBag.CloseDate = closeDateForView;
             return View(model);
         }
 
-        // Check if reporting window has closed
+        // Check if reporting window has closed (10 days before next period's due date)
         var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer add or edit entries.";
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
@@ -444,9 +450,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer edit entries.";
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
@@ -519,9 +525,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer edit entries.";
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
@@ -583,9 +589,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer delete entries.";
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
@@ -619,9 +625,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer add entries.";
             return Redirect($"/MilestonesUpdatesSuccesses/CreateUpdate?projectId={projectId.Value}&year={year.Value}&month={month.Value}");
@@ -919,9 +925,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer submit monthly updates.";
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
@@ -1007,9 +1013,9 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        // Check if reporting window has closed
-        var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
-        if (DateTime.UtcNow > dueDate)
+        // Check if reporting window has closed (10 days before next period's due date)
+        var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
+        if (DateTime.UtcNow > closeDate)
         {
             TempData["ErrorMessage"] = "The reporting window for this period has closed. You can no longer unsubmit monthly updates.";
             return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });

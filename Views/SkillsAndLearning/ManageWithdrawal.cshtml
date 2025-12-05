@@ -1,0 +1,128 @@
+@model Compass.Models.TrainingRequest
+
+@{
+    ViewData["Title"] = "Request withdrawal";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="MyRequests" style="color: #005ea5; text-decoration: none;">My requests</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Request withdrawal</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Request withdrawal</h1>
+        <p>Request withdrawal from an approved training course</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Training request details</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Course:</dt>
+                            <dd class="col-sm-9">
+                                <strong>@(Model.Course?.Title ?? Model.CustomCourseTitle ?? "Custom course")</strong>
+                            </dd>
+
+                            <dt class="col-sm-3">Provider:</dt>
+                            <dd class="col-sm-9">
+                                @(Model.Course?.Provider ?? Model.CustomCourseProvider ?? "N/A")
+                            </dd>
+
+                            <dt class="col-sm-3">Cost:</dt>
+                            <dd class="col-sm-9">
+                                @{
+                                    var cost = Model.ActualCost ?? Model.Course?.Cost ?? Model.CustomCourseCost ?? 0;
+                                }
+                                @if (cost > 0)
+                                {
+                                    <span>£@cost.ToString("N0")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-success">Free</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">Planned date:</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.PlannedDate.HasValue)
+                                {
+                                    @Model.PlannedDate.Value.ToString("dd MMM yyyy")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">TBC</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">Status:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge badge-success">@Model.Status</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Withdrawal request</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> 
+                            <strong>Note:</strong> If this training has a cost, an admin will need to review your withdrawal request. 
+                            They may transfer it to another person or cancel it if it's free.
+                        </div>
+
+                        <form asp-action="SubmitWithdrawalRequest" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+
+                            <div class="form-group">
+                                <label for="reason">Reason for withdrawal <span class="text-danger">*</span></label>
+                                <textarea id="reason" name="reason" class="form-control" rows="5" required placeholder="Please provide a reason for requesting withdrawal from this training..."></textarea>
+                                <small class="form-text text-muted">This will be reviewed by an admin.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-success">Submit withdrawal request</button>
+                                <a asp-action="MyRequests" class="btn btn-secondary">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
