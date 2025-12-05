@@ -53,11 +53,12 @@ public class ProductsController : ControllerBase
                     
                     return new
                     {
-                        fipsId = p.FipsId,
+                        documentId = p.DocumentId ?? p.FipsId, // Use DocumentId as primary identifier
+                        fipsId = p.FipsId, // Keep for backwards compatibility
                         title = p.Title,
                         phase = phase,
                         businessArea = businessArea,
-                        text = $"{p.Title} ({p.FipsId})" + 
+                        text = $"{p.Title} ({p.DocumentId ?? p.FipsId})" + 
                                (!string.IsNullOrEmpty(phase) && phase != "Not specified" ? $" - {phase}" : "") +
                                (!string.IsNullOrEmpty(businessArea) ? $" - {businessArea}" : "")
                     };
