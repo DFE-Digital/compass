@@ -19,6 +19,7 @@
 @inject IConfiguration Configuration
 @inject IPermissionService PermissionService
 @inject CompassDbContext DbContext
+@inject IWebHostEnvironment env
 
 <!DOCTYPE html>
 <html lang="en">
@@ -46,13 +47,17 @@
     <link href="~/css/custom.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" />
     <!-- Help Chatbot styles -->
     <!-- <link href="~/css/chatbot.css" rel="stylesheet" nonce="@Context.Items["Nonce"]" /> -->
-    <script type="text/javascript" nonce="@Context.Items["Nonce"]">
-    (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "ug8dgpkuqz");
-</script>
+    @if (env.IsProduction())
+    {
+        <script type="text/javascript" nonce="@Context.Items["Nonce"]">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            t.setAttribute("nonce", "@Context.Items["Nonce"]");
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "ug8dgpkuqz");
+        </script>
+    }
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="hold-transition sidebar-mini layout-fixed compass-theme">
@@ -244,7 +249,8 @@
                         @* Functional standards navigation moved to the header dropdown *@
 
                         <!-- Skills and Learning Section -->
-                        @{
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableSkillsAndLearning", false))
+                        {
                             var isSkillsAndLearningActive = controllerName == "SkillsAndLearning";
                             var isSkillsAndLearningIndexActive = controllerName == "SkillsAndLearning" && actionName == "Index";
                             var isBrowseCoursesActive = controllerName == "SkillsAndLearning" && actionName == "BrowseCourses";
@@ -255,85 +261,85 @@
                             var isHOPDashboardActive = controllerName == "SkillsAndLearning" && actionName == "HOPDashboard";
                             var isBudgetAndSpendingActive = controllerName == "SkillsAndLearning" && actionName == "BudgetAndSpending";
                             var isReportingActive = controllerName == "SkillsAndLearning" && (actionName == "Reporting" || actionName == "SpendAnalysis" || actionName == "Outcomes" || actionName == "ProfessionAnalytics");
+                            <li class="nav-header">Skills and Learning</li>
+                            <li class="nav-item @(isSkillsAndLearningActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isSkillsAndLearningActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isSkillsAndLearningActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-graduation-cap" aria-hidden="true"></i>
+                                    <p>
+                                        Skills and Learning
+                                        <i class="right fas fa-angle-left"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview" role="list">
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("Index", "SkillsAndLearning")" class="nav-link @(isSkillsAndLearningIndexActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>My skills and learning</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("BrowseCourses", "SkillsAndLearning")" class="nav-link @(isBrowseCoursesActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Browse courses</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("MyRequests", "SkillsAndLearning")" class="nav-link @(isMyRequestsActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>My requests</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="@Url.Action("LearningHistory", "SkillsAndLearning")" class="nav-link @(isLearningHistoryActive ? "active" : "")">
+                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                            <p>Learning history</p>
+                                        </a>
+                                    </li>
+                                    @if (await PermissionService.IsInGroupAsync(currentUserEmail, "Learning and skills"))
+                                    {
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("AdminDashboard", "SkillsAndLearning")" class="nav-link @(isAdminDashboardActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Admin dashboard</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("AdminRequests", "SkillsAndLearning")" class="nav-link @(isAdminRequestsActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Manage requests</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (await PermissionService.IsInGroupAsync(currentUserEmail, "Learning and skills") || 
+                                         await PermissionService.IsInGroupAsync(currentUserEmail, "HOP") || 
+                                         await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin"))
+                                    {
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("Reporting", "SkillsAndLearning")" class="nav-link @(isReportingActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>L&D Reporting</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    @if (await PermissionService.IsInGroupAsync(currentUserEmail, "HOP") || 
+                                         await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin"))
+                                    {
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("HOPDashboard", "SkillsAndLearning")" class="nav-link @(isHOPDashboardActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>HOP dashboard</p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a href="@Url.Action("BudgetAndSpending", "SkillsAndLearning")" class="nav-link @(isBudgetAndSpendingActive ? "active" : "")">
+                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                                <p>Budget and spending</p>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
                         }
-                        <li class="nav-header">Skills and Learning</li>
-                        <li class="nav-item @(isSkillsAndLearningActive ? "menu-open" : "")">
-                            <a href="#" class="nav-link @(isSkillsAndLearningActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isSkillsAndLearningActive ? "true" : "false")">
-                                <i class="nav-icon fas fa-graduation-cap" aria-hidden="true"></i>
-                                <p>
-                                    Skills and Learning
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview" role="list">
-                                <li class="nav-item">
-                                    <a href="@Url.Action("Index", "SkillsAndLearning")" class="nav-link @(isSkillsAndLearningIndexActive ? "active" : "")">
-                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                        <p>My skills and learning</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="@Url.Action("BrowseCourses", "SkillsAndLearning")" class="nav-link @(isBrowseCoursesActive ? "active" : "")">
-                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                        <p>Browse courses</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="@Url.Action("MyRequests", "SkillsAndLearning")" class="nav-link @(isMyRequestsActive ? "active" : "")">
-                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                        <p>My requests</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="@Url.Action("LearningHistory", "SkillsAndLearning")" class="nav-link @(isLearningHistoryActive ? "active" : "")">
-                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                        <p>Learning history</p>
-                                    </a>
-                                </li>
-                                @if (await PermissionService.IsInGroupAsync(currentUserEmail, "Learning and skills"))
-                                {
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("AdminDashboard", "SkillsAndLearning")" class="nav-link @(isAdminDashboardActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Admin dashboard</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("AdminRequests", "SkillsAndLearning")" class="nav-link @(isAdminRequestsActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Manage requests</p>
-                                        </a>
-                                    </li>
-                                }
-                                @if (await PermissionService.IsInGroupAsync(currentUserEmail, "Learning and skills") || 
-                                     await PermissionService.IsInGroupAsync(currentUserEmail, "HOP") || 
-                                     await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin"))
-                                {
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("Reporting", "SkillsAndLearning")" class="nav-link @(isReportingActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>L&D Reporting</p>
-                                        </a>
-                                    </li>
-                                }
-                                @if (await PermissionService.IsInGroupAsync(currentUserEmail, "HOP") || 
-                                     await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin"))
-                                {
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("HOPDashboard", "SkillsAndLearning")" class="nav-link @(isHOPDashboardActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>HOP dashboard</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="@Url.Action("BudgetAndSpending", "SkillsAndLearning")" class="nav-link @(isBudgetAndSpendingActive ? "active" : "")">
-                                            <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Budget and spending</p>
-                                        </a>
-                                    </li>
-                                }
-                            </ul>
-                        </li>
 
                         <!-- Central Operations Section -->
                         @{

@@ -1,0 +1,269 @@
+@model List<Compass.Models.TrainingRecord>
+
+@{
+    ViewData["Title"] = "Learning history";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Learning history</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Learning history</h1>
+        <p>View your completed and upcoming training</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Filters -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" asp-action="LearningHistory">
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="statusFilter" class="form-control form-control-sm">
+                                    <option value="">All</option>
+                                    <option value="Booked" selected="@(ViewBag.StatusFilter == "Booked")">Booked</option>
+                                    <option value="Completed" selected="@(ViewBag.StatusFilter == "Completed")">Completed</option>
+                                    <option value="Cancelled" selected="@(ViewBag.StatusFilter == "Cancelled")">Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
+                                <a asp-action="LearningHistory" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Learning Records -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Learning records (@Model.Count)</h3>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Any())
+                {
+                    <table class="table table-hover mb-0 sortable-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="Course">Course</th>
+                                <th class="sortable" data-column="Status">Status</th>
+                                <th class="sortable" data-column="DateAttended">Date attended</th>
+                                <th class="sortable" data-column="OutcomeRating">Rating</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var record in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@(record.Course?.Title ?? "Custom course")</strong>
+                                        @if (record.Course != null && !string.IsNullOrEmpty(record.Course.Provider))
+                                        {
+                                            <br><small class="text-muted">Provider: @record.Course.Provider</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @switch (record.Status)
+                                        {
+                                            case "Booked":
+                                                <span class="badge badge-info">Booked</span>
+                                                break;
+                                            case "Completed":
+                                                <span class="badge badge-success">Completed</span>
+                                                break;
+                                            case "Cancelled":
+                                                <span class="badge badge-danger">Cancelled</span>
+                                                break;
+                                            default:
+                                                <span class="badge badge-secondary">@record.Status</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (record.DateAttended.HasValue)
+                                        {
+                                            @record.DateAttended.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else if (record.DateRequested.HasValue)
+                                        {
+                                            <span class="text-muted">Requested: @record.DateRequested.Value.ToString("dd MMM yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (record.OutcomeRating.HasValue)
+                                        {
+                                            @for (int i = 1; i <= 5; i++)
+                                            {
+                                                <i class="fas fa-star @(i <= record.OutcomeRating.Value ? "text-warning" : "text-muted")"></i>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not rated</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (record.Status == "Completed" && !record.OutcomeRating.HasValue)
+                                        {
+                                            <a asp-action="ProvideFeedback" asp-route-id="@record.Id" class="btn btn-sm btn-primary">Provide feedback</a>
+                                        }
+                                        @if (record.Status == "Completed" && record.OutcomeRating.HasValue)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#feedbackModal@(record.Id)">View feedback</button>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (record.Status == "Completed" && !string.IsNullOrEmpty(record.Feedback))
+                                {
+                                    <div class="modal fade" id="feedbackModal@(record.Id)" tabindex="-1" role="dialog">
+                                        <div class="modal-dialog" role="document">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Training feedback</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p><strong>Rating:</strong> 
+                                                        @if (record.OutcomeRating.HasValue)
+                                                        {
+                                                            @for (int i = 1; i <= 5; i++)
+                                                            {
+                                                                <i class="fas fa-star @(i <= record.OutcomeRating.Value ? "text-warning" : "text-muted")"></i>
+                                                            }
+                                                        }
+                                                    </p>
+                                                    <p><strong>Feedback:</strong></p>
+                                                    <p>@record.Feedback</p>
+                                                    @if (!string.IsNullOrEmpty(record.EvidenceFileUrl))
+                                                    {
+                                                        <p><strong>Evidence:</strong> <a href="@record.EvidenceFileUrl" target="_blank">View certificate</a></p>
+                                                    }
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-3">
+                        <p class="text-muted mb-0">No learning records found.</p>
+                    </div>
+                }
+            </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'DateAttended') {
+                        var aDate = $(a).find('td').eq(colIndex).text().trim();
+                        var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        aVal = new Date(aDate);
+                        bVal = new Date(bDate);
+                    } else if (column === 'OutcomeRating') {
+                        aVal = $(a).find('td').eq(colIndex).find('.fa-star.text-warning').length;
+                        bVal = $(b).find('td').eq(colIndex).find('.fa-star.text-warning').length;
+                    } else {
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+    </script>
+}
+

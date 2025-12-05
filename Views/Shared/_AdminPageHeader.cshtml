@@ -19,10 +19,34 @@
 
 @model dynamic
 
+@functions {
+    private object? GetPropertyValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            var property = ((object)obj).GetType().GetProperty(propertyName);
+            return property?.GetValue(obj);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+
 @{
     var title = Model?.Title as string ?? ViewData["Title"]?.ToString() ?? "Page";
     var description = Model?.Description as string;
-    var actions = Model?.Actions as IEnumerable<dynamic> ?? new List<dynamic>();
+    IEnumerable<dynamic> actions = new List<dynamic>();
+    try
+    {
+        actions = Model?.Actions as IEnumerable<dynamic> ?? new List<dynamic>();
+    }
+    catch
+    {
+        // Actions property doesn't exist on the model, use empty list
+        actions = new List<dynamic>();
+    }
 }
 
 <div class="content-header">
@@ -42,45 +66,55 @@
                         @if (actions.Count() == 1)
                         {
                             var action = actions.First();
-                            if (action.ModalTarget != null)
+                            var modalTarget = GetPropertyValue(action, "ModalTarget") as string;
+                            var actionValue = GetPropertyValue(action, "Action") as string;
+                            var controllerValue = GetPropertyValue(action, "Controller") as string;
+                            var urlValue = GetPropertyValue(action, "Url") as string;
+                            var onClickValue = GetPropertyValue(action, "OnClick") as string;
+                            var classValue = GetPropertyValue(action, "Class") as string;
+                            var iconValue = GetPropertyValue(action, "Icon") as string;
+                            var textValue = GetPropertyValue(action, "Text") as string;
+                            
+                            if (!string.IsNullOrEmpty(modalTarget))
                             {
-                                <button type="button" class="btn @(action.Class ?? "btn-primary")" data-toggle="modal" data-target="@action.ModalTarget" onclick="@(action.OnClick ?? "")">
-                                    @if (action.Icon != null)
+                                <button type="button" class="btn @(classValue ?? "btn-primary")" data-toggle="modal" data-target="@modalTarget" onclick="@(onClickValue ?? "")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
                                     {
-                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                        <i class="@iconValue" aria-hidden="true"></i>
                                     }
-                                    @action.Text
+                                    @textValue
                                 </button>
                             }
-                            else if (action.Action != null)
+                            else if (!string.IsNullOrEmpty(actionValue))
                             {
-                                string actionName = action.Action?.ToString() ?? "";
-                                string controllerName = (action.Controller?.ToString()) ?? "Admin";
+                                string actionName = actionValue;
+                                string controllerName = controllerValue ?? "Admin";
                                 string url;
-                                if (action.RouteValues != null)
+                                var routeValues = GetPropertyValue(action, "RouteValues");
+                                if (routeValues != null)
                                 {
-                                    url = Url.Action(actionName, controllerName, (object)action.RouteValues);
+                                    url = Url.Action(actionName, controllerName, (object)routeValues);
                                 }
                                 else
                                 {
                                     url = Url.Action(actionName, controllerName);
                                 }
-                                <a href="@url" class="btn @(action.Class ?? "btn-primary")">
-                                    @if (action.Icon != null)
+                                <a href="@url" class="btn @(classValue ?? "btn-primary")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
                                     {
-                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                        <i class="@iconValue" aria-hidden="true"></i>
                                     }
-                                    @action.Text
+                                    @textValue
                                 </a>
                             }
-                            else if (action.Url != null)
+                            else if (!string.IsNullOrEmpty(urlValue))
                             {
-                                <a href="@action.Url" class="btn @(action.Class ?? "btn-primary")">
-                                    @if (action.Icon != null)
+                                <a href="@urlValue" class="btn @(classValue ?? "btn-primary")">
+                                    @if (!string.IsNullOrEmpty(iconValue))
                                     {
-                                        <i class="@action.Icon" aria-hidden="true"></i>
+                                        <i class="@iconValue" aria-hidden="true"></i>
                                     }
-                                    @action.Text
+                                    @textValue
                                 </a>
                             }
                         }
@@ -91,50 +125,59 @@
                                     Actions
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-right">
-                                    @foreach (var action in actions)
+                                    @foreach (var actionItem in actions)
                                     {
-                                        if (action.ModalTarget != null)
+                                        var itemModalTarget = GetPropertyValue(actionItem, "ModalTarget") as string;
+                                        var itemAction = GetPropertyValue(actionItem, "Action") as string;
+                                        var itemController = GetPropertyValue(actionItem, "Controller") as string;
+                                        var itemUrl = GetPropertyValue(actionItem, "Url") as string;
+                                        var itemOnClick = GetPropertyValue(actionItem, "OnClick") as string;
+                                        var itemIcon = GetPropertyValue(actionItem, "Icon") as string;
+                                        var itemText = GetPropertyValue(actionItem, "Text") as string;
+                                        
+                                        if (!string.IsNullOrEmpty(itemModalTarget))
                                         {
-                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="@action.ModalTarget" onclick="@(action.OnClick ?? "")">
-                                                @if (action.Icon != null)
+                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="@itemModalTarget" onclick="@(itemOnClick ?? "")">
+                                                @if (!string.IsNullOrEmpty(itemIcon))
                                                 {
-                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
                                                 }
-                                                @action.Text
+                                                @itemText
                                             </a>
                                         }
-                                        else if (action.Action != null)
+                                        else if (!string.IsNullOrEmpty(itemAction))
                                         {
-                                            string actionName = action.Action?.ToString() ?? "";
-                                            string controllerName = (action.Controller?.ToString()) ?? "Admin";
+                                            string actionName = itemAction;
+                                            string controllerName = itemController ?? "Admin";
                                             string url;
-                                            if (action.RouteValues != null)
+                                            var routeValues = GetPropertyValue(actionItem, "RouteValues");
+                                            if (routeValues != null)
                                             {
-                                                url = Url.Action(actionName, controllerName, (object)action.RouteValues);
+                                                url = Url.Action(actionName, controllerName, (object)routeValues);
                                             }
                                             else
                                             {
                                                 url = Url.Action(actionName, controllerName);
                                             }
                                             <a class="dropdown-item" href="@url">
-                                                @if (action.Icon != null)
+                                                @if (!string.IsNullOrEmpty(itemIcon))
                                                 {
-                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
                                                 }
-                                                @action.Text
+                                                @itemText
                                             </a>
                                         }
-                                        else if (action.Url != null)
+                                        else if (!string.IsNullOrEmpty(itemUrl))
                                         {
-                                            <a class="dropdown-item" href="@action.Url">
-                                                @if (action.Icon != null)
+                                            <a class="dropdown-item" href="@itemUrl">
+                                                @if (!string.IsNullOrEmpty(itemIcon))
                                                 {
-                                                    <i class="@action.Icon mr-2" aria-hidden="true"></i>
+                                                    <i class="@itemIcon mr-2" aria-hidden="true"></i>
                                                 }
-                                                @action.Text
+                                                @itemText
                                             </a>
                                         }
-                                        @if (action != actions.Last())
+                                        @if (actionItem != actions.Last())
                                         {
                                             <div class="dropdown-divider"></div>
                                         }

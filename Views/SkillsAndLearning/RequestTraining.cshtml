@@ -1,0 +1,134 @@
+@{
+    ViewData["Title"] = "Request training";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" style="color: #005ea5; text-decoration: none;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Request training</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Request training</h1>
+        <p>Request training from approved courses or submit a custom training request</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Training request form</h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="RequestTraining" method="post">
+                    @Html.AntiForgeryToken()
+                    @if (ViewBag.NudgeId != null)
+                    {
+                        <input type="hidden" name="nudgeId" value="@ViewBag.NudgeId" />
+                    }
+
+                    <div class="form-group">
+                        <label for="courseId">Select course (optional)</label>
+                        <select id="courseId" name="courseId" class="form-control">
+                            <option value="">-- Select a course or enter custom course below --</option>
+                            @if (ViewBag.Courses != null)
+                            {
+                                @foreach (var course in (SelectList)ViewBag.Courses)
+                                {
+                                    <option value="@course.Value" selected="@(course.Selected)">@course.Text</option>
+                                }
+                            }
+                        </select>
+                        <small class="form-text text-muted">Leave blank if requesting a custom course</small>
+                    </div>
+
+                    @if (ViewBag.SelectedCourse != null)
+                    {
+                        <div class="alert alert-info">
+                            <strong>Selected course:</strong> @ViewBag.SelectedCourse.Title<br>
+                            <strong>Provider:</strong> @(ViewBag.SelectedCourse.Provider ?? "N/A")<br>
+                            <strong>Format:</strong> @(ViewBag.SelectedCourse.Format ?? "N/A")<br>
+                            <strong>Cost:</strong> @(ViewBag.SelectedCourse.Cost.HasValue ? $"£{ViewBag.SelectedCourse.Cost.Value:F2}" : "N/A")
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label for="customCourseTitle">Custom course title (if not selecting from list above)</label>
+                        <input type="text" id="customCourseTitle" name="customCourseTitle" class="form-control" placeholder="Enter course title if requesting custom training" />
+                        <small class="form-text text-muted">Required if no course is selected above</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="justification">Justification <span class="text-danger">*</span></label>
+                        <textarea id="justification" name="justification" class="form-control" rows="5" required placeholder="Explain why this training is needed and how it aligns with your role or capability development"></textarea>
+                        <small class="form-text text-muted">Required. Explain why this training is needed.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="professionAlignment">Profession alignment</label>
+                        <textarea id="professionAlignment" name="professionAlignment" class="form-control" rows="3" placeholder="How does this training align with your profession or address capability gaps?"></textarea>
+                        <small class="form-text text-muted">Optional. Link to capability gaps or profession requirements.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Save as draft</button>
+                        <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#courseId').on('change', function() {
+                if ($(this).val()) {
+                    $('#customCourseTitle').prop('required', false);
+                } else {
+                    $('#customCourseTitle').prop('required', true);
+                }
+            });
+
+            $('form').on('submit', function(e) {
+                var courseId = $('#courseId').val();
+                var customTitle = $('#customCourseTitle').val().trim();
+
+                if (!courseId && !customTitle) {
+                    e.preventDefault();
+                    alert('Please either select a course or enter a custom course title.');
+                    return false;
+                }
+            });
+        });
+    </script>
+}
+
