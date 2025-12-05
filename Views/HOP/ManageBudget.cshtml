@@ -1,0 +1,159 @@
+@model Compass.Models.LearningBudget
+
+@{
+    ViewData["Title"] = "Manage budget";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="HOPDashboard" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">HOP dashboard</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="BudgetAndSpending" style="color: #005ea5; text-decoration: none;">Budget and spending</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Manage budget</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Manage L&D budget</h1>
+        <p>Set the total L&D budget amount for Financial Year @Model.FinancialYear</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Budget Summary -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total budget</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(Model.TotalBudget.ToString("F2"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Spent</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Spent ?? 0).ToString("F2"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@((Model.Forecasted ?? 0).ToString("F2"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Remaining</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.Remaining ?? 0).ToString("F2"))</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Budget Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Set budget for Financial Year @Model.FinancialYear</h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="UpdateBudget" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+
+                    <div class="form-group">
+                        <label for="totalBudget">Total budget amount (£) <span class="text-danger">*</span></label>
+                        <input type="number" 
+                               id="totalBudget" 
+                               name="totalBudget" 
+                               class="form-control" 
+                               value="@Model.TotalBudget" 
+                               step="0.01" 
+                               min="0" 
+                               required />
+                        <small class="form-text text-muted">Enter the total L&D budget for Financial Year @Model.FinancialYear</small>
+                        @if (ViewData.ModelState["TotalBudget"]?.Errors.Count > 0)
+                        {
+                            <span class="text-danger d-block">@ViewData.ModelState["TotalBudget"].Errors.First().ErrorMessage</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Update budget</button>
+                        <a asp-action="BudgetAndSpending" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+    .border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .text-gray-300 { color: #dddfeb !important; }
+</style>
+

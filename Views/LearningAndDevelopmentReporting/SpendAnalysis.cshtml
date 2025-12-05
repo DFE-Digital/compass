@@ -1,0 +1,249 @@
+@{
+    ViewData["Title"] = "Spend Analysis";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Reporting" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">L&D Reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Spend Analysis</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Spend Analysis</h1>
+        <p>Detailed spending breakdown and trends</p>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Year Selector -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="get" class="form-inline">
+                            <label for="year" class="mr-2">Financial Year:</label>
+                            <select name="year" id="year" class="form-control mr-2" onchange="this.form.submit()">
+                                @for (int y = DateTime.UtcNow.Year - 2; y <= DateTime.UtcNow.Year + 1; y++)
+                                {
+                                    <option value="@y" selected="@(y == ViewBag.Year)">@y/@(y+1)</option>
+                                }
+                            </select>
+                            <a asp-action="Index" asp-route-year="@ViewBag.Year" class="btn btn-secondary">Back to Dashboard</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Monthly Spending Trend</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="monthlySpendChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Spending by Profession</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="professionSpendChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Spending by Provider</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="providerSpendChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Top Courses by Spend</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Spend</th>
+                                        <th>Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var course in (dynamic)ViewBag.TopCourses)
+                                    {
+                                        <tr>
+                                            <td>@course.CourseTitle</td>
+                                            <td>£@(((decimal)course.TotalSpent).ToString("F2"))</td>
+                                            <td>@course.Count</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Spending by Profession</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Profession</th>
+                                        <th>Total Spend</th>
+                                        <th>Count</th>
+                                        <th>Average</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var prof in (dynamic)ViewBag.ProfessionSpend)
+                                    {
+                                        <tr>
+                                            <td>@prof.Profession</td>
+                                            <td>£@(((decimal)prof.TotalSpent).ToString("F2"))</td>
+                                            <td>@prof.Count</td>
+                                            <td>£@(((decimal)prof.AverageSpend).ToString("F2"))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var monthlySpendData = @Html.Raw(Json.Serialize(ViewBag.MonthlySpend));
+            if (monthlySpendData && monthlySpendData.length > 0) {
+                var ctx = document.getElementById('monthlySpendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: monthlySpendData.map(m => m.monthName),
+                        datasets: [{
+                            label: 'Spend (£)',
+                            data: monthlySpendData.map(m => m.spend),
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '£' + value.toFixed(0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            var professionSpendData = @Html.Raw(Json.Serialize(ViewBag.ProfessionSpend));
+            if (professionSpendData && professionSpendData.length > 0) {
+                var ctx2 = document.getElementById('professionSpendChart').getContext('2d');
+                new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: professionSpendData.map(p => p.profession),
+                        datasets: [{
+                            label: 'Total Spend (£)',
+                            data: professionSpendData.map(p => p.totalSpent),
+                            backgroundColor: 'rgba(54, 162, 235, 0.8)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '£' + value.toFixed(0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            var providerSpendData = @Html.Raw(Json.Serialize(ViewBag.ProviderSpend));
+            if (providerSpendData && providerSpendData.length > 0) {
+                var ctx3 = document.getElementById('providerSpendChart').getContext('2d');
+                new Chart(ctx3, {
+                    type: 'doughnut',
+                    data: {
+                        labels: providerSpendData.map(p => p.provider),
+                        datasets: [{
+                            data: providerSpendData.map(p => p.totalSpent),
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)',
+                                'rgba(153, 102, 255, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+        });
+    </script>
+}
+

@@ -1,0 +1,263 @@
+@{
+    ViewData["Title"] = "Budget and spending";
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="HOPDashboard" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">HOP dashboard</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Budget and spending</li>
+        </ol>
+    </nav>
+}
+
+<div class="dashboard-header">
+    <div>
+        <h1>Budget and spending</h1>
+        <p>Forecast cost and L&D demand, support financial planning</p>
+    </div>
+    @if (ViewBag.IsCentralOps == true)
+    {
+        <div>
+            <a asp-action="ManageBudget" class="btn btn-primary">
+                <i class="fas fa-cog"></i> Manage budget
+            </a>
+        </div>
+    }
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            @if (ViewBag.IsCentralOps == true && ViewBag.CurrentBudget != null)
+            {
+                var budget = (Compass.Models.LearningBudget)ViewBag.CurrentBudget;
+                var remaining = budget.TotalBudget - ((budget.Spent ?? 0) + (budget.Forecasted ?? 0));
+                <div class="col-md-3">
+                    <div class="card border-left-primary shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total budget</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(budget.TotalBudget.ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Actual spent</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.ActualSpent ?? 0).ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-left-warning shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted costs</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.ForecastedCosts ?? 0).ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Remaining</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(remaining.ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-4">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Actual spent</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.ActualSpent ?? 0).ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-left-warning shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted costs</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.ForecastedCosts ?? 0).ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(((decimal?)ViewBag.ActualSpent + (decimal?)ViewBag.ForecastedCosts ?? 0).ToString("F2"))</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Spending by provider</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.SpendingByProvider != null)
+                        {
+                            var providerList = ViewBag.SpendingByProvider as System.Collections.IEnumerable;
+                            var hasItems = providerList != null && providerList.Cast<dynamic>().Any();
+                            if (hasItems)
+                            {
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Provider</th>
+                                            <th>Count</th>
+                                            <th>Total spent</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic item in providerList)
+                                        {
+                                            <tr>
+                                                <td><strong>@item.Provider</strong></td>
+                                                <td>@item.Count</td>
+                                                <td>£@(((decimal)item.TotalSpent).ToString("F2"))</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No spending data available.</p>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No spending data available.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Spending by profession</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (ViewBag.SpendingByProfession != null)
+                        {
+                            var professionList = ViewBag.SpendingByProfession as System.Collections.IEnumerable;
+                            var hasItems = professionList != null && professionList.Cast<dynamic>().Any();
+                            if (hasItems)
+                            {
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Profession</th>
+                                            <th>Count</th>
+                                            <th>Total spent</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (dynamic item in professionList)
+                                        {
+                                            <tr>
+                                                <td><strong>@item.Profession</strong></td>
+                                                <td>@item.Count</td>
+                                                <td>£@(((decimal)item.TotalSpent).ToString("F2"))</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No spending data available.</p>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <p class="text-muted mb-0">No spending data available.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+    .border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .text-gray-300 { color: #dddfeb !important; }
+</style>
+
