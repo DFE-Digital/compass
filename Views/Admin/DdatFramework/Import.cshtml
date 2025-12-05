@@ -1,0 +1,234 @@
+@{
+    ViewData["Title"] = "Import DDAT Framework";
+    var versions = ViewBag.Versions as List<Compass.Models.DdatFrameworkVersion> ?? new List<Compass.Models.DdatFrameworkVersion>();
+    var activeVersion = ViewBag.ActiveVersion as Compass.Models.DdatFrameworkVersion;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item"><a href="/" style="color: #005ea5;">Home</a></li>
+            <li class="breadcrumb-item"><a asp-controller="Admin" asp-action="Index" style="color: #005ea5;">Admin</a></li>
+            <li class="breadcrumb-item active">Import DDAT Framework</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Import DDAT Framework</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (activeVersion != null)
+        {
+            <div class="alert alert-info">
+                <strong>Active Framework Version:</strong> @activeVersion.VersionIdentifier
+                @if (!string.IsNullOrEmpty(activeVersion.VersionName))
+                {
+                    <text> - @activeVersion.VersionName</text>
+                }
+                <br />
+                <small>Imported: @activeVersion.ImportedAt.ToString("dd MMM yyyy HH:mm") | Skills: @activeVersion.SkillsCount | Roles: @activeVersion.RolesCount</small>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Import from URLs</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="DdatFrameworkImportFromUrl" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="form-group">
+                                <label for="skillsCsvUrl">Skills CSV URL <span class="text-danger">*</span></label>
+                                <input type="url" name="skillsCsvUrl" id="skillsCsvUrl" class="form-control" 
+                                       value="https://cf-production-data-exports.s3.eu-west-2.amazonaws.com/exports/Skills%20Content%20-%20Capability%20Framework%20-%20Government%20Digital%20and%20Data%20profession2025-11-30_11-53-01.csv"
+                                       placeholder="https://..." required />
+                                <small class="form-text text-muted">
+                                    URL to download the Skills CSV from the <a href="https://ddat-capability-framework.service.gov.uk/download" target="_blank">DDAT Framework site</a>
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="rolesCsvUrl">Roles CSV URL <span class="text-danger">*</span></label>
+                                <input type="url" name="rolesCsvUrl" id="rolesCsvUrl" class="form-control" 
+                                       placeholder="https://..." required />
+                                <small class="form-text text-muted">
+                                    URL to download the Roles CSV from the <a href="https://ddat-capability-framework.service.gov.uk/download" target="_blank">DDAT Framework site</a>
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="versionIdentifier">Version Identifier <span class="text-danger">*</span></label>
+                                <input type="text" name="versionIdentifier" id="versionIdentifier" class="form-control" 
+                                       placeholder="e.g., 2025-12-05" required />
+                                <small class="form-text text-muted">Unique identifier for this framework version (e.g., date-based: 2025-12-05)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="versionName">Version Name</label>
+                                <input type="text" name="versionName" id="versionName" class="form-control" 
+                                       placeholder="e.g., December 2025" />
+                                <small class="form-text text-muted">Optional human-readable name for this version</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="notes">Notes</label>
+                                <textarea name="notes" id="notes" class="form-control" rows="3" 
+                                          placeholder="Optional notes about this import..."></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-download"></i> Import from URLs
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Import from Files</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="DdatFrameworkImportFromFile" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="form-group">
+                                <label for="skillsCsvFile">Skills CSV File <span class="text-danger">*</span></label>
+                                <input type="file" name="skillsCsvFile" id="skillsCsvFile" class="form-control-file" accept=".csv" required />
+                                <small class="form-text text-muted">Upload the Skills CSV file downloaded from the DDAT Framework site</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="rolesCsvFile">Roles CSV File <span class="text-danger">*</span></label>
+                                <input type="file" name="rolesCsvFile" id="rolesCsvFile" class="form-control-file" accept=".csv" required />
+                                <small class="form-text text-muted">Upload the Roles CSV file downloaded from the DDAT Framework site</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="versionIdentifierFile">Version Identifier <span class="text-danger">*</span></label>
+                                <input type="text" name="versionIdentifier" id="versionIdentifierFile" class="form-control" 
+                                       placeholder="e.g., 2025-12-05" required />
+                                <small class="form-text text-muted">Unique identifier for this framework version</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="versionNameFile">Version Name</label>
+                                <input type="text" name="versionName" id="versionNameFile" class="form-control" 
+                                       placeholder="e.g., December 2025" />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="notesFile">Notes</label>
+                                <textarea name="notes" id="notesFile" class="form-control" rows="3"></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Import from Files
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3 class="card-title">Framework Versions</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Version</th>
+                            <th>Name</th>
+                            <th>Imported</th>
+                            <th>Skills</th>
+                            <th>Roles</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (versions.Any())
+                        {
+                            @foreach (var version in versions)
+                            {
+                                <tr>
+                                    <td><strong>@version.VersionIdentifier</strong></td>
+                                    <td>@(version.VersionName ?? "-")</td>
+                                    <td>@version.ImportedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                    <td>@version.SkillsCount</td>
+                                    <td>@version.RolesCount</td>
+                                    <td>
+                                        @if (version.IsActive)
+                                        {
+                                            <span class="badge badge-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">Inactive</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <a href="@Url.Action("DdatFrameworkSkills", "Admin", new { versionId = version.Id })" class="btn btn-sm btn-info">
+                                            <i class="fas fa-list"></i> Skills
+                                        </a>
+                                        <a href="@Url.Action("DdatFrameworkRoles", "Admin", new { versionId = version.Id })" class="btn btn-sm btn-info">
+                                            <i class="fas fa-list"></i> Roles
+                                        </a>
+                                        @if (!string.IsNullOrEmpty(version.SkillsCsvUrl) && !string.IsNullOrEmpty(version.RolesCsvUrl))
+                                        {
+                                            <form asp-action="DdatFrameworkSync" method="post" style="display: inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="versionId" value="@version.Id" />
+                                                <button type="submit" class="btn btn-sm btn-warning" 
+                                                        onclick="return confirm('This will archive existing skills/roles and import new ones. Continue?');">
+                                                    <i class="fas fa-sync"></i> Sync
+                                                </button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No framework versions imported yet.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+

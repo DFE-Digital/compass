@@ -17,14 +17,17 @@
     </nav>
 }
 
-<div class="dashboard-header">
-    <div>
-        <h1>Profession requests</h1>
-        <p>Review and approve training requests</p>
-    </div>
-</div>
-
 <section class="content">
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-12">
+                    <h1 class="m-0">Profession requests</h1>
+                    <p class="text-muted mb-0">Review and approve training requests</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
@@ -35,32 +38,61 @@
         }
 
         <div class="row">
-            <!-- Left Column: Filters -->
+            <!-- Left Column: Status Navigation -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
-                <!-- Filters -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a asp-action="AdminRequests" asp-route-statusFilter="Submitted" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Submitted" ? "active" : "")">
+                                Submitted
+                                <span class="badge badge-light float-right">@ViewBag.SubmittedCount</span>
+                            </a>
+                            <a asp-action="AdminRequests" asp-route-statusFilter="Approved" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Approved" ? "active" : "")">
+                                Approved
+                                <span class="badge badge-light float-right">@ViewBag.ApprovedCount</span>
+                            </a>
+                            <a asp-action="AdminRequests" asp-route-statusFilter="Rejected" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Rejected" ? "active" : "")">
+                                Rejected
+                                <span class="badge badge-light float-right">@ViewBag.RejectedCount</span>
+                            </a>
+                            <a asp-action="AdminRequests" asp-route-statusFilter="Cancelled" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Cancelled" ? "active" : "")">
+                                Cancelled
+                                <span class="badge badge-light float-right">@ViewBag.CancelledCount</span>
+                            </a>
+                            <a asp-action="AdminRequests" asp-route-statusFilter="Completed" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Completed" ? "active" : "")">
+                                Completed
+                                <span class="badge badge-light float-right">@ViewBag.CompletedCount</span>
+                            </a>
+                            <a asp-action="AdminRequests" asp-route-statusFilter="On-hold" asp-route-search="@ViewBag.Search"
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "On-hold" ? "active" : "")">
+                                On-hold
+                                <span class="badge badge-light float-right">@ViewBag.OnHoldCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Search Filter -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Filters</h3>
+                        <h3 class="card-title">Search</h3>
                     </div>
                     <div class="card-body">
-                        <form method="get" asp-action="ProfessionRequests">
+                        <form method="get" asp-action="AdminRequests">
+                            <input type="hidden" name="statusFilter" value="@ViewBag.StatusFilter" />
                             <div class="form-group">
-                                <label>Status</label>
-                                <select name="statusFilter" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    <option value="Submitted" selected="@(ViewBag.StatusFilter == "Submitted")">Submitted</option>
-                                    <option value="Approved" selected="@(ViewBag.StatusFilter == "Approved")">Approved</option>
-                                    <option value="Rejected" selected="@(ViewBag.StatusFilter == "Rejected")">Rejected</option>
-                                    <option value="On-hold" selected="@(ViewBag.StatusFilter == "On-hold")">On-hold</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Search</label>
                                 <input type="text" name="search" class="form-control form-control-sm" value="@ViewBag.Search" placeholder="Search by user or course..." />
                             </div>
                             <div class="form-group">
-                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a asp-action="ProfessionRequests" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply</button>
+                                <a asp-action="AdminRequests" asp-route-statusFilter="@ViewBag.StatusFilter" class="btn btn-default btn-sm btn-block">Clear</a>
                             </div>
                         </form>
                     </div>
@@ -69,16 +101,87 @@
 
             <!-- Right Column: Requests List -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Withdrawal Requests Table -->
+                @if (ViewBag.WithdrawalRequests != null && ((List<Compass.Models.TrainingRequest>)ViewBag.WithdrawalRequests).Any())
+                {
+                    <div class="card mb-4">
+                        <div class="card-header bg-warning">
+                            <h3 class="card-title">Withdrawal requests (@(((List<Compass.Models.TrainingRequest>)ViewBag.WithdrawalRequests).Count))</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Course</th>
+                                        <th>Cost</th>
+                                        <th>Withdrawal reason</th>
+                                        <th>Requested</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in (List<Compass.Models.TrainingRequest>)ViewBag.WithdrawalRequests)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@(request.User?.Name ?? "Unknown")</strong><br>
+                                                <small class="text-muted">@(request.User?.Email ?? "N/A")</small>
+                                            </td>
+                                            <td>
+                                                <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var cost = request.ActualCost ?? request.Course?.Cost ?? request.CustomCourseCost ?? 0;
+                                                }
+                                                @if (cost > 0)
+                                                {
+                                                    <span class="text-danger">£@cost.ToString("N0")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-success">Free</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(request.WithdrawalReason))
+                                                {
+                                                    <span title="@request.WithdrawalReason">
+                                                        @(request.WithdrawalReason.Length > 50 ? request.WithdrawalReason.Substring(0, 50) + "..." : request.WithdrawalReason)
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (request.WithdrawalRequestedAt.HasValue)
+                                                {
+                                                    @request.WithdrawalRequestedAt.Value.ToString("dd MMM yyyy")
+                                                }
+                                            </td>
+                                            <td>
+                                                <a asp-action="ViewWithdrawalRequest" asp-route-id="@request.Id" class="btn btn-sm btn-primary">Manage</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
                 <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Training requests (@Model.Count)</h3>
+                <h3 class="card-title">Training requests@(ViewBag.StatusFilter != null ? $" - {ViewBag.StatusFilter}" : "")</h3>
                 <div class="card-tools">
                     <a asp-action="ExportRequests" 
                        asp-route-statusFilter="@ViewBag.StatusFilter" 
                        asp-route-professionFilter="@ViewBag.ProfessionFilter" 
-                       asp-route-search="@ViewBag.Search" 
-                       class="btn btn-sm btn-success">
-                        <i class="fas fa-download"></i> Export CSV
+                       asp-route-search="@ViewBag.Search">
+                        Export CSV
                     </a>
                 </div>
             </div>
@@ -91,8 +194,9 @@
                                 <th>User</th>
                                 <th>Course</th>
                                 <th>Status</th>
-                                <th>Requested</th>
-                                <th>Justification</th>
+                                <th>Requested / Training Date</th>
+                                <th>Cost</th>
+                                <th>Completed</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -108,45 +212,76 @@
                                         <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
                                         @if (request.Course != null && request.Course.Cost.HasValue)
                                         {
-                                            <br><small class="text-muted">Cost: £@request.Course.Cost.Value.ToString("F2")</small>
+                                            <br><small class="text-muted">Cost: £@request.Course.Cost.Value.ToString("N0")</small>
                                         }
                                     </td>
                                     <td>
-                                        @switch (request.Status)
-                                        {
-                                            case "Submitted":
-                                                <span class="badge badge-info">Submitted</span>
-                                                break;
-                                            case "Approved":
-                                                <span class="badge badge-success">Approved</span>
-                                                break;
-                                            case "Rejected":
-                                                <span class="badge badge-danger">Rejected</span>
-                                                break;
-                                            case "On-hold":
-                                                <span class="badge badge-warning">On-hold</span>
-                                                break;
-                                            default:
-                                                <span class="badge badge-secondary">@request.Status</span>
-                                                break;
-                                        }
+                                        <span class="badge badge-light">@request.Status</span>
                                     </td>
-                                    <td>@request.CreatedAt.ToString("dd MMM yyyy")</td>
                                     <td>
-                                        @if (!string.IsNullOrEmpty(request.Justification))
+                                        <div>Requested: @request.CreatedAt.ToString("dd MMM yyyy")</div>
+                                        @if (request.PlannedDate.HasValue)
                                         {
-                                            <span title="@request.Justification">
-                                                @(request.Justification.Length > 50 ? request.Justification.Substring(0, 50) + "..." : request.Justification)
-                                            </span>
+                                            <div><small class="text-muted">Training: @request.PlannedDate.Value.ToString("dd MMM yyyy")</small></div>
                                         }
                                     </td>
                                     <td>
-                                        @if (request.Status == "Submitted")
+                                        @if (request.ActualCost.HasValue)
                                         {
-                                            <button type="button" class="btn btn-sm btn-success" data-toggle="modal" data-target="#approveModal@(request.Id)">Approve</button>
-                                            <button type="button" class="btn btn-sm btn-danger" data-toggle="modal" data-target="#rejectModal@(request.Id)">Reject</button>
+                                            <span class="text-success">£@request.ActualCost.Value.ToString("N0")</span>
+                                            @if (request.Course != null && request.Course.Cost.HasValue && request.ActualCost.Value != request.Course.Cost.Value)
+                                            {
+                                                <br><small class="text-muted">Potential: £@request.Course.Cost.Value.ToString("N0")</small>
+                                            }
                                         }
-                                        <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal@(request.Id)">Details</button>
+                                        else if (request.Course != null && request.Course.Cost.HasValue)
+                                        {
+                                            <span>£@request.Course.Cost.Value.ToString("N0")</span>
+                                        }
+                                        else if (request.CustomCourseCost.HasValue)
+                                        {
+                                            <span>£@request.CustomCourseCost.Value.ToString("N0")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                            <td>
+                                                @if (request.TrainingCompleted == true)
+                                                {
+                                                    <span class="badge badge-light">Yes</span>
+                                                }
+                                                else if (request.TrainingCompleted == false)
+                                                {
+                                                    <span class="badge badge-light">No</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionsDropdown@(request.Id)" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                Actions
+                                            </button>
+                                            <div class="dropdown-menu" aria-labelledby="actionsDropdown@(request.Id)">
+                                                @if (request.Status == "Approved")
+                                                {
+                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#transferModal@(request.Id)">Transfer request</a>
+                                                }
+                                                <a class="dropdown-item" asp-action="UpdateRequestDetails" asp-route-id="@request.Id">Manage</a>
+                                                @if (request.Status == "Submitted")
+                                                {
+                                                    <div class="dropdown-divider"></div>
+                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#approveModal@(request.Id)">Approve</a>
+                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#rejectModal@(request.Id)">Reject</a>
+                                                }
+                                                <div class="dropdown-divider"></div>
+                                                <a class="dropdown-item" href="#" data-toggle="modal" data-target="#detailsModal@(request.Id)">View details</a>
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
 
@@ -240,6 +375,39 @@
                                                         <dt class="col-sm-3">Approver comments:</dt>
                                                         <dd class="col-sm-9">@request.ApproverComments</dd>
                                                     }
+                                                    @if (request.Course != null && request.Course.Cost.HasValue)
+                                                    {
+                                                        <dt class="col-sm-3">Potential cost:</dt>
+                                                        <dd class="col-sm-9">£@request.Course.Cost.Value.ToString("N0")</dd>
+                                                    }
+                                                    @if (request.ActualCost.HasValue)
+                                                    {
+                                                        <dt class="col-sm-3">Actual cost:</dt>
+                                                        <dd class="col-sm-9">£@request.ActualCost.Value.ToString("N0")</dd>
+                                                    }
+                                                    @if (request.PlannedDate.HasValue)
+                                                    {
+                                                        <dt class="col-sm-3">Planned date:</dt>
+                                                        <dd class="col-sm-9">@request.PlannedDate.Value.ToString("dd MMM yyyy")</dd>
+                                                    }
+                                                    @if (request.TrainingCompleted.HasValue)
+                                                    {
+                                                        <dt class="col-sm-3">Training completed:</dt>
+                                                        <dd class="col-sm-9">
+                                                            @if (request.TrainingCompleted.Value)
+                                                            {
+                                                                <span class="badge badge-light">Yes</span>
+                                                                @if (request.CompletedDate.HasValue)
+                                                                {
+                                                                    <span class="ml-2">(@request.CompletedDate.Value.ToString("dd MMM yyyy"))</span>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge badge-light">No</span>
+                                                            }
+                                                        </dd>
+                                                    }
                                                 </dl>
                                             </div>
                                             <div class="modal-footer">
@@ -248,6 +416,54 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Transfer Modal -->
+                                @if (request.Status == "Approved")
+                                {
+                                    <div class="modal fade" id="transferModal@(request.Id)" tabindex="-1" role="dialog">
+                                        <div class="modal-dialog modal-lg" role="document">
+                                            <div class="modal-content">
+                                                <form asp-action="TransferRequest" method="post" id="transferForm@(request.Id)">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@request.Id" />
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Transfer training request</h5>
+                                                        <button type="button" class="close" data-dismiss="modal">
+                                                            <span>&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Transfer training request for <strong>@(request.User?.Name ?? "Unknown")</strong> to another user.</p>
+                                                        <div class="form-group">
+                                                            <label class="control-label" for="transferSearch@(request.Id)">Search for a colleague</label>
+                                                            <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                                                <div class="position-relative">
+                                                                    <input type="text"
+                                                                           class="form-control js-user-picker-input"
+                                                                           id="transferSearch@(request.Id)"
+                                                                           autocomplete="off"
+                                                                           placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                                                </div>
+                                                                <p class="form-text text-muted js-user-picker-message"></p>
+                                                                <input type="hidden" id="transferToUserId@(request.Id)" name="transferToUserId" class="js-user-picker-value" />
+                                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
+                                                                    <span class="text-muted">No user selected.</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn btn-success">Transfer</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
                             }
                         </tbody>
                     </table>
@@ -264,4 +480,8 @@
         </div>
     </div>
 </section>
+
+@section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
+}
 

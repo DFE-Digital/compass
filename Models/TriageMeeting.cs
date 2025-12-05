@@ -25,6 +25,15 @@ public class TriageMeeting
     [StringLength(255)]
     public string? Location { get; set; }
 
+    [StringLength(255)]
+    public string? ChairName { get; set; }
+
+    [StringLength(100)]
+    public string? ChairEmail { get; set; }
+
+    [StringLength(255)]
+    public string? ChairObjectId { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     [Required]

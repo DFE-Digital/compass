@@ -29,6 +29,67 @@ if (args.Length > 0 && args[0] == "--clean-database")
     return;
 }
 
+// Check for applying custom course fields migration
+if (args.Length > 0 && args[0] == "--apply-custom-course-fields")
+{
+    var customCourseConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrEmpty(customCourseConnectionString))
+    {
+        Console.WriteLine("Error: DefaultConnection string not found in configuration.");
+        return;
+    }
+
+    var optionsBuilder = new DbContextOptionsBuilder<CompassDbContext>();
+    optionsBuilder.UseSqlServer(customCourseConnectionString);
+
+    using var context = new CompassDbContext(optionsBuilder.Options);
+
+    Console.WriteLine("Applying CustomCourseFields migration manually...");
+
+    try
+    {
+        // Try to add columns - if they already exist, SQL will throw an error which we'll catch
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync("ALTER TABLE [TrainingRequests] ADD [CustomCourseProvider] nvarchar(255) NULL");
+            Console.WriteLine("✓ Added CustomCourseProvider column");
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 2705 || ex.Message.Contains("already exists"))
+        {
+            Console.WriteLine("✓ CustomCourseProvider column already exists");
+        }
+
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync("ALTER TABLE [TrainingRequests] ADD [CustomCourseCost] decimal(18,2) NULL");
+            Console.WriteLine("✓ Added CustomCourseCost column");
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 2705 || ex.Message.Contains("already exists"))
+        {
+            Console.WriteLine("✓ CustomCourseCost column already exists");
+        }
+
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync("ALTER TABLE [TrainingRequests] ADD [CustomCourseUrl] nvarchar(500) NULL");
+            Console.WriteLine("✓ Added CustomCourseUrl column");
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 2705 || ex.Message.Contains("already exists"))
+        {
+            Console.WriteLine("✓ CustomCourseUrl column already exists");
+        }
+
+        Console.WriteLine("✓ Migration applied successfully!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error applying migration: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        throw;
+    }
+    return;
+}
+
 // Check for data seeding command
 if (args.Length > 0 && args[0] == "--seed-from-sqlite")
 {
@@ -490,6 +551,9 @@ using (var scope = app.Services.CreateScope())
         // Seed Technology Code of Practice
         await SeedTechnologyCodeOfPracticeAsync(context);
         
+        // Seed Grades
+        await SeedGradesAsync(context);
+        
         Console.WriteLine("Compass database initialized successfully");
     }
     catch (Exception ex)
@@ -841,6 +905,34 @@ static async Task SeedDdatProfessionsAsync(Compass.Data.CompassDbContext context
     context.DdatProfessions.AddRange(professions);
     await context.SaveChangesAsync();
     Console.WriteLine($"✓ Seeded {professions.Length} DDaT Professions successfully");
+}
+
+static async Task SeedGradesAsync(Compass.Data.CompassDbContext context)
+{
+    if (await context.Grades.AnyAsync())
+    {
+        Console.WriteLine("Grades already exist, skipping seed");
+        return;
+    }
+
+    var grades = new[]
+    {
+        new Compass.Models.Grade { Code = "AA", DisplayName = "Administrative Assistant", DisplayOrder = 1, IsActive = true },
+        new Compass.Models.Grade { Code = "AO", DisplayName = "Administrative Officer", DisplayOrder = 2, IsActive = true },
+        new Compass.Models.Grade { Code = "EO", DisplayName = "Executive Officer", DisplayOrder = 3, IsActive = true },
+        new Compass.Models.Grade { Code = "HEO", DisplayName = "Higher Executive Officer", DisplayOrder = 4, IsActive = true },
+        new Compass.Models.Grade { Code = "SEO", DisplayName = "Senior Executive Officer", DisplayOrder = 5, IsActive = true },
+        new Compass.Models.Grade { Code = "G7", DisplayName = "Grade 7", DisplayOrder = 6, IsActive = true },
+        new Compass.Models.Grade { Code = "G6", DisplayName = "Grade 6", DisplayOrder = 7, IsActive = true },
+        new Compass.Models.Grade { Code = "G6 HOP", DisplayName = "Grade 6 Head of Profession", DisplayOrder = 8, IsActive = true },
+        new Compass.Models.Grade { Code = "SCS1", DisplayName = "Senior Civil Service Pay Band 1", DisplayOrder = 9, IsActive = true },
+        new Compass.Models.Grade { Code = "SCS2", DisplayName = "Senior Civil Service Pay Band 2", DisplayOrder = 10, IsActive = true },
+        new Compass.Models.Grade { Code = "SCS3", DisplayName = "Senior Civil Service Pay Band 3", DisplayOrder = 11, IsActive = true }
+    };
+
+    await context.Grades.AddRangeAsync(grades);
+    await context.SaveChangesAsync();
+    Console.WriteLine($"✓ Seeded {grades.Length} Grades");
 }
 
 static async Task SeedTechnologyCodeOfPracticeAsync(Compass.Data.CompassDbContext context)
