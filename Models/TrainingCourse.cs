@@ -25,10 +25,16 @@ public class TrainingCourse
     public string? Format { get; set; } // Online / blended / in-person
 
     [StringLength(50)]
-    public string? Mode { get; set; } // Live / async / cohort
+    public string? Mode { get; set; } // Live / async / cohort (kept for backward compatibility)
 
     [StringLength(100)]
     public string? Duration { get; set; } // Hours or days
+
+    [Column(TypeName = "nvarchar(max)")]
+    public string? Prerequisites { get; set; } // Prerequisites for the course
+
+    [Column(TypeName = "nvarchar(max)")]
+    public string? Location { get; set; } // List of locations for in-person courses (comma-separated or newline-separated)
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal? Cost { get; set; }

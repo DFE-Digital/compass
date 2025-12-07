@@ -30,6 +30,14 @@ namespace Compass.Controllers
             _permissionService = permissionService;
         }
 
+        // Helper method to get documentId from ProductAccessibility (prefer ProductDocumentId, fallback to FipsId)
+        private static string GetDocumentId(ProductAccessibility productAccessibility)
+        {
+            return !string.IsNullOrEmpty(productAccessibility.ProductDocumentId) 
+                ? productAccessibility.ProductDocumentId 
+                : productAccessibility.FipsId ?? "unknown";
+        }
+
         // GET: Accessibility/SearchProducts (for autocomplete)
         [HttpGet]
         public async Task<IActionResult> SearchProducts(string q)
@@ -1306,24 +1314,32 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Audit record added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding audit record");
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding audit record. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while adding audit record.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
         }
 
         // POST: Accessibility/DeleteAudit
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteAudit(int id, string fipsId)
+        public async Task<IActionResult> DeleteAudit(int id)
         {
             try
             {
                 var audit = await _context.AuditHistories
+                    .Include(ah => ah.ProductAccessibility)
                     .FirstOrDefaultAsync(ah => ah.Id == id);
                 
                 if (audit == null)
@@ -1331,6 +1347,7 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
+                var productAccessibility = audit.ProductAccessibility;
                 audit.IsDeleted = true;
                 audit.UpdatedAt = DateTime.UtcNow;
                 audit.UpdatedBy = User.Identity?.Name;
@@ -1338,13 +1355,22 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Audit record deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "audits" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting audit record");
+                // Try to get productAccessibility from the audit if it wasn't loaded
+                var audit = await _context.AuditHistories
+                    .Include(ah => ah.ProductAccessibility)
+                    .FirstOrDefaultAsync(ah => ah.Id == id);
+                if (audit?.ProductAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while deleting audit record. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while deleting audit record.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "audits" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(audit.ProductAccessibility), tab = "audits" });
             }
         }
 
@@ -1439,25 +1465,33 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Accessibility issue added successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId = productAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
             catch (DbUpdateException dbEx) when (dbEx.InnerException is SqlException sqlEx && sqlEx.Message.Contains("String or binary data would be truncated"))
             {
                 _logger.LogError(dbEx, "Error adding accessibility issue - data truncation");
                 var productAccessibility = await _context.ProductAccessibilities
                     .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
-                var fipsId = productAccessibility?.FipsId ?? "unknown";
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while saving the issue. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while saving the issue. Please check that all fields are within their limits and try again.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding accessibility issue");
                 var productAccessibility = await _context.ProductAccessibilities
                     .FirstOrDefaultAsync(pa => pa.Id == productAccessibilityId && !pa.IsDeleted);
-                var fipsId = productAccessibility?.FipsId ?? "unknown";
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding the issue. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while adding the issue. Please try again.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
         }
 
@@ -1659,20 +1693,28 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue updated successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating accessibility issue");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while updating the issue. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while updating the issue.";
-                return RedirectToAction(nameof(ViewIssue), new { id });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
         }
 
         // POST: Accessibility/BulkUpdateIssues
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> BulkUpdateIssues(string fipsId, List<int> issueIds, string? status, DateTime? identifiedDate, string? isResolving, DateTime? plannedResolutionDate, string? changeNote)
+        public async Task<IActionResult> BulkUpdateIssues(string documentId, List<int> issueIds, string? status, DateTime? identifiedDate, string? isResolving, DateTime? plannedResolutionDate, string? changeNote)
         {
             try
             {
@@ -1681,18 +1723,20 @@ namespace Compass.Controllers
                 if (string.IsNullOrEmpty(userEmail) || !await _permissionService.IsInGroupAsync(userEmail, "Design Operations"))
                 {
                     TempData["ErrorMessage"] = "You do not have permission to perform bulk updates.";
-                    return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                    return RedirectToAction(nameof(Details), new { documentId, tab = "issues" });
                 }
                 
                 if (issueIds == null || !issueIds.Any())
                 {
                     TempData["ErrorMessage"] = "No issues selected for update.";
-                    return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                    return RedirectToAction(nameof(Details), new { documentId, tab = "issues" });
                 }
                 
-                // Get the product to verify fipsId
+                // Get the product to verify documentId (supports both DocumentId and FipsId)
                 var productAccessibility = await _context.ProductAccessibilities
-                    .FirstOrDefaultAsync(pa => pa.FipsId == fipsId && !pa.IsDeleted);
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
                 
                 if (productAccessibility == null)
                 {
@@ -1709,7 +1753,7 @@ namespace Compass.Controllers
                 if (!issues.Any())
                 {
                     TempData["ErrorMessage"] = "No valid issues found to update.";
-                    return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                    return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
                 }
                 
                 var changes = new List<IssueHistory>();
@@ -1798,13 +1842,23 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = $"Successfully updated {updatedCount} issue(s).";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error performing bulk update on issues");
+                // Try to get productAccessibility for redirect
+                var productAccessibility = await _context.ProductAccessibilities
+                    .FirstOrDefaultAsync(pa => 
+                        (pa.ProductDocumentId == documentId || (string.IsNullOrEmpty(pa.ProductDocumentId) && pa.FipsId == documentId)) 
+                        && !pa.IsDeleted);
+                if (productAccessibility == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while updating issues. Product not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while updating issues. Please try again.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(productAccessibility), tab = "issues" });
             }
         }
 
@@ -1824,7 +1878,6 @@ namespace Compass.Controllers
                     return NotFound();
                 }
                 
-                var fipsId = issue.ProductAccessibility.FipsId;
                 issue.IsDeleted = true;
                 issue.UpdatedAt = DateTime.UtcNow;
                 issue.UpdatedBy = User.Identity?.Name;
@@ -1832,7 +1885,7 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue deleted successfully.";
-                return RedirectToAction(nameof(Details), new { fipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
@@ -1897,13 +1950,21 @@ namespace Compass.Controllers
                 await _context.SaveChangesAsync();
                 
                 TempData["SuccessMessage"] = "Issue closed successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id, fipsId = issue.ProductAccessibility.FipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error closing accessibility issue");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while closing the issue. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while closing the issue.";
-                return RedirectToAction(nameof(ViewIssue), new { id });
+                return RedirectToAction(nameof(ViewIssue), new { id, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
         }
 
@@ -1932,7 +1993,7 @@ namespace Compass.Controllers
                 if (existingRequest != null)
                 {
                     TempData["ErrorMessage"] = "There is already a pending retest request for this issue.";
-                    return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                    return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
                 }
 
                 var retestRequest = new AccessibilityRetestRequest
@@ -1953,13 +2014,21 @@ namespace Compass.Controllers
                 // await SendRetestRequestEmails(retestRequest);
 
                 TempData["SuccessMessage"] = "Retest request submitted successfully. An administrator will review your request.";
-                return RedirectToAction(nameof(Details), new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating retest request");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == issueId && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while submitting the retest request. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while submitting the retest request.";
-                return RedirectToAction(nameof(Details), new { fipsId = "unknown", tab = "issues" });
+                return RedirectToAction(nameof(Details), new { documentId = GetDocumentId(issue.ProductAccessibility), tab = "issues" });
             }
         }
 
@@ -2021,7 +2090,7 @@ namespace Compass.Controllers
         // POST: Accessibility/AddComment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddComment(int issueId, string commentText, string? fipsId)
+        public async Task<IActionResult> AddComment(int issueId, string commentText)
         {
             try
             {
@@ -2045,17 +2114,22 @@ namespace Compass.Controllers
                 _context.IssueComments.Add(comment);
                 await _context.SaveChangesAsync();
                 
-                // Use provided fipsId or get from issue
-                var redirectFipsId = fipsId ?? issue.ProductAccessibility.FipsId;
                 TempData["SuccessMessage"] = "Comment added successfully.";
-                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding comment");
+                var issue = await _context.AccessibilityIssues
+                    .Include(i => i.ProductAccessibility)
+                    .FirstOrDefaultAsync(i => i.Id == issueId && !i.IsDeleted);
+                if (issue == null)
+                {
+                    TempData["ErrorMessage"] = "An error occurred while adding the comment. Issue not found.";
+                    return RedirectToAction(nameof(Index));
+                }
                 TempData["ErrorMessage"] = "An error occurred while adding the comment.";
-                var redirectFipsId = fipsId ?? "unknown";
-                return RedirectToAction(nameof(ViewIssue), new { id = issueId, fipsId = redirectFipsId });
+                return RedirectToAction(nameof(ViewIssue), new { id = issueId, documentId = GetDocumentId(issue.ProductAccessibility) });
             }
         }
 

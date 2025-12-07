@@ -319,6 +319,78 @@
             </div>
         }
 
+        @{
+            var meetingDate = selectedMeeting?.StartAt;
+            var meetingTime = selectedMeeting?.StartAt;
+            var chairName = selectedMeeting?.ChairName ?? "Not specified";
+            var meetingMonthYear = selectedMeeting != null ? selectedMeeting.StartAt.ToString("MMMM yyyy", UkCulture) : "No meeting selected";
+            var meetingItemsCount = selectedMeeting?.TotalRequests ?? 0;
+            var priorityItemsCount = (selectedMeeting?.TierOneCount ?? 0) + (selectedMeeting?.TierTwoCount ?? 0) + (selectedMeeting?.TierThreeCount ?? 0);
+        }
+
+        <!-- Summary Cards -->
+        @if (selectedMeeting != null)
+        {
+            <div class="row mb-4">
+                <!-- Card 1: Date, Time, and Chair -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-primary shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Triage Meeting</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@FormatDate(meetingDate)</div>
+                                    <div class="text-muted mb-2">@(meetingTime?.ToString("HH:mm", UkCulture) ?? "Time not set")</div>
+                                    <div class="text-muted">
+                                        <strong>Chair:</strong> @chairName
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-calendar-check fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Month/Year and Items Count -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Meeting Period</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@meetingMonthYear</div>
+                                    <small class="text-muted">@meetingItemsCount item@(meetingItemsCount != 1 ? "s" : "") in this meeting</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-list fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Priority Items -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Priority Items</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@priorityItemsCount</div>
+                                    <small class="text-muted">P1, P2, P3 items</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
         <div class="row">
             <!-- Left Column: Meeting Navigation -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
@@ -439,90 +511,7 @@
 
             <!-- Right Column: Main Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-        @if (hasMeetings)
-        {
-            <div class="card triage-overview-card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h3 class="card-title mb-0">Triage meeting overview</h3>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm triage-overview-table mb-0">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Meeting</th>
-                                    <th scope="col">When</th>
-                                    <th scope="col">Requests</th>
-                                    <th scope="col">In delivery</th>
-                                    <th scope="col">Converted</th>
-                                    <th scope="col">Deferred</th>
-                                    <th scope="col">Rejected</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var meeting in meetings.OrderBy(m => m.StartAt))
-                                {
-                                    var isActiveRow = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
-                                    var meetingLocation = string.IsNullOrWhiteSpace(meeting.Location) ? "Location TBC" : meeting.Location;
-                                    var tierHighlights = new List<string>();
-                                    if (meeting.TierOneCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 1 {meeting.TierOneCount}");
-                                    }
-                                    if (meeting.TierTwoCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 2 {meeting.TierTwoCount}");
-                                    }
-                                    if (meeting.TierThreeCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 3 {meeting.TierThreeCount}");
-                                    }
- 
-                                    <tr class="@(isActiveRow ? "triage-overview-selected" : string.Empty)">
-                                        <td>
-                                            <div class="font-weight-semibold">
-                                                <a class="triage-overview-link" href="@Url.Action("Triage", new { meetingId = meeting.Id, month = Model.SelectedMonthKey })">@meeting.Title</a>
-                                            </div>
-                                            <div class="text-muted small">@GetMeetingStateLabel(meeting) &middot; @(meeting.IsActive ? "Active" : "Inactive")</div>
-                                        </td>
-                                        <td>
-                                            <div>@meeting.StartAt.ToString("dd MMM yyyy HH:mm")</div>
-                                            <div class="text-muted small">@meetingLocation</div>
-                                        </td>
-                                        <td>
-                                            <div class="font-weight-semibold">@meeting.TotalRequests</div>
-                                            @if (tierHighlights.Any())
-                                            {
-                                                <div class="text-muted small">@string.Join(", ", tierHighlights)</div>
-                                            }
-                                            else
-                                            {
-                                                <div class="text-muted small">No tier assigned</div>
-                                            }
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.DeliveryCount</span>
-                                            <div class="text-muted small">Includes delivery &amp; run</div>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.ConvertedCount</span>
-                                            <div class="text-muted small">Created projects</div>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.DeferredCount</span>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.RejectedCount</span>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-        else
+        @if (!hasMeetings)
         {
             <div class="card mb-4">
                 <div class="card-body text-center py-5">
@@ -1045,6 +1034,28 @@
 </section>
 
 <style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+
     .btn-icon {
         width: 2.75rem;
         height: 2.75rem;
@@ -1059,10 +1070,6 @@
         cursor: default;
         color: #475467;
     }
- 
-     .triage-overview-card {
-         border: 1px solid #e4e7ec;
-     }
 
     .triage-overview-table tbody tr:hover {
         background-color: #f5f7fb;

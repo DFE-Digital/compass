@@ -75,6 +75,23 @@ public class TrainingRequest
     /// </summary>
     public int? FinancialYear { get; set; }
 
+    /// <summary>
+    /// Date the payment was made
+    /// </summary>
+    public DateTime? PaymentDate { get; set; }
+
+    /// <summary>
+    /// Payment method used (PO, Card, Other)
+    /// </summary>
+    [StringLength(50)]
+    public string? PaymentMethod { get; set; }
+
+    /// <summary>
+    /// Payment reference (e.g., PO Number, transaction reference)
+    /// </summary>
+    [StringLength(255)]
+    public string? PaymentReference { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

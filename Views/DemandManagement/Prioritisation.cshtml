@@ -1,0 +1,336 @@
+@using System
+@using System.Collections.Generic
+@model IEnumerable<Compass.Models.DemandRequest>
+
+@{
+    ViewData["Title"] = "Prioritisation";
+
+    string GetStatusBadgeClass(string? status) => status switch
+    {
+        "Explore" => "badge badge-info",
+        "Prioritisation" => "badge badge-primary",
+        _ => "badge badge-light"
+    };
+
+    string GetPriorityBadgeClass(string? tier) => tier switch
+    {
+        "Tier 1 – Critical" => "badge badge-danger",
+        "Tier 2 – High" => "badge badge-warning",
+        "Tier 3 – Medium" => "badge badge-info",
+        "Tier 4 – Low" => "badge badge-secondary",
+        _ => "badge badge-light"
+    };
+
+    string GetPriorityShortLabel(string? tier) => string.IsNullOrWhiteSpace(tier)
+        ? "Unprioritised"
+        : tier.Split('–')[0].Trim();
+
+    string FormatPersonName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var parts = name.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 2 ? $"{parts[1]} {parts[0]}".Trim() : name.Trim();
+    }
+
+    var currentPortfolio = ViewBag.CurrentPortfolio as string;
+    var currentSearch = ViewBag.CurrentSearch as string;
+    var currentViewFilter = ViewBag.CurrentView as string ?? "mine";
+    var portfolios = ViewBag.Portfolios as List<string> ?? new List<string>();
+    
+    var exploreRequests = Model.Where(r => string.Equals(r.Status, "Explore", StringComparison.OrdinalIgnoreCase)).ToList();
+    var prioritisationRequests = Model.Where(r => string.Equals(r.Status, "Prioritisation", StringComparison.OrdinalIgnoreCase)).ToList();
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-action="Requests" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Demand Management</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Prioritisation</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_DemandManagementNavigation")
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Left Column: Filters -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Filters</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" action="@Url.Action("Prioritisation")">
+                            <input type="hidden" name="view" value="@currentViewFilter" />
+                            
+                            <div class="form-group">
+                                <label for="portfolio">Portfolio</label>
+                                <select name="portfolio" id="portfolio" class="form-control">
+                                    <option value="">All portfolios</option>
+                                    @foreach (var portfolio in portfolios)
+                                    {
+                                        <option value="@portfolio" selected="@(currentPortfolio == portfolio)">@portfolio</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="search">Search</label>
+                                <input type="text" name="search" id="search" class="form-control" value="@currentSearch" placeholder="Search title or reference..." />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block">Apply filters</button>
+                            <a href="@Url.Action("Prioritisation", new { view = currentViewFilter })" class="btn btn-secondary btn-block">Clear</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Main Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <!-- Info Card -->
+               
+                <!-- Explore Phase Requests -->
+                @if (exploreRequests.Any())
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Explore phase</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover sortable-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Title" tabindex="0" role="button">Title</th>
+                                        <th class="sortable" data-column="Applicant" tabindex="0" role="button">Applicant</th>
+                                        <th class="sortable" data-column="Portfolio" tabindex="0" role="button">Portfolio</th>
+                                        <th class="sortable" data-column="Submitted" tabindex="0" role="button">Submitted</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in exploreRequests)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@request.Id" class="font-weight-bold" style="color: #005ea5;">
+                                                    @request.ProposedTitle
+                                                </a>
+                                                <div class="text-muted small">@request.ReferenceNumber</div>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(request.ApplicantEmail))
+                                                {
+                                                    <a href="mailto:@request.ApplicantEmail">@FormatPersonName(request.ApplicantName)</a>
+                                                }
+                                                else
+                                                {
+                                                    @FormatPersonName(request.ApplicantName)
+                                                }
+                                            </td>
+                                            <td>@(string.IsNullOrWhiteSpace(request.PortfolioName) ? "N/A" : request.PortfolioName)</td>
+                                            <td>@(request.SubmittedAt?.ToString("dd MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) ?? "Not submitted")</td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a asp-action="Details" asp-route-id="@request.Id" class="btn btn-sm btn-outline-primary">View</a>
+                                                    <a asp-action="ScoreRequest" asp-route-id="@request.Id" class="btn btn-sm btn-outline-success">Score</a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Prioritisation Phase Requests -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Prioritisation phase</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        @if (prioritisationRequests.Any())
+                        {
+                            <table class="table table-hover sortable-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="Title" tabindex="0" role="button">Title</th>
+                                        <th class="sortable" data-column="Applicant" tabindex="0" role="button">Applicant</th>
+                                        <th class="sortable" data-column="Portfolio" tabindex="0" role="button">Portfolio</th>
+                                        <th class="sortable" data-column="Priority" tabindex="0" role="button">Priority</th>
+                                        <th class="sortable" data-column="Score" tabindex="0" role="button">Score</th>
+                                        <th class="sortable" data-column="Submitted" tabindex="0" role="button">Submitted</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in prioritisationRequests)
+                                    {
+                                        var priorityTier = request.Prioritisation?.PriorityTier;
+                                        var priorityScore = request.Prioritisation?.TotalPriorityScore ?? 0;
+                                        <tr>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@request.Id" class="font-weight-bold" style="color: #005ea5;">
+                                                    @request.ProposedTitle
+                                                </a>
+                                                <div class="text-muted small">@request.ReferenceNumber</div>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(request.ApplicantEmail))
+                                                {
+                                                    <a href="mailto:@request.ApplicantEmail">@FormatPersonName(request.ApplicantName)</a>
+                                                }
+                                                else
+                                                {
+                                                    @FormatPersonName(request.ApplicantName)
+                                                }
+                                            </td>
+                                            <td>@(string.IsNullOrWhiteSpace(request.PortfolioName) ? "N/A" : request.PortfolioName)</td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(priorityTier))
+                                                {
+                                                    <span class="badge @GetPriorityBadgeClass(priorityTier)">@GetPriorityShortLabel(priorityTier)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-light">Not scored</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (priorityScore > 0)
+                                                {
+                                                    <strong>@priorityScore</strong>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>@(request.SubmittedAt?.ToString("dd MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) ?? "Not submitted")</td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a asp-action="Details" asp-route-id="@request.Id" class="btn btn-sm btn-outline-primary">View</a>
+                                                    <a asp-action="ScoreRequest" asp-route-id="@request.Id" class="btn btn-sm btn-success">Score</a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-muted">
+                                <p class="mb-0">No requests in prioritisation phase.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Initialize sortable tables
+            $('.sortable-table').each(function() {
+                initializeSortableTable($(this));
+            });
+        });
+
+        function initializeSortableTable(table) {
+            var currentSort = { column: null, direction: 'asc' };
+
+            table.find('.sortable').on('click keypress', function(e) {
+                if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                    return;
+                }
+                
+                var column = $(this).data('column');
+                var direction = 'asc';
+                
+                if (currentSort.column === column && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                }
+                
+                sortTable(table, column, direction);
+                currentSort = { column: column, direction: direction };
+            });
+
+            function sortTable(table, column, direction) {
+                var tbody = table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    var colIndex = table.find('thead th[data-column="' + column + '"]').index();
+                    
+                    if (column === 'Score' || column === 'Priority') {
+                        // Numeric sorting for score
+                        aVal = parseFloat($(a).find('td').eq(colIndex).text().trim()) || 0;
+                        bVal = parseFloat($(b).find('td').eq(colIndex).text().trim()) || 0;
+                    } else {
+                        // Text sorting
+                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+                
+                updateSortIcons(table, column, direction);
+            }
+
+            function updateSortIcons(table, column, direction) {
+                table.find('.sortable i').remove();
+                var header = table.find('.sortable[data-column="' + column + '"]');
+                var iconClass = direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                header.append(' <i class="fas ' + iconClass + '"></i>');
+            }
+        }
+    </script>
+}
+
