@@ -251,65 +251,120 @@ namespace Compass.Controllers
             var currentUser = await GetCurrentUserAsync();
             
             // Get user's projects (where they are a named contact or primary contact)
-            var userProjects = new List<Project>();
-            if (!string.IsNullOrEmpty(userEmail))
-            {
-                userProjects = await _context.Projects
-                    .Where(p => !p.IsDeleted && (
+            var userProjectsQuery = _context.Projects
+                .Where(p => !p.IsDeleted && (
+                    !string.IsNullOrEmpty(userEmail) && (
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
                         (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
-                    ))
-                    .Include(p => p.DeliveryPriority)
-                    .Include(p => p.BusinessAreaLookup)
-                    .Include(p => p.PhaseLookup)
-                    .Include(p => p.PrimaryContactUser)
-                    .Include(p => p.ProjectMissions)
-                        .ThenInclude(pm => pm.Mission)
-                    .Include(p => p.ProjectObjectives)
-                        .ThenInclude(po => po.Objective)
-                    .Include(p => p.FundingAllocations)
-                        .ThenInclude(fa => fa.FundingSource)
-                    .Include(p => p.Outcomes)
-                    .Include(p => p.ProjectContacts)
-                        .ThenInclude(pc => pc.User)
-                    .Include(p => p.MonthlyUpdates)
-                    .AsNoTracking()
-                    .OrderBy(p => p.Title)
-                    .ToListAsync();
+                    )
+                ))
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ProjectMissions)
+                    .ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives)
+                    .ThenInclude(po => po.Objective)
+                .Include(p => p.FundingAllocations)
+                    .ThenInclude(fa => fa.FundingSource)
+                .Include(p => p.Outcomes)
+                .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.MonthlyUpdates)
+                .AsQueryable();
+
+            // Apply filters to user projects
+            if (!string.IsNullOrEmpty(search))
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+            }
+            if (!string.IsNullOrEmpty(ragStatus))
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+            }
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+            if (!string.IsNullOrEmpty(phase))
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+            }
+            if (!string.IsNullOrEmpty(flagship))
+            {
+                var isFlagship = flagship == "true";
+                userProjectsQuery = userProjectsQuery.Where(p => p.IsFlagship == isFlagship);
+            }
+            if (priority.HasValue)
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
 
+            var userProjects = await userProjectsQuery
+                .AsNoTracking()
+                .OrderBy(p => p.Title)
+                .ToListAsync();
+
             // Get watched projects
-            var watchedProjects = new List<Project>();
+            var watchedProjectIds = new List<int>();
             if (currentUser != null)
             {
-                var watchedProjectIds = await _context.ProjectWatchlists
+                watchedProjectIds = await _context.ProjectWatchlists
                     .Where(w => w.UserId == currentUser.Id)
                     .Select(w => w.ProjectId)
                     .ToListAsync();
-
-                if (watchedProjectIds.Any())
-                {
-                    watchedProjects = await _context.Projects
-                        .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
-                        .Include(p => p.DeliveryPriority)
-                        .Include(p => p.BusinessAreaLookup)
-                        .Include(p => p.PhaseLookup)
-                        .Include(p => p.PrimaryContactUser)
-                        .Include(p => p.ProjectMissions)
-                            .ThenInclude(pm => pm.Mission)
-                        .Include(p => p.ProjectObjectives)
-                            .ThenInclude(po => po.Objective)
-                        .Include(p => p.FundingAllocations)
-                            .ThenInclude(fa => fa.FundingSource)
-                        .Include(p => p.Outcomes)
-                        .Include(p => p.ProjectContacts)
-                            .ThenInclude(pc => pc.User)
-                        .Include(p => p.MonthlyUpdates)
-                        .AsNoTracking()
-                        .OrderBy(p => p.Title)
-                        .ToListAsync();
-                }
             }
+
+            var watchedProjectsQuery = _context.Projects
+                .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PhaseLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.ProjectMissions)
+                    .ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives)
+                    .ThenInclude(po => po.Objective)
+                .Include(p => p.FundingAllocations)
+                    .ThenInclude(fa => fa.FundingSource)
+                .Include(p => p.Outcomes)
+                .Include(p => p.ProjectContacts)
+                    .ThenInclude(pc => pc.User)
+                .Include(p => p.MonthlyUpdates)
+                .AsQueryable();
+
+            // Apply filters to watched projects
+            if (!string.IsNullOrEmpty(search))
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+            }
+            if (!string.IsNullOrEmpty(ragStatus))
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+            }
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+            if (!string.IsNullOrEmpty(phase))
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+            }
+            if (!string.IsNullOrEmpty(flagship))
+            {
+                var isFlagship = flagship == "true";
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.IsFlagship == isFlagship);
+            }
+            if (priority.HasValue)
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+
+            var watchedProjects = await watchedProjectsQuery
+                .AsNoTracking()
+                .OrderBy(p => p.Title)
+                .ToListAsync();
 
             var query = _context.Projects
                 .Where(p => !p.IsDeleted)
@@ -476,7 +531,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportUserProjects
-        public async Task<IActionResult> ExportUserProjects()
+        public async Task<IActionResult> ExportUserProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
         {
             try
             {
@@ -490,7 +545,7 @@ namespace Compass.Controllers
                 }
 
                 // Get user's projects with all necessary includes
-                var userProjects = await _context.Projects
+                var userProjectsQuery = _context.Projects
                     .Where(p => !p.IsDeleted && (
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
                         (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
@@ -515,6 +570,36 @@ namespace Compass.Controllers
                     .Include(p => p.Milestones)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
+                    .AsQueryable();
+
+                // Apply filters
+                if (!string.IsNullOrEmpty(search))
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                }
+                if (!string.IsNullOrEmpty(ragStatus))
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                }
+                if (!string.IsNullOrEmpty(businessArea))
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+                }
+                if (!string.IsNullOrEmpty(phase))
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                }
+                if (!string.IsNullOrEmpty(flagship))
+                {
+                    var isFlagship = flagship == "true";
+                    userProjectsQuery = userProjectsQuery.Where(p => p.IsFlagship == isFlagship);
+                }
+                if (priority.HasValue)
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+
+                var userProjects = await userProjectsQuery
                     .AsNoTracking()
                     .OrderBy(p => p.Title)
                     .ToListAsync();
@@ -756,6 +841,633 @@ namespace Compass.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error exporting user projects to Excel");
+                TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+                return RedirectToAction("Index");
+            }
+        }
+
+        // GET: Project/ExportWatchedProjects
+        public async Task<IActionResult> ExportWatchedProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+        {
+            try
+            {
+                // Get current user
+                var currentUser = await GetCurrentUserAsync();
+
+                if (currentUser == null)
+                {
+                    TempData["ErrorMessage"] = "Unable to identify user. Please try again.";
+                    return RedirectToAction("Index");
+                }
+
+                var watchedProjectIds = await _context.ProjectWatchlists
+                    .Where(w => w.UserId == currentUser.Id)
+                    .Select(w => w.ProjectId)
+                    .ToListAsync();
+
+                if (!watchedProjectIds.Any())
+                {
+                    TempData["ErrorMessage"] = "No watched projects found to export.";
+                    return RedirectToAction("Index");
+                }
+
+                // Get watched projects with all necessary includes
+                var watchedProjectsQuery = _context.Projects
+                    .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
+                    .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Include(p => p.PhaseLookup)
+                    .Include(p => p.PrimaryContactUser)
+                    .Include(p => p.ActivityTypeLookup)
+                    .Include(p => p.RiskAppetiteLookup)
+                    .Include(p => p.SeniorResponsibleOfficers)
+                        .ThenInclude(sro => sro.User)
+                    .Include(p => p.ServiceOwners)
+                        .ThenInclude(so => so.User)
+                    .Include(p => p.Directorates)
+                        .ThenInclude(d => d.DirectorateLookup)
+                    .Include(p => p.ProjectProducts)
+                    .Include(p => p.ProjectContacts)
+                        .ThenInclude(pc => pc.User)
+                    .Include(p => p.PmoContacts)
+                        .ThenInclude(pc => pc.User)
+                    .Include(p => p.Milestones)
+                    .Include(p => p.ProjectMissions)
+                        .ThenInclude(pm => pm.Mission)
+                    .AsQueryable();
+
+                // Apply filters
+                if (!string.IsNullOrEmpty(search))
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                }
+                if (!string.IsNullOrEmpty(ragStatus))
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                }
+                if (!string.IsNullOrEmpty(businessArea))
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+                }
+                if (!string.IsNullOrEmpty(phase))
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                }
+                if (!string.IsNullOrEmpty(flagship))
+                {
+                    var isFlagship = flagship == "true";
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.IsFlagship == isFlagship);
+                }
+                if (priority.HasValue)
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+
+                var watchedProjects = await watchedProjectsQuery
+                    .AsNoTracking()
+                    .OrderBy(p => p.Title)
+                    .ToListAsync();
+
+                // Load dependencies for each project
+                foreach (var project in watchedProjects)
+                {
+                    project.DependenciesAsSource = await _context.Dependencies
+                        .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    project.DependenciesAsTarget = await _context.Dependencies
+                        .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Populate dependency titles
+                    foreach (var dep in project.DependenciesAsSource)
+                    {
+                        dep.SourceEntityTitle = project.Title;
+                        dep.TargetEntityTitle = await GetEntityTitle(dep.TargetEntityType, dep.TargetEntityId);
+                    }
+                    foreach (var dep in project.DependenciesAsTarget)
+                    {
+                        dep.TargetEntityTitle = project.Title;
+                        dep.SourceEntityTitle = await GetEntityTitle(dep.SourceEntityType, dep.SourceEntityId);
+                    }
+                }
+
+                if (!watchedProjects.Any())
+                {
+                    TempData["ErrorMessage"] = "No watched projects found to export.";
+                    return RedirectToAction("Index");
+                }
+
+                // Find maximum number of SROs to determine column count
+                var maxSroCount = watchedProjects.Max(p => p.SeniorResponsibleOfficers?.Count ?? 0);
+                maxSroCount = Math.Max(maxSroCount, 1); // At least 1 column
+
+                // Create workbook
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("Watched Work");
+
+                // Build headers (same as ExportUserProjects)
+                var headers = new List<string>
+                {
+                    "Project Code",
+                    "Title",
+                    "Business Area",
+                    "Phase",
+                    "Status",
+                    "Primary Contact",
+                    "Start Date",
+                    "End Date",
+                    "Activity Type",
+                    "Risk Appetite",
+                    "Current Priority",
+                    "Current RAG",
+                    "Subject to Spend Control"
+                };
+
+                // Add SRO columns (multiple if needed)
+                for (int i = 1; i <= maxSroCount; i++)
+                {
+                    headers.Add($"SRO {i}");
+                }
+
+                headers.AddRange(new[]
+                {
+                    "Service Owner",
+                    "Directorates",
+                    "Linked Products",
+                    "Dependencies In",
+                    "Dependencies Out",
+                    "Strategic Alignment",
+                    "Governance",
+                    "Team",
+                    "Milestones"
+                });
+
+                // Add headers to worksheet
+                for (int col = 0; col < headers.Count; col++)
+                {
+                    var cell = worksheet.Cell(1, col + 1);
+                    cell.Value = headers[col];
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                    cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                }
+
+                // Add data rows (same logic as ExportUserProjects)
+                int currentRow = 2;
+                foreach (var project in watchedProjects)
+                {
+                    int col = 1;
+
+                    worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
+                    worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.PhaseLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.Status ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.PrimaryContactUser != null 
+                        ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                        : string.Empty;
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.StartDate;
+                    if (project.StartDate.HasValue)
+                    {
+                        worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                    }
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.TargetDeliveryDate;
+                    if (project.TargetDeliveryDate.HasValue)
+                    {
+                        worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                    }
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
+                        ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
+                        : string.Empty;
+
+                    // Add SROs (multiple columns)
+                    var sros = project.SeniorResponsibleOfficers?.OrderBy(sro => sro.CreatedAt).ToList() ?? new List<ProjectSeniorResponsibleOfficer>();
+                    for (int i = 0; i < maxSroCount; i++)
+                    {
+                        if (i < sros.Count)
+                        {
+                            var sro = sros[i];
+                            worksheet.Cell(currentRow, col++).Value = sro.User != null 
+                                ? $"{sro.User.Name} ({sro.User.Email})" 
+                                : string.Empty;
+                        }
+                        else
+                        {
+                            worksheet.Cell(currentRow, col++).Value = string.Empty;
+                        }
+                    }
+
+                    // Service Owner
+                    var serviceOwners = project.ServiceOwners?
+                        .Select(so => so.User != null ? $"{so.User.Name} ({so.User.Email})" : string.Empty)
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
+
+                    // Directorates
+                    var directorates = project.Directorates?
+                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Where(d => !string.IsNullOrEmpty(d))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+
+                    // Linked Products
+                    var products = project.ProjectProducts?
+                        .Select(pp => pp.ProductTitle ?? string.Empty)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", products);
+
+                    // Dependencies In
+                    var dependenciesIn = project.DependenciesAsTarget?
+                        .Select(d => $"{d.SourceEntityTitle} ({d.DependencyType ?? "N/A"})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesIn);
+
+                    // Dependencies Out
+                    var dependenciesOut = project.DependenciesAsSource?
+                        .Select(d => $"{d.TargetEntityTitle} ({d.DependencyType ?? "N/A"})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
+
+                    // Strategic Alignment
+                    var strategicItems = new List<string>();
+                    if (!string.IsNullOrEmpty(project.StrategicObjectives))
+                    {
+                        strategicItems.Add($"Objectives: {project.StrategicObjectives}");
+                    }
+                    if (project.ProjectMissions?.Any() == true)
+                    {
+                        var missions = project.ProjectMissions
+                            .Select(pm => pm.Mission?.Title ?? string.Empty)
+                            .Where(m => !string.IsNullOrEmpty(m));
+                        strategicItems.Add($"Missions: {string.Join(", ", missions)}");
+                    }
+                    worksheet.Cell(currentRow, col++).Value = string.Join(" | ", strategicItems);
+
+                    // Governance (PMO Contacts)
+                    var pmoContacts = project.PmoContacts?
+                        .Select(pc => pc.User != null ? $"{pc.User.Name} ({pc.User.Email})" : string.Empty)
+                        .Where(pc => !string.IsNullOrEmpty(pc))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", pmoContacts);
+
+                    // Team
+                    var teamMembers = project.ProjectContacts?
+                        .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || pc.TeamStatus == "current")
+                        .Select(pc => pc.User != null 
+                            ? $"{pc.User.Name} ({pc.Role})" 
+                            : $"{pc.Name} ({pc.Role})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", teamMembers);
+
+                    // Milestones
+                    var milestones = project.Milestones?
+                        .Where(m => !m.IsDeleted)
+                        .Select(m => $"{m.Name} ({m.Status}) - Due: {m.DueDate:dd/MM/yyyy}")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join(" | ", milestones);
+
+                    currentRow++;
+                }
+
+                // Auto-fit columns
+                worksheet.Columns().AdjustToContents();
+                
+                // Wrap text for longer columns
+                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+                for (int i = 0; i < headers.Count; i++)
+                {
+                    if (wrapColumns.Contains(headers[i]))
+                    {
+                        worksheet.Column(i + 1).Style.Alignment.WrapText = true;
+                    }
+                }
+
+                worksheet.SheetView.FreezeRows(1);
+
+                // Save to memory stream
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var fileName = $"watched-work-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+                return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting watched projects to Excel");
+                TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+                return RedirectToAction("Index");
+            }
+        }
+
+        // GET: Project/ExportAllProjects
+        public async Task<IActionResult> ExportAllProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+        {
+            try
+            {
+                var query = _context.Projects
+                    .Where(p => !p.IsDeleted)
+                    .Include(p => p.DeliveryPriority)
+                    .Include(p => p.BusinessAreaLookup)
+                    .Include(p => p.PhaseLookup)
+                    .Include(p => p.PrimaryContactUser)
+                    .Include(p => p.ActivityTypeLookup)
+                    .Include(p => p.RiskAppetiteLookup)
+                    .Include(p => p.SeniorResponsibleOfficers)
+                        .ThenInclude(sro => sro.User)
+                    .Include(p => p.ServiceOwners)
+                        .ThenInclude(so => so.User)
+                    .Include(p => p.Directorates)
+                        .ThenInclude(d => d.DirectorateLookup)
+                    .Include(p => p.ProjectProducts)
+                    .Include(p => p.ProjectContacts)
+                        .ThenInclude(pc => pc.User)
+                    .Include(p => p.PmoContacts)
+                        .ThenInclude(pc => pc.User)
+                    .Include(p => p.Milestones)
+                    .Include(p => p.ProjectMissions)
+                        .ThenInclude(pm => pm.Mission)
+                    .AsQueryable();
+
+                // Apply filters
+                if (!string.IsNullOrEmpty(search))
+                {
+                    query = query.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+                }
+                if (!string.IsNullOrEmpty(ragStatus))
+                {
+                    query = query.Where(p => p.RagStatus == ragStatus);
+                }
+                if (!string.IsNullOrEmpty(businessArea))
+                {
+                    query = query.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+                }
+                if (!string.IsNullOrEmpty(phase))
+                {
+                    query = query.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+                }
+                if (!string.IsNullOrEmpty(flagship))
+                {
+                    var isFlagship = flagship == "true";
+                    query = query.Where(p => p.IsFlagship == isFlagship);
+                }
+                if (priority.HasValue)
+                {
+                    query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+
+                var allProjects = await query
+                    .AsNoTracking()
+                    .OrderBy(p => p.Title)
+                    .ToListAsync();
+
+                // Load dependencies for each project
+                foreach (var project in allProjects)
+                {
+                    project.DependenciesAsSource = await _context.Dependencies
+                        .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    project.DependenciesAsTarget = await _context.Dependencies
+                        .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Populate dependency titles
+                    foreach (var dep in project.DependenciesAsSource)
+                    {
+                        dep.SourceEntityTitle = project.Title;
+                        dep.TargetEntityTitle = await GetEntityTitle(dep.TargetEntityType, dep.TargetEntityId);
+                    }
+                    foreach (var dep in project.DependenciesAsTarget)
+                    {
+                        dep.TargetEntityTitle = project.Title;
+                        dep.SourceEntityTitle = await GetEntityTitle(dep.SourceEntityType, dep.SourceEntityId);
+                    }
+                }
+
+                if (!allProjects.Any())
+                {
+                    TempData["ErrorMessage"] = "No projects found to export.";
+                    return RedirectToAction("Index");
+                }
+
+                // Find maximum number of SROs to determine column count
+                var maxSroCount = allProjects.Max(p => p.SeniorResponsibleOfficers?.Count ?? 0);
+                maxSroCount = Math.Max(maxSroCount, 1); // At least 1 column
+
+                // Create workbook
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("All Work");
+
+                // Build headers (same as ExportUserProjects)
+                var headers = new List<string>
+                {
+                    "Project Code",
+                    "Title",
+                    "Business Area",
+                    "Phase",
+                    "Status",
+                    "Primary Contact",
+                    "Start Date",
+                    "End Date",
+                    "Activity Type",
+                    "Risk Appetite",
+                    "Current Priority",
+                    "Current RAG",
+                    "Subject to Spend Control"
+                };
+
+                // Add SRO columns (multiple if needed)
+                for (int i = 1; i <= maxSroCount; i++)
+                {
+                    headers.Add($"SRO {i}");
+                }
+
+                headers.AddRange(new[]
+                {
+                    "Service Owner",
+                    "Directorates",
+                    "Linked Products",
+                    "Dependencies In",
+                    "Dependencies Out",
+                    "Strategic Alignment",
+                    "Governance",
+                    "Team",
+                    "Milestones"
+                });
+
+                // Add headers to worksheet
+                for (int col = 0; col < headers.Count; col++)
+                {
+                    var cell = worksheet.Cell(1, col + 1);
+                    cell.Value = headers[col];
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                    cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                }
+
+                // Add data rows (same logic as ExportUserProjects)
+                int currentRow = 2;
+                foreach (var project in allProjects)
+                {
+                    int col = 1;
+
+                    worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
+                    worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.PhaseLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.Status ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.PrimaryContactUser != null 
+                        ? $"{project.PrimaryContactUser.Name} ({project.PrimaryContactUser.Email})" 
+                        : string.Empty;
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.StartDate;
+                    if (project.StartDate.HasValue)
+                    {
+                        worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                    }
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.TargetDeliveryDate;
+                    if (project.TargetDeliveryDate.HasValue)
+                    {
+                        worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy";
+                    }
+                    
+                    worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
+                        ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
+                        : string.Empty;
+
+                    // Add SROs (multiple columns)
+                    var sros = project.SeniorResponsibleOfficers?.OrderBy(sro => sro.CreatedAt).ToList() ?? new List<ProjectSeniorResponsibleOfficer>();
+                    for (int i = 0; i < maxSroCount; i++)
+                    {
+                        if (i < sros.Count)
+                        {
+                            var sro = sros[i];
+                            worksheet.Cell(currentRow, col++).Value = sro.User != null 
+                                ? $"{sro.User.Name} ({sro.User.Email})" 
+                                : string.Empty;
+                        }
+                        else
+                        {
+                            worksheet.Cell(currentRow, col++).Value = string.Empty;
+                        }
+                    }
+
+                    // Service Owner
+                    var serviceOwners = project.ServiceOwners?
+                        .Select(so => so.User != null ? $"{so.User.Name} ({so.User.Email})" : string.Empty)
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
+
+                    // Directorates
+                    var directorates = project.Directorates?
+                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Where(d => !string.IsNullOrEmpty(d))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+
+                    // Linked Products
+                    var products = project.ProjectProducts?
+                        .Select(pp => pp.ProductTitle ?? string.Empty)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", products);
+
+                    // Dependencies In
+                    var dependenciesIn = project.DependenciesAsTarget?
+                        .Select(d => $"{d.SourceEntityTitle} ({d.DependencyType ?? "N/A"})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesIn);
+
+                    // Dependencies Out
+                    var dependenciesOut = project.DependenciesAsSource?
+                        .Select(d => $"{d.TargetEntityTitle} ({d.DependencyType ?? "N/A"})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
+
+                    // Strategic Alignment
+                    var strategicItems = new List<string>();
+                    if (!string.IsNullOrEmpty(project.StrategicObjectives))
+                    {
+                        strategicItems.Add($"Objectives: {project.StrategicObjectives}");
+                    }
+                    if (project.ProjectMissions?.Any() == true)
+                    {
+                        var missions = project.ProjectMissions
+                            .Select(pm => pm.Mission?.Title ?? string.Empty)
+                            .Where(m => !string.IsNullOrEmpty(m));
+                        strategicItems.Add($"Missions: {string.Join(", ", missions)}");
+                    }
+                    worksheet.Cell(currentRow, col++).Value = string.Join(" | ", strategicItems);
+
+                    // Governance (PMO Contacts)
+                    var pmoContacts = project.PmoContacts?
+                        .Select(pc => pc.User != null ? $"{pc.User.Name} ({pc.User.Email})" : string.Empty)
+                        .Where(pc => !string.IsNullOrEmpty(pc))
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", pmoContacts);
+
+                    // Team
+                    var teamMembers = project.ProjectContacts?
+                        .Where(pc => string.IsNullOrEmpty(pc.TeamStatus) || pc.TeamStatus == "current")
+                        .Select(pc => pc.User != null 
+                            ? $"{pc.User.Name} ({pc.Role})" 
+                            : $"{pc.Name} ({pc.Role})")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", teamMembers);
+
+                    // Milestones
+                    var milestones = project.Milestones?
+                        .Where(m => !m.IsDeleted)
+                        .Select(m => $"{m.Name} ({m.Status}) - Due: {m.DueDate:dd/MM/yyyy}")
+                        .ToList() ?? new List<string>();
+                    worksheet.Cell(currentRow, col++).Value = string.Join(" | ", milestones);
+
+                    currentRow++;
+                }
+
+                // Auto-fit columns
+                worksheet.Columns().AdjustToContents();
+                
+                // Wrap text for longer columns
+                var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+                for (int i = 0; i < headers.Count; i++)
+                {
+                    if (wrapColumns.Contains(headers[i]))
+                    {
+                        worksheet.Column(i + 1).Style.Alignment.WrapText = true;
+                    }
+                }
+
+                worksheet.SheetView.FreezeRows(1);
+
+                // Save to memory stream
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var fileName = $"all-work-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+                return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting all projects to Excel");
                 TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
                 return RedirectToAction("Index");
             }

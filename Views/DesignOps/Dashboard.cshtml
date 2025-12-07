@@ -2,8 +2,6 @@
     ViewData["Title"] = "Design Operations Dashboard";
 }
 
-@await Html.PartialAsync("_DashboardStyles")
-
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
         <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
@@ -18,23 +16,19 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Dashboard Header -->
-<div class="dashboard-header">
-    <h1>Design Operations</h1>
-    <p>Retest requests, accessibility issues, and product enrollment overview</p>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Design Operations";
+            ViewBag.NavLinks = new[]
+            {
+                new { Text = "Dashboard", Action = "Dashboard", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Dashboard" },
+                new { Text = "Accessibility oversight", Action = "AccessibilityOversight", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AccessibilityOversight" }
+            };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+
         @if (TempData["ErrorMessage"] != null)
         {
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -44,30 +38,6 @@
                 </button>
             </div>
         }
-
-        <!-- Summary Cards -->
-        <div class="dashboard-summary-cards">
-            <a href="@Url.Action("RetestRequests", "DesignOps")" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit;">
-                <div class="dashboard-card-value">@(ViewBag.PendingRetestCount ?? 0)</div>
-                <div class="dashboard-card-label">Open Retest Requests</div>
-                <div class="dashboard-card-icon"><i class="fas fa-clipboard-check"></i></div>
-            </a>
-            <a href="@Url.Action("VerificationRequests", "DesignOps")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit;">
-                <div class="dashboard-card-value">@(ViewBag.PendingVerificationCount ?? 0)</div>
-                <div class="dashboard-card-label">Verification Requests</div>
-                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-            </a>
-            <a href="/Apps/Accessibility" class="dashboard-card @((ViewBag.OpenIssuesCount ?? 0) == 0 ? "bg-success" : (ViewBag.OpenIssuesCount ?? 0) < 10 ? "bg-warning" : "bg-danger")" style="text-decoration: none; color: inherit;">
-                <div class="dashboard-card-value">@(ViewBag.OpenIssuesCount ?? 0)</div>
-                <div class="dashboard-card-label">Open Accessibility Issues</div>
-                <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
-            </a>
-            <a href="/Admin/AccessibilityService" class="dashboard-card bg-secondary" style="text-decoration: none; color: inherit;">
-                <div class="dashboard-card-value">@(ViewBag.EnrolledProductsCount ?? 0)<small style="font-size: 1.2rem;"> / @(ViewBag.TotalProducts ?? 0)</small></div>
-                <div class="dashboard-card-label">Enrolled Products (@(ViewBag.EnrollmentPercentage ?? 0)%)</div>
-                <div class="dashboard-card-icon"><i class="fas fa-list"></i></div>
-            </a>
-        </div>
     </div>
 </section>
 

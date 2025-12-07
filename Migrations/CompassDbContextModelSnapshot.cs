@@ -9527,9 +9527,17 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Mode")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Prerequisites")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PrimaryProfessionTags")
                         .HasMaxLength(450)
@@ -9730,9 +9738,23 @@ namespace Compass.Migrations
                     b.Property<int?>("DecisionId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("FinancialYear")
+                        .HasColumnType("int");
+
                     b.Property<string>("Justification")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime?>("PlannedDate")
                         .HasColumnType("datetime2");

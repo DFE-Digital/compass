@@ -60,47 +60,63 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Dashboard Header with Navigation -->
-<div class="dashboard-header">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h1>SLT Weekly Report</h1>
-            <p>
-                @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
-                <br />
-                <small style="opacity: 0.9;">Week @Model.WeekNumber, @Model.Year</small>
-            </p>
-        </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-            @if (Model.HasPreviousWeek && Model.PreviousWeekYear.HasValue && Model.PreviousWeekNumber.HasValue)
-            {
-                <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.PreviousWeekYear, week = Model.PreviousWeekNumber })" 
-                   class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
-                    <i class="fas fa-chevron-left"></i> Previous
-                </a>
-            }
-            @if (Model.HasNextWeek && Model.NextWeekYear.HasValue && Model.NextWeekNumber.HasValue)
-            {
-                <a href="@Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.NextWeekYear, week = Model.NextWeekNumber })" 
-                   class="btn btn-light btn-sm" style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
-                    Next <i class="fas fa-chevron-right"></i>
-                </a>
-            }
-        </div>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            var navLinks = new List<object>
+            {
+                new { Text = "Summary overview", Action = "Summary", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Summary" },
+                new { Text = "Monthly reporting", Action = "MonthlyReporting", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "MonthlyReporting" },
+                new { Text = "RAG and Risk", Action = "RagAndRisk", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "RagAndRisk" },
+                new { Text = "All work", Action = "AllWork", Controller = "CentralOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AllWork" },
+                new { Text = "Risks and Issues", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#risks-and-issues", IsButton = false, IsActive = false },
+                new { Text = "Successes", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#successes", IsButton = false, IsActive = false },
+                new { Text = "Updates", Action = "SltWeeklyReport", Controller = "CentralOps", Url = "#updates", IsButton = false, IsActive = false }
+            };
+            
+            if (Model.HasPreviousWeek && Model.PreviousWeekYear.HasValue && Model.PreviousWeekNumber.HasValue)
+            {
+                navLinks.Add(new { 
+                    Text = "Previous week", 
+                    Action = "SltWeeklyReport", 
+                    Controller = "CentralOps", 
+                    Url = Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.PreviousWeekYear, week = Model.PreviousWeekNumber }), 
+                    IsButton = false, 
+                    IsActive = false 
+                });
+            }
+            
+            if (Model.HasNextWeek && Model.NextWeekYear.HasValue && Model.NextWeekNumber.HasValue)
+            {
+                navLinks.Add(new { 
+                    Text = "Next week", 
+                    Action = "SltWeeklyReport", 
+                    Controller = "CentralOps", 
+                    Url = Url.Action("SltWeeklyReport", "CentralOps", new { year = Model.NextWeekYear, week = Model.NextWeekNumber }), 
+                    IsButton = false, 
+                    IsActive = false 
+                });
+            }
+            
+            ViewBag.BrandText = "Central Operations";
+            ViewBag.NavLinks = navLinks;
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <!-- Dashboard Header with Navigation -->
+        <div class="dashboard-header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1>SLT Weekly Report</h1>
+                    <p>
+                        @Model.WeekStartDate.ToString("dd MMMM") to @Model.WeekEndDate.ToString("dd MMMM yyyy")
+                        <br />
+                        <small style="opacity: 0.9;">Week @Model.WeekNumber, @Model.Year</small>
+                    </p>
+                </div>
+            </div>
+        </div>
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -116,31 +132,10 @@
             </div>
         }
 
-        <!-- Summary Cards -->
-        @{
-            var totalSuccesses = Model.BusinessAreaGroups?.Sum(ba => ba.UpdateCount) ?? 0;
-            var totalMilestones = Model.Milestones?.Count ?? 0;
-        }
-        <div class="dashboard-summary-cards mb-4">
-            <div class="dashboard-card bg-success">
-                <div class="dashboard-card-value">@totalSuccesses</div>
-                <div class="dashboard-card-label">Successes Reported</div>
-                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-                            </div>
-            <div class="dashboard-card bg-info">
-                <div class="dashboard-card-value">@(Model.BusinessAreaGroups?.Count(ba => ba.UpdateCount > 0) ?? 0)</div>
-                <div class="dashboard-card-label">Business Areas with Updates</div>
-                <div class="dashboard-card-icon"><i class="fas fa-building"></i></div>
-                            </div>
-            <div class="dashboard-card bg-warning">
-                <div class="dashboard-card-value">@totalMilestones</div>
-                <div class="dashboard-card-label">Milestones Due This Week</div>
-                <div class="dashboard-card-icon"><i class="fas fa-calendar-check"></i></div>
-            </div>
-        </div>
+      
 
         <!-- Successes Section -->
-        <div class="dashboard-section">
+        <div class="dashboard-section" id="successes">
             <div class="dashboard-section-header">
                 <h2><i class="fas fa-trophy"></i> Successes Reported to SLT</h2>
                         @if (Model.BusinessAreaGroups != null && Model.BusinessAreaGroups.Any())
@@ -251,7 +246,7 @@
                                                                         <textarea class="form-control mb-2" rows="3" placeholder="Enter SLT response..."></textarea>
                                                                         <div class="d-flex justify-content-end">
                                                                             <button type="button" class="btn btn-sm btn-secondary mr-2 cancel-edit-slt-response-btn">Cancel</button>
-                                                                            <button type="button" class="btn btn-sm btn-primary save-edit-slt-response-btn">Save</button>
+                                                                            <button type="button" class="btn btn-sm btn-success save-edit-slt-response-btn">Save</button>
                                                                         </div>
                                                                     </div>
                                                                     <div>
@@ -328,6 +323,186 @@
                                 <p class="text-muted mb-0">No successes reported to SLT for this week.</p>
                             </div>
                         }
+        </div>
+
+        <!-- Risks and Issues Section -->
+        <div class="dashboard-section" id="risks-and-issues">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-exclamation-triangle"></i> Risks and Issues</h2>
+            </div>
+            @if (Model.Risks.Any() || Model.Issues.Any())
+            {
+                @if (Model.Risks.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="mb-3"><i class="fas fa-shield-alt"></i> Risks (@Model.Risks.Count)</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Risk Score</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var risk in Model.Risks)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (risk.Project != null)
+                                                {
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@risk.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                        @risk.Project.Title
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No project</span>
+                                                }
+                                            </td>
+                                            <td>@risk.Title</td>
+                                            <td>
+                                                <span class="badge badge-@(risk.Status == "closed" ? "secondary" : risk.Status == "monitoring" ? "warning" : "danger")">
+                                                    @risk.Status
+                                                </span>
+                                            </td>
+                                            <td>@risk.RiskScore</td>
+                                            <td>@risk.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                
+                @if (Model.Issues.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="mb-3"><i class="fas fa-bug"></i> Issues (@Model.Issues.Count)</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Severity</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var issue in Model.Issues)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (issue.Project != null)
+                                                {
+                                                    <a asp-controller="Project" asp-action="Details" asp-route-id="@issue.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                        @issue.Project.Title
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No project</span>
+                                                }
+                                            </td>
+                                            <td>@issue.Title</td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Status == "closed" ? "secondary" : issue.Status == "resolved" ? "success" : "warning")">
+                                                    @issue.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-@(issue.Severity == "high" ? "danger" : issue.Severity == "medium" ? "warning" : "info")">
+                                                    @issue.Severity
+                                                </span>
+                                            </td>
+                                            <td>@issue.CreatedAt.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-4">
+                    <p class="text-muted mb-0">No risks or issues for this week.</p>
+                </div>
+            }
+        </div>
+
+        <!-- Updates Section -->
+        <div class="dashboard-section" id="updates">
+            <div class="dashboard-section-header">
+                <h2><i class="fas fa-sync-alt"></i> Project Status Updates</h2>
+            </div>
+            @if (Model.Updates.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>Update</th>
+                                <th>Created By</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var update in Model.Updates)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (update.Project != null)
+                                        {
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@update.ProjectId" style="color: #005ea5; text-decoration: none;">
+                                                @update.Project.Title
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No project</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@update.Narrative">
+                                            @update.Narrative
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(update.CreatedByName))
+                                        {
+                                            @update.CreatedByName
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(update.CreatedByEmail))
+                                        {
+                                            @update.CreatedByEmail
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unknown</span>
+                                        }
+                                    </td>
+                                    <td>@update.CreatedAt.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-4">
+                    <p class="text-muted mb-0">No project status updates for this week.</p>
+                </div>
+            }
         </div>
 
         <!-- Milestones Section -->

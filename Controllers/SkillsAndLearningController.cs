@@ -1115,6 +1115,146 @@ public class SkillsAndLearningController : Controller
     }
 
     /// <summary>
+    /// Manage approved training - set date, rate, comment, or request cancellation
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> ManageApprovedTraining(int id)
+    {
+        var userId = await GetCurrentUserIdAsync();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var request = await _context.TrainingRequests
+            .Include(tr => tr.User)
+            .Include(tr => tr.Course)
+            .FirstOrDefaultAsync(tr => tr.Id == id && tr.UserId == userId.Value);
+
+        if (request == null)
+        {
+            return NotFound();
+        }
+
+        if (request.Status != "Approved")
+        {
+            TempData["ErrorMessage"] = "Only approved training requests can be managed";
+            return RedirectToAction(nameof(MyRequests));
+        }
+
+        // Get or create training record
+        var trainingRecord = await _context.TrainingRecords
+            .FirstOrDefaultAsync(tr => tr.UserId == userId.Value && tr.CourseId == request.CourseId);
+
+        if (trainingRecord == null)
+        {
+            trainingRecord = new TrainingRecord
+            {
+                UserId = userId.Value,
+                CourseId = request.CourseId,
+                Status = "booked",
+                DateRequested = request.CreatedAt,
+                DateApproved = request.ApprovedAt
+            };
+            _context.TrainingRecords.Add(trainingRecord);
+            await _context.SaveChangesAsync();
+        }
+
+        ViewBag.TrainingRecord = trainingRecord;
+        return View(request);
+    }
+
+    /// <summary>
+    /// Submit training completion details
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitTrainingCompletion(
+        int id,
+        DateTime? completedDate,
+        int? outcomeRating,
+        string? feedback)
+    {
+        var userId = await GetCurrentUserIdAsync();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var request = await _context.TrainingRequests
+            .Include(tr => tr.Course)
+            .FirstOrDefaultAsync(tr => tr.Id == id && tr.UserId == userId.Value);
+
+        if (request == null)
+        {
+            return NotFound();
+        }
+
+        if (request.Status != "Approved")
+        {
+            TempData["ErrorMessage"] = "Only approved training requests can be updated";
+            return RedirectToAction(nameof(MyRequests));
+        }
+
+        // Get or create training record
+        var trainingRecord = await _context.TrainingRecords
+            .FirstOrDefaultAsync(tr => tr.UserId == userId.Value && tr.CourseId == request.CourseId);
+
+        if (trainingRecord == null)
+        {
+            trainingRecord = new TrainingRecord
+            {
+                UserId = userId.Value,
+                CourseId = request.CourseId,
+                Status = "booked",
+                DateRequested = request.CreatedAt,
+                DateApproved = request.ApprovedAt
+            };
+            _context.TrainingRecords.Add(trainingRecord);
+        }
+
+        // Update training request
+        if (completedDate.HasValue)
+        {
+            request.CompletedDate = completedDate.Value;
+            request.TrainingCompleted = true;
+            trainingRecord.DateAttended = completedDate.Value;
+            trainingRecord.Status = "Completed";
+        }
+        else if (request.TrainingCompleted == true && request.CompletedDate.HasValue)
+        {
+            // Keep existing date if training already completed
+            trainingRecord.DateAttended = request.CompletedDate.Value;
+            trainingRecord.Status = "Completed";
+        }
+
+        // Update training record with rating and feedback
+        if (outcomeRating.HasValue)
+        {
+            if (outcomeRating.Value < 1 || outcomeRating.Value > 5)
+            {
+                ModelState.AddModelError("OutcomeRating", "Rating must be between 1 and 5");
+                ViewBag.TrainingRecord = trainingRecord;
+                return View("ManageApprovedTraining", request);
+            }
+            trainingRecord.OutcomeRating = outcomeRating.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            trainingRecord.Feedback = feedback;
+        }
+
+        request.UpdatedAt = DateTime.UtcNow;
+        trainingRecord.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Training details updated successfully";
+        return RedirectToAction(nameof(MyRequests));
+    }
+
+    /// <summary>
     /// Update professional profile
     /// </summary>
     public async Task<IActionResult> MyProfile()
@@ -2050,7 +2190,10 @@ You can view your training requests at: {Url.Action("MyRequests", "SkillsAndLear
         decimal? actualCost,
         DateTime? plannedDate,
         string? trainingCompleted,
-        DateTime? completedDate)
+        DateTime? completedDate,
+        DateTime? paymentDate,
+        string? paymentMethod,
+        string? paymentReference)
     {
         if (!await IsLearningAndSkillsRoleAsync())
         {
@@ -2104,6 +2247,11 @@ You can view your training requests at: {Url.Action("MyRequests", "SkillsAndLear
         {
             request.CompletedDate = null;
         }
+
+        // Update payment information
+        request.PaymentDate = paymentDate;
+        request.PaymentMethod = paymentMethod;
+        request.PaymentReference = paymentReference;
 
         request.UpdatedAt = DateTime.UtcNow;
 

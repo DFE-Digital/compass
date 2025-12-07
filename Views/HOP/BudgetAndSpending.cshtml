@@ -9,14 +9,17 @@
 
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
-                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
             <li class="breadcrumb-item">
-                <a asp-action="HOPDashboard" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none;">HOP dashboard</a>
+                <a asp-action="Index" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">My skills and learning</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page">Budget and spending</li>
+            <li class="breadcrumb-item">
+                <a asp-action="HOPDashboard" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">HOP dashboard</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Budget and spending</li>
         </ol>
     </nav>
 }
@@ -24,31 +27,11 @@
 <section class="content">
     <div class="container-fluid">
         <!-- Navigation Bar -->
-        <nav class="navbar navbar-expand-lg navbar-light mb-3" style="background-color: #005ea5; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="container-fluid">
-                <span class="navbar-brand mb-0 h6" style="color: white;">Budget and Spending</span>
-                <div class="navbar-nav flex-row">
-                    <a class="nav-link @(selectedFY == currentFY ? "active font-weight-bold" : "")" 
-                       asp-action="BudgetAndSpending" asp-route-financialYear="@currentFY"
-                       style="color: @(selectedFY == currentFY ? "white" : "rgba(255,255,255,0.8)");">
-                        Current FY (@currentFY/@(currentFY + 1))
-                    </a>
-                    <a class="nav-link @(selectedFY == nextFY ? "active font-weight-bold" : "")" 
-                       asp-action="BudgetAndSpending" asp-route-financialYear="@nextFY"
-                       style="color: @(selectedFY == nextFY ? "white" : "rgba(255,255,255,0.8)");">
-                        Next FY (@nextFY/@(nextFY + 1))
-                    </a>
-                    @if (ViewBag.IsCentralOps == true)
-                    {
-                        <a class="nav-link" 
-                           asp-action="ManageBudget"
-                           style="color: rgba(255,255,255,0.8);">
-                            Manage budgets
-                        </a>
-                    }
-                </div>
-            </div>
-        </nav>
+        @{
+            ViewBag.BrandText = "Budget and Spending";
+            ViewBag.NavLinks = new object[] { };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
 
         <style>
             .navbar-nav .nav-link {
@@ -82,7 +65,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total budget</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(budget.TotalBudget.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(budget.TotalBudget < 0 ? "text-danger" : "text-gray-800")">£@(budget.TotalBudget.ToString("N0"))</div>
                                     <small class="text-muted">Financial Year @selectedFY/@(selectedFY + 1)</small>
                                 </div>
                                 <div class="col-auto">
@@ -98,7 +81,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Actual spent</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(actualSpentForRemaining.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(actualSpentForRemaining < 0 ? "text-danger" : "text-gray-800")">£@(actualSpentForRemaining.ToString("N0"))</div>
                                 </div>
                                 <div class="col-auto">
                                     <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -113,7 +96,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted costs</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(forecastedForRemaining.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(forecastedForRemaining < 0 ? "text-danger" : "text-gray-800")">£@(forecastedForRemaining.ToString("N0"))</div>
                                 </div>
                                 <div class="col-auto">
                                     <i class="fas fa-calculator fa-2x text-gray-300"></i>
@@ -128,7 +111,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Remaining</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(remaining.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(remaining < 0 ? "text-danger" : "text-gray-800")">£@(remaining.ToString("N0"))</div>
                                 </div>
                                 <div class="col-auto">
                                     <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
@@ -151,7 +134,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Actual spent</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(actualSpent.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(actualSpent < 0 ? "text-danger" : "text-gray-800")">£@(actualSpent.ToString("N0"))</div>
                                 </div>
                                 <div class="col-auto">
                                     <i class="fas fa-pound-sign fa-2x text-gray-300"></i>
@@ -166,7 +149,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Forecasted costs</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(forecastedCosts.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(forecastedCosts < 0 ? "text-danger" : "text-gray-800")">£@(forecastedCosts.ToString("N0"))</div>
                                 </div>
                                 <div class="col-auto">
                                     <i class="fas fa-calculator fa-2x text-gray-300"></i>
@@ -181,7 +164,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Remaining budget for FY</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">£@(remaining.ToString("N0"))</div>
+                                    <div class="h5 mb-0 font-weight-bold @(remaining < 0 ? "text-danger" : "text-gray-800")">£@(remaining.ToString("N0"))</div>
                                     <small class="text-muted">Financial Year @selectedFY/@(selectedFY + 1)</small>
                                 </div>
                                 <div class="col-auto">
@@ -207,7 +190,7 @@
                             var hasItems = providerList != null && providerList.Cast<dynamic>().Any();
                             if (hasItems)
                             {
-                                <table class="table table-hover mb-0">
+                                <table class="table table-hover text-nowrap sortable-table mb-0">
                                     <thead>
                                         <tr>
                                             <th>Provider</th>
@@ -218,10 +201,11 @@
                                     <tbody>
                                         @foreach (dynamic item in providerList)
                                         {
+                                            var totalSpent = (decimal)item.TotalSpent;
                                             <tr>
                                                 <td><strong>@item.Provider</strong></td>
                                                 <td>@item.Count</td>
-                                                <td>£@(((decimal)item.TotalSpent).ToString("N0"))</td>
+                                                <td class="@(totalSpent < 0 ? "text-danger" : "")">£@(totalSpent.ToString("N0"))</td>
                                             </tr>
                                         }
                                     </tbody>
@@ -255,7 +239,7 @@
                             var hasItems = professionList != null && professionList.Cast<dynamic>().Any();
                             if (hasItems)
                             {
-                                <table class="table table-hover mb-0">
+                                <table class="table table-hover text-nowrap sortable-table mb-0">
                                     <thead>
                                         <tr>
                                             <th>Profession</th>
@@ -266,10 +250,11 @@
                                     <tbody>
                                         @foreach (dynamic item in professionList)
                                         {
+                                            var totalSpent = (decimal)item.TotalSpent;
                                             <tr>
                                                 <td><strong>@item.Profession</strong></td>
                                                 <td>@item.Count</td>
-                                                <td>£@(((decimal)item.TotalSpent).ToString("N0"))</td>
+                                                <td class="@(totalSpent < 0 ? "text-danger" : "")">£@(totalSpent.ToString("N0"))</td>
                                             </tr>
                                         }
                                     </tbody>
