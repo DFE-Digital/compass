@@ -101,8 +101,8 @@
 
     var currentStatusValue = string.IsNullOrWhiteSpace(currentStatus) ? string.Empty : currentStatus;
     var canViewAllRequests = ViewBag.CanViewAllRequests as bool? ?? false;
-    var isViewAll = string.IsNullOrWhiteSpace(currentViewFilter) && canViewAllRequests;
-    var isViewMine = string.Equals(currentViewFilter, "mine", StringComparison.OrdinalIgnoreCase) || (string.IsNullOrWhiteSpace(currentViewFilter) && !canViewAllRequests);
+    var isViewAll = string.Equals(currentViewFilter, "all", StringComparison.OrdinalIgnoreCase);
+    var isViewMine = string.Equals(currentViewFilter, "mine", StringComparison.OrdinalIgnoreCase);
     var isViewAssigned = string.Equals(currentViewFilter, "assigned", StringComparison.OrdinalIgnoreCase);
     var statusRouteValue = string.IsNullOrWhiteSpace(currentStatusValue) ? null : currentStatusValue;
     var portfolioRouteValue = string.IsNullOrWhiteSpace(currentPortfolio) ? null : currentPortfolio;
@@ -164,7 +164,7 @@
                             @if (canViewAllRequests)
                             {
                                 <a class="list-group-item list-group-item-action @(isViewAll ? "active" : string.Empty)"
-                                   href="@Url.Action("Requests", new { view = (string)null, status = statusRouteValue, portfolio = portfolioRouteValue, search = searchRouteValue })">
+                                   href="@Url.Action("Requests", new { view = "all", status = statusRouteValue, portfolio = portfolioRouteValue, search = searchRouteValue })">
                                     All requests
                                     <span class="badge badge-light float-right">@allRequestsCount</span>
                                 </a>
@@ -173,30 +173,6 @@
                     </div>
                 </div>
 
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h3 class="card-title">Status</h3>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            <a class="list-group-item list-group-item-action @(string.IsNullOrEmpty(currentStatusValue) ? "active" : string.Empty)"
-                               href="@Url.Action("Requests", new { view = viewRouteValue, status = (string)null, portfolio = portfolioRouteValue, search = searchRouteValue })">
-                                All
-                                <span class="badge badge-light float-right">@totalCount</span>
-                            </a>
-                            @foreach (var item in statusNavItems)
-                            {
-                                var statusDisplay = GetStatusDisplay(item.Status);
-                                var isActive = string.Equals(item.Status, currentStatusValue, StringComparison.OrdinalIgnoreCase);
-                                <a class="list-group-item list-group-item-action @(isActive ? "active" : string.Empty)"
-                                   href="@Url.Action("Requests", new { view = viewRouteValue, status = item.Status, portfolio = portfolioRouteValue, search = searchRouteValue })">
-                                    @statusDisplay
-                                    <span class="badge badge-light float-right">@item.Count</span>
-                                </a>
-                            }
-                        </div>
-                    </div>
-                </div>
 
                 <div class="card">
                     <div class="card-header">
@@ -315,8 +291,30 @@
                 }
 
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0">All other requests</h3>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">
+                            @if (isViewMine)
+                            {
+                                <text>My requests</text>
+                            }
+                            else if (isViewAssigned)
+                            {
+                                <text>Assigned to me</text>
+                            }
+                            else if (isViewAll)
+                            {
+                                <text>All requests</text>
+                            }
+                            else
+                            {
+                                <text>My requests</text>
+                            }
+                        </h3>
+                        <div class="card-tools">
+                            <a href="@Url.Action("ImportCsv", "DemandManagement")" class="btn btn-sm btn-primary">
+                                <i class="fas fa-file-import"></i> Import CSV
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body table-responsive p-0">
                         @if (otherRequests.Any())
@@ -439,9 +437,8 @@
                         }
                         else
                         {
-                            <div class="p-4 text-center text-muted">
-                                <i class="fas fa-table fa-3x mb-3"></i>
-                                <p>No requests match your current filters.</p>
+                            <div class="p-3 text-muted">
+                                <p class="mb-0">There are no items to show.</p>
                             </div>
                         }
                     </div>

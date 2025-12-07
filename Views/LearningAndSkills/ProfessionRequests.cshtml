@@ -6,29 +6,46 @@
 
 @await Html.PartialAsync("_DashboardStyles")
 
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    ViewBag.BrandText = "Skills and Learning";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My skills and learning", Action = "Index", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" },
+        new { Text = "Browse courses", Action = "BrowseCourses", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "BrowseCourses" },
+        new { Text = "My requests", Action = "MyRequests", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "MyRequests" },
+        new { Text = "Manage requests", Action = "AdminRequests", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "AdminRequests" }
+    };
+}
+
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
-                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
             </li>
-            <li class="breadcrumb-item active" aria-current="page">Profession requests</li>
+            <li class="breadcrumb-item">
+                <a asp-action="Index" asp-controller="SkillsAndLearning" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">My skills and learning</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Manage requests</li>
         </ol>
     </nav>
 }
 
 <section class="content">
-    <div class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2">
-                <div class="col-sm-12">
-                    <h1 class="m-0">Profession requests</h1>
-                    <p class="text-muted mb-0">Review and approve training requests</p>
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-12">
+                        <h1 class="m-0">Profession requests</h1>
+                        <p class="text-muted mb-0">Review and approve training requests</p>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -194,38 +211,77 @@
                                 <th>User</th>
                                 <th>Course</th>
                                 <th>Status</th>
-                                <th>Requested / Training Date</th>
+                                <th>Requested</th>
+                                <th>Training Date</th>
                                 <th>Cost</th>
                                 <th>Completed</th>
-                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var request in Model)
                             {
                                 <tr>
-                                    <td>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
                                         <strong>@(request.User?.Name ?? "Unknown")</strong><br>
                                         <small class="text-muted">@(request.User?.Email ?? "N/A")</small>
                                     </td>
-                                    <td>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
                                         <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
-                                        @if (request.Course != null && request.Course.Cost.HasValue)
+                                        @{
+                                            var provider = request.Course?.Provider ?? request.CustomCourseProvider;
+                                        }
+                                        @if (!string.IsNullOrEmpty(provider))
                                         {
-                                            <br><small class="text-muted">Cost: £@request.Course.Cost.Value.ToString("N0")</small>
+                                            <br><small class="text-muted">@provider</small>
                                         }
                                     </td>
-                                    <td>
-                                        <span class="badge badge-light">@request.Status</span>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
+                                        @switch (request.Status)
+                                        {
+                                            case "Submitted":
+                                                <span class="badge badge-info">@request.Status</span>
+                                                break;
+                                            case "Approved":
+                                                <span class="badge badge-success">@request.Status</span>
+                                                break;
+                                            case "Rejected":
+                                                <span class="badge badge-danger">@request.Status</span>
+                                                break;
+                                            case "On-hold":
+                                                <span class="badge badge-warning">@request.Status</span>
+                                                break;
+                                            case "Cancelled":
+                                                <span class="badge badge-secondary">@request.Status</span>
+                                                break;
+                                            case "Completed":
+                                                <span class="badge badge-success">@request.Status</span>
+                                                break;
+                                            default:
+                                                <span class="badge badge-light">@request.Status</span>
+                                                break;
+                                        }
+                                        @if (request.Status == "Submitted")
+                                        {
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-sm btn-success" data-toggle="modal" data-target="#approveModal@(request.Id)" onclick="event.stopPropagation();">Approve</button>
+                                                <button type="button" class="btn btn-sm btn-danger" data-toggle="modal" data-target="#rejectModal@(request.Id)" onclick="event.stopPropagation();">Reject</button>
+                                            </div>
+                                        }
                                     </td>
-                                    <td>
-                                        <div>Requested: @request.CreatedAt.ToString("dd MMM yyyy")</div>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
+                                        @request.CreatedAt.ToString("dd MMM yyyy")
+                                    </td>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
                                         @if (request.PlannedDate.HasValue)
                                         {
-                                            <div><small class="text-muted">Training: @request.PlannedDate.Value.ToString("dd MMM yyyy")</small></div>
+                                            @request.PlannedDate.Value.ToString("dd MMM yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
                                         }
                                     </td>
-                                    <td>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
                                         @if (request.ActualCost.HasValue)
                                         {
                                             <span class="text-success">£@request.ActualCost.Value.ToString("N0")</span>
@@ -247,217 +303,75 @@
                                             <span class="text-muted">-</span>
                                         }
                                     </td>
-                                            <td>
-                                                @if (request.TrainingCompleted == true)
-                                                {
-                                                    <span class="badge badge-light">Yes</span>
-                                                }
-                                                else if (request.TrainingCompleted == false)
-                                                {
-                                                    <span class="badge badge-light">No</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                    <td>
-                                        <div class="dropdown">
-                                            <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionsDropdown@(request.Id)" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                                Actions
-                                            </button>
-                                            <div class="dropdown-menu" aria-labelledby="actionsDropdown@(request.Id)">
-                                                @if (request.Status == "Approved")
-                                                {
-                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#transferModal@(request.Id)">Transfer request</a>
-                                                }
-                                                <a class="dropdown-item" asp-action="UpdateRequestDetails" asp-route-id="@request.Id">Manage</a>
-                                                @if (request.Status == "Submitted")
-                                                {
-                                                    <div class="dropdown-divider"></div>
-                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#approveModal@(request.Id)">Approve</a>
-                                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#rejectModal@(request.Id)">Reject</a>
-                                                }
-                                                <div class="dropdown-divider"></div>
-                                                <a class="dropdown-item" href="#" data-toggle="modal" data-target="#detailsModal@(request.Id)">View details</a>
-                                            </div>
-                                        </div>
+                                    <td onclick="window.location.href='@Url.Action("UpdateRequestDetails", new { id = request.Id })'" style="cursor: pointer;">
+                                        @if (request.TrainingCompleted == true)
+                                        {
+                                            <span class="badge badge-success">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">No</span>
+                                        }
                                     </td>
                                 </tr>
 
                                 <!-- Approve Modal -->
-                                <div class="modal fade" id="approveModal@(request.Id)" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog" role="document">
-                                        <div class="modal-content">
-                                            <form asp-action="ApproveRequest" method="post">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="id" value="@request.Id" />
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">Approve training request</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <p>Approve training request for <strong>@(request.User?.Name ?? "Unknown")</strong>?</p>
-                                                    <div class="form-group">
-                                                        <label for="comments@(request.Id)">Comments (optional)</label>
-                                                        <textarea id="comments@(request.Id)" name="comments" class="form-control" rows="3"></textarea>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-success">Approve</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Reject Modal -->
-                                <div class="modal fade" id="rejectModal@(request.Id)" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog" role="document">
-                                        <div class="modal-content">
-                                            <form asp-action="RejectRequest" method="post">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="id" value="@request.Id" />
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">Reject training request</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <p>Reject training request for <strong>@(request.User?.Name ?? "Unknown")</strong>?</p>
-                                                    <div class="form-group">
-                                                        <label for="rejectComments@(request.Id)">Reason for rejection</label>
-                                                        <textarea id="rejectComments@(request.Id)" name="comments" class="form-control" rows="3" required></textarea>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-danger">Reject</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Details Modal -->
-                                <div class="modal fade" id="detailsModal@(request.Id)" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog modal-lg" role="document">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Request details</h5>
-                                                <button type="button" class="close" data-dismiss="modal">
-                                                    <span>&times;</span>
-                                                </button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <dl class="row">
-                                                    <dt class="col-sm-3">User:</dt>
-                                                    <dd class="col-sm-9">@(request.User?.Name ?? "Unknown") (@(request.User?.Email ?? "N/A"))</dd>
-                                                    <dt class="col-sm-3">Course:</dt>
-                                                    <dd class="col-sm-9">@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</dd>
-                                                    <dt class="col-sm-3">Status:</dt>
-                                                    <dd class="col-sm-9">@request.Status</dd>
-                                                    <dt class="col-sm-3">Requested:</dt>
-                                                    <dd class="col-sm-9">@request.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-                                                    <dt class="col-sm-3">Justification:</dt>
-                                                    <dd class="col-sm-9">@(request.Justification ?? "N/A")</dd>
-                                                    @if (!string.IsNullOrEmpty(request.ProfessionAlignment))
-                                                    {
-                                                        <dt class="col-sm-3">Profession alignment:</dt>
-                                                        <dd class="col-sm-9">@request.ProfessionAlignment</dd>
-                                                    }
-                                                    @if (!string.IsNullOrEmpty(request.ApproverComments))
-                                                    {
-                                                        <dt class="col-sm-3">Approver comments:</dt>
-                                                        <dd class="col-sm-9">@request.ApproverComments</dd>
-                                                    }
-                                                    @if (request.Course != null && request.Course.Cost.HasValue)
-                                                    {
-                                                        <dt class="col-sm-3">Potential cost:</dt>
-                                                        <dd class="col-sm-9">£@request.Course.Cost.Value.ToString("N0")</dd>
-                                                    }
-                                                    @if (request.ActualCost.HasValue)
-                                                    {
-                                                        <dt class="col-sm-3">Actual cost:</dt>
-                                                        <dd class="col-sm-9">£@request.ActualCost.Value.ToString("N0")</dd>
-                                                    }
-                                                    @if (request.PlannedDate.HasValue)
-                                                    {
-                                                        <dt class="col-sm-3">Planned date:</dt>
-                                                        <dd class="col-sm-9">@request.PlannedDate.Value.ToString("dd MMM yyyy")</dd>
-                                                    }
-                                                    @if (request.TrainingCompleted.HasValue)
-                                                    {
-                                                        <dt class="col-sm-3">Training completed:</dt>
-                                                        <dd class="col-sm-9">
-                                                            @if (request.TrainingCompleted.Value)
-                                                            {
-                                                                <span class="badge badge-light">Yes</span>
-                                                                @if (request.CompletedDate.HasValue)
-                                                                {
-                                                                    <span class="ml-2">(@request.CompletedDate.Value.ToString("dd MMM yyyy"))</span>
-                                                                }
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="badge badge-light">No</span>
-                                                            }
-                                                        </dd>
-                                                    }
-                                                </dl>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Transfer Modal -->
-                                @if (request.Status == "Approved")
+                                @if (request.Status == "Submitted")
                                 {
-                                    <div class="modal fade" id="transferModal@(request.Id)" tabindex="-1" role="dialog">
-                                        <div class="modal-dialog modal-lg" role="document">
+                                    <div class="modal fade" id="approveModal@(request.Id)" tabindex="-1" role="dialog">
+                                        <div class="modal-dialog" role="document">
                                             <div class="modal-content">
-                                                <form asp-action="TransferRequest" method="post" id="transferForm@(request.Id)">
+                                                <form asp-action="ApproveRequest" method="post">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="id" value="@request.Id" />
                                                     <div class="modal-header">
-                                                        <h5 class="modal-title">Transfer training request</h5>
+                                                        <h5 class="modal-title">Approve training request</h5>
                                                         <button type="button" class="close" data-dismiss="modal">
                                                             <span>&times;</span>
                                                         </button>
                                                     </div>
                                                     <div class="modal-body">
-                                                        <p>Transfer training request for <strong>@(request.User?.Name ?? "Unknown")</strong> to another user.</p>
+                                                        <p>Approve training request for <strong>@(request.User?.Name ?? "Unknown")</strong>?</p>
                                                         <div class="form-group">
-                                                            <label class="control-label" for="transferSearch@(request.Id)">Search for a colleague</label>
-                                                            <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
-                                                            <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
-                                                                <div class="position-relative">
-                                                                    <input type="text"
-                                                                           class="form-control js-user-picker-input"
-                                                                           id="transferSearch@(request.Id)"
-                                                                           autocomplete="off"
-                                                                           placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
-                                                                    <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
-                                                                    <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
-                                                                </div>
-                                                                <p class="form-text text-muted js-user-picker-message"></p>
-                                                                <input type="hidden" id="transferToUserId@(request.Id)" name="transferToUserId" class="js-user-picker-value" />
-                                                                <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
-                                                                    <span class="text-muted">No user selected.</span>
-                                                                </div>
-                                                            </div>
+                                                            <label for="comments@(request.Id)">Comments (optional)</label>
+                                                            <textarea id="comments@(request.Id)" name="comments" class="form-control" rows="3"></textarea>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
                                                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                                                        <button type="submit" class="btn btn-success">Transfer</button>
+                                                        <button type="submit" class="btn btn-success">Approve</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Reject Modal -->
+                                @if (request.Status == "Submitted")
+                                {
+                                    <div class="modal fade" id="rejectModal@(request.Id)" tabindex="-1" role="dialog">
+                                        <div class="modal-dialog" role="document">
+                                            <div class="modal-content">
+                                                <form asp-action="RejectRequest" method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@request.Id" />
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Reject training request</h5>
+                                                        <button type="button" class="close" data-dismiss="modal">
+                                                            <span>&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Reject training request for <strong>@(request.User?.Name ?? "Unknown")</strong>?</p>
+                                                        <div class="form-group">
+                                                            <label for="rejectComments@(request.Id)">Reason for rejection</label>
+                                                            <textarea id="rejectComments@(request.Id)" name="comments" class="form-control" rows="3" required></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn btn-danger">Reject</button>
                                                     </div>
                                                 </form>
                                             </div>
@@ -482,6 +396,5 @@
 </section>
 
 @section Scripts {
-    <script src="~/js/user-picker.js" asp-append-version="true"></script>
 }
 

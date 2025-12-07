@@ -11,6 +11,9 @@ using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Compass.Services;
+using CsvHelper;
+using CsvHelper.Configuration;
+using System.Text;
 
 namespace Compass.Controllers
 {
@@ -21,6 +24,7 @@ namespace Compass.Controllers
         private readonly ILogger<DemandManagementController> _logger;
         private readonly IConfiguration _configuration;
         private readonly IPermissionService _permissionService;
+        private readonly IGraphService _graphService;
 
         private static readonly IReadOnlyDictionary<string, int> RiskLevelPriority = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
@@ -33,12 +37,14 @@ namespace Compass.Controllers
             CompassDbContext context, 
             ILogger<DemandManagementController> logger,
             IConfiguration configuration,
-            IPermissionService permissionService)
+            IPermissionService permissionService,
+            IGraphService graphService)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
             _permissionService = permissionService;
+            _graphService = graphService;
         }
 
         // Check if Demand Management is enabled
@@ -156,6 +162,12 @@ namespace Compass.Controllers
                 return NotFound("Demand Management is not enabled.");
             }
 
+            // Default to "mine" if no view parameter is provided - redirect to include it in URL
+            if (string.IsNullOrWhiteSpace(view))
+            {
+                return RedirectToAction("Requests", new { view = "mine", status, portfolio, search });
+            }
+
             var userEmail = User.Identity?.Name ?? string.Empty;
 
             var baseQuery = _context.DemandRequests.AsNoTracking();
@@ -198,19 +210,10 @@ namespace Compass.Controllers
                 }
             }
             
-            // Apply view filter - default to "mine" if no view specified and user can't view all
+            // Apply view filter
             if (!string.IsNullOrWhiteSpace(userEmail))
             {
-                if (string.IsNullOrWhiteSpace(view))
-                {
-                    // Default to "mine" if user doesn't have permission to view all
-                    if (!canViewAllRequests)
-                    {
-                        filteredByView = filteredByView.Where(dr => dr.ApplicantEmail == userEmail);
-                    }
-                    // If user can view all and no view specified, show all (no filter)
-                }
-                else if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
                 {
                     filteredByView = filteredByView.Where(dr => dr.ApplicantEmail == userEmail);
                 }
@@ -218,6 +221,7 @@ namespace Compass.Controllers
                 {
                     filteredByView = filteredByView.Where(dr => dr.AssignedToEmail == userEmail);
                 }
+                // If view is "all" or anything else, show all requests (no filter)
             }
             else
             {
@@ -303,7 +307,7 @@ namespace Compass.Controllers
 
             await CheckAndSetCentralOpsAdminAsync();
 
-            return View(requests);
+            return View("Requests", requests);
         }
 
         public async Task<IActionResult> Triage(int? meetingId, string? month)
@@ -343,6 +347,7 @@ namespace Compass.Controllers
                     EndAt = meeting.EndAt,
                     Location = meeting.Location,
                     Description = meeting.Description,
+                    ChairName = meeting.ChairName,
                     IsActive = meeting.IsActive,
                     IsUpcoming = meeting.StartAt >= DateTime.UtcNow,
                     TotalRequests = requests.Count,
@@ -719,6 +724,8 @@ namespace Compass.Controllers
         {
             return NotFound("Demand Management is not enabled.");
         }
+
+        await CheckAndSetCentralOpsAdminAsync();
 
         var userEmail = User.Identity?.Name ?? string.Empty;
         var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? User.FindFirst("name")?.Value ?? string.Empty;
@@ -2760,6 +2767,78 @@ namespace Compass.Controllers
         // PRIORITISATION SECTION
         // ==========================================
 
+        // GET: DemandManagement/Prioritisation
+        public async Task<IActionResult> Prioritisation(string? portfolio, string? search, string? view)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Default to "mine" if no view parameter is provided
+            if (string.IsNullOrWhiteSpace(view))
+            {
+                view = "mine";
+            }
+
+            var userEmail = User.Identity?.Name ?? string.Empty;
+
+            var baseQuery = _context.DemandRequests.AsNoTracking()
+                .Where(dr => dr.Status == "Explore" || dr.Status == "Prioritisation");
+
+            var filteredByView = baseQuery;
+            
+            // Apply view filter
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
+                {
+                    filteredByView = filteredByView.Where(dr => dr.ApplicantEmail == userEmail);
+                }
+                else if (string.Equals(view, "assigned", StringComparison.OrdinalIgnoreCase))
+                {
+                    filteredByView = filteredByView.Where(dr => dr.AssignedToEmail == userEmail);
+                }
+                // If view is "all", show all requests (no filter)
+            }
+            else
+            {
+                filteredByView = baseQuery.Where(dr => false);
+            }
+
+            var filteredByPortfolio = filteredByView;
+            if (!string.IsNullOrWhiteSpace(portfolio))
+            {
+                filteredByPortfolio = filteredByPortfolio.Where(dr => dr.PortfolioName == portfolio);
+            }
+
+            var filteredBySearch = filteredByPortfolio;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                filteredBySearch = filteredBySearch.Where(dr => dr.ProposedTitle.Contains(search) || dr.ReferenceNumber.Contains(search));
+            }
+
+            var requests = await filteredBySearch
+                .Include(dr => dr.Prioritisation)
+                .OrderByDescending(dr => dr.SubmittedAt ?? dr.CreatedAt)
+                .ToListAsync();
+
+            ViewBag.Portfolios = await baseQuery
+                .Where(dr => !string.IsNullOrEmpty(dr.PortfolioName))
+                .Select(dr => dr.PortfolioName!)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToListAsync();
+
+            ViewBag.CurrentPortfolio = portfolio;
+            ViewBag.CurrentSearch = search;
+            ViewBag.CurrentView = view;
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            return View(requests);
+        }
+
         // GET: DemandManagement/ScoreRequest/5
         public async Task<IActionResult> ScoreRequest(int? id)
         {
@@ -2951,6 +3030,8 @@ namespace Compass.Controllers
             {
                 return NotFound("Demand Management is not enabled.");
             }
+
+            await CheckAndSetCentralOpsAdminAsync();
 
             // Get summary statistics
             var allRequests = await _context.DemandRequests
@@ -3239,6 +3320,482 @@ namespace Compass.Controllers
             target.TotalPriorityScore = source.TotalPriorityScore;
             target.PriorityTier = string.IsNullOrWhiteSpace(source.PriorityTier) ? target.PriorityTier : source.PriorityTier;
             target.ScoringNotes = source.ScoringNotes;
+        }
+
+        // CSV Import Actions
+        [HttpGet]
+        [Route("api/DemandManagement/ImportCsv")]
+        public IActionResult ImportCsv()
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Route("api/DemandManagement/UploadCsv")]
+        public async Task<IActionResult> UploadCsv(IFormFile csvFile)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (csvFile == null || csvFile.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a CSV file to upload.";
+                return RedirectToAction(nameof(ImportCsv));
+            }
+
+            if (!csvFile.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["ErrorMessage"] = "Please upload a CSV file.";
+                return RedirectToAction(nameof(ImportCsv));
+            }
+
+            try
+            {
+                // Save file temporarily
+                var tempDir = Path.Combine(Path.GetTempPath(), "compass_csv_imports");
+                Directory.CreateDirectory(tempDir);
+                var tempFileName = $"{Guid.NewGuid()}.csv";
+                var tempFilePath = Path.Combine(tempDir, tempFileName);
+
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await csvFile.CopyToAsync(stream);
+                }
+
+                // Read CSV headers and sample rows
+                var csvColumns = new List<string>();
+                var sampleRows = new List<Dictionary<string, string>>();
+
+                // Read file to check for metadata line
+                var allLines = await System.IO.File.ReadAllLinesAsync(tempFilePath, Encoding.UTF8);
+                var startIndex = 0;
+                
+                // Skip metadata line if present
+                if (allLines.Length > 0 && allLines[0].TrimStart().StartsWith("ListSchema", StringComparison.OrdinalIgnoreCase))
+                {
+                    startIndex = 1;
+                }
+
+                // Create a temporary file without metadata line for CsvHelper
+                var tempFileForCsv = Path.Combine(Path.GetTempPath(), "compass_csv_imports", $"{Guid.NewGuid()}_clean.csv");
+                Directory.CreateDirectory(Path.GetDirectoryName(tempFileForCsv)!);
+                await System.IO.File.WriteAllLinesAsync(tempFileForCsv, allLines.Skip(startIndex), Encoding.UTF8);
+
+                try
+                {
+                    using (var reader = new StreamReader(tempFileForCsv, Encoding.UTF8))
+                    using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                    {
+                        HasHeaderRecord = true,
+                        TrimOptions = TrimOptions.Trim,
+                        BadDataFound = null // Ignore bad data for now
+                    }))
+                    {
+                        // Read headers
+                        if (await csv.ReadAsync())
+                        {
+                            csv.ReadHeader();
+                            csvColumns = csv.HeaderRecord?.Where(h => !string.IsNullOrWhiteSpace(h)).ToList() ?? new List<string>();
+                        }
+
+                        // Read first 3 rows as samples
+                        int sampleCount = 0;
+                        while (await csv.ReadAsync() && sampleCount < 3)
+                        {
+                            var row = new Dictionary<string, string>();
+                            foreach (var column in csvColumns)
+                            {
+                                try
+                                {
+                                    row[column] = csv.GetField(column) ?? string.Empty;
+                                }
+                                catch
+                                {
+                                    row[column] = string.Empty;
+                                }
+                            }
+                            sampleRows.Add(row);
+                            sampleCount++;
+                        }
+                    }
+                }
+                finally
+                {
+                    // Clean up temp file
+                    try
+                    {
+                        if (System.IO.File.Exists(tempFileForCsv))
+                        {
+                            System.IO.File.Delete(tempFileForCsv);
+                        }
+                    }
+                    catch { }
+                }
+
+                // Store temp file path in session
+                HttpContext.Session.SetString("CsvImport_TempFile", tempFilePath);
+
+                var viewModel = new CsvImportViewModel
+                {
+                    CsvColumns = csvColumns,
+                    SampleRows = sampleRows,
+                    TempFilePath = tempFilePath,
+                    FieldMappings = GetDefaultMappings(csvColumns)
+                };
+
+                ViewBag.DatabaseFields = GetDatabaseFields();
+                return View("MapCsvFields", viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading CSV file");
+                TempData["ErrorMessage"] = $"Error reading CSV file: {ex.Message}";
+                return RedirectToAction(nameof(ImportCsv));
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Route("api/DemandManagement/ProcessCsvImport")]
+        public async Task<IActionResult> ProcessCsvImport(Dictionary<string, string> FieldMappings)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var tempFilePath = HttpContext.Session.GetString("CsvImport_TempFile");
+            if (string.IsNullOrEmpty(tempFilePath) || !System.IO.File.Exists(tempFilePath))
+            {
+                TempData["ErrorMessage"] = "CSV file not found. Please upload again.";
+                return RedirectToAction(nameof(ImportCsv));
+            }
+
+            var result = new CsvImportResultViewModel();
+            var mappings = FieldMappings ?? new Dictionary<string, string>();
+
+            try
+            {
+                // Read file to check for metadata line
+                var allLines = await System.IO.File.ReadAllLinesAsync(tempFilePath, Encoding.UTF8);
+                var startIndex = 0;
+                
+                // Skip metadata line if present
+                if (allLines.Length > 0 && allLines[0].TrimStart().StartsWith("ListSchema", StringComparison.OrdinalIgnoreCase))
+                {
+                    startIndex = 1;
+                }
+
+                // Create a temporary file without metadata line for CsvHelper
+                var tempFileForCsv = Path.Combine(Path.GetTempPath(), "compass_csv_imports", $"{Guid.NewGuid()}_clean.csv");
+                Directory.CreateDirectory(Path.GetDirectoryName(tempFileForCsv)!);
+                await System.IO.File.WriteAllLinesAsync(tempFileForCsv, allLines.Skip(startIndex), Encoding.UTF8);
+
+                try
+                {
+                    using (var reader = new StreamReader(tempFileForCsv, Encoding.UTF8))
+                    using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                    {
+                        HasHeaderRecord = true,
+                        TrimOptions = TrimOptions.Trim,
+                        BadDataFound = null
+                    }))
+                    {
+                        await csv.ReadAsync();
+                        csv.ReadHeader();
+
+                        int rowNumber = 1; // Header is row 0, first data row is 1
+                        while (await csv.ReadAsync())
+                        {
+                            rowNumber++;
+                            result.TotalRows++;
+
+                            try
+                            {
+                                var request = await CreateDemandRequestFromCsvRow(csv, mappings, _graphService);
+                                
+                                _context.DemandRequests.Add(request);
+                                await _context.SaveChangesAsync();
+
+                                result.SuccessfulImports++;
+                                result.CreatedRequestIds.Add(request.Id);
+                            }
+                            catch (Exception ex)
+                            {
+                                result.FailedImports++;
+                                string demandId = "Unknown";
+                                try
+                                {
+                                    demandId = csv.GetField("Demand ID") ?? csv.GetField("DemandID") ?? "Unknown";
+                                }
+                                catch { }
+                                
+                                result.Errors.Add(new ImportError
+                                {
+                                    RowNumber = rowNumber,
+                                    DemandId = demandId,
+                                    ErrorMessage = ex.Message
+                                });
+                                _logger.LogError(ex, "Error importing row {RowNumber} (Demand ID: {DemandId})", rowNumber, demandId);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    // Clean up temp file
+                    try
+                    {
+                        if (System.IO.File.Exists(tempFileForCsv))
+                        {
+                            System.IO.File.Delete(tempFileForCsv);
+                        }
+                    }
+                    catch { }
+                }
+
+                // Clean up original temp file
+                try
+                {
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+                catch { }
+
+                HttpContext.Session.Remove("CsvImport_TempFile");
+
+                ViewBag.Result = result;
+                return View("ImportResult", result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing CSV import");
+                TempData["ErrorMessage"] = $"Error processing CSV import: {ex.Message}";
+                return RedirectToAction(nameof(ImportCsv));
+            }
+        }
+
+        private async Task<DemandRequest> CreateDemandRequestFromCsvRow(CsvReader csv, Dictionary<string, string> mappings, IGraphService graphService)
+        {
+            var request = new DemandRequest
+            {
+                ReferenceNumber = GenerateReferenceNumber(),
+                Status = "Draft",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            // Helper to get mapped value
+            string? GetMappedValue(string dbField)
+            {
+                var csvColumn = mappings.FirstOrDefault(m => m.Value == dbField).Key;
+                if (string.IsNullOrEmpty(csvColumn)) return null;
+                return csv.GetField(csvColumn)?.Trim();
+            }
+
+            // Map fields
+            var applicantName = GetMappedValue("ApplicantName");
+            if (!string.IsNullOrEmpty(applicantName))
+            {
+                request.ApplicantName = applicantName;
+                
+                // Try to find email via Entra ID search
+                var staffResults = await graphService.SearchStaffAsync(applicantName, 5);
+                var matchedStaff = staffResults.FirstOrDefault(s => 
+                    s.DisplayName.Equals(applicantName, StringComparison.OrdinalIgnoreCase) ||
+                    s.DisplayName.Contains(applicantName, StringComparison.OrdinalIgnoreCase));
+                
+                if (matchedStaff != null && !string.IsNullOrEmpty(matchedStaff.Email))
+                {
+                    request.ApplicantEmail = matchedStaff.Email;
+                }
+                else
+                {
+                    // Fallback: try to extract email from contact field
+                    var contactField = GetMappedValue("ContactInfo");
+                    if (!string.IsNullOrEmpty(contactField))
+                    {
+                        var emailMatch = System.Text.RegularExpressions.Regex.Match(contactField, @"[\w\.-]+@[\w\.-]+\.\w+");
+                        if (emailMatch.Success)
+                        {
+                            request.ApplicantEmail = emailMatch.Value;
+                        }
+                    }
+                    
+                    if (string.IsNullOrEmpty(request.ApplicantEmail))
+                    {
+                        request.ApplicantEmail = $"{applicantName.Replace(" ", ".").ToLower()}@education.gov.uk"; // Fallback
+                    }
+                }
+            }
+
+            request.BusinessArea = GetMappedValue("BusinessArea") ?? string.Empty;
+            request.SeniorResponsibleOfficer = GetMappedValue("SeniorResponsibleOfficer") ?? string.Empty;
+            request.ProposedTitle = GetMappedValue("ProposedTitle") ?? string.Empty;
+            request.OverviewAndBusinessNeed = GetMappedValue("OverviewAndBusinessNeed") ?? string.Empty;
+            request.PreviousResearchOrInsight = GetMappedValue("PreviousResearchOrInsight");
+            request.ExpectedBenefits = GetMappedValue("ExpectedBenefits") ?? string.Empty;
+            request.RiskIfNotDelivered = GetMappedValue("RiskIfNotDelivered") ?? string.Empty;
+
+            // Boolean fields
+            var hasPortfolio = GetMappedValue("HasPortfolioSupport");
+            if (!string.IsNullOrEmpty(hasPortfolio))
+            {
+                request.HasPortfolioSupport = hasPortfolio.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+            }
+
+            request.PortfolioName = GetMappedValue("PortfolioName");
+            request.PortfolioPrioritisation = GetMappedValue("PortfolioPrioritisation");
+
+            // Strategic alignment
+            request.IsManifestoOrStatutory = GetMappedValue("IsManifestoOrStatutory") ?? string.Empty;
+            var opportunityPillars = GetMappedValue("OpportunityMissionPillars");
+            if (!string.IsNullOrEmpty(opportunityPillars))
+            {
+                request.SupportsOpportunityMissionPillar = true;
+                request.OpportunityMissionPillars = opportunityPillars;
+            }
+
+            var ddtThemes = GetMappedValue("DdatStrategicThemes");
+            if (!string.IsNullOrEmpty(ddtThemes))
+            {
+                request.SupportsDdatStrategicTheme = true;
+                request.DdatStrategicThemes = ddtThemes;
+            }
+
+            // Funding
+            var hasFunding = GetMappedValue("HasFunding");
+            if (!string.IsNullOrEmpty(hasFunding))
+            {
+                request.HasFunding = hasFunding.Equals("Yes", StringComparison.OrdinalIgnoreCase) || 
+                                   hasFunding.Contains("Confirmed", StringComparison.OrdinalIgnoreCase);
+            }
+
+            request.FundingSource = GetMappedValue("FundingSource");
+            request.FundingNotes = GetMappedValue("FundingNotes");
+
+            // Headcount
+            var hasHeadcount = GetMappedValue("HasHeadcount");
+            if (!string.IsNullOrEmpty(hasHeadcount))
+            {
+                request.HasHeadcount = hasHeadcount.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+            }
+
+            request.RolesProvided = GetMappedValue("RolesProvided");
+            request.HeadcountNotes = GetMappedValue("HeadcountNotes");
+
+            // Delivery date
+            var hasTargetDate = GetMappedValue("HasTargetDeliveryDate");
+            if (!string.IsNullOrEmpty(hasTargetDate))
+            {
+                request.HasTargetDeliveryDate = hasTargetDate.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+            }
+
+            var targetDateStr = GetMappedValue("TargetDeliveryDate");
+            if (!string.IsNullOrEmpty(targetDateStr) && DateTime.TryParse(targetDateStr, out var targetDate))
+            {
+                request.TargetDeliveryDate = targetDate;
+            }
+
+            // Digital service
+            request.WillCreateOrChangeDigitalService = GetMappedValue("WillCreateOrChangeDigitalService") ?? string.Empty;
+            request.DigitalServiceDetails = GetMappedValue("DigitalServiceDetails");
+
+            // Calculate risk level
+            RefreshPredictedRiskLevel(request);
+
+            return request;
+        }
+
+        private Dictionary<string, string> GetDefaultMappings(List<string> csvColumns)
+        {
+            var mappings = new Dictionary<string, string>();
+            
+            // Common mappings based on CSV column names
+            var columnMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Demand ID"] = "DemandId",
+                ["What is your department group?"] = "BusinessArea",
+                ["1. Please provide your full name"] = "ApplicantName",
+                ["3. Is there a DDT portfolio supporting this request?"] = "HasPortfolioSupport",
+                ["3a. Use drop down to indicate which portfolio is supporting"] = "PortfolioName",
+                ["4. Has this new request been through the relevant DDT portfolio prioritisation process?"] = "PortfolioPrioritisation",
+                ["5. Who is the point of contact and their email address for this request?"] = "ContactInfo",
+                ["Provide the name of the Senior Responsible Officer (G6+) authorising this request"] = "SeniorResponsibleOfficer",
+                ["Proposed project/request title"] = "ProposedTitle",
+                ["Provide an overview of your request and why it is necessary to access DDT for it. (business need/problem statement)"] = "OverviewAndBusinessNeed",
+                ["Any insight / research carried out previously?"] = "PreviousResearchOrInsight",
+                ["Is this project essential to enable DfE to deliver a manifesto commitment or statute law?"] = "IsManifestoOrStatutory",
+                ["Does this support one of the Secretary of State Opportunity Mission Pillars?"] = "OpportunityMissionPillars",
+                ["Does this support one of the DDT Strategic Framework themes? "] = "DdatStrategicThemes",
+                ["What measurable benefits and successes do you expect from this change?"] = "ExpectedBenefits",
+                ["What is the risk to the department or consequence in not delivering this project?"] = "RiskIfNotDelivered",
+                ["16.\tDoes the request have confirmation of funding? Or are you bidding for funding? If so, how much funding has been secured?"] = "HasFunding",
+                ["Source and type of funding (if applicable) "] = "FundingSource",
+                ["Is there a target delivery date for this work?"] = "HasTargetDeliveryDate",
+                ["What is the target delivery date?"] = "TargetDeliveryDate",
+                ["17.\tDoes your request come with funding and headcount to support delivery?"] = "HasHeadcount",
+                ["Please explain the headcount that will support this delivery. "] = "HeadcountNotes"
+            };
+
+            foreach (var column in csvColumns)
+            {
+                if (columnMap.ContainsKey(column))
+                {
+                    mappings[column] = columnMap[column];
+                }
+            }
+
+            return mappings;
+        }
+
+        private List<string> GetDatabaseFields()
+        {
+            return new List<string>
+            {
+                "ApplicantName",
+                "ApplicantEmail",
+                "BusinessArea",
+                "SeniorResponsibleOfficer",
+                "HasPortfolioSupport",
+                "PortfolioName",
+                "PortfolioPrioritisation",
+                "ProposedTitle",
+                "OverviewAndBusinessNeed",
+                "PreviousResearchOrInsight",
+                "WillCreateOrChangeDigitalService",
+                "DigitalServiceDetails",
+                "IsManifestoOrStatutory",
+                "ManifestoStatutoryDetails",
+                "SupportsOpportunityMissionPillar",
+                "OpportunityMissionPillars",
+                "SupportsDdatStrategicTheme",
+                "DdatStrategicThemes",
+                "ExpectedBenefits",
+                "RiskIfNotDelivered",
+                "HasFunding",
+                "FundingAmount",
+                "FundingSource",
+                "FundingNotes",
+                "HasHeadcount",
+                "NumberOfFTE",
+                "RolesProvided",
+                "HeadcountNotes",
+                "HasTargetDeliveryDate",
+                "TargetDeliveryDate",
+                "DeliveryTimescales",
+                "ContactInfo"
+            };
         }
     }
 }

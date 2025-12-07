@@ -2387,23 +2387,23 @@ public class CentralOpsController : Controller
     {
         try
         {
-            // Determine the week to display
+            // Determine the week to display - Thursday to Wednesday (report is read on Thursday)
             DateTime weekStart;
             if (year.HasValue && week.HasValue)
             {
-                // Calculate the date from year and week number using ISO 8601 week calculation
+                // Calculate the date from year and week number - find first Thursday of the year
                 var jan1 = new DateTime(year.Value, 1, 1);
-                var daysOffset = DayOfWeek.Monday - jan1.DayOfWeek;
-                if (daysOffset > 0) daysOffset -= 7; // Adjust if Jan 1 is after Monday
-                var firstMonday = jan1.AddDays(daysOffset);
-                weekStart = firstMonday.AddDays((week.Value - 1) * 7);
+                var daysOffset = DayOfWeek.Thursday - jan1.DayOfWeek;
+                if (daysOffset < 0) daysOffset += 7; // Adjust if Jan 1 is after Thursday
+                var firstThursday = jan1.AddDays(daysOffset);
+                weekStart = firstThursday.AddDays((week.Value - 1) * 7);
             }
             else
             {
-                // Default to current week - calculate Monday of current week
+                // Default to current week - calculate Thursday of current week
                 var today = DateTime.UtcNow.Date;
-                var daysSinceMonday = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-                weekStart = today.AddDays(-daysSinceMonday);
+                var daysSinceThursday = ((int)today.DayOfWeek - (int)DayOfWeek.Thursday + 7) % 7;
+                weekStart = today.AddDays(-daysSinceThursday);
             }
 
             weekStart = weekStart.Date;
@@ -2550,7 +2550,37 @@ public class CentralOpsController : Controller
                 .OrderBy(m => m.DueDate)
                 .ToListAsync();
 
-            // Check for previous week
+            // Get risks created or updated within this week (Thursday to Wednesday)
+            var risks = await _context.Risks
+                .Include(r => r.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(r => !r.IsDeleted && 
+                           r.ProjectId != null && 
+                           (r.CreatedAt >= weekStart && r.CreatedAt <= weekEnd ||
+                            r.UpdatedAt >= weekStart && r.UpdatedAt <= weekEnd))
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+
+            // Get issues created or updated within this week (Thursday to Wednesday)
+            var issues = await _context.Issues
+                .Include(i => i.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(i => !i.IsDeleted && 
+                           i.ProjectId != null && 
+                           (i.CreatedAt >= weekStart && i.CreatedAt <= weekEnd ||
+                            i.UpdatedAt >= weekStart && i.UpdatedAt <= weekEnd))
+                .OrderByDescending(i => i.CreatedAt)
+                .ToListAsync();
+
+            // Get project status updates created within this week (Thursday to Wednesday)
+            var updates = await _context.ProjectStatusUpdates
+                .Include(u => u.Project)
+                    .ThenInclude(p => p.BusinessAreaLookup)
+                .Where(u => u.CreatedAt >= weekStart && u.CreatedAt <= weekEnd)
+                .OrderByDescending(u => u.CreatedAt)
+                .ToListAsync();
+
+            // Check for previous week (Thursday to Wednesday)
             var previousWeekStart = weekStart.AddDays(-7);
             var previousWeekEnd = previousWeekStart.AddDays(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
             var hasPreviousWeek = await _context.ProjectSuccesses
@@ -2564,12 +2594,22 @@ public class CentralOpsController : Controller
                 await _context.Milestones
                     .AnyAsync(m => !m.IsDeleted && 
                                   m.DueDate >= previousWeekStart && 
-                                  m.DueDate <= previousWeekEnd);
+                                  m.DueDate <= previousWeekEnd) ||
+                await _context.Risks
+                    .AnyAsync(r => !r.IsDeleted && r.ProjectId != null &&
+                                  (r.CreatedAt >= previousWeekStart && r.CreatedAt <= previousWeekEnd ||
+                                   r.UpdatedAt >= previousWeekStart && r.UpdatedAt <= previousWeekEnd)) ||
+                await _context.Issues
+                    .AnyAsync(i => !i.IsDeleted && i.ProjectId != null &&
+                                  (i.CreatedAt >= previousWeekStart && i.CreatedAt <= previousWeekEnd ||
+                                   i.UpdatedAt >= previousWeekStart && i.UpdatedAt <= previousWeekEnd)) ||
+                await _context.ProjectStatusUpdates
+                    .AnyAsync(u => u.CreatedAt >= previousWeekStart && u.CreatedAt <= previousWeekEnd);
 
             var prevWeekNumber = calendar.GetWeekOfYear(previousWeekStart, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
             var prevYear = previousWeekStart.Year;
 
-            // Check for next week
+            // Check for next week (Thursday to Wednesday)
             var nextWeekStart = weekStart.AddDays(7);
             var nextWeekEnd = nextWeekStart.AddDays(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
             var hasNextWeek = await _context.ProjectSuccesses
@@ -2583,7 +2623,17 @@ public class CentralOpsController : Controller
                 await _context.Milestones
                     .AnyAsync(m => !m.IsDeleted && 
                                   m.DueDate >= nextWeekStart && 
-                                  m.DueDate <= nextWeekEnd);
+                                  m.DueDate <= nextWeekEnd) ||
+                await _context.Risks
+                    .AnyAsync(r => !r.IsDeleted && r.ProjectId != null &&
+                                  (r.CreatedAt >= nextWeekStart && r.CreatedAt <= nextWeekEnd ||
+                                   r.UpdatedAt >= nextWeekStart && r.UpdatedAt <= nextWeekEnd)) ||
+                await _context.Issues
+                    .AnyAsync(i => !i.IsDeleted && i.ProjectId != null &&
+                                  (i.CreatedAt >= nextWeekStart && i.CreatedAt <= nextWeekEnd ||
+                                   i.UpdatedAt >= nextWeekStart && i.UpdatedAt <= nextWeekEnd)) ||
+                await _context.ProjectStatusUpdates
+                    .AnyAsync(u => u.CreatedAt >= nextWeekStart && u.CreatedAt <= nextWeekEnd);
 
             var nextWeekNumber = calendar.GetWeekOfYear(nextWeekStart, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
             var nextYear = nextWeekStart.Year;
@@ -2596,6 +2646,9 @@ public class CentralOpsController : Controller
                 WeekEndDate = weekEnd,
                 Successes = successes,
                 Milestones = milestones,
+                Risks = risks,
+                Issues = issues,
+                Updates = updates,
                 BusinessAreaGroups = businessAreaGroups,
                 HasPreviousWeek = hasPreviousWeek,
                 HasNextWeek = hasNextWeek,

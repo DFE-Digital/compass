@@ -27,6 +27,7 @@ public class TriageMeetingSummaryViewModel
     public DateTime EndAt { get; set; }
     public string? Location { get; set; }
     public string? Description { get; set; }
+    public string? ChairName { get; set; }
     public bool IsActive { get; set; }
     public bool IsUpcoming { get; set; }
     public int TotalRequests { get; set; }

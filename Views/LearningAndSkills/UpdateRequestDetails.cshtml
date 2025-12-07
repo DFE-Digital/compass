@@ -23,7 +23,7 @@
 <div class="dashboard-header">
     <div>
         <h1>Update request details</h1>
-        <p>Record actual cost, planned date, and completion status</p>
+        <p>Manage training request details and actions</p>
     </div>
 </div>
 
@@ -45,150 +45,370 @@
             </div>
         }
 
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Request information</h3>
-            </div>
-            <div class="card-body">
-                <dl class="row mb-4">
-                    <dt class="col-sm-3">User:</dt>
-                    <dd class="col-sm-9">@(Model.User?.Name ?? "Unknown") (@(Model.User?.Email ?? "N/A"))</dd>
-                    <dt class="col-sm-3">Course:</dt>
-                    <dd class="col-sm-9">
-                        @(Model.Course?.Title ?? Model.CustomCourseTitle ?? "Custom course")
-                        @if (Model.Course != null && Model.Course.Cost.HasValue)
-                        {
-                            <span class="text-muted"> - Potential cost: £@Model.Course.Cost.Value.ToString("N0")</span>
-                        }
-                    </dd>
-                    <dt class="col-sm-3">Status:</dt>
-                    <dd class="col-sm-9">
-                        @switch (Model.Status)
-                        {
-                            case "Submitted":
-                                <span class="badge badge-info">Submitted</span>
-                                break;
-                            case "Approved":
-                                <span class="badge badge-success">Approved</span>
-                                break;
-                            case "Rejected":
-                                <span class="badge badge-danger">Rejected</span>
-                                break;
-                            case "On-hold":
-                                <span class="badge badge-warning">On-hold</span>
-                                break;
-                            default:
-                                <span class="badge badge-secondary">@Model.Status</span>
-                                break;
-                        }
-                    </dd>
-                    <dt class="col-sm-3">Requested:</dt>
-                    <dd class="col-sm-9">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
-                    @if (Model.ApprovedAt.HasValue)
-                    {
-                        <dt class="col-sm-3">Approved:</dt>
-                        <dd class="col-sm-9">@Model.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm") by @(Model.ApprovedBy ?? "Unknown")</dd>
-                    }
-                </dl>
-
-                <hr />
-
-                <form asp-action="UpdateRequestDetails" method="post" id="updateForm">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-
-                    <div class="form-group">
-                        <label for="actualCost">Actual cost incurred <span class="text-muted">(optional)</span></label>
-                        <div class="input-group">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text">£</span>
-                            </div>
-                            <input type="number" 
-                                   step="0.01" 
-                                   min="0" 
-                                   class="form-control" 
-                                   id="actualCost" 
-                                   name="actualCost" 
-                                   value="@(Model.ActualCost?.ToString("N0") ?? "")" 
-                                   placeholder="0.00" />
-                        </div>
-                        <small class="form-text text-muted">
-                            Record the actual cost paid (may differ from course cost due to discounts or bulk pricing).
-                            @if (Model.Course != null && Model.Course.Cost.HasValue)
+        <div class="row">
+            <!-- Left Column: Request Information -->
+            <div class="col-xxl-4 col-xl-4 col-lg-5 col-md-12 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Request information</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">User:</dt>
+                            <dd class="col-sm-8">@(Model.User?.Name ?? "Unknown")<br><small class="text-muted">@(Model.User?.Email ?? "N/A")</small></dd>
+                            
+                            <dt class="col-sm-4">Course:</dt>
+                            <dd class="col-sm-8">
+                                <strong>@(Model.Course?.Title ?? Model.CustomCourseTitle ?? "Custom course")</strong>
+                                @if (Model.Course != null && Model.Course.Cost.HasValue)
+                                {
+                                    <br><small class="text-muted">Potential cost: £@Model.Course.Cost.Value.ToString("N0")</small>
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                @switch (Model.Status)
+                                {
+                                    case "Submitted":
+                                        <span class="badge badge-info">Submitted</span>
+                                        break;
+                                    case "Approved":
+                                        <span class="badge badge-success">Approved</span>
+                                        break;
+                                    case "Rejected":
+                                        <span class="badge badge-danger">Rejected</span>
+                                        break;
+                                    case "On-hold":
+                                        <span class="badge badge-warning">On-hold</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-secondary">@Model.Status</span>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-4">Requested:</dt>
+                            <dd class="col-sm-8">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                            
+                            @if (Model.ApprovedAt.HasValue)
                             {
-                                <span>Potential cost: £@Model.Course.Cost.Value.ToString("N0")</span>
+                                <dt class="col-sm-4">Approved:</dt>
+                                <dd class="col-sm-8">@Model.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm")<br><small class="text-muted">by @(Model.ApprovedBy ?? "Unknown")</small></dd>
                             }
-                        </small>
+                            
+                            @if (Model.ActualCost.HasValue)
+                            {
+                                <dt class="col-sm-4">Actual cost:</dt>
+                                <dd class="col-sm-8">£@Model.ActualCost.Value.ToString("N0")</dd>
+                            }
+                            
+                            @if (Model.PlannedDate.HasValue)
+                            {
+                                <dt class="col-sm-4">Planned date:</dt>
+                                <dd class="col-sm-8">@Model.PlannedDate.Value.ToString("dd MMM yyyy")</dd>
+                            }
+                            
+                            @if (Model.TrainingCompleted.HasValue)
+                            {
+                                <dt class="col-sm-4">Completed:</dt>
+                                <dd class="col-sm-8">
+                                    @if (Model.TrainingCompleted.Value)
+                                    {
+                                        <span class="badge badge-success">Yes</span>
+                                        @if (Model.CompletedDate.HasValue)
+                                        {
+                                            <br><small class="text-muted">@Model.CompletedDate.Value.ToString("dd MMM yyyy")</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">No</span>
+                                    }
+                                </dd>
+                            }
+                            
+                            @if (!string.IsNullOrEmpty(Model.PaymentMethod))
+                            {
+                                <dt class="col-sm-4">Payment method:</dt>
+                                <dd class="col-sm-8">@Model.PaymentMethod</dd>
+                            }
+                            
+                            @if (!string.IsNullOrEmpty(Model.PaymentReference))
+                            {
+                                <dt class="col-sm-4">Payment reference:</dt>
+                                <dd class="col-sm-8">@Model.PaymentReference</dd>
+                            }
+                            
+                            @if (Model.PaymentDate.HasValue)
+                            {
+                                <dt class="col-sm-4">Payment date:</dt>
+                                <dd class="col-sm-8">@Model.PaymentDate.Value.ToString("dd MMM yyyy")</dd>
+                            }
+                        </dl>
                     </div>
+                </div>
+            </div>
 
-                    <div class="form-group">
-                        <label for="plannedDate">Planned training date <span class="text-muted">(optional)</span></label>
-                        <input type="date" 
-                               class="form-control" 
-                               id="plannedDate" 
-                               name="plannedDate" 
-                               value="@(Model.PlannedDate?.ToString("yyyy-MM-dd") ?? "")" />
-                        <small class="form-text text-muted">When the training is scheduled to take place</small>
+            <!-- Right Column: Action Cards -->
+            <div class="col-xxl-8 col-xl-8 col-lg-7 col-md-12 col-sm-12 col-12">
+                <!-- Change Cost Card -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Change cost</h3>
                     </div>
+                    <div class="card-body">
+                        <form asp-action="UpdateRequestDetails" method="post" id="costForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <input type="hidden" name="plannedDate" value="@(Model.PlannedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="trainingCompleted" value="@(Model.TrainingCompleted.HasValue ? Model.TrainingCompleted.Value.ToString().ToLower() : "")" />
+                            <input type="hidden" name="completedDate" value="@(Model.CompletedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentDate" value="@(Model.PaymentDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentMethod" value="@(Model.PaymentMethod ?? "")" />
+                            <input type="hidden" name="paymentReference" value="@(Model.PaymentReference ?? "")" />
 
-                    <div class="form-group">
-                        <label>Training completion</label>
-                        <div class="form-check">
-                            <input class="form-check-input" 
-                                   type="radio" 
-                                   name="trainingCompleted" 
-                                   id="completedYes" 
-                                   value="true" 
-                                   @(Model.TrainingCompleted == true ? "checked" : "") />
-                            <label class="form-check-label" for="completedYes">
-                                Training completed
-                            </label>
+                            <div class="form-group">
+                                <label for="actualCost">Actual cost incurred <span class="text-muted">(optional)</span></label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">£</span>
+                                    </div>
+                                    <input type="number" 
+                                           step="0.01" 
+                                           min="0" 
+                                           class="form-control" 
+                                           id="actualCost" 
+                                           name="actualCost" 
+                                           value="@(Model.ActualCost?.ToString("N0") ?? "")" 
+                                           placeholder="0.00" />
+                                </div>
+                                <small class="form-text text-muted">
+                                    Record the actual cost paid (may differ from course cost due to discounts or bulk pricing).
+                                    @if (Model.Course != null && Model.Course.Cost.HasValue)
+                                    {
+                                        <span>Potential cost: £@Model.Course.Cost.Value.ToString("N0")</span>
+                                    }
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="paymentDate">Date paid <span class="text-muted">(optional)</span></label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="paymentDate" 
+                                       name="paymentDate" 
+                                       value="@(Model.PaymentDate?.ToString("yyyy-MM-dd") ?? "")" />
+                                <small class="form-text text-muted">Date the payment was made</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="paymentMethod">Payment method <span class="text-muted">(optional)</span></label>
+                                <select class="form-control" 
+                                        id="paymentMethod" 
+                                        name="paymentMethod">
+                                    <option value="">-- Select payment method --</option>
+                                    @if (Model.PaymentMethod == "PO")
+                                    {
+                                        <option value="PO" selected>PO</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="PO">PO</option>
+                                    }
+                                    @if (Model.PaymentMethod == "Card")
+                                    {
+                                        <option value="Card" selected>Card</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Card">Card</option>
+                                    }
+                                    @if (Model.PaymentMethod == "Other")
+                                    {
+                                        <option value="Other" selected>Other</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Other">Other</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Method used to make the payment</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="paymentReference">Payment reference <span class="text-muted">(optional)</span></label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="paymentReference" 
+                                       name="paymentReference" 
+                                       value="@(Model.PaymentReference ?? "")" 
+                                       placeholder="e.g., PO Number, transaction reference" 
+                                       maxlength="255" />
+                                <small class="form-text text-muted">Reference number (e.g., PO Number, transaction reference)</small>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">Save cost</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Change Planned Training Date Card -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Change planned training date</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="UpdateRequestDetails" method="post" id="plannedDateForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <input type="hidden" name="actualCost" value="@(Model.ActualCost?.ToString("N0") ?? "")" />
+                            <input type="hidden" name="trainingCompleted" value="@(Model.TrainingCompleted.HasValue ? Model.TrainingCompleted.Value.ToString().ToLower() : "")" />
+                            <input type="hidden" name="completedDate" value="@(Model.CompletedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentDate" value="@(Model.PaymentDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentMethod" value="@(Model.PaymentMethod ?? "")" />
+                            <input type="hidden" name="paymentReference" value="@(Model.PaymentReference ?? "")" />
+
+                            <div class="form-group">
+                                <label for="plannedDate">Planned training date <span class="text-muted">(optional)</span></label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="plannedDate" 
+                                       name="plannedDate" 
+                                       value="@(Model.PlannedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                                <small class="form-text text-muted">When the training is scheduled to take place</small>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">Save date</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Change Training Completion Card -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Change training completion</h3>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="UpdateRequestDetails" method="post" id="completionForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <input type="hidden" name="actualCost" value="@(Model.ActualCost?.ToString("N0") ?? "")" />
+                            <input type="hidden" name="plannedDate" value="@(Model.PlannedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentDate" value="@(Model.PaymentDate?.ToString("yyyy-MM-dd") ?? "")" />
+                            <input type="hidden" name="paymentMethod" value="@(Model.PaymentMethod ?? "")" />
+                            <input type="hidden" name="paymentReference" value="@(Model.PaymentReference ?? "")" />
+
+                            <div class="form-group">
+                                <label>Training completion</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="trainingCompleted" 
+                                           id="completedYes" 
+                                           value="true" 
+                                           @(Model.TrainingCompleted == true ? "checked" : "") />
+                                    <label class="form-check-label" for="completedYes">
+                                        Training completed
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="trainingCompleted" 
+                                           id="completedNo" 
+                                           value="false" 
+                                           @(Model.TrainingCompleted == false ? "checked" : "") />
+                                    <label class="form-check-label" for="completedNo">
+                                        Training not completed
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="trainingCompleted" 
+                                           id="completedNotSet" 
+                                           value="" 
+                                           @(Model.TrainingCompleted == null ? "checked" : "") />
+                                    <label class="form-check-label" for="completedNotSet">
+                                        Not set
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group" id="completedDateGroup" style="@(Model.TrainingCompleted == true ? "" : "display: none;")">
+                                <label for="completedDate">Actual completion date <span class="text-muted">(optional)</span></label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="completedDate" 
+                                       name="completedDate" 
+                                       value="@(Model.CompletedDate?.ToString("yyyy-MM-dd") ?? "")" />
+                                <small class="form-text text-muted">Actual date the training was completed (if different from planned date)</small>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary">Save completion</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Transfer Training Card -->
+                @if (Model.Status == "Approved")
+                {
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h3 class="card-title">Transfer training</h3>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" 
-                                   type="radio" 
-                                   name="trainingCompleted" 
-                                   id="completedNo" 
-                                   value="false" 
-                                   @(Model.TrainingCompleted == false ? "checked" : "") />
-                            <label class="form-check-label" for="completedNo">
-                                Training not completed
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" 
-                                   type="radio" 
-                                   name="trainingCompleted" 
-                                   id="completedNotSet" 
-                                   value="" 
-                                   @(Model.TrainingCompleted == null ? "checked" : "") />
-                            <label class="form-check-label" for="completedNotSet">
-                                Not set
-                            </label>
-                        </div>
-                    </div>
+                        <div class="card-body">
+                            <p class="text-muted">Transfer this training request to another user.</p>
+                            <form asp-action="TransferRequest" method="post" id="transferForm">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Id" />
 
-                    <div class="form-group" id="completedDateGroup" style="@(Model.TrainingCompleted == true ? "" : "display: none;")">
-                        <label for="completedDate">Actual completion date <span class="text-muted">(optional)</span></label>
-                        <input type="date" 
-                               class="form-control" 
-                               id="completedDate" 
-                               name="completedDate" 
-                               value="@(Model.CompletedDate?.ToString("yyyy-MM-dd") ?? "")" />
-                        <small class="form-text text-muted">Actual date the training was completed (if different from planned date)</small>
-                    </div>
+                                <div class="form-group">
+                                    <label class="control-label" for="transferSearch">Search for a colleague</label>
+                                    <small class="form-text text-muted">Start typing a name or email address to look up someone in Entra ID.</small>
+                                    <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                                        <div class="position-relative">
+                                            <input type="text"
+                                                   class="form-control js-user-picker-input"
+                                                   id="transferSearch"
+                                                   autocomplete="off"
+                                                   placeholder="e.g. Alex Smith or alex.smith@education.gov.uk" />
+                                            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                                        </div>
+                                        <p class="form-text text-muted js-user-picker-message"></p>
+                                        <input type="hidden" id="transferToUserId" name="transferToUserId" class="js-user-picker-value" />
+                                        <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
+                                            <span class="text-muted">No user selected.</span>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    <div class="form-group">
-                        <button type="submit" class="btn btn-success">Save changes</button>
-                        <a asp-action="AdminRequests" class="btn btn-secondary">Cancel</a>
+                                <div class="form-group mb-0">
+                                    <button type="submit" class="btn btn-success">Transfer request</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </form>
+                }
+
+                <div class="mt-3">
+                    <a asp-action="AdminRequests" class="btn btn-secondary">Back to requests</a>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
 @section Scripts {
+    <script src="~/js/user-picker.js" asp-append-version="true"></script>
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
             // Show/hide completed date field based on completion status
@@ -203,4 +423,3 @@
         });
     </script>
 }
-

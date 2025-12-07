@@ -100,16 +100,16 @@
                             <div class="card-body p-0">
                                 @if (projects.Any())
                                 {
-                                    <div class="table-responsive">
-                                        <table class="table table-hover text-nowrap sortable-table mb-0">
+                                    <div class="table-responsive" style="max-width: 100%; overflow-x: auto;">
+                                        <table class="table table-hover sortable-table mb-0" style="width: 100%; min-width: 800px;">
                                             <thead>
                                                 <tr>
-                                                    <th style="width: 250px;" class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title">Title</th>
-                                                    <th style="width: 100px;" class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority">Priority</th>
-                                                    <th style="width: 120px;" class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG">RAG</th>
-                                                    <th style="width: 150px;" class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area">Business Area</th>
-                                                    <th style="width: 150px;" class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact</th>
-                                                    <th style="width: 200px;" class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner">Service Owner</th>
+                                                    <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="min-width: 200px;">Title</th>
+                                                    <th class="sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="min-width: 100px;">Priority</th>
+                                                    <th class="sortable" data-column="Rag" tabindex="0" role="button" aria-label="Sort by RAG" style="min-width: 100px;">RAG</th>
+                                                    <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="min-width: 120px;">Business Area</th>
+                                                    <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact" style="min-width: 120px;">Primary Contact</th>
+                                                    <th class="sortable" data-column="ServiceOwner" tabindex="0" role="button" aria-label="Sort by Service Owner" style="min-width: 150px;">Service Owner</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -231,7 +231,6 @@
         <div class="dashboard-section mt-4">
             <div class="dashboard-section-header">
                 <h2><i class="fas fa-exclamation-triangle"></i> Exception Reporting</h2>
-                <p class="dashboard-section-description">Projects where RAG status contradicts milestone indicators - helps identify under or over-reporting</p>
             </div>
             @if (exceptions.Any())
             {
@@ -271,115 +270,46 @@
                     .text-xs { font-size: .7rem; }
                 </style>
             }
-            <div class="card">
-                <div class="card-body">
-                    @if (exceptions.Any())
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-hover text-nowrap sortable-table mb-0">
-                                <thead>
-                                    <tr>
-                                        <th class="sortable" data-column="ProjectCode" tabindex="0" role="button">Project ID</th>
-                                        <th class="sortable" data-column="ProjectTitle" tabindex="0" role="button">Project Title</th>
-                                        <th class="sortable" data-column="BusinessArea" tabindex="0" role="button">Business Area</th>
-                                        <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button">Primary Contact</th>
-                                        <th class="sortable" data-column="RagStatus" tabindex="0" role="button">RAG Status</th>
-                                        <th class="sortable" data-column="ExceptionType" tabindex="0" role="button">Exception Type</th>
-                                        <th class="sortable" data-column="ExceptionDescription" tabindex="0" role="button">Description</th>
-                                        <th class="sortable text-center" data-column="Overdue" tabindex="0" role="button">Overdue</th>
-                                        <th class="sortable text-center" data-column="Delayed" tabindex="0" role="button">Delayed</th>
-                                        <th class="sortable text-center" data-column="AtRisk" tabindex="0" role="button">At Risk</th>
-                                        <th class="sortable text-center" data-column="OnTrack" tabindex="0" role="button">On Track</th>
-                                        <th class="sortable text-center" data-column="Total" tabindex="0" role="button">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var exception in exceptions)
-                                    {
-                                        var ragClass = exception.RagStatus switch
-                                        {
-                                            "Red" => "badge badge-red",
-                                            "Amber-Red" => "badge badge-amber-red",
-                                            "Amber" => "badge badge-amber",
-                                            "Amber-Green" => "badge badge-amber-green",
-                                            "Green" => "badge badge-green",
-                                            _ => "badge badge-secondary"
-                                        };
-                                        var rowClass = exception.ExceptionType.Contains("Red") ? "table-danger" : 
-                                                      exception.ExceptionType.Contains("Amber-Green") ? "table-warning" : 
-                                                      "table-info";
+            @if (exceptions.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover sortable-table mb-0">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="ProjectTitle" tabindex="0" role="button">Project</th>
+                                <th class="sortable" data-column="ExceptionType" tabindex="0" role="button">Exception Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var exception in exceptions)
+                            {
+                                var rowClass = exception.ExceptionType.Contains("Red") ? "table-danger" : 
+                                              exception.ExceptionType.Contains("Amber-Green") ? "table-warning" : 
+                                              "table-info";
 
-                                        <tr class="@rowClass">
-                                            <td>
-                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@exception.ProjectId" target="_blank">
-                                                    @exception.ProjectCode
-                                                </a>
-                                            </td>
-                                            <td>@exception.ProjectTitle</td>
-                                            <td>@(exception.BusinessArea ?? "Not assigned")</td>
-                                            <td>@(exception.PrimaryContact ?? "Not assigned")</td>
-                                            <td><span class="@ragClass">@exception.RagStatus</span></td>
-                                            <td>
-                                                <span class="badge badge-warning">@exception.ExceptionType</span>
-                                            </td>
-                                            <td>@exception.ExceptionDescription</td>
-                                            <td style="text-align: center;">
-                                                @if (exception.OverdueMilestonesCount > 0)
-                                                {
-                                                    <span class="badge badge-danger">@exception.OverdueMilestonesCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">0</span>
-                                                }
-                                            </td>
-                                            <td style="text-align: center;">
-                                                @if (exception.DelayedMilestonesCount > 0)
-                                                {
-                                                    <span class="badge badge-warning">@exception.DelayedMilestonesCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">0</span>
-                                                }
-                                            </td>
-                                            <td style="text-align: center;">
-                                                @if (exception.AtRiskMilestonesCount > 0)
-                                                {
-                                                    <span class="badge badge-warning">@exception.AtRiskMilestonesCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">0</span>
-                                                }
-                                            </td>
-                                            <td style="text-align: center;">
-                                                @if (exception.OnTrackMilestonesCount > 0)
-                                                {
-                                                    <span class="badge badge-success">@exception.OnTrackMilestonesCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">0</span>
-                                                }
-                                            </td>
-                                            <td style="text-align: center;">
-                                                <strong>@exception.TotalMilestonesCount</strong>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-info mb-0">
-                            <i class="fas fa-info-circle"></i> No exceptions found. All projects' RAG statuses align with their milestone indicators.
-                        </div>
-                    }
+                                <tr class="@rowClass">
+                                    <td>
+                                        <a asp-controller="Project" asp-action="Details" asp-route-id="@exception.ProjectId" style="font-weight: bold; color: #005ea5; text-decoration: none;">
+                                            @exception.ProjectTitle
+                                        </a>
+                                        <br />
+                                        <small class="text-muted">DFE-DDT-@exception.ProjectId</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-warning">@exception.ExceptionType</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-            </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle"></i> No exceptions found. All projects' RAG statuses align with their milestone indicators.
+                </div>
+            }
         </div>
     </div>
 </section>
@@ -470,15 +400,9 @@
                     var aVal, bVal;
                     var colIndex = table.find('thead th[data-column="' + column + '"]').index();
                     
-                    if (column === 'Overdue' || column === 'Delayed' || column === 'AtRisk' || column === 'OnTrack' || column === 'Total') {
-                        // Numeric sorting
-                        aVal = parseInt($(a).find('td').eq(colIndex).text().trim()) || 0;
-                        bVal = parseInt($(b).find('td').eq(colIndex).text().trim()) || 0;
-                    } else {
-                        // Text sorting
-                        aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
-                        bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
-                    }
+                    // Text sorting for all columns
+                    aVal = $(a).find('td').eq(colIndex).text().trim().toLowerCase();
+                    bVal = $(b).find('td').eq(colIndex).text().trim().toLowerCase();
                     
                     if (direction === 'asc') {
                         return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;

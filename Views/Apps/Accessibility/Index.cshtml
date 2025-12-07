@@ -26,6 +26,18 @@
     var totalAuditSpend = (decimal)(summaryStats?.TotalAuditSpend ?? 0m);
 }
 
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    ViewBag.BrandText = "Accessibility Issues and Statements";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Dashboard", Action = "Index", Controller = "Accessibility", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" && currentController == "Accessibility" && activeTab != "heatmap" },
+        new { Text = "Heatmap", Action = "Index", Controller = "Accessibility", Url = Url.Action("Index", new { tab = "heatmap" }), IsButton = false, IsActive = currentAction == "Index" && currentController == "Accessibility" && activeTab == "heatmap" },
+    };
+    ViewBag.NavbarActionButton = ("Enrol product", "Accessibility", "Enroll", "btn-success");
+}
+
 @section Breadcrumbs {
     <style>
         .breadcrumb a:hover {
@@ -50,19 +62,8 @@
 
 <section class="content">
     <div class="container-fluid">
-        <div class="dashboard-header">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h1>Accessibility issues and statements</h1>
-                    <p>Manage accessibility issues and statements for your products</p>
-                </div>
-                <div>
-                    <button type="button" class="btn btn-success" data-toggle="modal" data-target="#enrollProductModal">
-                        <i class="fas fa-plus"></i> Enrol Product
-                    </button>
-                </div>
-            </div>
-        </div>
+        @await Html.PartialAsync("_ModuleNavbar")
+        
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -78,60 +79,100 @@
             </div>
         }
 
-        <!-- Your Products Summary Cards - Only show on your-products tab -->
+        <!-- Summary Cards - CentralOps Style -->
         @if (activeTab == "your-products")
         {
-            @if (myProductsTotal > 0)
-            {
-                <div class="dashboard-section mb-4">
-                    <div class="dashboard-section-header">
-                        <h2><i class="fas fa-user-circle"></i> Your Products</h2>
-                    </div>
-                <div class="dashboard-summary-cards mb-4">
-                    <div class="dashboard-card bg-primary">
-                        <div class="dashboard-card-value">@myProductsTotal</div>
-                        <div class="dashboard-card-label">Your Products</div>
-                        <div class="dashboard-card-icon"><i class="fas fa-box"></i></div>
-                    </div>
-                    <div class="dashboard-card @(myProductsOpenIssues == 0 ? "bg-success" : (myProductsOpenIssues < 5 ? "bg-warning" : "bg-danger"))">
-                        <div class="dashboard-card-value">@myProductsOpenIssues</div>
-                        <div class="dashboard-card-label">Open Issues</div>
-                        <div class="dashboard-card-icon"><i class="fas @(myProductsOpenIssues == 0 ? "fa-check-circle" : (myProductsOpenIssues < 5 ? "fa-exclamation-triangle" : "fa-times-circle"))"></i></div>
-                    </div>
-                    <div class="dashboard-card @(myProductsOverdueIssues == 0 ? "bg-success" : "bg-danger")">
-                        <div class="dashboard-card-value">@myProductsOverdueIssues</div>
-                        <div class="dashboard-card-label">Overdue Issues</div>
-                        <div class="dashboard-card-icon"><i class="fas fa-clock"></i></div>
-                    </div>
-                    <div class="dashboard-card bg-success">
-                        <div class="dashboard-card-value">@myProductsCompliant</div>
-                        <div class="dashboard-card-label">Compliant</div>
-                        <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-                    </div>
-                    <div class="dashboard-card bg-warning">
-                        <div class="dashboard-card-value">@myProductsPartiallyCompliant</div>
-                        <div class="dashboard-card-label">Partially Compliant</div>
-                        <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                    </div>
-                    <div class="dashboard-card bg-danger">
-                        <div class="dashboard-card-value">@myProductsNonCompliant</div>
-                        <div class="dashboard-card-label">Non-Compliant</div>
-                        <div class="dashboard-card-icon"><i class="fas fa-times-circle"></i></div>
+            var notEnrolledCount = totalProducts - enrolledProductsCount;
+            var totalIssues = totalOpenIssues;
+
+            <div class="row mb-4">
+
+             <!-- Your Products Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Your Products</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@myProductsTotal</div>
+                                    <small class="text-muted">Assigned to You</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-box fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- Issues Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-danger shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Issues</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@totalIssues</div>
+                                    <small class="text-muted">Total Issues</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">Open</div>
+                                        <div class="h6 mb-0 font-weight-bold @(totalOpenIssues > 0 ? "text-danger" : "text-success")">@totalOpenIssues</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-xs text-muted mb-1">Overdue</div>
+                                        <div class="h6 mb-0 font-weight-bold @(overdueIssues > 0 ? "text-danger" : "text-success")">@overdueIssues</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compliance Card -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Compliance</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@(myProductsCompliant + myProductsPartiallyCompliant + myProductsNonCompliant)</div>
+                                    <small class="text-muted">Total Assessed</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="row">
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Fully</div>
+                                        <div class="h6 mb-0 font-weight-bold text-success">@myProductsCompliant</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Partial</div>
+                                        <div class="h6 mb-0 font-weight-bold text-warning">@myProductsPartiallyCompliant</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-xs text-muted mb-1">Non</div>
+                                        <div class="h6 mb-0 font-weight-bold text-danger">@myProductsNonCompliant</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+           
+
+               
             </div>
-            }
-            else
-            {
-                <div class="dashboard-section mb-4">
-                    <div class="dashboard-section-header">
-                        <h2><i class="fas fa-user-circle"></i> Your Products</h2>
-                    </div>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> You don't have any products assigned to you yet. Products you are responsible for will appear here.
-                    </div>
-                </div>
-            }
         }
 
         <div class="row">
@@ -402,7 +443,7 @@
                                 <h3 class="card-title">@(activeTab == "your-products" ? "Your Products" : "All Products") (@productsToDisplay.Count)</h3>
                             </div>
                             <div class="card-body table-responsive p-0">
-                                <table class="table table-hover text-nowrap">
+                                <table class="table table-hover text-nowrap sortable-table mb-0">
                                     <thead>
                                         <tr>
                                             <th>Product Name</th>
@@ -1247,6 +1288,28 @@
 </script>
 
 <style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+
     .heatmap-card {
         border: 1px solid #e2e8f0;
     }

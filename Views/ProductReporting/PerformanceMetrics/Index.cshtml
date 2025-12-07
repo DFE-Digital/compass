@@ -24,13 +24,22 @@
 
 @await Html.PartialAsync("_DashboardStyles")
 
-<div class="dashboard-header">
-    <h1>Monthly operational performance reporting</h1>
-    <p>For live running, operational services to report performance metrics</p>
-</div>
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Performance metrics", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = (string)null, IsButton = false, IsActive = true }
+    };
+}
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <div class="dashboard-header">
+            <h1>Monthly operational performance reporting</h1>
+            <p>For live running, operational services to report performance metrics</p>
+        </div>
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -51,8 +60,54 @@
         }
 
         <div class="row mb-4">
-            <!-- Left Column: Your Tasks and Your Products -->
-            <div class="col-md-8">
+            <!-- Left Column: Guidance -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Guidance Links Section -->
+                <div class="dashboard-section mb-4">
+                    <div class="dashboard-section-header">
+                        <h2>Guidance</h2>
+                    </div>
+                    <div class="mb-3">
+                        <a href="@Url.Action("WhatYouNeedToReport", "ProductReporting")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit; display: block;">
+                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-book"></i></div>
+                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">What you need to report</div>
+                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">Learn about the metrics and data you need to submit</div>
+                        </a>
+                    </div>
+                    <div class="mb-3">
+                        <a href="@Url.Action("ReportingDates", "ProductReporting")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit; display: block;">
+                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">Reporting dates</div>
+                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">View all reporting deadlines and period information</div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Your Tasks and Your Products -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @{
+                    var productsWithExclusions = Model?.Where(p => !p.IsReportingRequired && !string.IsNullOrEmpty(p.ReportingSuspensionReason)).ToList() ?? new List<Compass.Models.ProductReturnStatusViewModel>();
+                }
+                @if (productsWithExclusions.Any())
+                {
+                    <div class="alert alert-info alert-dismissible fade show mb-3">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        <strong>Reporting exclusions:</strong>
+                        <ul class="mb-0 mt-2">
+                            @foreach (var product in productsWithExclusions)
+                            {
+                                <li>
+                                    <strong>@product.Product.Title:</strong> @product.ReportingSuspensionReason
+                                    @if (product.NextReportingPeriod.HasValue && product.NextReportingPeriodDueDate.HasValue)
+                                    {
+                                        <text> You will be expected to submit reports by <strong>@product.NextReportingPeriodDueDate.Value.ToString("d MMMM yyyy")</strong>, which will report on performance for the month of <strong>@product.NextReportingPeriod.Value.ToString("MMMM yyyy")</strong>.</text>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
                 <!-- Your Tasks Card -->
                 <div class="dashboard-section mb-4">
                     <div class="dashboard-section-header">
@@ -62,7 +117,7 @@
                     {
                         <div class="card">
                             <div class="card-body table-responsive p-0">
-                                <table class="table table-hover text-nowrap sortable-table" id="tasksTable">
+                                <table class="table table-hover text-nowrap sortable-table mb-0" id="tasksTable">
                                     <thead>
                                         <tr>
                                             <th class="sortable col-product-name" data-column="ProductName" tabindex="0" role="button" aria-label="Sort by Product name">Product name <i class="fas fa-sort sort-icon"></i></th>
@@ -77,13 +132,11 @@
                                             <tr>
                                                 <td>
                                                     <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-documentId="@(item.Product.DocumentId ?? item.Product.FipsId)" class="font-weight-bold">
-                                                        @item.Product.Title<br/>
-                                                        <small class="text-muted product-fips-id">@(item.Product.DocumentId ?? item.Product.FipsId)
+                                                        @item.Product.Title
                                                         @if (!string.IsNullOrEmpty(item.Product.Phase))
                                                         {
-                                                            <text> - </text>@item.Product.Phase
+                                                            <br/><small class="text-muted">@item.Product.Phase</small>
                                                         }
-                                                        </small>
                                                     </a>
                                                 </td>
                                                 <td>
@@ -94,18 +147,6 @@
                                                     else
                                                     {
                                                         <span class="badge badge-secondary">Not required</span>
-                                                        @if (!string.IsNullOrEmpty(item.ReportingSuspensionReason))
-                                                        {
-                                                            <br/>
-                                                            <small class="text-muted">@item.ReportingSuspensionReason</small>
-                                                            @if (item.NextReportingPeriod.HasValue && item.NextReportingPeriodDueDate.HasValue)
-                                                            {
-                                                                <br/>
-                                                                <small class="text-muted">
-                                                                    You will be expected to submit reports for the products listed below, by <strong>@item.NextReportingPeriodDueDate.Value.ToString("d MMMM yyyy")</strong>, which will report on performance for the month of <strong>@item.NextReportingPeriod.Value.ToString("MMMM yyyy")</strong>.
-                                                                </small>
-                                                            }
-                                                        }
                                                     }
                                                 </td>
                                                 <td>
@@ -289,31 +330,6 @@
                         </div>
                     }
                 </div>
-            </div>
-
-            <!-- Right Column: Guidance and Upcoming Dates -->
-            <div class="col-md-4">
-                <!-- Guidance Links Section -->
-                <div class="dashboard-section mb-4">
-                    <div class="dashboard-section-header">
-                        <h2>Guidance</h2>
-                    </div>
-                    <div class="mb-3">
-                        <a href="@Url.Action("WhatYouNeedToReport", "ProductReporting")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit; display: block;">
-                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-book"></i></div>
-                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">What you need to report</div>
-                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">Learn about the metrics and data you need to submit</div>
-                        </a>
-                    </div>
-                    <div class="mb-3">
-                        <a href="@Url.Action("ReportingDates", "ProductReporting")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit; display: block;">
-                            <div class="dashboard-card-icon" style="font-size: 2rem;"><i class="fas fa-calendar-alt"></i></div>
-                            <div class="dashboard-card-label" style="font-size: 1.1rem; font-weight: 600;">Reporting dates</div>
-                            <div class="mt-2" style="font-size: 0.9rem; opacity: 0.9;">View all reporting deadlines and period information</div>
-                        </a>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>

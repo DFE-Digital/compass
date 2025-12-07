@@ -30,11 +30,8 @@
     
     var businessAreaRisk = ViewBag.BusinessAreaRisk as List<dynamic> ?? new List<dynamic>();
     
-    var productsWithValidatedStatements = ViewBag.ProductsWithValidatedStatements as List<dynamic> ?? new List<dynamic>();
     var productsWithoutValidatedStatements = ViewBag.ProductsWithoutValidatedStatements as List<dynamic> ?? new List<dynamic>();
 }
-
-@await Html.PartialAsync("_DashboardStyles")
 
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
@@ -50,13 +47,19 @@
     </nav>
 }
 
-<div class="dashboard-header">
-    <h1>Accessibility Issues and Statements - Oversight</h1>
-    <p>Central operations oversight of accessibility compliance across all products and services</p>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Design Operations";
+            ViewBag.NavLinks = new[]
+            {
+                new { Text = "Dashboard", Action = "Dashboard", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "Dashboard" },
+                new { Text = "Accessibility oversight", Action = "AccessibilityOversight", Controller = "DesignOps", Url = (string)null, IsButton = false, IsActive = currentAction == "AccessibilityOversight" }
+            };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -72,415 +75,247 @@
             </div>
         }
 
-        <!-- Enrollment Progress Section -->
-        <div class="dashboard-section mb-4">
-            <div class="dashboard-section-header">
-                <h2><i class="fas fa-chart-line"></i> Enrollment Progress</h2>
-                <p class="dashboard-section-description">Target: 100% of Products enrolled by @targetDate.ToString("dd MMMM yyyy")</p>
+        <!-- Key Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-primary"><i class="fas fa-box"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Total Products</span>
+                        <span class="info-box-number">@totalProducts</span>
+                    </div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <h4>Current Status</h4>
-                            <div class="progress mb-2" style="height: 30px;">
-                                <div class="progress-bar @(enrollmentProgress >= 100 ? "bg-success" : enrollmentProgress >= 75 ? "bg-info" : enrollmentProgress >= 50 ? "bg-warning" : "bg-danger")" 
-                                     role="progressbar" 
-                                     style="width: @(Math.Min(enrollmentProgress, 100))%" 
-                                     aria-valuenow="@enrollmentProgress" 
-                                     aria-valuemin="0" 
-                                     aria-valuemax="100">
-                                    <strong>@enrollmentProgress.ToString("F1")%</strong>
-                                </div>
-                            </div>
-                            <p class="mb-1"><strong>@enrolledCount</strong> of <strong>@totalProducts</strong> products enrolled</p>
-                            <p class="mb-0 text-muted">@productsNeeded products still need to be enrolled</p>
-                        </div>
-                        <div class="col-md-6">
-                            <h4>Target Progress</h4>
-                            <p><strong>Target Date:</strong> @targetDate.ToString("dd MMMM yyyy")</p>
-                            <p><strong>Days Remaining:</strong> <span class="badge @(daysRemaining > 180 ? "badge-success" : daysRemaining > 90 ? "badge-warning" : "badge-danger")">@daysRemaining days</span></p>
-                            @if (daysRemaining > 0 && productsNeeded > 0)
-                            {
-                                var productsPerDay = (double)productsNeeded / daysRemaining;
-                                <p><strong>Required Rate:</strong> @productsPerDay.ToString("F2") products per day</p>
-                            }
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Enrolled</span>
+                        <span class="info-box-number">@enrolledCount</span>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" style="width: @(totalProducts > 0 ? (enrolledCount * 100.0 / totalProducts) : 0)%"></div>
                         </div>
                     </div>
-                    <div class="dashboard-summary-cards">
-                        <div class="dashboard-card bg-primary">
-                            <div class="dashboard-card-value">@totalProducts</div>
-                            <div class="dashboard-card-label">Total Products</div>
-                            <div class="dashboard-card-icon"><i class="fas fa-box"></i></div>
-                        </div>
-                        <div class="dashboard-card bg-success">
-                            <div class="dashboard-card-value">@enrolledCount</div>
-                            <div class="dashboard-card-label">Enrolled</div>
-                            <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-                        </div>
-                        <div class="dashboard-card bg-warning">
-                            <div class="dashboard-card-value">@notEnrolledCount</div>
-                            <div class="dashboard-card-label">Not Enrolled</div>
-                            <div class="dashboard-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                        </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Open Issues</span>
+                        <span class="info-box-number">@totalOpenIssues</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box">
+                    <span class="info-box-icon bg-info"><i class="fas fa-file-check"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Validated Statements</span>
+                        <span class="info-box-number">@validatedStatements</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Issues and Statements -->
-        <div class="dashboard-section mb-4">
-            <div class="dashboard-section-header">
-                <h2><i class="fas fa-file-check"></i> Issues and Statements</h2>
-                <p class="dashboard-section-description">Status of accessibility issues and statement installation and verification</p>
+        <!-- Enrollment Progress -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Enrollment Progress</h3>
+                <div class="card-tools">
+                    <span class="badge badge-@(daysRemaining > 180 ? "success" : daysRemaining > 90 ? "warning" : "danger")">@daysRemaining days remaining</span>
+                </div>
             </div>
-            <div class="dashboard-summary-cards mb-3">
-                <a href="@Url.Action("ValidatedStatements", "DesignOps")" class="dashboard-card bg-success" style="text-decoration: none; color: inherit; display: block;">
-                    <div class="dashboard-card-value">@validatedStatements</div>
-                    <div class="dashboard-card-label">Validated Statements</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-                </a>
-                <a href="@Url.Action("RetestRequests", "DesignOps")" class="dashboard-card bg-info" style="text-decoration: none; color: inherit; display: block;">
-                    <div class="dashboard-card-value">@retestRequestsCount</div>
-                    <div class="dashboard-card-label">Issue Retest Requests</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-redo"></i></div>
-                </a>
-                <a href="@Url.Action("VerificationRequests", "DesignOps")" class="dashboard-card bg-primary" style="text-decoration: none; color: inherit; display: block;">
-                    <div class="dashboard-card-value">@verificationRequestsCount</div>
-                    <div class="dashboard-card-label">Verification Requests</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
-                </a>
-                <a href="@Url.Action("OpenIssues", "DesignOps")" class="dashboard-card bg-warning" style="text-decoration: none; color: inherit; display: block;">
-                    <div class="dashboard-card-value">@totalOpenIssues</div>
-                    <div class="dashboard-card-label">Open Issues</div>
-                    <div class="dashboard-card-icon"><i class="fas fa-exclamation-circle"></i></div>
-                </a>
+            <div class="card-body">
+                <p class="mb-3">Target: 100% of products enrolled by @targetDate.ToString("dd MMMM yyyy")</p>
+                <div class="progress mb-2" style="height: 30px;">
+                    <div class="progress-bar @(enrollmentProgress >= 100 ? "bg-success" : enrollmentProgress >= 75 ? "bg-info" : enrollmentProgress >= 50 ? "bg-warning" : "bg-danger")" 
+                         role="progressbar" 
+                         style="width: @(Math.Min(enrollmentProgress, 100))%" 
+                         aria-valuenow="@enrollmentProgress" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                        <strong>@enrollmentProgress.ToString("F1")%</strong>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>@enrolledCount</strong> of <strong>@totalProducts</strong> products enrolled</p>
+                        <p class="mb-0 text-muted">@productsNeeded products still need to be enrolled</p>
+                    </div>
+                    <div class="col-md-6 text-right">
+                        @if (daysRemaining > 0 && productsNeeded > 0)
+                        {
+                            var productsPerDay = (double)productsNeeded / daysRemaining;
+                            <p class="mb-0"><strong>Required Rate:</strong> @productsPerDay.ToString("F2") products per day</p>
+                        }
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="mb-2">@retestRequestsCount</h4>
+                        <p class="text-muted mb-2">Retest Requests</p>
+                        <a href="@Url.Action("RetestRequests", "DesignOps")" class="btn btn-sm btn-info">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="mb-2">@verificationRequestsCount</h4>
+                        <p class="text-muted mb-2">Verification Requests</p>
+                        <a href="@Url.Action("VerificationRequests", "DesignOps")" class="btn btn-sm btn-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="mb-2">@issuesWithUpcomingDueDatesCount</h4>
+                        <p class="text-muted mb-2">Issues Due Soon</p>
+                        <a href="@Url.Action("OpenIssues", "DesignOps")" class="btn btn-sm btn-warning">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="mb-2">@issuesNotBeingResolvedCount</h4>
+                        <p class="text-muted mb-2">Issues Not Resolved</p>
+                        <a href="@Url.Action("OpenIssues", "DesignOps")" class="btn btn-sm btn-danger">View</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Priority Items -->
+        <div class="row">
+            <!-- Products Without Validated Statements -->
             @if (productsWithoutValidatedStatements.Any())
             {
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Products Without Validated Statements</h5>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Products Without Validated Statements</h3>
+                            <div class="card-tools">
+                                <span class="badge badge-warning">@productsWithoutValidatedStatements.Count</span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in productsWithoutValidatedStatements.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@product.ProductName</strong><br />
+                                                    <small class="text-muted">@product.FipsId</small>
+                                                </td>
+                                                <td>
+                                                    @if (product.StatementInstalled)
+                                                    {
+                                                        <span class="badge badge-info">Installed</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-danger">Not installed</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a href="@Url.Action("Details", "Accessibility", new { fipsId = product.FipsId, tab = "statement" })" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-eye"></i> View
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (productsWithoutValidatedStatements.Count > 10)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">Showing 10 of @productsWithoutValidatedStatements.Count products</span>
+                                </div>
+                            }
+                        </div>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product Name</th>
-                                    <th>FIPS ID</th>
-                                    <th>Statement Installed</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var product in productsWithoutValidatedStatements.Take(20))
-                                {
-                                    <tr>
-                                        <td><strong>@product.ProductName</strong></td>
-                                        <td><code>@product.FipsId</code></td>
-                                        <td>
-                                            @if (product.StatementInstalled)
-                                            {
-                                                <span class="badge badge-info">Installed</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge badge-danger">Not installed</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = product.FipsId, tab = "statement" })" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-eye"></i> View
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                </div>
+            }
+
+            <!-- Issues by WCAG Criteria -->
+            @if (issuesByWcagCriteria.Any())
+            {
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Top Issues by WCAG Criteria</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>WCAG Criterion</th>
+                                            <th>Level</th>
+                                            <th>Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var criterion in issuesByWcagCriteria.Take(10))
+                                        {
+                                            <tr>
+                                                <td><strong>@criterion.Criterion</strong></td>
+                                                <td><span class="badge badge-info">@criterion.Level</span></td>
+                                                <td><span class="badge badge-warning">@criterion.Count</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (issuesByWcagCriteria.Count > 10)
+                            {
+                                <div class="card-footer text-center">
+                                    <span class="text-muted">Showing top 10 of @issuesByWcagCriteria.Count criteria</span>
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
             }
         </div>
 
-        <!-- Issues by WCAG Criteria -->
-        @if (issuesByWcagCriteria.Any())
-        {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-list-alt"></i> Issues by WCAG Criteria</h2>
-                    <p class="dashboard-section-description">Breakdown of open issues by WCAG criterion</p>
-                </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>WCAG Criterion</th>
-                                    <th>Level</th>
-                                    <th>Version</th>
-                                    <th>Issue Count</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var criterion in issuesByWcagCriteria)
-                                {
-                                    <tr>
-                                        <td><strong>@criterion.Criterion</strong></td>
-                                        <td><span class="badge badge-info">@criterion.Level</span></td>
-                                        <td>@criterion.Version</td>
-                                        <td><span class="badge badge-warning">@criterion.Count</span></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Retest Requests -->
-        @if (retestRequests.Any())
-        {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-redo"></i> Retest Requests</h2>
-                    <p class="dashboard-section-description">Pending retest requests requiring action</p>
-                </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Requested By</th>
-                                    <th>Requested Date</th>
-                                    <th>Issue</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var request in retestRequests.Take(20))
-                                {
-                                    <tr>
-                                        <td><strong>@request.AccessibilityIssue.ProductAccessibility.ProductName</strong></td>
-                                        <td>@request.RequestedBy</td>
-                                        <td>@request.RequestedAt.ToString("dd MMM yyyy")</td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(request.AccessibilityIssue.IssueTitle))
-                                            {
-                                                <text>@request.AccessibilityIssue.IssueTitle</text>
-                                            }
-                                            else if (!string.IsNullOrEmpty(request.AccessibilityIssue.WcagCriteria))
-                                            {
-                                                <text>WCAG @request.AccessibilityIssue.WcagCriteria</text>
-                                            }
-                                            else
-                                            {
-                                                <text>Issue #@request.AccessibilityIssue.Id</text>
-                                            }
-                                        </td>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = request.AccessibilityIssue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-eye"></i> View
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Verification Requests -->
-        @if (verificationRequests.Any())
-        {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-check-circle"></i> Verification Requests</h2>
-                    <p class="dashboard-section-description">Pending statement verification requests requiring action</p>
-                </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Requested By</th>
-                                    <th>Requested Date</th>
-                                    <th>Statement URL</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var request in verificationRequests.Take(20))
-                                {
-                                    var statementUrl = $"https://accessibility-statements.education.gov.uk/s/{request.ProductAccessibility.FipsId}";
-                                    <tr>
-                                        <td><strong>@request.ProductAccessibility.ProductName</strong><br><small class="text-muted">@request.ProductAccessibility.FipsId</small></td>
-                                        <td>@request.RequestedBy</td>
-                                        <td>@request.RequestedAt.ToString("dd MMM yyyy")</td>
-                                        <td>
-                                            <a href="@statementUrl" target="_blank" rel="noopener noreferrer">@statementUrl</a>
-                                        </td>
-                                        <td>
-                                            <a href="@Url.Action("VerificationRequests", "DesignOps")" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-check"></i> Verify
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Issues with Upcoming Due Dates -->
-        @if (issuesWithUpcomingDueDates.Any())
-        {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-calendar-alt"></i> Issues with Upcoming Due Dates</h2>
-                    <p class="dashboard-section-description">Issues with planned resolution dates in the next 30 days</p>
-                </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Issue</th>
-                                    <th>Due Date</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var issue in issuesWithUpcomingDueDates.Take(20))
-                                {
-                                    <tr>
-                                        <td><strong>@issue.ProductAccessibility.ProductName</strong></td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(issue.IssueTitle))
-                                            {
-                                                <text>@issue.IssueTitle</text>
-                                            }
-                                            else if (!string.IsNullOrEmpty(issue.WcagCriteria))
-                                            {
-                                                <text>WCAG @issue.WcagCriteria</text>
-                                            }
-                                            else
-                                            {
-                                                <text>Issue #@issue.Id</text>
-                                            }
-                                        </td>
-                                        <td>
-                                            <span class="badge @((issue.PlannedResolutionDate!.Value - DateTime.UtcNow).Days <= 7 ? "badge-danger" : "badge-warning")">
-                                                @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")
-                                            </span>
-                                        </td>
-                                        <td><span class="badge badge-info">@issue.Status</span></td>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-eye"></i> View
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Issues Not Being Resolved -->
-        @if (issuesNotBeingResolved.Any())
-        {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-exclamation-circle"></i> Issues Not Being Resolved</h2>
-                    <p class="dashboard-section-description">Open issues without planned resolution dates or past their due dates</p>
-                </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Issue</th>
-                                    <th>Status</th>
-                                    <th>Planned Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var issue in issuesNotBeingResolved.Take(20))
-                                {
-                                    <tr>
-                                        <td><strong>@issue.ProductAccessibility.ProductName</strong></td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(issue.IssueTitle))
-                                            {
-                                                <text>@issue.IssueTitle</text>
-                                            }
-                                            else if (!string.IsNullOrEmpty(issue.WcagCriteria))
-                                            {
-                                                <text>WCAG @issue.WcagCriteria</text>
-                                            }
-                                            else
-                                            {
-                                                <text>Issue #@issue.Id</text>
-                                            }
-                                        </td>
-                                        <td><span class="badge badge-warning">@issue.Status</span></td>
-                                        <td>
-                                            @if (issue.PlannedResolutionDate.HasValue)
-                                            {
-                                                <span class="badge badge-danger">Overdue: @issue.PlannedResolutionDate.Value.ToString("dd MMM yyyy")</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge badge-secondary">No date set</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <a href="@Url.Action("Details", "Accessibility", new { fipsId = issue.ProductAccessibility.FipsId, tab = "issues" })" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-eye"></i> View
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
         <!-- Business Area Risk Analysis -->
         @if (businessAreaRisk.Any())
         {
-            <div class="dashboard-section mb-4">
-                <div class="dashboard-section-header">
-                    <h2><i class="fas fa-chart-pie"></i> Business Area Risk Analysis</h2>
-                    <p class="dashboard-section-description">Risk assessment by business area based on enrollment, issues, and overdue items</p>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Business Area Risk Analysis</h3>
                 </div>
-                <div class="card">
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
                                     <th>Business Area</th>
-                                    <th>Total Products</th>
                                     <th>Enrolled</th>
                                     <th>Not Enrolled</th>
                                     <th>Enrollment Rate</th>
                                     <th>Total Issues</th>
-                                    <th>Overdue Issues</th>
+                                    <th>Overdue</th>
                                     <th>Risk Level</th>
                                 </tr>
                             </thead>
@@ -491,7 +326,6 @@
                                                         area.RiskLevel == "medium" ? "badge-warning" : "badge-success";
                                     <tr>
                                         <td><strong>@area.BusinessArea</strong></td>
-                                        <td>@area.TotalProducts</td>
                                         <td>@area.EnrolledProducts</td>
                                         <td>
                                             @if (area.NotEnrolledProducts > 0)
@@ -544,4 +378,3 @@
         }
     </div>
 </section>
-
