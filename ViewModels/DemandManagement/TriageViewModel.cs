@@ -7,12 +7,16 @@ namespace Compass.ViewModels.DemandManagement;
 public class TriageViewModel
 {
     public IReadOnlyCollection<TriageMeetingSummaryViewModel> Meetings { get; set; } = Array.Empty<TriageMeetingSummaryViewModel>();
+    public IReadOnlyCollection<TriageMeetingSummaryViewModel> AllMeetings { get; set; } = Array.Empty<TriageMeetingSummaryViewModel>();
     public IReadOnlyCollection<TriageMonthSummaryViewModel> Months { get; set; } = Array.Empty<TriageMonthSummaryViewModel>();
     public string? SelectedMonthKey { get; set; }
     public int? SelectedMeetingId { get; set; }
     public TriageMeetingSummaryViewModel? SelectedMeeting { get; set; }
+    public TriageMeetingSummaryViewModel? PreviousMeeting { get; set; }
+    public TriageMeetingSummaryViewModel? NextMeeting { get; set; }
     public IReadOnlyCollection<DemandRequest> MeetingRequests { get; set; } = Array.Empty<DemandRequest>();
     public IReadOnlyCollection<DemandRequest> AwaitingScheduling { get; set; } = Array.Empty<DemandRequest>();
+    public Dictionary<int, IReadOnlyCollection<DemandRequest>> MeetingRequestsByMeetingId { get; set; } = new Dictionary<int, IReadOnlyCollection<DemandRequest>>();
 }
 
 public class TriageMeetingSummaryViewModel
@@ -23,6 +27,7 @@ public class TriageMeetingSummaryViewModel
     public DateTime EndAt { get; set; }
     public string? Location { get; set; }
     public string? Description { get; set; }
+    public string? ChairName { get; set; }
     public bool IsActive { get; set; }
     public bool IsUpcoming { get; set; }
     public int TotalRequests { get; set; }

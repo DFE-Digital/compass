@@ -6,6 +6,17 @@
 
 @await Html.PartialAsync("_DashboardStyles")
 
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    ViewBag.BrandText = "Skills and Learning";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My skills and learning", Action = "Index", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" },
+        new { Text = "Browse courses", Action = "BrowseCourses", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "BrowseCourses" },
+        new { Text = "My requests", Action = "MyRequests", Controller = "SkillsAndLearning", Url = (string)null, IsButton = false, IsActive = currentAction == "MyRequests" }
+    };
+}
+
 @section Breadcrumbs {
     <nav aria-label="Breadcrumb">
         <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
@@ -20,20 +31,20 @@
     </nav>
 }
 
-<div class="dashboard-header">
-    <div>
-        <h1>My training requests</h1>
-        <p>View and manage your training requests</p>
-    </div>
-    <div>
-        <a asp-action="RequestTraining" class="btn btn-success">
-            <i class="fas fa-plus"></i> New request
-        </a>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-12">
+                        <h1 class="m-0">My training requests</h1>
+                        <p class="text-muted mb-0">View and manage your training requests</p>
+                    </div>
+                </div>
+            </div>
+        </div>
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -43,31 +54,40 @@
         }
 
         <div class="row">
-            <!-- Left Column: Filters -->
+            <!-- Left Column: Navigation -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
-                <!-- Filters -->
-                <div class="card">
+                <div class="card mb-4">
                     <div class="card-header">
-                        <h3 class="card-title">Filters</h3>
+                        <h3 class="card-title">Status</h3>
                     </div>
-                    <div class="card-body">
-                        <form method="get" asp-action="MyRequests">
-                            <div class="form-group">
-                                <label>Status</label>
-                                <select name="statusFilter" class="form-control form-control-sm">
-                                    <option value="">All</option>
-                                    <option value="Draft" selected="@(ViewBag.StatusFilter == "Draft")">Draft</option>
-                                    <option value="Submitted" selected="@(ViewBag.StatusFilter == "Submitted")">Submitted</option>
-                                    <option value="Approved" selected="@(ViewBag.StatusFilter == "Approved")">Approved</option>
-                                    <option value="Rejected" selected="@(ViewBag.StatusFilter == "Rejected")">Rejected</option>
-                                    <option value="On-hold" selected="@(ViewBag.StatusFilter == "On-hold")">On-hold</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a asp-action="MyRequests" class="btn btn-default btn-sm btn-block">Clear all filters</a>
-                            </div>
-                        </form>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a asp-action="MyRequests" asp-route-statusFilter="Submitted" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Submitted" ? "active" : "")">
+                                Submitted
+                                <span class="badge badge-light float-right">@ViewBag.SubmittedCount</span>
+                            </a>
+                            <a asp-action="MyRequests" asp-route-statusFilter="Approved" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Approved" ? "active" : "")">
+                                Approved
+                                <span class="badge badge-light float-right">@ViewBag.ApprovedCount</span>
+                            </a>
+                            <a asp-action="MyRequests" asp-route-statusFilter="Rejected" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Rejected" ? "active" : "")">
+                                Rejected
+                                <span class="badge badge-light float-right">@ViewBag.RejectedCount</span>
+                            </a>
+                            <a asp-action="MyRequests" asp-route-statusFilter="Cancelled" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Cancelled" ? "active" : "")">
+                                Cancelled
+                                <span class="badge badge-light float-right">@ViewBag.CancelledCount</span>
+                            </a>
+                            <a asp-action="MyRequests" asp-route-statusFilter="Completed" 
+                               class="list-group-item list-group-item-action @(ViewBag.StatusFilter == "Completed" ? "active" : "")">
+                                Completed
+                                <span class="badge badge-light float-right">@ViewBag.CompletedCount</span>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -77,26 +97,51 @@
                 <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Training requests (@Model.Count)</h3>
+                <div class="card-tools">
+                    <a asp-action="RequestTraining" class="text-primary" style="text-decoration: underline;">
+                        New request
+                    </a>
+                </div>
             </div>
             <div class="card-body p-0">
                 @if (Model.Any())
                 {
-                    <table class="table table-hover mb-0 sortable-table">
+                    <table class="table table-hover text-nowrap sortable-table mb-0">
                         <thead>
                             <tr>
                                 <th class="sortable" data-column="Course">Course</th>
                                 <th class="sortable" data-column="Status">Status</th>
                                 <th class="sortable" data-column="CreatedAt">Requested</th>
                                 <th class="sortable" data-column="ApprovedAt">Approved/Rejected</th>
-                                <th>Actions</th>
+                                @if (ViewBag.StatusFilter == "Approved" || ViewBag.StatusFilter == "Completed")
+                                {
+                                    <th class="sortable" data-column="TrainingDate">Training date</th>
+                                }
+                                else
+                                {
+                                    <th>Actions</th>
+                                }
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var request in Model)
                             {
+                                var recordsByCourse = ViewBag.TrainingRecords as Dictionary<int?, Compass.Models.TrainingRecord> ?? new Dictionary<int?, Compass.Models.TrainingRecord>();
+                                var trainingRecord = request.CourseId.HasValue && recordsByCourse.ContainsKey(request.CourseId.Value) 
+                                    ? recordsByCourse[request.CourseId.Value] 
+                                    : null;
                                 <tr>
                                     <td>
-                                        <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
+                                        @if (request.Status == "Approved" && !request.WithdrawalRequested && request.TrainingCompleted != true)
+                                        {
+                                            <a asp-action="ManageApprovedTraining" asp-route-id="@request.Id" style="color: #005ea5; text-decoration: underline;">
+                                                <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <strong>@(request.Course?.Title ?? request.CustomCourseTitle ?? "Custom course")</strong>
+                                        }
                                         @if (!string.IsNullOrEmpty(request.Justification))
                                         {
                                             <br><small class="text-muted">@(request.Justification.Length > 100 ? request.Justification.Substring(0, 100) + "..." : request.Justification)</small>
@@ -109,10 +154,17 @@
                                                 <span class="badge badge-secondary">Draft</span>
                                                 break;
                                             case "Submitted":
-                                                <span class="badge badge-info">Submitted</span>
+                                                <span class="badge badge-warning">Submitted</span>
                                                 break;
                                             case "Approved":
-                                                <span class="badge badge-success">Approved</span>
+                                                @if (request.TrainingCompleted == true)
+                                                {
+                                                    <span class="badge badge-success">Completed</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-success">Approved</span>
+                                                }
                                                 break;
                                             case "Rejected":
                                                 <span class="badge badge-danger">Rejected</span>
@@ -140,35 +192,98 @@
                                             <span class="text-muted">-</span>
                                         }
                                     </td>
-                                    <td>
-                                        @if (request.Status == "Draft")
-                                        {
-                                            <a asp-action="EditRequest" asp-route-id="@request.Id" class="btn btn-sm btn-warning">Edit</a>
-                                            <form asp-action="SubmitRequest" method="post" style="display: inline;">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="id" value="@request.Id" />
-                                                <button type="submit" class="btn btn-sm btn-primary">Submit</button>
-                                            </form>
-                                            <form asp-action="WithdrawRequest" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to withdraw this request?');">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="id" value="@request.Id" />
-                                                <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
-                                            </form>
-                                        }
-                                        else if (request.Status == "Submitted")
-                                        {
-                                            <form asp-action="WithdrawRequest" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to withdraw this request?');">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="id" value="@request.Id" />
-                                                <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
-                                            </form>
-                                        }
-                                        @if (!string.IsNullOrEmpty(request.ApproverComments))
-                                        {
-                                            <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#commentsModal@(request.Id)">Comments</button>
-                                        }
-                                    </td>
+                                    @if (ViewBag.StatusFilter == "Approved" || ViewBag.StatusFilter == "Completed")
+                                    {
+                                        <td>
+                                            @if (request.TrainingCompleted == true && request.CompletedDate.HasValue)
+                                            {
+                                                @request.CompletedDate.Value.ToString("dd MMM yyyy")
+                                            }
+                                            else if (request.PlannedDate.HasValue)
+                                            {
+                                                @request.PlannedDate.Value.ToString("dd MMM yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    }
+                                    else
+                                    {
+                                        <td>
+                                            @if (request.Status == "Draft")
+                                            {
+                                                <a asp-action="EditRequest" asp-route-id="@request.Id" class="btn btn-sm btn-warning">Edit</a>
+                                                <form asp-action="SubmitRequest" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@request.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-success">Submit</button>
+                                                </form>
+                                                <form asp-action="WithdrawRequest" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to withdraw this request?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@request.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
+                                                </form>
+                                            }
+                                            else if (request.Status == "Submitted")
+                                            {
+                                                <form asp-action="WithdrawRequest" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to withdraw this request?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@request.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
+                                                </form>
+                                            }
+                                            else if (request.Status == "Approved" && trainingRecord != null && trainingRecord.Status == "Completed" && !trainingRecord.OutcomeRating.HasValue)
+                                            {
+                                                <a asp-action="ProvideFeedback" asp-route-id="@trainingRecord.Id" class="btn btn-sm btn-primary">Provide feedback</a>
+                                            }
+                                            else if (request.Status == "Approved" && trainingRecord != null && trainingRecord.Status == "Completed" && trainingRecord.OutcomeRating.HasValue)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#feedbackModal@(trainingRecord.Id)">View feedback</button>
+                                            }
+                                            @if (!string.IsNullOrEmpty(request.ApproverComments))
+                                            {
+                                                <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#commentsModal@(request.Id)">Comments</button>
+                                            }
+                                        </td>
+                                    }
                                 </tr>
+                                @if (trainingRecord != null && trainingRecord.Status == "Completed" && !string.IsNullOrEmpty(trainingRecord.Feedback))
+                                {
+                                    <div class="modal fade" id="feedbackModal@(trainingRecord.Id)" tabindex="-1" role="dialog">
+                                        <div class="modal-dialog" role="document">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Training feedback</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p><strong>Rating:</strong> 
+                                                        @if (trainingRecord.OutcomeRating.HasValue)
+                                                        {
+                                                            @for (int i = 1; i <= 5; i++)
+                                                            {
+                                                                <i class="fas fa-star @(i <= trainingRecord.OutcomeRating.Value ? "text-warning" : "text-muted")"></i>
+                                                            }
+                                                        }
+                                                    </p>
+                                                    <p><strong>Feedback:</strong></p>
+                                                    <p>@trainingRecord.Feedback</p>
+                                                    @if (!string.IsNullOrEmpty(trainingRecord.EvidenceFileUrl))
+                                                    {
+                                                        <p><strong>Evidence:</strong> <a href="@trainingRecord.EvidenceFileUrl" target="_blank">View certificate</a></p>
+                                                    }
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
                                 @if (!string.IsNullOrEmpty(request.ApproverComments))
                                 {
                                     <div class="modal fade" id="commentsModal@(request.Id)" tabindex="-1" role="dialog">
@@ -198,7 +313,7 @@
                 {
                     <div class="p-3">
                         <p class="text-muted mb-0">No training requests found.</p>
-                        <a asp-action="RequestTraining" class="btn btn-primary mt-2">Create your first request</a>
+                       
                     </div>
                 }
             </div>
@@ -243,9 +358,11 @@
                     var aVal, bVal;
                     var colIndex = table.find('thead th[data-column="' + column + '"]').index();
                     
-                    if (column === 'CreatedAt' || column === 'ApprovedAt') {
+                    if (column === 'CreatedAt' || column === 'ApprovedAt' || column === 'Completed' || column === 'TrainingDate') {
                         var aDate = $(a).find('td').eq(colIndex).text().trim();
                         var bDate = $(b).find('td').eq(colIndex).text().trim();
+                        if (aDate === '-' || aDate.startsWith('Planned:')) aDate = '1900-01-01';
+                        if (bDate === '-' || bDate.startsWith('Planned:')) bDate = '1900-01-01';
                         aVal = new Date(aDate);
                         bVal = new Date(bDate);
                     } else {

@@ -14,9 +14,14 @@ public class HOPS
     [Required]
     public int UserId { get; set; }
 
+    /// <summary>
+    /// The profession ID the user is responsible for
+    /// </summary>
     [Required]
-    [StringLength(100)]
-    public string Profession { get; set; } = string.Empty; // The profession the user is responsible for
+    public int DdatProfessionId { get; set; }
+
+    [ForeignKey(nameof(DdatProfessionId))]
+    public DdatProfession DdatProfession { get; set; } = null!;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

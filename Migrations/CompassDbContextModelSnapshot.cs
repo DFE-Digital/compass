@@ -1285,6 +1285,40 @@ namespace Compass.Migrations
                     b.ToTable("BusinessAreaLookups");
                 });
 
+            modelBuilder.Entity("Compass.Models.CapabilityGap", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ActionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserProfessionalProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActionId");
+
+                    b.HasIndex("UserProfessionalProfileId");
+
+                    b.ToTable("CapabilityGaps");
+                });
+
             modelBuilder.Entity("Compass.Models.ChatConversation", b =>
                 {
                     b.Property<int>("Id")
@@ -1455,6 +1489,310 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Criteria");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkChangeNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ChangeNote")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FrameworkVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Page")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FrameworkVersionId");
+
+                    b.HasIndex("Timestamp");
+
+                    b.ToTable("DdatFrameworkChangeNotes");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkRole", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FrameworkVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoleFamily")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleLevel")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleLevelDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoleType")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FrameworkVersionId");
+
+                    b.HasIndex("IsArchived");
+
+                    b.HasIndex("Role", "RoleLevel", "FrameworkVersionId");
+
+                    b.ToTable("DdatFrameworkRoles");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkRoleSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DdatFrameworkRoleId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SkillDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SkillLevel")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SkillLevelDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SkillName")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DdatFrameworkRoleId", "SkillName", "SkillLevel");
+
+                    b.ToTable("DdatFrameworkRoleSkills");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AwarenessDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExpertDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("FrameworkVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PractitionerDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RolesThatRequireSkill")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SkillDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SkillName")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkingDescription")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FrameworkVersionId");
+
+                    b.HasIndex("IsArchived");
+
+                    b.HasIndex("SkillName", "FrameworkVersionId");
+
+                    b.ToTable("DdatFrameworkSkills");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkSkillGradeMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CapabilityLevel")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DdatFrameworkSkillId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Grade")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DdatFrameworkSkillId", "CapabilityLevel", "Grade")
+                        .IsUnique();
+
+                    b.ToTable("DdatFrameworkSkillGradeMappings");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ImportedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RolesCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RolesCsvPath")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RolesCsvUrl")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SkillsCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SkillsCsvPath")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SkillsCsvUrl")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VersionIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("VersionName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("VersionIdentifier")
+                        .IsUnique();
+
+                    b.ToTable("DdatFrameworkVersions");
                 });
 
             modelBuilder.Entity("Compass.Models.DdatProfession", b =>
@@ -3726,6 +4064,47 @@ namespace Compass.Migrations
                     b.ToTable("GovernmentDepartments");
                 });
 
+            modelBuilder.Entity("Compass.Models.Grade", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DisplayOrder");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("Grades");
+                });
+
             modelBuilder.Entity("Compass.Models.Group", b =>
                 {
                     b.Property<int>("Id")
@@ -3824,10 +4203,8 @@ namespace Compass.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Profession")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                    b.Property<int>("DdatProfessionId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -3837,11 +4214,11 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Profession");
+                    b.HasIndex("DdatProfessionId");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "Profession")
+                    b.HasIndex("UserId", "DdatProfessionId")
                         .IsUnique();
 
                     b.ToTable("HOPS");
@@ -4648,6 +5025,54 @@ namespace Compass.Migrations
                     b.HasIndex("SubmittedByUserId");
 
                     b.ToTable("KpiDataPoints");
+                });
+
+            modelBuilder.Entity("Compass.Models.LearningBudget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("FinancialYear")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Forecasted")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("Spent")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalBudget")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FinancialYear");
+
+                    b.HasIndex("FinancialYear", "IsActive")
+                        .IsUnique()
+                        .HasFilter("[IsActive] = 1");
+
+                    b.ToTable("LearningBudgets");
                 });
 
             modelBuilder.Entity("Compass.Models.Milestone", b =>
@@ -5997,6 +6422,35 @@ namespace Compass.Migrations
                     b.HasIndex("ProductDocumentId", "Year", "Month");
 
                     b.ToTable("ProductReturns");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProfessionSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DdatProfessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SkillId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DdatProfessionId");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("DdatProfessionId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("ProfessionSkills");
                 });
 
             modelBuilder.Entity("Compass.Models.Project", b =>
@@ -9073,9 +9527,21 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Mode")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Prerequisites")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PrimaryProfessionTags")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ProfessionTags")
                         .HasMaxLength(450)
@@ -9084,6 +9550,10 @@ namespace Compass.Migrations
                     b.Property<string>("Provider")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SecondaryProfessionTags")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -9110,6 +9580,52 @@ namespace Compass.Migrations
                     b.HasIndex("Title");
 
                     b.ToTable("TrainingCourses");
+                });
+
+            modelBuilder.Entity("Compass.Models.TrainingNudge", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CapabilityGap")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DismissedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "IsActive");
+
+                    b.ToTable("TrainingNudges");
                 });
 
             modelBuilder.Entity("Compass.Models.TrainingRecord", b =>
@@ -9181,6 +9697,9 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("ActualCost")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("datetime2");
 
@@ -9192,22 +9711,53 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("CourseId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("CustomCourseCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("CustomCourseProvider")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("CustomCourseTitle")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CustomCourseUrl")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<int?>("DecisionId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("FinancialYear")
+                        .HasColumnType("int");
+
                     b.Property<string>("Justification")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("PlannedDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ProfessionAlignment")
                         .HasMaxLength(450)
@@ -9218,11 +9768,27 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<bool?>("TrainingCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("TransferToUserId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
+
+                    b.Property<string>("WithdrawalReason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("WithdrawalRequested")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("WithdrawalRequestedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -9233,6 +9799,8 @@ namespace Compass.Migrations
                     b.HasIndex("DecisionId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("TransferToUserId");
 
                     b.HasIndex("UserId");
 
@@ -9246,6 +9814,18 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ChairEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChairName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChairObjectId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -9389,6 +9969,36 @@ namespace Compass.Migrations
                     b.ToTable("UserBusinessAreaRoleAssignments");
                 });
 
+            modelBuilder.Entity("Compass.Models.UserDdatFrameworkSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DdatFrameworkSkillId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserProfessionalProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DdatFrameworkSkillId");
+
+                    b.HasIndex("UserProfessionalProfileId", "DdatFrameworkSkillId")
+                        .IsUnique();
+
+                    b.ToTable("UserDdatFrameworkSkills");
+                });
+
             modelBuilder.Entity("Compass.Models.UserGroup", b =>
                 {
                     b.Property<int>("Id")
@@ -9485,12 +10095,18 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("CapabilityGaps")
+                    b.Property<string>("CapabilityGapsLegacy")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("DdatFrameworkRoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DdatProfessionId")
+                        .HasColumnType("int");
 
                     b.Property<string>("HeadOfProfessionId")
                         .HasMaxLength(450)
@@ -9500,9 +10116,9 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("Skills")
+                    b.Property<string>("SubstantiveGrade")
                         .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -9512,12 +10128,43 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DdatFrameworkRoleId");
+
+                    b.HasIndex("DdatProfessionId");
+
                     b.HasIndex("Profession");
 
                     b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("UserProfessionalProfiles");
+                });
+
+            modelBuilder.Entity("Compass.Models.UserProfessionalProfileSkill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SkillId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserProfessionalProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("UserProfessionalProfileId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("UserProfessionalProfileSkills");
                 });
 
             modelBuilder.Entity("Compass.Models.WcagCriterion", b =>
@@ -9837,6 +10484,24 @@ namespace Compass.Migrations
                         .HasForeignKey("DdtStandardId");
                 });
 
+            modelBuilder.Entity("Compass.Models.CapabilityGap", b =>
+                {
+                    b.HasOne("Compass.Models.Action", "Action")
+                        .WithMany()
+                        .HasForeignKey("ActionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Compass.Models.UserProfessionalProfile", "UserProfessionalProfile")
+                        .WithMany("CapabilityGaps")
+                        .HasForeignKey("UserProfessionalProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Action");
+
+                    b.Navigation("UserProfessionalProfile");
+                });
+
             modelBuilder.Entity("Compass.Models.ChatConversation", b =>
                 {
                     b.HasOne("Compass.Models.User", "User")
@@ -9878,6 +10543,61 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("PracticeArea");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkChangeNote", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkVersion", "FrameworkVersion")
+                        .WithMany("ChangeNotes")
+                        .HasForeignKey("FrameworkVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FrameworkVersion");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkRole", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkVersion", "FrameworkVersion")
+                        .WithMany("Roles")
+                        .HasForeignKey("FrameworkVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FrameworkVersion");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkRoleSkill", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkRole", "DdatFrameworkRole")
+                        .WithMany("RoleSkills")
+                        .HasForeignKey("DdatFrameworkRoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DdatFrameworkRole");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkSkill", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkVersion", "FrameworkVersion")
+                        .WithMany("Skills")
+                        .HasForeignKey("FrameworkVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FrameworkVersion");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkSkillGradeMapping", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkSkill", "DdatFrameworkSkill")
+                        .WithMany("GradeMappings")
+                        .HasForeignKey("DdatFrameworkSkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DdatFrameworkSkill");
                 });
 
             modelBuilder.Entity("Compass.Models.DdtStandard", b =>
@@ -10415,11 +11135,19 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.HOPS", b =>
                 {
+                    b.HasOne("Compass.Models.DdatProfession", "DdatProfession")
+                        .WithMany()
+                        .HasForeignKey("DdatProfessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Compass.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("DdatProfession");
 
                     b.Navigation("User");
                 });
@@ -10932,6 +11660,25 @@ namespace Compass.Migrations
                     b.Navigation("PerformanceMetric");
 
                     b.Navigation("ProductReturn");
+                });
+
+            modelBuilder.Entity("Compass.Models.ProfessionSkill", b =>
+                {
+                    b.HasOne("Compass.Models.DdatProfession", "DdatProfession")
+                        .WithMany("ProfessionSkills")
+                        .HasForeignKey("DdatProfessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Skill", "Skill")
+                        .WithMany("ProfessionSkills")
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DdatProfession");
+
+                    b.Navigation("Skill");
                 });
 
             modelBuilder.Entity("Compass.Models.Project", b =>
@@ -11823,6 +12570,25 @@ namespace Compass.Migrations
                     b.Navigation("TechnologyCodeOfPractice");
                 });
 
+            modelBuilder.Entity("Compass.Models.TrainingNudge", b =>
+                {
+                    b.HasOne("Compass.Models.TrainingCourse", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Compass.Models.TrainingRecord", b =>
                 {
                     b.HasOne("Compass.Models.TrainingCourse", "Course")
@@ -11853,6 +12619,10 @@ namespace Compass.Migrations
                         .HasForeignKey("DecisionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Compass.Models.User", "TransferToUser")
+                        .WithMany()
+                        .HasForeignKey("TransferToUserId");
+
                     b.HasOne("Compass.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -11862,6 +12632,8 @@ namespace Compass.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("Decision");
+
+                    b.Navigation("TransferToUser");
 
                     b.Navigation("User");
                 });
@@ -11875,6 +12647,25 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Compass.Models.UserDdatFrameworkSkill", b =>
+                {
+                    b.HasOne("Compass.Models.DdatFrameworkSkill", "DdatFrameworkSkill")
+                        .WithMany()
+                        .HasForeignKey("DdatFrameworkSkillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.UserProfessionalProfile", "UserProfessionalProfile")
+                        .WithMany("AdditionalDdatFrameworkSkills")
+                        .HasForeignKey("UserProfessionalProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DdatFrameworkSkill");
+
+                    b.Navigation("UserProfessionalProfile");
                 });
 
             modelBuilder.Entity("Compass.Models.UserGroup", b =>
@@ -11909,13 +12700,46 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.UserProfessionalProfile", b =>
                 {
+                    b.HasOne("Compass.Models.DdatFrameworkRole", "DdatFrameworkRole")
+                        .WithMany()
+                        .HasForeignKey("DdatFrameworkRoleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.DdatProfession", "DdatProfession")
+                        .WithMany()
+                        .HasForeignKey("DdatProfessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Compass.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("DdatFrameworkRole");
+
+                    b.Navigation("DdatProfession");
+
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Compass.Models.UserProfessionalProfileSkill", b =>
+                {
+                    b.HasOne("Compass.Models.Skill", "Skill")
+                        .WithMany()
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.UserProfessionalProfile", "UserProfessionalProfile")
+                        .WithMany("UserSkills")
+                        .HasForeignKey("UserProfessionalProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Skill");
+
+                    b.Navigation("UserProfessionalProfile");
                 });
 
             modelBuilder.Entity("Compass.Models.AccessibilityIssue", b =>
@@ -11951,8 +12775,29 @@ namespace Compass.Migrations
                     b.Navigation("RequestLogs");
                 });
 
+            modelBuilder.Entity("Compass.Models.DdatFrameworkRole", b =>
+                {
+                    b.Navigation("RoleSkills");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkSkill", b =>
+                {
+                    b.Navigation("GradeMappings");
+                });
+
+            modelBuilder.Entity("Compass.Models.DdatFrameworkVersion", b =>
+                {
+                    b.Navigation("ChangeNotes");
+
+                    b.Navigation("Roles");
+
+                    b.Navigation("Skills");
+                });
+
             modelBuilder.Entity("Compass.Models.DdatProfession", b =>
                 {
+                    b.Navigation("ProfessionSkills");
+
                     b.Navigation("ServiceStandardProfessions");
                 });
 
@@ -12263,6 +13108,8 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.Skill", b =>
                 {
+                    b.Navigation("ProfessionSkills");
+
                     b.Navigation("StaffRoleReturns");
                 });
 
@@ -12332,6 +13179,15 @@ namespace Compass.Migrations
             modelBuilder.Entity("Compass.Models.User", b =>
                 {
                     b.Navigation("UserGroups");
+                });
+
+            modelBuilder.Entity("Compass.Models.UserProfessionalProfile", b =>
+                {
+                    b.Navigation("AdditionalDdatFrameworkSkills");
+
+                    b.Navigation("CapabilityGaps");
+
+                    b.Navigation("UserSkills");
                 });
 #pragma warning restore 612, 618
         }

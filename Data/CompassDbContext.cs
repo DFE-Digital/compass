@@ -123,9 +123,20 @@ public partial class CompassDbContext : DbContext
     public DbSet<TrainingRecord> TrainingRecords { get; set; }
     public DbSet<TrainingRequest> TrainingRequests { get; set; }
     public DbSet<UserProfessionalProfile> UserProfessionalProfiles { get; set; }
+    public DbSet<CapabilityGap> CapabilityGaps { get; set; }
     public DbSet<HOPS> HOPS { get; set; }
     public DbSet<TrainingNudge> TrainingNudges { get; set; }
     public DbSet<LearningBudget> LearningBudgets { get; set; }
+    
+    // DDAT Framework
+    public DbSet<DdatFrameworkVersion> DdatFrameworkVersions { get; set; }
+    public DbSet<DdatFrameworkSkill> DdatFrameworkSkills { get; set; }
+    public DbSet<DdatFrameworkSkillGradeMapping> DdatFrameworkSkillGradeMappings { get; set; }
+    public DbSet<DdatFrameworkRole> DdatFrameworkRoles { get; set; }
+    public DbSet<DdatFrameworkRoleSkill> DdatFrameworkRoleSkills { get; set; }
+    public DbSet<DdatFrameworkChangeNote> DdatFrameworkChangeNotes { get; set; }
+    public DbSet<UserDdatFrameworkSkill> UserDdatFrameworkSkills { get; set; }
+    public DbSet<Grade> Grades { get; set; }
     
     // Product Governance
     public DbSet<Objective> Objectives { get; set; }
@@ -255,6 +266,10 @@ public partial class CompassDbContext : DbContext
     public DbSet<TechnologyCodeOfPractice> TechnologyCodeOfPractice { get; set; }
     public DbSet<TechnologyCodeOfPracticeProfession> TechnologyCodeOfPracticeProfessions { get; set; }
     public DbSet<TechnologyCodeOfPracticePhaseGuidance> TechnologyCodeOfPracticePhaseGuidance { get; set; }
+
+    // Profession and Skills Management
+    public DbSet<ProfessionSkill> ProfessionSkills { get; set; }
+    public DbSet<UserProfessionalProfileSkill> UserProfessionalProfileSkills { get; set; }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -2365,11 +2380,43 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<UserProfessionalProfile>()
+            .HasOne(upp => upp.DdatProfession)
+            .WithMany()
+            .HasForeignKey(upp => upp.DdatProfessionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasOne(upp => upp.DdatFrameworkRole)
+            .WithMany()
+            .HasForeignKey(upp => upp.DdatFrameworkRoleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserProfessionalProfile>()
             .HasIndex(upp => upp.UserId)
             .IsUnique();
 
         modelBuilder.Entity<UserProfessionalProfile>()
             .HasIndex(upp => upp.Profession);
+
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasIndex(upp => upp.DdatProfessionId);
+
+        modelBuilder.Entity<UserProfessionalProfile>()
+            .HasMany(upp => upp.UserSkills)
+            .WithOne(ups => ups.UserProfessionalProfile)
+            .HasForeignKey(ups => ups.UserProfessionalProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // UserProfessionalProfileSkill configuration
+        modelBuilder.Entity<UserProfessionalProfileSkill>()
+            .HasOne(ups => ups.Skill)
+            .WithMany()
+            .HasForeignKey(ups => ups.SkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserProfessionalProfileSkill>()
+            .HasIndex(ups => new { ups.UserProfessionalProfileId, ups.SkillId })
+            .IsUnique();
 
         // HOPS configuration
         modelBuilder.Entity<HOPS>()
@@ -2379,13 +2426,62 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<HOPS>()
+            .HasOne(h => h.DdatProfession)
+            .WithMany()
+            .HasForeignKey(h => h.DdatProfessionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<HOPS>()
             .HasIndex(h => h.UserId);
 
         modelBuilder.Entity<HOPS>()
-            .HasIndex(h => h.Profession);
+            .HasIndex(h => h.DdatProfessionId);
 
         modelBuilder.Entity<HOPS>()
-            .HasIndex(h => new { h.UserId, h.Profession })
+            .HasIndex(h => new { h.UserId, h.DdatProfessionId })
+            .IsUnique();
+
+        // ProfessionSkill configuration (many-to-many: DdatProfession ↔ Skill)
+        modelBuilder.Entity<ProfessionSkill>()
+            .HasIndex(ps => new { ps.DdatProfessionId, ps.SkillId })
+            .IsUnique();
+
+        modelBuilder.Entity<ProfessionSkill>()
+            .HasOne(ps => ps.DdatProfession)
+            .WithMany(dp => dp.ProfessionSkills)
+            .HasForeignKey(ps => ps.DdatProfessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProfessionSkill>()
+            .HasOne(ps => ps.Skill)
+            .WithMany(s => s.ProfessionSkills)
+            .HasForeignKey(ps => ps.SkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProfessionSkill>()
+            .HasIndex(ps => ps.DdatProfessionId);
+
+        modelBuilder.Entity<ProfessionSkill>()
+            .HasIndex(ps => ps.SkillId);
+
+        // CapabilityGap configuration
+        modelBuilder.Entity<CapabilityGap>()
+            .HasOne(cg => cg.UserProfessionalProfile)
+            .WithMany(upp => upp.CapabilityGaps)
+            .HasForeignKey(cg => cg.UserProfessionalProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CapabilityGap>()
+            .HasOne(cg => cg.Action)
+            .WithMany()
+            .HasForeignKey(cg => cg.ActionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<CapabilityGap>()
+            .HasIndex(cg => cg.UserProfessionalProfileId);
+
+        modelBuilder.Entity<HOPS>()
+            .HasIndex(h => new { h.UserId, h.DdatProfessionId })
             .IsUnique();
 
         // TrainingNudge configuration
@@ -2415,6 +2511,97 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<LearningBudget>()
             .HasIndex(lb => lb.FinancialYear);
+
+        // DDAT Framework Version configuration
+        modelBuilder.Entity<DdatFrameworkVersion>()
+            .HasIndex(fv => fv.VersionIdentifier)
+            .IsUnique();
+
+        modelBuilder.Entity<DdatFrameworkVersion>()
+            .HasIndex(fv => fv.IsActive);
+
+        // DDAT Framework Skill configuration
+        modelBuilder.Entity<DdatFrameworkSkill>()
+            .HasOne(s => s.FrameworkVersion)
+            .WithMany(v => v.Skills)
+            .HasForeignKey(s => s.FrameworkVersionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DdatFrameworkSkill>()
+            .HasIndex(s => new { s.SkillName, s.FrameworkVersionId });
+
+        modelBuilder.Entity<DdatFrameworkSkill>()
+            .HasIndex(s => s.IsArchived);
+
+        modelBuilder.Entity<DdatFrameworkSkillGradeMapping>()
+            .HasOne(m => m.DdatFrameworkSkill)
+            .WithMany(s => s.GradeMappings)
+            .HasForeignKey(m => m.DdatFrameworkSkillId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DdatFrameworkSkillGradeMapping>()
+            .HasIndex(m => new { m.DdatFrameworkSkillId, m.CapabilityLevel, m.Grade })
+            .IsUnique();
+
+        // DDAT Framework Role configuration
+        modelBuilder.Entity<DdatFrameworkRole>()
+            .HasOne(r => r.FrameworkVersion)
+            .WithMany(v => v.Roles)
+            .HasForeignKey(r => r.FrameworkVersionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DdatFrameworkRole>()
+            .HasIndex(r => new { r.Role, r.RoleLevel, r.FrameworkVersionId });
+
+        modelBuilder.Entity<DdatFrameworkRole>()
+            .HasIndex(r => r.IsArchived);
+
+        modelBuilder.Entity<DdatFrameworkRoleSkill>()
+            .HasOne(rs => rs.DdatFrameworkRole)
+            .WithMany(r => r.RoleSkills)
+            .HasForeignKey(rs => rs.DdatFrameworkRoleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DdatFrameworkRoleSkill>()
+            .HasIndex(rs => new { rs.DdatFrameworkRoleId, rs.SkillName, rs.SkillLevel });
+
+        // DDAT Framework Change Note configuration
+        modelBuilder.Entity<DdatFrameworkChangeNote>()
+            .HasOne(cn => cn.FrameworkVersion)
+            .WithMany(v => v.ChangeNotes)
+            .HasForeignKey(cn => cn.FrameworkVersionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DdatFrameworkChangeNote>()
+            .HasIndex(cn => cn.Timestamp);
+
+        // UserDdatFrameworkSkill configuration
+        modelBuilder.Entity<UserDdatFrameworkSkill>()
+            .HasOne(udfs => udfs.UserProfessionalProfile)
+            .WithMany(upp => upp.AdditionalDdatFrameworkSkills)
+            .HasForeignKey(udfs => udfs.UserProfessionalProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserDdatFrameworkSkill>()
+            .HasOne(udfs => udfs.DdatFrameworkSkill)
+            .WithMany()
+            .HasForeignKey(udfs => udfs.DdatFrameworkSkillId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserDdatFrameworkSkill>()
+            .HasIndex(udfs => new { udfs.UserProfessionalProfileId, udfs.DdatFrameworkSkillId })
+            .IsUnique();
+
+        // Grade configuration
+        modelBuilder.Entity<Grade>()
+            .HasIndex(g => g.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<Grade>()
+            .HasIndex(g => g.IsActive);
+
+        modelBuilder.Entity<Grade>()
+            .HasIndex(g => g.DisplayOrder);
 
     }
 }

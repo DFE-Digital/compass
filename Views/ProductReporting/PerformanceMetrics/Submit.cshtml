@@ -6,6 +6,15 @@
     var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
 }
 
+@{
+    ViewBag.BrandText = "Performance reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Performance metrics", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = (string)null, IsButton = false, IsActive = false }
+    };
+}
+@await Html.PartialAsync("_ModuleNavbar")
+
 @section Breadcrumbs {
     <style>
         .breadcrumb a:hover {
@@ -30,12 +39,26 @@
 }
 
 <style nonce="@Context.Items["Nonce"]">
-    .small-box .inner h3 {
-        font-size: 1.5rem;
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
     }
-    
-    .small-box .inner p {
-        font-size: 0.875rem;
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
     }
 </style>
 
@@ -56,10 +79,10 @@
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <aside class="col-xl-3 col-lg-4 mb-4">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
                 <partial name="_ProductSummarySidebar" model="product" />
             </aside>
-            <div class="col-xl-9 col-lg-8">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                 @if (TempData["SuccessMessage"] != null)
                 {
                     <div class="alert alert-success alert-dismissible fade show">
@@ -82,37 +105,58 @@
                     </div>
                 }
 
-                <div class="row">
-                    <div class="col-xxl-6 col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-                        <div class="small-box bg-info">
-                            <div class="inner">
-                                <h3>@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</h3>
-                                <p>Reporting period</p>
-                            </div>
-                            <div class="icon">
-                                <i class="fas fa-calendar-alt"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
-                        <div class="small-box @(productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "bg-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "bg-danger" : "bg-warning")">
-                            <div class="inner">
-                                <h3>@productReturn.Status</h3>
-                                <p>Status</p>
-                            </div>
-                            <div class="icon">
-                                <i class="fas fa-flag"></i>
+                <div class="row mb-4">
+                    <!-- Card 1: Reporting Period -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-info shadow h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Reporting Period</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xxl-3 col-xl-3 col-lg-3 col-md-3 col-sm-12 col-12">
-                        <div class="small-box bg-primary">
-                            <div class="inner">
-                                <h3>@Model.Count(m => m.IsComplete) of @Model.Count complete</h3>
-                                <p>Progress</p>
+
+                    <!-- Card 2: Status -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        @{
+                            var statusBorderClass = productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "border-left-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "border-left-danger" : "border-left-warning";
+                            var statusTextClass = productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "text-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "text-danger" : "text-warning";
+                        }
+                        <div class="card @statusBorderClass shadow h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold @statusTextClass text-uppercase mb-1">Status</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@productReturn.Status</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-flag fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="icon">
-                                <i class="fas fa-tasks"></i>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Progress -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-primary shadow h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Progress</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.Count(m => m.IsComplete) of @Model.Count complete</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-tasks fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

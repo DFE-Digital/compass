@@ -14,13 +14,7 @@
 @await Html.PartialAsync("_DashboardStyles")
 
 @section Breadcrumbs {
-    <style>
-        .breadcrumb a:hover {
-            color: #003078 !important;
-            text-decoration: underline !important;
-        }
-    </style>
-    <nav aria-label="Breadcrumb">
+ <nav aria-label="Breadcrumb">
         <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <li class="breadcrumb-item">
                 <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
@@ -30,23 +24,29 @@
     </nav>
 }
 
-<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-    <div>
-        <h1>Work reporting</h1>
-        <p>Manage and track your work items and monthly updates</p>
-    </div>
-    @if (ViewBag.IsCentralOpsAdmin == true)
+@{
+    var currentView = ViewBag.CurrentView as string ?? Context.Request.Query["view"].ToString();
+    if (string.IsNullOrEmpty(currentView))
     {
-        <div style="margin-top: 0;">
-            <a asp-action="Create" class="btn btn-success">
-                <i class="fas fa-plus"></i> Create entry
-            </a>
-        </div>
+        currentView = "mine"; // Default to "Your work"
     }
-</div>
+    var isViewMine = string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
+    var isViewWatched = string.Equals(currentView, "watched", StringComparison.OrdinalIgnoreCase);
+    var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
+    
+    ViewBag.BrandText = "Work reporting";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Your work", Action = "Index", Controller = "Project", Url = Url.Action("Index", "Project", new { view = "mine" }), IsButton = false, IsActive = isViewMine },
+        new { Text = "Watched", Action = "Index", Controller = "Project", Url = Url.Action("Index", "Project", new { view = "watched" }), IsButton = false, IsActive = isViewWatched },
+        new { Text = "All work", Action = "Index", Controller = "Project", Url = Url.Action("Index", "Project", new { view = "all" }), IsButton = false, IsActive = isViewAll },
+        new { Text = "Create work entry", Action = "Create", Controller = "Project", Url = (string)null, IsButton = true, IsActive = false }
+    };
+}
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -78,6 +78,7 @@
                             var currentPriorityId = ViewBag.CurrentPriority as int?;
                         }
                         <form method="get" id="filterForm">
+                            <input type="hidden" name="view" value="@currentView" />
                             <div class="form-group">
                                 <label>Search</label>
                                 <input type="text" name="search" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
@@ -215,7 +216,7 @@
 
                             <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm btn-block">Apply filters</button>
-                                <a asp-action="Index" asp-route-clearFilters="true" class="btn btn-default btn-sm btn-block">Clear all filters</a>
+                                <a asp-action="Index" asp-route-clearFilters="true" asp-route-view="@currentView" class="btn btn-default btn-sm btn-block">Clear all filters</a>
                             </div>
                         </form>
                         
@@ -231,80 +232,86 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = "",
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
                                 {
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = "",
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
                                 {
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = "",
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
                                 {
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = "",
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = currentPriorityId
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
                                 {
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase,
                                         flagship = "",
                                         priority = currentPriorityId
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                                 @if (currentPriorityId.HasValue)
                                 {
                                     var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
                                     <a href="@Url.Action("Index", new { 
+                                        view = currentView,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase,
                                         flagship = ViewBag.CurrentFlagship,
                                         priority = (int?)null
-                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center" style="text-decoration: none;" title="Remove filter">
-                                        Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2" style="color: white; opacity: 0.9;"></i>
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2"></i>
                                     </a>
                                 }
                             </div>
@@ -315,90 +322,139 @@
 
             <!-- Right Column: Work Items Tables -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @if (Model.UserProjects.Any())
+                @if (isViewMine)
                 {
                     <!-- Your Work Section -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h3 class="card-title">Your work</h3>
-                            <div class="card-tools">
-                                <a asp-action="ExportUserProjects" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-file-excel"></i> Export to Excel
-                                </a>
-                            </div>
-                        </div>
-                        @{
-                            ViewData["TableId"] = "user-projects-table";
-                            ViewData["TableClass"] = "user-projects-table";
-                            ViewData["ShowPagination"] = false;
-                            ViewData["PaginationIdPrefix"] = "userProjects";
-                            ViewData["ShowMonthlyUpdateStatus"] = true;
-                        }
-                        <partial name="_ProjectTable" model="Model.UserProjects" view-data="ViewData" />
-                    </div>
-                }
-
-                @if (Model.WatchedProjects.Any())
-                {
-                    <!-- Watched Work Section -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h3 class="card-title">Watched work</h3>
-                        </div>
-                        @{
-                            ViewData["TableId"] = "watched-projects-table";
-                            ViewData["TableClass"] = "watched-projects-table";
-                            ViewData["ShowPagination"] = false;
-                            ViewData["PaginationIdPrefix"] = "watchedProjects";
-                            ViewData["ShowMonthlyUpdateStatus"] = false;
-                        }
-                        <partial name="_ProjectTable" model="Model.WatchedProjects" view-data="ViewData" />
-                    </div>
-                }
-                
-
-                <!-- All Work Items Section -->
-                <div class="card mb-4" id="all-work-items-card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            @{
-                                var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
-                                                !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
-                                                !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
-                                                !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
-                                                !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
-                                                (ViewBag.CurrentPriority as int?).HasValue;
-                            }
-                            @(hasFilters ? "Filtered view of work items" : "All work items")
-                        </h3>
-                         <div class="card-tools">
-                 
-                </div>
-                    </div>
-                    @if (Model.Projects.Any())
+                    @if (Model.UserProjects.Any())
                     {
-                        ViewData["TableId"] = "all-projects-table";
-                        ViewData["TableClass"] = "projects-index-table";
-                        ViewData["ShowPagination"] = true;
-                        ViewData["TotalCount"] = Model.TotalCount;
-                        ViewData["PageNumber"] = Model.PageNumber;
-                        ViewData["PageSize"] = Model.PageSize;
-                        ViewData["TotalPages"] = Model.TotalPages;
-                        ViewData["HasPreviousPage"] = Model.HasPreviousPage;
-                        ViewData["HasNextPage"] = Model.HasNextPage;
-                        ViewData["ShowMonthlyUpdateStatus"] = true;
-                        <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Your work</h3>
+                                <div class="card-tools">
+                                    <a asp-action="ExportUserProjects" 
+                                       asp-route-search="@ViewBag.CurrentSearch"
+                                       asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                       asp-route-phase="@ViewBag.CurrentPhase"
+                                       asp-route-flagship="@ViewBag.CurrentFlagship"
+                                       asp-route-priority="@ViewBag.CurrentPriority"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            @{
+                                ViewData["TableId"] = "user-projects-table";
+                                ViewData["TableClass"] = "user-projects-table";
+                                ViewData["ShowPagination"] = false;
+                                ViewData["PaginationIdPrefix"] = "userProjects";
+                                ViewData["ShowMonthlyUpdateStatus"] = true;
+                            }
+                            <partial name="_ProjectTable" model="Model.UserProjects" view-data="ViewData" />
+                        </div>
                     }
                     else
                     {
-                        <div class="card-body p-0">
-                            <div class="p-3">
-                                <p class="text-muted mb-0">No work items recorded.</p>
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No work items assigned to you.</p>
                             </div>
                         </div>
                     }
-                </div>
-                
+                }
+                else if (isViewWatched)
+                {
+                    <!-- Watched Work Section -->
+                    @if (Model.WatchedProjects.Any())
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Watched work</h3>
+                                <div class="card-tools">
+                                    <a asp-action="ExportWatchedProjects" 
+                                       asp-route-search="@ViewBag.CurrentSearch"
+                                       asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                       asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                       asp-route-phase="@ViewBag.CurrentPhase"
+                                       asp-route-flagship="@ViewBag.CurrentFlagship"
+                                       asp-route-priority="@ViewBag.CurrentPriority"
+                                       style="color: #005ea5; text-decoration: none;">
+                                        Export to Excel
+                                    </a>
+                                </div>
+                            </div>
+                            @{
+                                ViewData["TableId"] = "watched-projects-table";
+                                ViewData["TableClass"] = "watched-projects-table";
+                                ViewData["ShowPagination"] = false;
+                                ViewData["PaginationIdPrefix"] = "watchedProjects";
+                                ViewData["ShowMonthlyUpdateStatus"] = false;
+                            }
+                            <partial name="_ProjectTable" model="Model.WatchedProjects" view-data="ViewData" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card mb-4">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted mb-0">No watched work items.</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (isViewAll)
+                {
+                    <!-- All Work Items Section -->
+                    <div class="card mb-4" id="all-work-items-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                @{
+                                    var hasFilters = !string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
+                                                    (ViewBag.CurrentPriority as int?).HasValue;
+                                }
+                                @(hasFilters ? "Filtered view of work items" : "All work items")
+                            </h3>
+                            <div class="card-tools">
+                                <a asp-action="ExportAllProjects" 
+                                   asp-route-search="@ViewBag.CurrentSearch"
+                                   asp-route-ragStatus="@ViewBag.CurrentRagStatus"
+                                   asp-route-businessArea="@ViewBag.CurrentBusinessArea"
+                                   asp-route-phase="@ViewBag.CurrentPhase"
+                                   asp-route-flagship="@ViewBag.CurrentFlagship"
+                                   asp-route-priority="@ViewBag.CurrentPriority"
+                                   style="color: #005ea5; text-decoration: none;">
+                                    Export to Excel
+                                </a>
+                            </div>
+                        </div>
+                        @if (Model.Projects.Any())
+                        {
+                            ViewData["TableId"] = "all-projects-table";
+                            ViewData["TableClass"] = "projects-index-table";
+                            ViewData["ShowPagination"] = true;
+                            ViewData["TotalCount"] = Model.TotalCount;
+                            ViewData["PageNumber"] = Model.PageNumber;
+                            ViewData["PageSize"] = Model.PageSize;
+                            ViewData["TotalPages"] = Model.TotalPages;
+                            ViewData["HasPreviousPage"] = Model.HasPreviousPage;
+                            ViewData["HasNextPage"] = Model.HasNextPage;
+                            ViewData["ShowMonthlyUpdateStatus"] = true;
+                            <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
+                        }
+                        else
+                        {
+                            <div class="card-body p-0">
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">No work items recorded.</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -687,12 +743,7 @@
                     var aVal, bVal;
                     var colIndex = table.find('thead th[data-column="' + column + '"]').index();
                     
-                    if (column === 'TargetDate') {
-                        var aDate = $(a).find('td').eq(colIndex).text().trim();
-                        var bDate = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = new Date(aDate);
-                        bVal = new Date(bDate);
-                    } else if (column === 'Flagship') {
+                    if (column === 'Flagship') {
                         aVal = $(a).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
                         bVal = $(b).find('td').eq(colIndex).text().trim() === 'Yes' ? 1 : 0;
                     } else if (column === 'MonthlyUpdateStatus') {

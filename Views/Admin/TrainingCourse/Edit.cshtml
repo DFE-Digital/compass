@@ -1,4 +1,5 @@
 @model Compass.Models.TrainingCourse
+@using Compass.Models
 
 @{
     ViewData["Title"] = "Edit training course";
@@ -37,10 +38,10 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label asp-for="Format">Format</label>
-                                <select asp-for="Format" class="form-control">
+                                <select asp-for="Format" class="form-control" id="formatSelect">
                                     <option value="">Select format</option>
                                     <option value="Online">Online</option>
                                     <option value="Blended">Blended</option>
@@ -48,23 +49,24 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label asp-for="Mode">Mode</label>
-                                <select asp-for="Mode" class="form-control">
-                                    <option value="">Select mode</option>
-                                    <option value="Live">Live</option>
-                                    <option value="Async">Async</option>
-                                    <option value="Cohort">Cohort</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label asp-for="Duration">Duration</label>
                                 <input asp-for="Duration" class="form-control" placeholder="e.g., 2 days, 16 hours" />
                             </div>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Prerequisites">Prerequisites</label>
+                        <textarea asp-for="Prerequisites" class="form-control" rows="3" placeholder="List any prerequisites for this course">@Model.Prerequisites</textarea>
+                        <small class="form-text text-muted">Describe any prerequisites, required knowledge, or skills needed for this course</small>
+                    </div>
+
+                    <div class="form-group" id="locationGroup" style="display: @(Model.Format == "In-person" ? "block" : "none");">
+                        <label asp-for="Location">Locations</label>
+                        <textarea asp-for="Location" class="form-control" rows="3" placeholder="Enter locations, one per line (e.g., London, Manchester, Birmingham)">@Model.Location</textarea>
+                        <small class="form-text text-muted">List locations where this in-person course is available (one per line)</small>
                     </div>
 
                     <div class="row">
@@ -83,9 +85,66 @@
                     </div>
 
                     <div class="form-group">
-                        <label asp-for="ProfessionTags">Profession tags</label>
-                        <input asp-for="ProfessionTags" class="form-control" placeholder="Comma-separated professions" />
-                        <small class="form-text text-muted">Comma-separated list of relevant professions</small>
+                        <label>Primary professions <span class="text-danger">*</span></label>
+                        <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; background-color: #f9f9f9;">
+                            @{
+                                var professions = ViewBag.Professions as List<DdatProfession> ?? new List<DdatProfession>();
+                                var selectedPrimaryIds = ViewBag.SelectedPrimaryProfessionIds as List<int> ?? new List<int>();
+                            }
+                            @if (professions.Any())
+                            {
+                                @foreach (var profession in professions)
+                                {
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="selectedPrimaryProfessionIds" value="@profession.Id" 
+                                               id="primary_profession_@profession.Id" @(selectedPrimaryIds.Contains(profession.Id) ? "checked" : "")>
+                                        <label class="form-check-label" for="primary_profession_@profession.Id">
+                                            <strong>@profession.Name</strong>
+                                            @if (!string.IsNullOrEmpty(profession.RoleGroup))
+                                            {
+                                                <span class="badge badge-secondary ml-2">@profession.RoleGroup</span>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No professions available. Please add professions in the Admin area first.</p>
+                            }
+                        </div>
+                        <small class="form-text text-muted">Select professions where this skill is specifically required</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Secondary professions</label>
+                        <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; background-color: #f0f8ff;">
+                            @{
+                                var selectedSecondaryIds = ViewBag.SelectedSecondaryProfessionIds as List<int> ?? new List<int>();
+                            }
+                            @if (professions.Any())
+                            {
+                                @foreach (var profession in professions)
+                                {
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="selectedSecondaryProfessionIds" value="@profession.Id" 
+                                               id="secondary_profession_@profession.Id" @(selectedSecondaryIds.Contains(profession.Id) ? "checked" : "")>
+                                        <label class="form-check-label" for="secondary_profession_@profession.Id">
+                                            <strong>@profession.Name</strong>
+                                            @if (!string.IsNullOrEmpty(profession.RoleGroup))
+                                            {
+                                                <span class="badge badge-secondary ml-2">@profession.RoleGroup</span>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No professions available. Please add professions in the Admin area first.</p>
+                            }
+                        </div>
+                        <small class="form-text text-muted">Select professions where this would be useful for additional awareness training or career progression</small>
                     </div>
 
                     <div class="form-group">
@@ -102,7 +161,7 @@
                     </div>
 
                     <div class="form-group">
-                        <button type="submit" class="btn btn-primary">Update course</button>
+                        <button type="submit" class="btn btn-success">Update course</button>
                         <a asp-action="Index" class="btn btn-secondary">Cancel</a>
                     </div>
                 </form>
@@ -113,5 +172,17 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Show/hide location field based on format selection
+            $('#formatSelect').on('change', function() {
+                if ($(this).val() === 'In-person') {
+                    $('#locationGroup').show();
+                } else {
+                    $('#locationGroup').hide();
+                }
+            });
+        });
+    </script>
 }
 
