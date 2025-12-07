@@ -298,19 +298,12 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2 align-items-center">
-            <div class="col-sm-12">
-                <h1 class="m-0">Triage</h1>
-                <p class="text-muted mb-0">Review upcoming meetings, understand outcomes, and prepare for decision making.</p>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_DemandManagementNavigation")
+
         @if (TempData["SuccessMessage"] is string successMessage)
         {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -326,203 +319,199 @@
             </div>
         }
 
-        @if (months.Any())
-         {
-             <div class="card triage-month-card mb-3">
-                <div class="card-body">
-                    <div class="triage-month-controls d-flex flex-column flex-lg-row align-items-lg-center justify-content-between">
-                        <div class="btn-group mb-3 mb-lg-0" role="group" aria-label="Change month">
-                            @if (previousMonth != null)
-                            {
-                                <a class="btn btn-outline-secondary btn-icon" href="@Url.Action("Triage", new { month = previousMonth.Key })" aria-label="View @previousMonth.Label">
-                                    <span aria-hidden="true">&larr;</span>
-                                    <span class="sr-only">Previous month</span>
-                                </a>
-                                <span class="btn btn-outline-secondary btn-static d-none d-lg-inline">@previousMonth.Label</span>
-                            }
-                            else
-                            {
-                                <button type="button" class="btn btn-outline-secondary btn-icon" disabled aria-disabled="true" aria-label="No earlier month available">
-                                    <span aria-hidden="true">&larr;</span>
-                                </button>
-                            }
+        @{
+            var meetingDate = selectedMeeting?.StartAt;
+            var meetingTime = selectedMeeting?.StartAt;
+            var chairName = selectedMeeting?.ChairName ?? "Not specified";
+            var meetingMonthYear = selectedMeeting != null ? selectedMeeting.StartAt.ToString("MMMM yyyy", UkCulture) : "No meeting selected";
+            var meetingItemsCount = selectedMeeting?.TotalRequests ?? 0;
+            var priorityItemsCount = (selectedMeeting?.TierOneCount ?? 0) + (selectedMeeting?.TierTwoCount ?? 0) + (selectedMeeting?.TierThreeCount ?? 0);
+        }
 
-                            @if (nextMonth != null)
-                            {
-                                <span class="btn btn-outline-secondary btn-static d-none d-lg-inline">@nextMonth.Label</span>
-                                <a class="btn btn-outline-secondary btn-icon" href="@Url.Action("Triage", new { month = nextMonth.Key })" aria-label="View @nextMonth.Label">
-                                    <span aria-hidden="true">&rarr;</span>
-                                    <span class="sr-only">Next month</span>
-                                </a>
-                            }
-                            else
-                            {
-                                <button type="button" class="btn btn-outline-secondary btn-icon" disabled aria-disabled="true" aria-label="No later month available">
-                                    <span aria-hidden="true">&rarr;</span>
-                                </button>
-                            }
-                        </div>
-                        <div class="triage-month-summary text-lg-right">
-                            <div class="triage-month-label">@(selectedMonth?.Label ?? months.Last().Label)</div>
-                            <div class="text-muted small mt-1 mt-lg-0">
-                                @(selectedMonth?.MeetingCount ?? months.Last().MeetingCount) meeting@((selectedMonth?.MeetingCount ?? months.Last().MeetingCount) == 1 ? string.Empty : "s") ·
-                                @(selectedMonth?.RequestCount ?? months.Last().RequestCount) request@((selectedMonth?.RequestCount ?? months.Last().RequestCount) == 1 ? string.Empty : "s")
+        <!-- Summary Cards -->
+        @if (selectedMeeting != null)
+        {
+            <div class="row mb-4">
+                <!-- Card 1: Date, Time, and Chair -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-primary shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Triage Meeting</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@FormatDate(meetingDate)</div>
+                                    <div class="text-muted mb-2">@(meetingTime?.ToString("HH:mm", UkCulture) ?? "Time not set")</div>
+                                    <div class="text-muted">
+                                        <strong>Chair:</strong> @chairName
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-calendar-check fa-2x text-gray-300"></i>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                    @if (meetings.Any())
-                    {
-                        <div class="triage-meeting-picker mt-3">
-                            <label for="triageMeetingSelect" class="sr-only">Jump to meeting</label>
-                            <select id="triageMeetingSelect" class="custom-select custom-select-sm">
-                                <option value="">Jump to a meeting…</option>
-                                @foreach (var meeting in meetings)
-                                {
-                                    var isSelected = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
-                                    if (isSelected)
-                                    {
-                                        <option value="@meeting.Id" selected="selected">@meeting.Title (@meeting.StartAt.ToString("dd MMM"))</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@meeting.Id">@meeting.Title (@meeting.StartAt.ToString("dd MMM"))</option>
-                                    }
-                                }
-                            </select>
-                        </div>
-
-                        <div class="table-responsive triage-month-table mt-3">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Meeting</th>
-                                        <th scope="col">When</th>
-                                        <th scope="col">Requests</th>
-                                        <th scope="col">State</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var meeting in meetings)
-                                    {
-                                        var isActive = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
-                                        <tr class="@(isActive ? "table-active" : string.Empty)">
-                                            <td>
-                                                <div class="font-weight-semibold">@meeting.Title</div>
-                                                <div class="text-muted small">@(string.IsNullOrWhiteSpace(meeting.Location) ? "Location TBC" : meeting.Location)</div>
-                                            </td>
-                                            <td>
-                                                @meeting.StartAt.ToString("dd MMM yyyy HH:mm")
-                                            </td>
-                                            <td>@meeting.TotalRequests</td>
-                                            <td>@GetMeetingStateLabel(meeting)</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-
-                    @if (months.Count > 1)
-                    {
-                        <div class="card-footer triage-month-links mt-3">
-                            @foreach (var monthSummary in months)
-                            {
-                                var isActiveMonth = string.Equals(monthSummary.Key, Model.SelectedMonthKey, StringComparison.OrdinalIgnoreCase);
-                                <a class="badge badge-pill @(isActiveMonth ? "badge-primary" : "badge-light")" href="@Url.Action("Triage", new { month = monthSummary.Key })">
-                                    @monthSummary.Label
-                                </a>
-                            }
-                        </div>
-                    }
                 </div>
-             </div>
-         }
 
-        @if (hasMeetings)
-        {
-            <div class="card triage-overview-card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h3 class="card-title mb-0">Triage meetings overview</h3>
+                <!-- Card 2: Month/Year and Items Count -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-success shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Meeting Period</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@meetingMonthYear</div>
+                                    <small class="text-muted">@meetingItemsCount item@(meetingItemsCount != 1 ? "s" : "") in this meeting</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-list fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm triage-overview-table mb-0">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Meeting</th>
-                                    <th scope="col">When</th>
-                                    <th scope="col">Requests</th>
-                                    <th scope="col">In delivery</th>
-                                    <th scope="col">Converted</th>
-                                    <th scope="col">Deferred</th>
-                                    <th scope="col">Rejected</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var meeting in meetings.OrderBy(m => m.StartAt))
-                                {
-                                    var isActiveRow = selectedMeetingId.HasValue && meeting.Id == selectedMeetingId.Value;
-                                    var meetingLocation = string.IsNullOrWhiteSpace(meeting.Location) ? "Location TBC" : meeting.Location;
-                                    var tierHighlights = new List<string>();
-                                    if (meeting.TierOneCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 1 {meeting.TierOneCount}");
-                                    }
-                                    if (meeting.TierTwoCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 2 {meeting.TierTwoCount}");
-                                    }
-                                    if (meeting.TierThreeCount > 0)
-                                    {
-                                        tierHighlights.Add($"Tier 3 {meeting.TierThreeCount}");
-                                    }
- 
-                                    <tr class="@(isActiveRow ? "triage-overview-selected" : string.Empty)">
-                                        <td>
-                                            <div class="font-weight-semibold">
-                                                <a class="triage-overview-link" href="@Url.Action("Triage", new { meetingId = meeting.Id, month = Model.SelectedMonthKey })">@meeting.Title</a>
-                                            </div>
-                                            <div class="text-muted small">@GetMeetingStateLabel(meeting) &middot; @(meeting.IsActive ? "Active" : "Inactive")</div>
-                                        </td>
-                                        <td>
-                                            <div>@meeting.StartAt.ToString("dd MMM yyyy HH:mm")</div>
-                                            <div class="text-muted small">@meetingLocation</div>
-                                        </td>
-                                        <td>
-                                            <div class="font-weight-semibold">@meeting.TotalRequests</div>
-                                            @if (tierHighlights.Any())
-                                            {
-                                                <div class="text-muted small">@string.Join(", ", tierHighlights)</div>
-                                            }
-                                            else
-                                            {
-                                                <div class="text-muted small">No tier assigned</div>
-                                            }
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.DeliveryCount</span>
-                                            <div class="text-muted small">Includes delivery &amp; run</div>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.ConvertedCount</span>
-                                            <div class="text-muted small">Created projects</div>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.DeferredCount</span>
-                                        </td>
-                                        <td>
-                                            <span class="font-weight-semibold">@meeting.RejectedCount</span>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+
+                <!-- Card 3: Priority Items -->
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Priority Items</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@priorityItemsCount</div>
+                                    <small class="text-muted">P1, P2, P3 items</small>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         }
-        else
+
+        <div class="row">
+            <!-- Left Column: Meeting Navigation -->
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Navigation</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @if (Model.PreviousMeeting != null)
+                            {
+                                var prevRequests = Model.MeetingRequestsByMeetingId.GetValueOrDefault(Model.PreviousMeeting.Id) ?? Array.Empty<DemandRequest>();
+                                <a href="@Url.Action("Triage", new { meetingId = Model.PreviousMeeting.Id, month = Model.SelectedMonthKey })"
+                                   class="list-group-item list-group-item-action">
+                                    @Model.PreviousMeeting.Title
+                                    <span class="badge badge-light float-right">@Model.PreviousMeeting.TotalRequests</span>
+                                    @if (prevRequests.Any())
+                                    {
+                                        <div class="mt-2 pt-2 border-top">
+                                            <div class="small text-muted mb-1">Assigned requests:</div>
+                                            <div class="small" style="max-height: 150px; overflow-y: auto;">
+                                                @foreach (var req in prevRequests.Take(5))
+                                                {
+                                                    <div class="mb-1">
+                                                        <a href="@Url.Action("Details", new { id = req.Id })" class="text-decoration-none" title="@req.ProposedTitle">
+                                                            <span class="badge badge-sm @(req.Prioritisation?.PriorityTier == "Tier 1 – Critical" ? "badge-danger" : req.Prioritisation?.PriorityTier == "Tier 2 – High" ? "badge-warning" : req.Prioritisation?.PriorityTier == "Tier 3 – Medium" ? "badge-info" : "badge-secondary")">
+                                                                @(req.Prioritisation?.PriorityTier?.Split('–')[0].Trim() ?? "Unprioritised")
+                                                            </span>
+                                                            <span class="text-truncate d-inline-block" style="max-width: 120px;">@req.ReferenceNumber</span>
+                                                        </a>
+                                                    </div>
+                                                }
+                                                @if (prevRequests.Count > 5)
+                                                {
+                                                    <div class="text-muted small">+ @(prevRequests.Count - 5) more</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </a>
+                            }
+
+                            @if (Model.SelectedMeeting != null)
+                            {
+                                <a href="@Url.Action("Triage", new { meetingId = Model.SelectedMeeting.Id, month = Model.SelectedMonthKey })"
+                                   class="list-group-item list-group-item-action active">
+                                    @Model.SelectedMeeting.Title
+                                    <span class="badge badge-light float-right">@Model.SelectedMeeting.TotalRequests</span>
+                                    @if (Model.MeetingRequests.Any())
+                                    {
+                                        <div class="mt-2 pt-2 border-top">
+                                            <div class="small mb-1">Assigned requests:</div>
+                                            <div class="small" style="max-height: 150px; overflow-y: auto;">
+                                                @foreach (var req in Model.MeetingRequests.Take(5))
+                                                {
+                                                    <div class="mb-1">
+                                                        <a href="@Url.Action("Details", new { id = req.Id })" class="text-decoration-none text-white" title="@req.ProposedTitle">
+                                                            <span class="badge badge-sm @(req.Prioritisation?.PriorityTier == "Tier 1 – Critical" ? "badge-danger" : req.Prioritisation?.PriorityTier == "Tier 2 – High" ? "badge-warning" : req.Prioritisation?.PriorityTier == "Tier 3 – Medium" ? "badge-info" : "badge-secondary")">
+                                                                @(req.Prioritisation?.PriorityTier?.Split('–')[0].Trim() ?? "Unprioritised")
+                                                            </span>
+                                                            <span class="text-truncate d-inline-block" style="max-width: 120px;">@req.ReferenceNumber</span>
+                                                        </a>
+                                                    </div>
+                                                }
+                                                @if (Model.MeetingRequests.Count > 5)
+                                                {
+                                                    <div class="small">+ @(Model.MeetingRequests.Count - 5) more</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </a>
+                            }
+
+                            @if (Model.NextMeeting != null)
+                            {
+                                var nextRequests = Model.MeetingRequestsByMeetingId.GetValueOrDefault(Model.NextMeeting.Id) ?? Array.Empty<DemandRequest>();
+                                <a href="@Url.Action("Triage", new { meetingId = Model.NextMeeting.Id, month = Model.SelectedMonthKey })"
+                                   class="list-group-item list-group-item-action">
+                                    @Model.NextMeeting.Title
+                                    <span class="badge badge-light float-right">@Model.NextMeeting.TotalRequests</span>
+                                    @if (nextRequests.Any())
+                                    {
+                                        <div class="mt-2 pt-2 border-top">
+                                            <div class="small text-muted mb-1">Assigned requests:</div>
+                                            <div class="small" style="max-height: 150px; overflow-y: auto;">
+                                                @foreach (var req in nextRequests.Take(5))
+                                                {
+                                                    <div class="mb-1">
+                                                        <a href="@Url.Action("Details", new { id = req.Id })" class="text-decoration-none" title="@req.ProposedTitle">
+                                                            <span class="badge badge-sm @(req.Prioritisation?.PriorityTier == "Tier 1 – Critical" ? "badge-danger" : req.Prioritisation?.PriorityTier == "Tier 2 – High" ? "badge-warning" : req.Prioritisation?.PriorityTier == "Tier 3 – Medium" ? "badge-info" : "badge-secondary")">
+                                                                @(req.Prioritisation?.PriorityTier?.Split('–')[0].Trim() ?? "Unprioritised")
+                                                            </span>
+                                                            <span class="text-truncate d-inline-block" style="max-width: 120px;">@req.ReferenceNumber</span>
+                                                        </a>
+                                                    </div>
+                                                }
+                                                @if (nextRequests.Count > 5)
+                                                {
+                                                    <div class="text-muted small">+ @(nextRequests.Count - 5) more</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </a>
+                            }
+
+                            @if (Model.PreviousMeeting == null && Model.SelectedMeeting == null && Model.NextMeeting == null)
+                            {
+                                <div class="list-group-item">
+                                    <div class="text-muted small text-center py-3">No meetings available</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Main Content -->
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+        @if (!hasMeetings)
         {
             <div class="card mb-4">
                 <div class="card-body text-center py-5">
@@ -536,74 +525,10 @@
             <div class="col-12">
                 @if (selectedMeeting != null)
                 {
+                   
                     <div class="card mb-4">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h3 class="card-title mb-0">@selectedMeeting.Title</h3>
-                            <span class="text-muted small">@GetMeetingStateLabel(selectedMeeting)</span>
-                        </div>
-                        <div class="card-body">
-                            <dl class="definition-list triage-meeting-summary">
-                                <div class="definition-item">
-                                    <dt>Date &amp; time</dt>
-                                    <dd>
-                                        <div>@selectedMeeting.StartAt.ToString("dd MMM yyyy HH:mm")</div>
-                                        <div class="text-muted small">Ends @selectedMeeting.EndAt.ToString("HH:mm")</div>
-                                    </dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Location</dt>
-                                    <dd>@(string.IsNullOrWhiteSpace(selectedMeeting.Location) ? "Location TBC" : selectedMeeting.Location)</dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Total requests</dt>
-                                    <dd>
-                                        <div class="font-weight-semibold">@selectedMeeting.TotalRequests</div>
-                                        <div class="text-muted small">Delivery @selectedMeeting.DeliveryCount &middot; Converted @selectedMeeting.ConvertedCount</div>
-                                    </dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Funding confirmed</dt>
-                                    <dd>@selectedMeeting.FundingConfirmedCount</dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Headcount confirmed</dt>
-                                    <dd>@selectedMeeting.HeadcountConfirmedCount</dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Deferred</dt>
-                                    <dd>@selectedMeeting.DeferredCount</dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Rejected</dt>
-                                    <dd>@selectedMeeting.RejectedCount</dd>
-                                </div>
-                                <div class="definition-item">
-                                    <dt>Tier split</dt>
-                                    <dd>
-                                        <div class="triage-tier-list">
-                                            <span>Tier 1 @selectedMeeting.TierOneCount</span>
-                                            <span>Tier 2 @selectedMeeting.TierTwoCount</span>
-                                            <span>Tier 3 @selectedMeeting.TierThreeCount</span>
-                                        </div>
-                                    </dd>
-                                </div>
-                            </dl>
-                            @if (selectedMeeting.StatusCounts.Any())
-                            {
-                                <div class="triage-status-pills">
-                                    @foreach (var status in selectedMeeting.StatusCounts.OrderByDescending(pair => pair.Value))
-                                    {
-                                        <span class="badge badge-light">@status.Key: @status.Value</span>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="card mb-4">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h3 class="card-title mb-0">Requests in this meeting</h3>
-                            <span class="text-muted small">@meetingRequests.Count request@(meetingRequests.Count == 1 ? string.Empty : "s")</span>
                         </div>
                         <div class="card-body">
                             @if (meetingRequests.Any())
@@ -1103,237 +1028,48 @@
                 }
             </div>
         </div>
-
-        <div id="awaiting-requests" class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h3 class="card-title mb-0">Requests awaiting scheduling</h3>
-                <span class="text-muted small">@awaitingCount request@(awaitingCount == 1 ? string.Empty : "s")</span>
-            </div>
-            <div class="card-body">
-                @if (awaitingRequests.Any())
-                {
-                    <p class="text-muted mb-3">Requests flagged for triage but not yet allocated to a meeting.</p>
-                    var awaitingAccordionId = "awaitingRequestsAccordion";
-                    <div id="@awaitingAccordionId" class="triage-request-list">
-                        @foreach (var request in awaitingRequests)
-                        {
-                            var collapseId = $"awaiting-{request.Id}";
-                            var requestorName = FormatPersonName(request.ApplicantName);
-                            var hasRequestorEmail = !string.IsNullOrWhiteSpace(request.ApplicantEmail) && !string.IsNullOrWhiteSpace(requestorName);
-                            var priorityTier = request.Prioritisation?.PriorityTier;
-                            var priorityBadgeClass = GetPriorityBadgeClass(priorityTier);
-                            var priorityShort = GetPriorityShortLabel(priorityTier);
-                            var totalScore = request.Prioritisation?.TotalPriorityScore;
-                            var assessments = request.Assessments?.OrderByDescending(a => a.UpdatedAt).ToList() ?? new List<DemandRequestAssessment>();
-                            var scoringCategories = BuildPriorityCategories(request.Prioritisation);
-                            var awaitingRiskScore = request.Prioritisation != null
-                                ? (int?)Math.Round((request.Prioritisation.RiskIfNotDeliveredScore + request.Prioritisation.TargetDeliveryUrgencyScore) / 2.0, MidpointRounding.AwayFromZero)
-                                : null;
-                            var awaitingImpactScore = request.Prioritisation != null
-                                ? (int?)Math.Round((request.Prioritisation.ScaleOfUsersScore + request.Prioritisation.EvidenceOfUserNeedScore) / 2.0, MidpointRounding.AwayFromZero)
-                                : null;
-                            var awaitingTimescale = !string.IsNullOrWhiteSpace(request.DeliveryTimescales)
-                                ? request.DeliveryTimescales
-                                : (request.TargetDeliveryDate.HasValue ? $"Target delivery {request.TargetDeliveryDate.Value:dd MMM yyyy}" : "Not specified");
-
-                            <div class="card triage-request-card">
-                                <div class="card-header" id="awaiting-heading-@request.Id">
-                                    <button class="triage-toggle" type="button" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
-                                        <div class="triage-card-summary">
-                                            <div class="triage-card-title-block">
-                                                <div class="triage-card-title">@request.ProposedTitle</div>
-                                                <div class="triage-card-ref">Reference @request.ReferenceNumber</div>
-                                            </div>
-                                            <div class="triage-card-badges">
-                                                <span class="@GetStatusBadgeClass(request.Status)">@request.Status</span>
-                                                @if (!string.IsNullOrWhiteSpace(priorityShort))
-                                                {
-                                                    <span class="@priorityBadgeClass">@priorityShort</span>
-                                                }
-                                                @if (totalScore.HasValue)
-                                                {
-                                                    <span class="badge badge-light text-dark">Score @totalScore</span>
-                                                }
-                                            </div>
-                                        </div>
-                                        <div class="triage-card-meta">
-                                            <span>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Business area not set" : request.BusinessArea)</span>
-                                            <span>
-                                                @if (hasRequestorEmail)
-                                                {
-                                                    <a href="mailto:@request.ApplicantEmail" class="triage-link">@requestorName</a>
-                                                }
-                                                else if (!string.IsNullOrWhiteSpace(requestorName))
-                                                {
-                                                    @requestorName
-                                                }
-                                                else if (!string.IsNullOrWhiteSpace(request.ApplicantEmail))
-                                                {
-                                                    <a href="mailto:@request.ApplicantEmail" class="triage-link">@request.ApplicantEmail</a>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Requestor not set</span>
-                                                }
-                                            </span>
-                                            <span>Submitted @FormatDate(request.TriageSubmittedAt ?? request.SubmittedAt)</span>
-                                            <span>Updated @FormatDateTime(request.UpdatedAt)</span>
-                                        </div>
-                                    </button>
-                                </div>
-                                <div id="@collapseId" class="collapse" aria-labelledby="awaiting-heading-@request.Id" data-parent="#@awaitingAccordionId">
-                                    <div class="card-body">
-                                        <div class="triage-detail-layout">
-                                            <div class="triage-detail-main">
-                                                <p class="text-muted">This request is ready to be scheduled into a triage meeting.</p>
-                                                @if (request.Prioritisation != null)
-                                                {
-                                                    <div class="triage-note triage-note--highlight">
-                                                        <div class="triage-note-label">Prioritisation summary</div>
-                                                        <div class="triage-note-text">
-                                                            <strong>Total score:</strong> @request.Prioritisation.TotalPriorityScore (@priorityTier)
-                                                        </div>
-                                                    </div>
-                                                }
-                                            </div>
-                                            <aside class="triage-detail-aside">
-                                                <div class="triage-summary-card">
-                                                    <h5 class="triage-summary-title">Quick view</h5>
-                                                    <dl class="definition-list summary-list">
-                                                        <div class="definition-item">
-                                                            <dt>Timescales</dt>
-                                                            <dd>@awaitingTimescale</dd>
-                                                        </div>
-                                                        <div class="definition-item">
-                                                            <dt>Risk level</dt>
-                                                            <dd>@FormatLevel(awaitingRiskScore)</dd>
-                                                        </div>
-                                                        <div class="definition-item">
-                                                            <dt>Impact level</dt>
-                                                            <dd>@FormatLevel(awaitingImpactScore)</dd>
-                                                        </div>
-                                                    </dl>
-                                                </div>
-                                                @if (request.Prioritisation != null)
-                                                {
-                                                    <div class="triage-summary-card">
-                                                        <h5 class="triage-summary-title">Prioritisation details</h5>
-                                                        <div class="table-responsive triage-score-table">
-                                                            <table class="table table-sm mb-0">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th scope="col">Category</th>
-                                                                        <th scope="col">Weighted total</th>
-                                                                        <th scope="col">Factors (score /5)</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    @foreach (var category in scoringCategories)
-                                                                    {
-                                                                        <tr>
-                                                                            <td>@category.Label</td>
-                                                                            <td>@category.Total</td>
-                                                                            <td>
-                                                                                <ul class="triage-score-factor-list">
-                                                                                    @foreach (var factor in category.Factors)
-                                                                                    {
-                                                                                        <li>@factor.Label &middot; <strong>@factor.Score</strong></li>
-                                                                                    }
-                                                                                </ul>
-                                                                            </td>
-                                                                        </tr>
-                                                                    }
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                }
-                                            </aside>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-0">No requests are currently awaiting scheduling.</p>
-                }
             </div>
         </div>
     </div>
 </section>
 
 <style>
-    .triage-month-card {
-        border: 1px solid #e4e7ec;
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
     }
- 
-     .btn-icon {
-         width: 2.75rem;
-         height: 2.75rem;
-         display: inline-flex;
-         align-items: center;
-         justify-content: center;
-         border-radius: 0.5rem;
-     }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+
+    .btn-icon {
+        width: 2.75rem;
+        height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+    }
 
     .btn-static {
         pointer-events: none;
         cursor: default;
         color: #475467;
     }
-
-    .triage-month-controls {
-        gap: 1rem;
-    }
- 
-     .triage-month-summary {
-         text-align: left;
-     }
- 
-     .triage-month-label {
-         font-weight: 600;
-         font-size: 1.05rem;
-         color: #0c1d3e;
-     }
- 
-     .triage-month-links {
-         display: flex;
-         flex-wrap: wrap;
-         gap: 0.5rem;
-     }
- 
-     .triage-month-links .badge {
-         padding: 0.45rem 0.85rem;
-         font-weight: 600;
-         font-size: 0.85rem;
-     }
-
-    .triage-meeting-picker select {
-        max-width: 340px;
-    }
-
-    .triage-month-table table thead th {
-        border-top: none;
-        font-size: 0.8rem;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        color: #667085;
-    }
-
-    .triage-month-table table td {
-        vertical-align: middle;
-    }
-
-    .triage-month-table .table-active {
-        background-color: #eef4ff;
-    }
- 
-     .triage-overview-card {
-         border: 1px solid #e4e7ec;
-     }
 
     .triage-overview-table tbody tr:hover {
         background-color: #f5f7fb;
@@ -1704,15 +1440,6 @@
             gap: 0.75rem;
         }
 
-        .triage-month-summary {
-            width: 100%;
-            text-align: left;
-        }
-
-        .triage-month-card .btn-group {
-            width: 100%;
-            justify-content: space-between;
-        }
 
         .triage-overview-table thead {
             display: none;
@@ -1738,6 +1465,13 @@
     }
 </style>
 
+@section Scripts {
+    @if (ViewBag.IsCentralOpsAdmin == true)
+    {
+        <script src="~/js/user-picker.js" asp-append-version="true"></script>
+    }
+}
+
 <script nonce="@Context.Items["Nonce"]">
     (function () {
         const meetingSelect = document.getElementById('triageMeetingSelect');
@@ -1761,5 +1495,9 @@
             window.location.href = destination.toString();
         });
     })();
+
+    function resetMeetingForm() {
+        window.location.href = '@Url.Action("Triage", new { month = Model.SelectedMonthKey })';
+    }
 </script>
 

@@ -87,8 +87,16 @@ public class TrainingCourseController : Controller
     /// Create new course - GET
     /// </summary>
     [HttpGet("Create")]
-    public IActionResult Create()
+    public async Task<IActionResult> Create()
     {
+        // Load active DDaT professions for the dropdown
+        var professions = await _context.DdatProfessions
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        ViewBag.Professions = professions;
         return View("~/Views/Admin/TrainingCourse/Create.cshtml");
     }
 
@@ -97,10 +105,40 @@ public class TrainingCourseController : Controller
     /// </summary>
     [HttpPost("Create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(TrainingCourse course)
+    public async Task<IActionResult> Create(TrainingCourse course, int[] selectedPrimaryProfessionIds, int[] selectedSecondaryProfessionIds)
     {
         if (ModelState.IsValid)
         {
+            // Convert selected primary profession IDs to comma-separated names
+            if (selectedPrimaryProfessionIds != null && selectedPrimaryProfessionIds.Length > 0)
+            {
+                var professionNames = await _context.DdatProfessions
+                    .Where(p => selectedPrimaryProfessionIds.Contains(p.Id))
+                    .Select(p => p.Name)
+                    .ToListAsync();
+                
+                course.PrimaryProfessionTags = string.Join(", ", professionNames);
+            }
+            else
+            {
+                course.PrimaryProfessionTags = null;
+            }
+
+            // Convert selected secondary profession IDs to comma-separated names
+            if (selectedSecondaryProfessionIds != null && selectedSecondaryProfessionIds.Length > 0)
+            {
+                var professionNames = await _context.DdatProfessions
+                    .Where(p => selectedSecondaryProfessionIds.Contains(p.Id))
+                    .Select(p => p.Name)
+                    .ToListAsync();
+                
+                course.SecondaryProfessionTags = string.Join(", ", professionNames);
+            }
+            else
+            {
+                course.SecondaryProfessionTags = null;
+            }
+
             course.CreatedAt = DateTime.UtcNow;
             course.UpdatedAt = DateTime.UtcNow;
             course.Active = true;
@@ -115,6 +153,17 @@ public class TrainingCourseController : Controller
             TempData["SuccessMessage"] = "Course created successfully";
             return RedirectToAction(nameof(Index));
         }
+
+        // Reload professions for the view
+        var professions = await _context.DdatProfessions
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        ViewBag.Professions = professions;
+        ViewBag.SelectedPrimaryProfessionIds = selectedPrimaryProfessionIds ?? Array.Empty<int>();
+        ViewBag.SelectedSecondaryProfessionIds = selectedSecondaryProfessionIds ?? Array.Empty<int>();
 
         return View("~/Views/Admin/TrainingCourse/Create.cshtml", course);
     }
@@ -133,6 +182,58 @@ public class TrainingCourseController : Controller
             return NotFound();
         }
 
+        // Load active DDaT professions for the dropdown
+        var professions = await _context.DdatProfessions
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        ViewBag.Professions = professions;
+        
+        // Parse existing primary profession tags to pre-select professions
+        var selectedPrimaryProfessionIds = new List<int>();
+        if (!string.IsNullOrEmpty(course.PrimaryProfessionTags))
+        {
+            var professionNames = course.PrimaryProfessionTags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            
+            selectedPrimaryProfessionIds = await _context.DdatProfessions
+                .Where(p => professionNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToListAsync();
+        }
+        // Fallback to legacy ProfessionTags if PrimaryProfessionTags is empty
+        else if (!string.IsNullOrEmpty(course.ProfessionTags))
+        {
+            var professionNames = course.ProfessionTags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            
+            selectedPrimaryProfessionIds = await _context.DdatProfessions
+                .Where(p => professionNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToListAsync();
+        }
+        
+        // Parse existing secondary profession tags
+        var selectedSecondaryProfessionIds = new List<int>();
+        if (!string.IsNullOrEmpty(course.SecondaryProfessionTags))
+        {
+            var professionNames = course.SecondaryProfessionTags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            
+            selectedSecondaryProfessionIds = await _context.DdatProfessions
+                .Where(p => professionNames.Contains(p.Name))
+                .Select(p => p.Id)
+                .ToListAsync();
+        }
+        
+        ViewBag.SelectedPrimaryProfessionIds = selectedPrimaryProfessionIds;
+        ViewBag.SelectedSecondaryProfessionIds = selectedSecondaryProfessionIds;
+
         return View("~/Views/Admin/TrainingCourse/Edit.cshtml", course);
     }
 
@@ -141,7 +242,7 @@ public class TrainingCourseController : Controller
     /// </summary>
     [HttpPost("Edit/{id}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, TrainingCourse course)
+    public async Task<IActionResult> Edit(int id, TrainingCourse course, int[] selectedPrimaryProfessionIds, int[] selectedSecondaryProfessionIds)
     {
         if (id != course.Id)
         {
@@ -152,6 +253,36 @@ public class TrainingCourseController : Controller
         {
             try
             {
+                // Convert selected primary profession IDs to comma-separated names
+                if (selectedPrimaryProfessionIds != null && selectedPrimaryProfessionIds.Length > 0)
+                {
+                    var professionNames = await _context.DdatProfessions
+                        .Where(p => selectedPrimaryProfessionIds.Contains(p.Id))
+                        .Select(p => p.Name)
+                        .ToListAsync();
+                    
+                    course.PrimaryProfessionTags = string.Join(", ", professionNames);
+                }
+                else
+                {
+                    course.PrimaryProfessionTags = null;
+                }
+
+                // Convert selected secondary profession IDs to comma-separated names
+                if (selectedSecondaryProfessionIds != null && selectedSecondaryProfessionIds.Length > 0)
+                {
+                    var professionNames = await _context.DdatProfessions
+                        .Where(p => selectedSecondaryProfessionIds.Contains(p.Id))
+                        .Select(p => p.Name)
+                        .ToListAsync();
+                    
+                    course.SecondaryProfessionTags = string.Join(", ", professionNames);
+                }
+                else
+                {
+                    course.SecondaryProfessionTags = null;
+                }
+
                 course.UpdatedAt = DateTime.UtcNow;
                 var userEmail = User.Identity?.Name ?? "System";
                 course.UpdatedBy = userEmail;
@@ -171,6 +302,17 @@ public class TrainingCourseController : Controller
                 throw;
             }
         }
+
+        // Reload professions for the view
+        var professions = await _context.DdatProfessions
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.Name)
+            .ToListAsync();
+        
+        ViewBag.Professions = professions;
+        ViewBag.SelectedPrimaryProfessionIds = selectedPrimaryProfessionIds ?? Array.Empty<int>();
+        ViewBag.SelectedSecondaryProfessionIds = selectedSecondaryProfessionIds ?? Array.Empty<int>();
 
         return View("~/Views/Admin/TrainingCourse/Edit.cshtml", course);
     }

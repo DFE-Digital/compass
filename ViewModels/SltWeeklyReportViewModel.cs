@@ -10,6 +10,9 @@ public class SltWeeklyReportViewModel
     public DateTime WeekEndDate { get; set; }
     public List<ProjectSuccess> Successes { get; set; } = new();
     public List<Milestone> Milestones { get; set; } = new();
+    public List<Risk> Risks { get; set; } = new();
+    public List<Issue> Issues { get; set; } = new();
+    public List<ProjectStatusUpdate> Updates { get; set; } = new();
     public bool HasPreviousWeek { get; set; }
     public bool HasNextWeek { get; set; }
     public int? PreviousWeekYear { get; set; }

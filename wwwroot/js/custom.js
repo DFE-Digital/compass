@@ -11,9 +11,6 @@
         var $ = jQuery;
         
         $(document).ready(function() {
-            // Smooth page loading
-            handleSmoothLoading();
-            
             // Initialize AdminLTE components
             initializeAdminLTE();
             
@@ -24,22 +21,6 @@
             setupEventHandlers();
         });
         
-        function handleSmoothLoading() {
-            // Wait for all resources to load
-            $(window).on('load', function() {
-                // Hide preloader smoothly
-                $('.preloader').addClass('fade-out');
-                
-                // Show body content
-                $('body').addClass('loaded');
-                
-                // Remove preloader from DOM after transition
-                setTimeout(function() {
-                    $('.preloader').remove();
-                }, 300);
-            });
-        }
-        
         function initializeAdminLTE() {
             // Initialize tooltips
             $('[data-toggle="tooltip"]').tooltip();
@@ -47,51 +28,51 @@
             // Initialize popovers
             $('[data-toggle="popover"]').popover();
             
-            // Initialize smooth dropdown transitions for topnav
-            initializeSmoothDropdowns();
+            // Smooth dropdown transitions disabled - no transitions on navbar
             
             // DataTable initialization moved to individual pages
         }
         
-        function initializeSmoothDropdowns() {
-            // Handle smooth dropdown open transitions in navbar-gov
-            $('.navbar-gov .dropdown').on('show.bs.dropdown', function() {
-                const $menu = $(this).find('.dropdown-menu');
-                const $dropdown = $(this);
-                
-                // Ensure menu is visible for transition
-                $menu.css('display', 'block');
-                
-                // Set initial hidden state
-                $menu.css({
-                    'opacity': '0',
-                    'transform': 'translateY(-8px) scale(0.98)',
-                    'visibility': 'visible'
-                });
-                
-                // Force reflow to ensure initial state is rendered
-                $menu[0].offsetHeight;
-                
-                // Trigger transition to visible state
-                requestAnimationFrame(function() {
-                    $menu.css({
-                        'opacity': '1',
-                        'transform': 'translateY(0) scale(1)'
-                    });
-                });
-            });
-            
-            // Handle smooth dropdown close transitions
-            $('.navbar-gov .dropdown').on('hide.bs.dropdown', function() {
-                const $menu = $(this).find('.dropdown-menu');
-                
-                // Start closing transition
-                $menu.css({
-                    'opacity': '0',
-                    'transform': 'translateY(-8px) scale(0.98)'
-                });
-            });
-        }
+        // Smooth dropdown transitions disabled - removed to eliminate hover and UI transitions
+        // function initializeSmoothDropdowns() {
+        //     // Handle smooth dropdown open transitions in navbar-gov
+        //     $('.navbar-gov .dropdown').on('show.bs.dropdown', function() {
+        //         const $menu = $(this).find('.dropdown-menu');
+        //         const $dropdown = $(this);
+        //         
+        //         // Ensure menu is visible for transition
+        //         $menu.css('display', 'block');
+        //         
+        //         // Set initial hidden state
+        //         $menu.css({
+        //             'opacity': '0',
+        //             'transform': 'translateY(-8px) scale(0.98)',
+        //             'visibility': 'visible'
+        //         });
+        //         
+        //         // Force reflow to ensure initial state is rendered
+        //         $menu[0].offsetHeight;
+        //         
+        //         // Trigger transition to visible state
+        //         requestAnimationFrame(function() {
+        //             $menu.css({
+        //                 'opacity': '1',
+        //                 'transform': 'translateY(0) scale(1)'
+        //             });
+        //         });
+        //     });
+        //     
+        //     // Handle smooth dropdown close transitions
+        //     $('.navbar-gov .dropdown').on('hide.bs.dropdown', function() {
+        //         const $menu = $(this).find('.dropdown-menu');
+        //         
+        //         // Start closing transition
+        //         $menu.css({
+        //             'opacity': '0',
+        //             'transform': 'translateY(-8px) scale(0.98)'
+        //         });
+        //     });
+        // }
         
         function initializeCustomComponents() {
             // Initialize dashboard components

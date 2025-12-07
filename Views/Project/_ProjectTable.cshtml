@@ -122,15 +122,14 @@
 }
 
 <div class="card-body table-responsive p-0">
-    <table class="table table-hover sortable-table @tableClass" id="@tableId" style="width: 100%;">
+    <div class="table-responsive-horizontal">
+        <table class="table table-hover text-nowrap sortable-table mb-0 table-responsive-mobile @tableClass" id="@tableId" style="width: 100%;">
         <thead>
             <tr>
                 <th class="col-project-title sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 25%; min-width: 200px;">Title <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-business-area sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="width: 12%; min-width: 120px;">Business Area <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-priority sortable" data-column="Priority" tabindex="0" role="button" aria-label="Sort by Priority" style="width: 10%; min-width: 100px;">Priority <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-rag sortable" data-column="RAGStatus" tabindex="0" role="button" aria-label="Sort by RAG Status" style="width: 10%; min-width: 100px;">RAG Status <i class="fas fa-sort sort-icon"></i></th>
-                <th class="col-project-phase sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase" style="width: 10%; min-width: 100px;">Phase <i class="fas fa-sort sort-icon"></i></th>
-                <th class="col-project-target sortable" data-column="TargetDate" tabindex="0" role="button" aria-label="Sort by Target Date" style="width: 12%; min-width: 120px;">Target Date <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-flagship sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship" style="width: 8%; min-width: 80px;">Flagship <i class="fas fa-sort sort-icon"></i></th>
                 <th class="col-project-monthly-update sortable" data-column="MonthlyUpdateStatus" tabindex="0" role="button" aria-label="Sort by Monthly Update Status" style="width: 13%; min-width: 140px;">@updateStatusHeader <i class="fas fa-sort sort-icon"></i></th>
             </tr>
@@ -139,14 +138,20 @@
             @foreach (var project in Model)
             {
                 <tr>
-                    <td>
+                        <td data-label="Title">
                         <a asp-action="Details" asp-route-id="@project.Id" class="project-title-link">@project.Title</a>
                         <div class="project-meta text-muted small mt-1">
-                            <span class="d-block"><span class="text-monospace">@GetDeliveryCode(project)</span></span>
+                            <span class="d-block">
+                                <span class="text-monospace">@GetDeliveryCode(project)</span>
+                                @if (!string.IsNullOrWhiteSpace(project.Phase))
+                                {
+                                    <span class="ml-2">• @project.Phase</span>
+                                }
+                            </span>
                         </div>
                     </td>
-                    <td>@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
-                    <td>
+                        <td data-label="Business Area">@(string.IsNullOrWhiteSpace(project.BusinessArea) ? "-" : project.BusinessArea)</td>
+                        <td data-label="Priority">
                         @if (project.DeliveryPriority != null)
                         {
                             <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
@@ -156,7 +161,7 @@
                             <span class="text-muted">Not set</span>
                         }
                     </td>
-                    <td>
+                        <td data-label="RAG Status">
                         @if (!string.IsNullOrEmpty(project.RagStatus))
                         {
                             <span class="@GetRagBadgeClass(project.RagStatus)">@FormatRagStatusText(project.RagStatus)</span>
@@ -166,18 +171,7 @@
                             <span class="badge badge-secondary">Not set</span>
                         }
                     </td>
-                    <td>@project.Phase</td>
-                    <td>
-                        @if (project.TargetDeliveryDate.HasValue && project.TargetDeliveryDate.Value.Year > 1)
-                        {
-                            @project.TargetDeliveryDate.Value.ToString("d MMMM yyyy")
-                        }
-                        else
-                        {
-                            <span class="text-muted">No end date</span>
-                        }
-                    </td>
-                    <td>
+                        <td data-label="Flagship">
                         @if (project.IsFlagship)
                         {
                             <span class="badge badge-primary">Yes</span>
@@ -187,7 +181,7 @@
                             <span class="badge badge-secondary">No</span>
                         }
                     </td>
-                    <td>
+                        <td data-label="@updateStatusHeader">
                         @{
                             // Get the due date for the applicable reporting period (using variables from top-level scope)
                             var dueDate = MonthlyUpdateService.GetMonthlyUpdateDueDate(applicableYear, applicableMonth);
@@ -233,6 +227,7 @@
             }
         </tbody>
     </table>
+    </div>
     @if (showPagination && totalPages > 1)
     {
         <div class="p-3 border-top">
