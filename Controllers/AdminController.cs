@@ -52,7 +52,8 @@ public class AdminController : Controller
         CreateLookupDefinition<RiskProximity>("risk-proximities", "Risk proximities", "Timeline bands for when a risk may materialise."),
         CreateLookupDefinition<RiskCategory>("risk-categories", "Risk categories", "Categorisation for risk libraries."),
         CreateLookupDefinition<RaidEvidenceType>("raid-evidence-types", "Evidence types", "Shared evidence/documentation types."),
-        CreateLookupDefinition<GovernanceBoard>("governance-boards", "Governance boards", "Committees and boards used for RAID escalation.")
+        CreateLookupDefinition<GovernanceBoard>("governance-boards", "Governance boards", "Committees and boards used for RAID escalation."),
+        CreateLookupDefinition<DemandRequestStatus>("demand-request-statuses", "Demand request statuses", "Workflow states for demand requests.")
     };
 
     private static RaidLookupDefinition CreateLookupDefinition<TLookup>(string key, string label, string? description = null)

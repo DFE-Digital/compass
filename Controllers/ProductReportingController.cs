@@ -32,8 +32,26 @@ public class ProductReportingController : Controller
     }
 
     // GET: ProductReporting/PerformanceMetrics
-    public async Task<IActionResult> PerformanceMetrics(string view = "tasks")
+    public async Task<IActionResult> PerformanceMetrics(
+        string view = "mine", 
+        string search = "", 
+        string phase = "", 
+        string businessArea = "", 
+        string reportingStatus = "",
+        bool clearFilters = false)
     {
+        // Handle guidance view - redirect to guidance page
+        if (view == "guidance")
+        {
+            return RedirectToAction("Guidance", "ProductReporting");
+        }
+
+        // Handle clear filters
+        if (clearFilters)
+        {
+            return RedirectToAction("PerformanceMetrics", new { view = view });
+        }
+
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
@@ -118,24 +136,79 @@ public class ProductReportingController : Controller
         
         // Determine which data to show based on view
         List<ProductReturnStatusViewModel> displayData;
-        if (view == "tasks")
+        if (view == "mine" || string.IsNullOrEmpty(view))
         {
-            // Show products that:
-            // 1. Require reporting (includes business area overrides), OR
-            // 2. Have business area override (even if period excluded)
-            // AND have status Due or Late
-            displayData = userProductStatuses
-                .Where(p => (p.IsReportingRequired || (p.IsBusinessAreaInScope && p.Status.HasValue)) && 
-                           (p.Status == ReturnStatus.Due || p.Status == ReturnStatus.Late))
-                .ToList();
+            displayData = userProductStatuses;
+        }
+        else if (view == "watched")
+        {
+            // Watched products not yet implemented - show empty list
+            displayData = new List<ProductReturnStatusViewModel>();
         }
         else if (view == "all")
         {
             displayData = allProductStatuses;
         }
-        else // "products" or default
+        else
         {
             displayData = userProductStatuses;
+        }
+
+        // Apply filters
+        if (!string.IsNullOrEmpty(search))
+        {
+            displayData = displayData.Where(p => 
+                p.Product.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (p.Product.FipsId != null && p.Product.FipsId.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(p.Product.Phase) && p.Product.Phase.Contains(search, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(phase))
+        {
+            displayData = displayData.Where(p => 
+                !string.IsNullOrEmpty(p.Product.Phase) && 
+                p.Product.Phase.Equals(phase, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(businessArea))
+        {
+            displayData = displayData.Where(p => 
+                p.Product.CategoryValues != null &&
+                p.Product.CategoryValues.Any(cv => 
+                    cv.CategoryType != null &&
+                    cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase) &&
+                    cv.Name.Equals(businessArea, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(reportingStatus))
+        {
+            if (reportingStatus == "Due")
+            {
+                displayData = displayData.Where(p => p.Status == ReturnStatus.Due).ToList();
+            }
+            else if (reportingStatus == "Late")
+            {
+                displayData = displayData.Where(p => p.Status == ReturnStatus.Late).ToList();
+            }
+            else if (reportingStatus == "Submitted")
+            {
+                displayData = displayData.Where(p => p.Status == ReturnStatus.Submitted).ToList();
+            }
+            else if (reportingStatus == "Upcoming")
+            {
+                displayData = displayData.Where(p => p.Status == ReturnStatus.Upcoming).ToList();
+            }
+            else if (reportingStatus == "Required")
+            {
+                displayData = displayData.Where(p => p.IsReportingRequired).ToList();
+            }
+            else if (reportingStatus == "NotRequired")
+            {
+                displayData = displayData.Where(p => !p.IsReportingRequired).ToList();
+            }
         }
         
         // Check if current period is excluded and there are no business area overrides
@@ -197,8 +270,26 @@ public class ProductReportingController : Controller
             .OrderBy(p => p.Product.Title)
             .ToList();
 
+        // Get unique values for filter dropdowns
+        var allProductsForFilters = view == "all" ? allProductStatuses : userProductStatuses;
+        var phases = allProductsForFilters
+            .Where(p => !string.IsNullOrEmpty(p.Product.Phase))
+            .Select(p => p.Product.Phase!)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
+        
+        var businessAreas = allProductsForFilters
+            .Where(p => p.Product.CategoryValues != null)
+            .SelectMany(p => p.Product.CategoryValues!)
+            .Where(cv => cv.CategoryType != null && 
+                        cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase))
+            .Select(cv => cv.Name)
+            .Distinct()
+            .OrderBy(ba => ba)
+            .ToList();
+
         ViewBag.CurrentView = view;
-        ViewBag.TasksCount = tasksCount;
         ViewBag.YourProductsCount = yourProductsCount;
         ViewBag.AllProductsCount = allProductsCount;
         ViewBag.CurrentYear = currentYear;
@@ -209,6 +300,14 @@ public class ProductReportingController : Controller
         ViewBag.UpcomingReportingDates = upcomingReportingDates;
         ViewBag.ProductsForTable = productsForTable;
         ViewBag.UserProducts = userProductStatuses;
+        
+        // Filter values
+        ViewBag.CurrentSearch = search;
+        ViewBag.CurrentPhase = phase;
+        ViewBag.CurrentBusinessArea = businessArea;
+        ViewBag.CurrentReportingStatus = reportingStatus;
+        ViewBag.Phases = phases;
+        ViewBag.BusinessAreas = businessAreas;
         
         return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", displayData);
     }
@@ -306,9 +405,18 @@ public class ProductReportingController : Controller
             return RedirectToAction(nameof(ProductHistory), new { documentId = productDocumentId });
         }
 
-        if (productReturn.Status == ReturnStatus.Upcoming)
+        // Allow submissions up to 10 days before the due date
+        var dueDate = _returnStatusService.GetReturnDueDate(year, month);
+        var now = DateTime.UtcNow;
+        var tenDaysBeforeDue = dueDate.AddDays(-10);
+        
+        // Check if we're within 10 days of the due date or past the period end
+        var periodEndDate = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+        var canSubmit = now >= periodEndDate || (now >= tenDaysBeforeDue && now <= dueDate.AddDays(1));
+        
+        if (!canSubmit && productReturn.Status == ReturnStatus.Upcoming)
         {
-            TempData["WarningMessage"] = "This return is not yet due. You can view the metrics but cannot enter data yet.";
+            TempData["WarningMessage"] = $"This return is not yet due. You can start submitting data from {tenDaysBeforeDue:dd MMM yyyy} (10 days before the due date of {dueDate:dd MMM yyyy}).";
         }
 
         // Get all performance metrics that are valid for this reporting period
@@ -478,9 +586,17 @@ public class ProductReportingController : Controller
             }
         }
 
+        // Allow editing if within 10 days before due date or past period end
+        var dueDateForReadOnly = _returnStatusService.GetReturnDueDate(year, month);
+        var nowForReadOnly = DateTime.UtcNow;
+        var tenDaysBeforeDueForReadOnly = dueDateForReadOnly.AddDays(-10);
+        var periodEndDateForReadOnly = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+        var canEdit = !(productReturn.Status == ReturnStatus.Submitted) && 
+                      (nowForReadOnly >= periodEndDateForReadOnly || (nowForReadOnly >= tenDaysBeforeDueForReadOnly && nowForReadOnly <= dueDateForReadOnly.AddDays(1)));
+
         ViewBag.Product = product;
         ViewBag.ProductReturn = productReturn;
-        ViewBag.IsReadOnly = productReturn.Status == ReturnStatus.Submitted || productReturn.Status == ReturnStatus.Upcoming;
+        ViewBag.IsReadOnly = !canEdit;
         
         return View("~/Views/ProductReporting/PerformanceMetrics/Submit.cshtml", metricValues.OrderBy(mv => mv.PerformanceMetric?.Identifier).ToList());
     }
@@ -1296,6 +1412,117 @@ public class ProductReportingController : Controller
         ViewBag.AllProductsCount = allProductsCount;
         
         return View("~/Views/ProductReporting/PerformanceMetrics/WhatYouNeedToReport.cshtml");
+    }
+
+    // GET: ProductReporting/Guidance
+    public async Task<IActionResult> Guidance()
+    {
+        // Get the current user's email
+        var userEmail = User.Identity?.Name;
+        
+        // Get current reporting period (previous month)
+        var now = DateTime.UtcNow;
+        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // Load eligibility cache once
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        
+        // Get all metrics
+        var metrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+        
+        // Get reporting dates information
+        var overrides = await _context.PerformanceReportingDueDateOverrides
+            .AsNoTracking()
+            .Where(o => o.IsActive)
+            .ToDictionaryAsync(o => (o.ReportingYear, o.ReportingMonth), o => o);
+        var periodExclusions = await _context.PerformanceReportingPeriodExclusions
+            .AsNoTracking()
+            .Where(e => e.IsActive)
+            .OrderBy(e => e.Year)
+            .ThenBy(e => e.Month)
+            .ToListAsync();
+        var businessAreaConfigs = await _context.PerformanceReportingBusinessAreaConfigs
+            .AsNoTracking()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.ApplicableFromYear)
+            .ThenBy(c => c.ApplicableFromMonth)
+            .ToListAsync();
+        
+        // Calculate reporting periods (next 12 months)
+        var reportingPeriods = new List<(int Year, int Month, DateTime DueDate, bool HasOverride, string? OverrideReason)>();
+        for (int i = 0; i < 12; i++)
+        {
+            var futureMonth = currentMonth + i;
+            var futureYear = currentYear;
+            while (futureMonth > 12)
+            {
+                futureMonth -= 12;
+                futureYear += 1;
+            }
+            
+            var hasOverride = overrides.ContainsKey((futureYear, futureMonth));
+            var overrideReason = hasOverride ? overrides[(futureYear, futureMonth)].Reason : null;
+            var dueDate = _returnStatusService.GetReturnDueDate(futureYear, futureMonth);
+            
+            reportingPeriods.Add((futureYear, futureMonth, dueDate, hasOverride, overrideReason));
+        }
+        
+        ViewBag.Metrics = metrics;
+        ViewBag.ReportingPeriods = reportingPeriods;
+        ViewBag.DefaultRule = "Returns are due by the 3rd working day of the following month";
+        ViewBag.PeriodExclusions = periodExclusions;
+        ViewBag.BusinessAreaConfigs = businessAreaConfigs;
+        
+        return View("~/Views/ProductReporting/PerformanceMetrics/Guidance.cshtml");
+    }
+
+    // GET: ProductReporting/ExportUserProducts
+    public async Task<IActionResult> ExportUserProducts(string search, string phase, string businessArea, string reportingStatus)
+    {
+        try
+        {
+            // Get the current user's email
+            var userEmail = User.Identity?.Name;
+
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                TempData["ErrorMessage"] = "Unable to identify user. Please try again.";
+                return RedirectToAction("PerformanceMetrics", new { view = "mine" });
+            }
+
+            // This is a placeholder - actual export implementation would go here
+            // For now, redirect back with a message
+            TempData["ErrorMessage"] = "Export functionality is being implemented.";
+            return RedirectToAction("PerformanceMetrics", new { view = "mine" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting user products");
+            TempData["ErrorMessage"] = "An error occurred while exporting products.";
+            return RedirectToAction("PerformanceMetrics", new { view = "mine" });
+        }
+    }
+
+    // GET: ProductReporting/ExportAllProducts
+    public async Task<IActionResult> ExportAllProducts(string search, string phase, string businessArea, string reportingStatus)
+    {
+        try
+        {
+            // This is a placeholder - actual export implementation would go here
+            // For now, redirect back with a message
+            TempData["ErrorMessage"] = "Export functionality is being implemented.";
+            return RedirectToAction("PerformanceMetrics", new { view = "all" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting all products");
+            TempData["ErrorMessage"] = "An error occurred while exporting products.";
+            return RedirectToAction("PerformanceMetrics", new { view = "all" });
+        }
     }
 
     #endregion

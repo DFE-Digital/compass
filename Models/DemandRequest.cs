@@ -185,6 +185,9 @@ public class DemandRequest
     // Declaration
     public bool DeclarationConfirmed { get; set; }
 
+    // Sensitive Request Flag
+    public bool IsSensitiveRequest { get; set; }
+
     // Timestamps
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
