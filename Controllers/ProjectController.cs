@@ -104,18 +104,109 @@ namespace Compass.Controllers
         }
 
         // GET: Project
-        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        [HttpGet]
+        [Route("api/project")]
+        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false, string view = null)
+        {
+            // Redirect to specific view routes if view parameter is provided
+            if (!string.IsNullOrEmpty(view))
+            {
+                var routeValues = new Dictionary<string, object?>
+                {
+                    { "search", search },
+                    { "ragStatus", ragStatus },
+                    { "businessArea", businessArea },
+                    { "phase", phase },
+                    { "flagship", flagship },
+                    { "priority", priority }
+                };
+
+                // Only include page if it's not 1 (default), and clearFilters if it's true
+                if (page != 1)
+                {
+                    routeValues["page"] = page;
+                }
+                if (clearFilters)
+                {
+                    routeValues["clearFilters"] = clearFilters;
+                }
+
+                // Remove null values
+                routeValues = routeValues.Where(kvp => kvp.Value != null).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                return view.ToLower() switch
+                {
+                    "your-work" or "mine" => RedirectToAction("YourWork", routeValues),
+                    "watched" => RedirectToAction("Watched", routeValues),
+                    "all" => RedirectToAction("All", routeValues),
+                    _ => RedirectToAction("YourWork", routeValues) // Default to your-work
+                };
+            }
+
+            // Default behavior: redirect to your-work if no view specified
+            var defaultRouteValues = new Dictionary<string, object?>
+            {
+                { "search", search },
+                { "ragStatus", ragStatus },
+                { "businessArea", businessArea },
+                { "phase", phase },
+                { "flagship", flagship },
+                { "priority", priority }
+            };
+
+            // Only include page if it's not 1 (default), and clearFilters if it's true
+            if (page != 1)
+            {
+                defaultRouteValues["page"] = page;
+            }
+            if (clearFilters)
+            {
+                defaultRouteValues["clearFilters"] = clearFilters;
+            }
+
+            // Remove null values
+            defaultRouteValues = defaultRouteValues.Where(kvp => kvp.Value != null).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            return RedirectToAction("YourWork", defaultRouteValues);
+        }
+
+        // GET: Project/YourWork
+        [HttpGet]
+        [Route("api/project/your-work")]
+        public async Task<IActionResult> YourWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        {
+            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+        }
+
+        // GET: Project/Watched
+        [HttpGet]
+        [Route("api/project/watched")]
+        public async Task<IActionResult> Watched(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        {
+            return await GetProjectsView("watched", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+        }
+
+        // GET: Project/All
+        [HttpGet]
+        [Route("api/project/all")]
+        public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        {
+            return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+        }
+
+        // Helper method to handle the common logic for all project views
+        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page, bool clearFilters)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
 
-            // Session keys for filters
-            const string sessionKeySearch = "ProjectIndex_Search";
-            const string sessionKeyRagStatus = "ProjectIndex_RagStatus";
-            const string sessionKeyBusinessArea = "ProjectIndex_BusinessArea";
-            const string sessionKeyPhase = "ProjectIndex_Phase";
-            const string sessionKeyFlagship = "ProjectIndex_Flagship";
-            const string sessionKeyPriority = "ProjectIndex_Priority";
+            // Session keys for filters - use view-specific keys
+            var sessionKeyPrefix = $"Project{viewType}";
+            var sessionKeySearch = $"{sessionKeyPrefix}_Search";
+            var sessionKeyRagStatus = $"{sessionKeyPrefix}_RagStatus";
+            var sessionKeyBusinessArea = $"{sessionKeyPrefix}_BusinessArea";
+            var sessionKeyPhase = $"{sessionKeyPrefix}_Phase";
+            var sessionKeyFlagship = $"{sessionKeyPrefix}_Flagship";
+            var sessionKeyPriority = $"{sessionKeyPrefix}_Priority";
 
             // Clear filters from session if requested
             if (clearFilters)
@@ -516,6 +607,7 @@ namespace Compass.Controllers
             ViewBag.CurrentReportingYear = currentYear;
             ViewBag.CurrentReportingMonth = currentMonth;
             ViewBag.CurrentReportingMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
+            ViewBag.CurrentView = viewType;
 
             var viewModel = new ProjectIndexViewModel
             {
@@ -527,7 +619,7 @@ namespace Compass.Controllers
                 TotalCount = totalCount
             };
 
-            return View(viewModel);
+            return View("Index", viewModel);
         }
 
         // GET: Project/ExportUserProjects

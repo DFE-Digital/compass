@@ -1,5 +1,6 @@
 @using System
 @using System.Collections.Generic
+@using Compass.Models
 @model IEnumerable<Compass.Models.DemandRequest>
 
 @{
@@ -81,25 +82,24 @@
     var userEmail = ViewBag.UserEmail as string ?? string.Empty;
     var hasUserIdentity = !string.IsNullOrWhiteSpace(userEmail);
 
-    var newRequests = Model
-        .Where(r => string.Equals(r.Status, "Submitted", StringComparison.OrdinalIgnoreCase))
+    // All requests are already filtered by status in the controller
+    // Map database status back to display status for display purposes
+    var displayRequests = Model
         .OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt)
-        .ToList();
-
-    var otherRequests = Model
-        .Where(r => !string.Equals(r.Status, "Submitted", StringComparison.OrdinalIgnoreCase))
-        .OrderByDescending(r => r.CreatedAt)
         .ToList();
 
     var statusNavItems = statusCounts
         .Select(sc => new
         {
             Status = sc.Status as string ?? string.Empty,
-            Count = Convert.ToInt32(sc.Count == null ? 0 : sc.Count)
+            Count = sc.Count != null ? Convert.ToInt32(sc.Count) : 0
         })
+        .Where(s => !string.IsNullOrEmpty(s.Status))
         .ToList();
 
-    var currentStatusValue = string.IsNullOrWhiteSpace(currentStatus) ? string.Empty : currentStatus;
+    // Default to "New" if no status is selected (for UI display)
+    var defaultStatus = "New";
+    var currentStatusValue = string.IsNullOrWhiteSpace(currentStatus) ? defaultStatus : currentStatus;
     var canViewAllRequests = ViewBag.CanViewAllRequests as bool? ?? false;
     var isViewAll = string.Equals(currentViewFilter, "all", StringComparison.OrdinalIgnoreCase);
     var isViewMine = string.Equals(currentViewFilter, "mine", StringComparison.OrdinalIgnoreCase);
@@ -145,34 +145,54 @@
         <div class="row">
             <!-- Left Column: Filters -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Status Navigation -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h3 class="card-title">Request views</h3>
+                        <h3 class="card-title">Requests</h3>
                     </div>
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
-                            <a class="list-group-item list-group-item-action @(isViewMine ? "active" : string.Empty)"
-                               href="@Url.Action("Requests", new { view = "mine", status = statusRouteValue, portfolio = portfolioRouteValue, search = searchRouteValue })">
-                                My requests
-                                <span class="badge badge-light float-right">@myRequestsCount</span>
-                            </a>
-                            <a class="list-group-item list-group-item-action @(isViewAssigned ? "active" : string.Empty)"
-                               href="@Url.Action("Requests", new { view = "assigned", status = statusRouteValue, portfolio = portfolioRouteValue, search = searchRouteValue })">
-                                Assigned to me
-                                <span class="badge badge-light float-right">@assignedToMeCount</span>
-                            </a>
-                            @if (canViewAllRequests)
-                            {
-                                <a class="list-group-item list-group-item-action @(isViewAll ? "active" : string.Empty)"
-                                   href="@Url.Action("Requests", new { view = "all", status = statusRouteValue, portfolio = portfolioRouteValue, search = searchRouteValue })">
-                                    All requests
-                                    <span class="badge badge-light float-right">@allRequestsCount</span>
-                                </a>
+                            @{
+                                // Load statuses from lookup
+                                var statusLookups = ViewBag.StatusLookups as List<DemandRequestStatus> ?? new List<DemandRequestStatus>();
+                                
+                                // Build status dictionary with counts
+                                var statusCountDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                                foreach (var statusNavItem in statusNavItems)
+                                {
+                                    statusCountDict[statusNavItem.Status] = statusNavItem.Count;
+                                }
+                                
+                                // Add status items from lookup if available, otherwise use default list
+                                // Only show statuses that have requests (count > 0)
+                                var statusList = statusLookups.Any() 
+                                    ? statusLookups.OrderBy(s => s.SortOrder).ThenBy(s => s.Label).Select(s => s.Label).ToList()
+                                    : new List<string> { "New", "Not started", "Assigned", "DDT Division Assigned", "In delivery", "Rejected", "Withdrawn", "Delivered", "Closed" };
+                                
+                                // Show all statuses from the lookup, even if they have 0 count
+                                var statusesWithRequests = statusList;
+                                
+                                foreach (var statusItem in statusesWithRequests)
+                                {
+                                    var count = statusCountDict.ContainsKey(statusItem) ? statusCountDict[statusItem] : 0;
+                                    var isActive = string.Equals(currentStatusValue, statusItem, StringComparison.OrdinalIgnoreCase);
+                                    <a class="list-group-item list-group-item-action @(isActive ? "active" : string.Empty)"
+                                       href="@Url.Action("Requests", new { status = statusItem, portfolio = portfolioRouteValue, search = searchRouteValue, view = viewRouteValue })">
+                                        @statusItem
+                                        <span class="badge badge-light float-right">@count</span>
+                                    </a>
+                                }
+                                
+                                @if (!statusesWithRequests.Any())
+                                {
+                                    <div class="list-group-item">
+                                        <div class="text-muted small text-center py-3">No requests found</div>
+                                    </div>
+                                }
                             }
                         </div>
                     </div>
                 </div>
-
 
                 <div class="card">
                     <div class="card-header">
@@ -183,7 +203,6 @@
                     <div class="card-body">
                         <form method="get" id="filterForm">
                             <input type="hidden" name="status" value="@currentStatusValue" />
-                            <input type="hidden" name="view" value="@currentViewFilter" />
                             <div class="form-group">
                                 <label>Search</label>
                                 <input type="text" name="search" class="form-control form-control-sm" placeholder="Search requests..." value="@currentSearch" />
@@ -219,105 +238,21 @@
 
             <!-- Right Column: Content -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                @if (newRequests.Any())
-                {
-                    <div class="card mb-4">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h3 class="card-title mb-0">New requests</h3>
-                        </div>
-                        <div class="card-body p-0 table-responsive">
-                            <table class="table table-hover text-nowrap sortable-table mb-0">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Title</th>
-                                        <th scope="col">Business area</th>
-                                        <th scope="col">Assigned to</th>
-                                        <th scope="col">Submitted</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var request in newRequests)
-                                    {
-                                        var assignedDisplay = FormatPersonName(request.AssignedToName);
-                                        var hasAssignedName = !string.IsNullOrWhiteSpace(assignedDisplay);
-                                        var hasAssignedEmail = !string.IsNullOrWhiteSpace(request.AssignedToEmail);
-                                        var submitted = request.SubmittedAt ?? request.CreatedAt;
-                                        var applicantName = GetApplicantDisplayName(request.ApplicantName);
-                                        var hasEmail = !string.IsNullOrWhiteSpace(request.ApplicantEmail);
-                                        <tr>
-                                            <td>
-                                                <a asp-action="Details" asp-route-id="@request.Id" class="font-weight-semibold">@request.ProposedTitle</a>
-                                                <div class="text-muted small">Reference @request.ReferenceNumber</div>
-                                            </td>
-                                            <td>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Not set" : request.BusinessArea)</td>
-                                            <td>
-                                                @if (hasAssignedEmail)
-                                                {
-                                                    var displayName = hasAssignedName ? assignedDisplay : request.AssignedToEmail;
-                                                    <a href="mailto:@request.AssignedToEmail" class="font-weight-semibold">@displayName</a>
-                                                    @if (hasAssignedName && !string.Equals(displayName, request.AssignedToEmail, StringComparison.OrdinalIgnoreCase))
-                                                    {
-                                                        <div class="text-muted small">@request.AssignedToEmail</div>
-                                                    }
-                                                }
-                                                else if (hasAssignedName)
-                                                {
-                                                    <span class="font-weight-semibold">@assignedDisplay</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Not assigned</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <div>@submitted.ToString("dd MMM yyyy HH:mm")</div>
-                                                <div class="text-muted small">
-                                                    @if (hasEmail)
-                                                    {
-                                                        <a href="mailto:@request.ApplicantEmail" class="font-weight-semibold">@applicantName</a>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="font-weight-semibold">@applicantName</span>
-                                                    }
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                }
-
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h3 class="card-title mb-0">
-                            @if (isViewMine)
+                            @if (!string.IsNullOrWhiteSpace(currentStatusValue))
                             {
-                                <text>My requests</text>
-                            }
-                            else if (isViewAssigned)
-                            {
-                                <text>Assigned to me</text>
-                            }
-                            else if (isViewAll)
-                            {
-                                <text>All requests</text>
+                                <text>@currentStatusValue requests</text>
                             }
                             else
                             {
-                                <text>My requests</text>
+                                <text>Requests</text>
                             }
                         </h3>
-                        <div class="card-tools">
-                            <a href="@Url.Action("ImportCsv", "DemandManagement")" class="btn btn-sm btn-primary">
-                                <i class="fas fa-file-import"></i> Import CSV
-                            </a>
-                        </div>
                     </div>
                     <div class="card-body table-responsive p-0">
-                        @if (otherRequests.Any())
+                        @if (displayRequests.Any())
                         {
                             <table class="table table-hover text-nowrap sortable-table mb-0" id="requestsTable">
                                 <thead>
@@ -331,7 +266,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var request in otherRequests)
+                                    @foreach (var request in displayRequests)
                                     {
                                         var submittedDisplay = request.SubmittedAt?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty;
                                         var priorityScore = request.Prioritisation?.TotalPriorityScore ?? 0;
