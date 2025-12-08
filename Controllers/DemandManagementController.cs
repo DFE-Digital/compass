@@ -74,6 +74,54 @@ namespace Compass.Controllers
             return isCentralOpsAdmin;
         }
 
+        // Helper method to check if user has access to DemandManagement
+        private async Task<bool> HasDemandManagementAccessAsync()
+        {
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                return false;
+            }
+
+            try
+            {
+                // Check user groups: "Demand Triage", "HOP", "Central Operations Admin", "Super Admin", "Admin"
+                var allowedGroups = new[] { "Demand Triage", "HOP", "Central Operations Admin", "Super Admin", "Admin" };
+                foreach (var groupName in allowedGroups)
+                {
+                    if (await _permissionService.IsInGroupAsync(userEmail, groupName))
+                    {
+                        return true;
+                    }
+                }
+
+                // Check leadership roles: "Deputy Director / SRO", "Director General", "C-Level", "Permanent Secretary"
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);
+                if (user != null)
+                {
+                    var leadershipRoles = await _context.UserBusinessAreaRoleAssignments
+                        .Where(a => a.UserId == user.Id)
+                        .Select(a => a.Role)
+                        .ToListAsync();
+
+                    if (leadershipRoles.Any(r => r == LeadershipRoleTier.DeputyDirectorOrSro ||
+                                                  r == LeadershipRoleTier.DirectorGeneral ||
+                                                  r == LeadershipRoleTier.CLevel ||
+                                                  r == LeadershipRoleTier.PermanentSecretary))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking DemandManagement access for {Email}", userEmail);
+                // Non-blocking: default to false
+            }
+
+            return false;
+        }
+
         private static string? NormaliseTriLevel(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -162,10 +210,10 @@ namespace Compass.Controllers
                 return NotFound("Demand Management is not enabled.");
             }
 
-            // Default to "mine" if no view parameter is provided - redirect to include it in URL
-            if (string.IsNullOrWhiteSpace(view))
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
             {
-                return RedirectToAction("Requests", new { view = "mine", status, portfolio, search });
+                return Forbid("You do not have access to Demand Management.");
             }
 
             var userEmail = User.Identity?.Name ?? string.Empty;
@@ -210,8 +258,8 @@ namespace Compass.Controllers
                 }
             }
             
-            // Apply view filter
-            if (!string.IsNullOrWhiteSpace(userEmail))
+            // View filter is optional - only apply if explicitly provided
+            if (!string.IsNullOrWhiteSpace(view) && !string.IsNullOrWhiteSpace(userEmail))
             {
                 if (string.Equals(view, "mine", StringComparison.OrdinalIgnoreCase))
                 {
@@ -222,12 +270,6 @@ namespace Compass.Controllers
                     filteredByView = filteredByView.Where(dr => dr.AssignedToEmail == userEmail);
                 }
                 // If view is "all" or anything else, show all requests (no filter)
-            }
-            else
-            {
-                // No user email - can't filter by view, default to empty results or all
-                // This shouldn't happen as we require authentication, but handle gracefully
-                filteredByView = baseQuery.Where(dr => false);
             }
 
             var filteredByPortfolio = filteredByView;
@@ -244,10 +286,51 @@ namespace Compass.Controllers
 
             var preStatusQuery = filteredBySearch;
 
+            // Load statuses from lookup first to help with mapping
+            var statusLookups = await _context.DemandRequestStatuses
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Label)
+                .ToListAsync();
+
             var finalQuery = preStatusQuery;
-            if (!string.IsNullOrWhiteSpace(status))
+            // Default to "New" status if no status is provided (for query, but don't redirect)
+            var effectiveStatus = string.IsNullOrWhiteSpace(status) ? "New" : status;
+            if (!string.IsNullOrWhiteSpace(effectiveStatus))
             {
-                finalQuery = finalQuery.Where(dr => dr.Status == status);
+                // Try to find the status in the lookup table first
+                var lookupStatus = statusLookups.FirstOrDefault(s => 
+                    string.Equals(s.Label, effectiveStatus, StringComparison.OrdinalIgnoreCase));
+                
+                if (lookupStatus != null)
+                {
+                    // Build list of possible database values that map to this lookup status
+                    var possibleStatusValues = new List<string> { lookupStatus.Code, lookupStatus.Label };
+                    
+                    // Add legacy mappings for "New" status
+                    if (string.Equals(lookupStatus.Label, "New", StringComparison.OrdinalIgnoreCase))
+                    {
+                        possibleStatusValues.AddRange(new[] { "Submitted", "Draft", "New" });
+                    }
+                    
+                    // Remove duplicates and filter
+                    possibleStatusValues = possibleStatusValues.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    finalQuery = finalQuery.Where(dr => possibleStatusValues.Contains(dr.Status));
+                }
+                else if (string.Equals(effectiveStatus, "New", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Fallback: "New" can map to "Submitted" (old system) or "Draft" (default) or "New" (if set) or "NEW" (code)
+                    finalQuery = finalQuery.Where(dr => 
+                        dr.Status == "Submitted" || 
+                        dr.Status == "Draft" || 
+                        dr.Status == "New" ||
+                        dr.Status == "NEW");
+                }
+                else
+                {
+                    // Use the status as-is (could be Code or Label)
+                    finalQuery = finalQuery.Where(dr => dr.Status == effectiveStatus);
+                }
             }
 
             var requests = await finalQuery
@@ -255,27 +338,71 @@ namespace Compass.Controllers
                 .OrderByDescending(dr => dr.SubmittedAt ?? dr.CreatedAt)
                 .ToListAsync();
 
+            // Calculate status counts from the pre-status query (before status filter is applied)
             var statusCountsRaw = await preStatusQuery
                 .GroupBy(dr => dr.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            var statusOrder = new List<string>
+            var statusOrder = statusLookups.Select(s => s.Label).ToList();
+
+            // Map database status codes/values to display labels
+            // First, try to find by Code in lookup table, then by Label, then use legacy mapping
+            var statusMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                "Submitted",
-                "Explore",
-                "Prioritisation",
-                "Triage",
-                "Delivery",
-                "Run",
-                "Approved",
-                "Deferred",
-                "Rejected",
-                "Under Review",
-                "Draft"
+                { "Submitted", "New" },
+                { "Draft", "New" }, // Draft status should also show as "New"
+                { "NEW", "New" }    // Code from lookup table
             };
 
-            var orderedStatusCounts = statusCountsRaw
+            // Map status counts to lookup labels
+            var mappedStatusCounts = statusCountsRaw.Select(sc =>
+            {
+                var originalStatus = sc.Status ?? string.Empty;
+                
+                // First, try to find by Code in lookup table
+                var lookupByCode = statusLookups.FirstOrDefault(s => 
+                    string.Equals(s.Code, originalStatus, StringComparison.OrdinalIgnoreCase));
+                
+                if (lookupByCode != null)
+                {
+                    return new { 
+                        Status = lookupByCode.Label, 
+                        Count = sc.Count 
+                    };
+                }
+                
+                // Second, try to find by Label in lookup table
+                var lookupByLabel = statusLookups.FirstOrDefault(s => 
+                    string.Equals(s.Label, originalStatus, StringComparison.OrdinalIgnoreCase));
+                
+                if (lookupByLabel != null)
+                {
+                    return new { 
+                        Status = lookupByLabel.Label, 
+                        Count = sc.Count 
+                    };
+                }
+                
+                // Third, use legacy mapping
+                var mappedStatus = statusMapping.ContainsKey(originalStatus) 
+                    ? statusMapping[originalStatus] 
+                    : originalStatus;
+                
+                // Check if the mapped status exists in the lookup
+                var lookupStatus = statusLookups.FirstOrDefault(s => 
+                    string.Equals(s.Label, mappedStatus, StringComparison.OrdinalIgnoreCase));
+                
+                return new { 
+                    Status = lookupStatus?.Label ?? mappedStatus, 
+                    Count = sc.Count 
+                };
+            })
+            .GroupBy(sc => sc.Status)
+            .Select(g => new { Status = g.Key, Count = g.Sum(sc => sc.Count) })
+            .ToList();
+
+            var orderedStatusCounts = mappedStatusCounts
                 .OrderBy(sc =>
                 {
                     var index = statusOrder.IndexOf(sc.Status ?? string.Empty);
@@ -287,6 +414,11 @@ namespace Compass.Controllers
             ViewBag.StatusCounts = orderedStatusCounts;
             ViewBag.TotalCount = orderedStatusCounts.Sum(sc => sc.Count);
             ViewBag.Statuses = orderedStatusCounts.Select(sc => sc.Status ?? string.Empty).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            ViewBag.StatusLookups = statusLookups;
+            ViewBag.CurrentStatus = effectiveStatus; // Use effectiveStatus (which defaults to "New")
+            ViewBag.CurrentView = view;
+            
+            await CheckAndSetCentralOpsAdminAsync();
 
             ViewBag.Portfolios = await filteredByView
                 .Where(dr => !string.IsNullOrEmpty(dr.PortfolioName))
@@ -295,7 +427,7 @@ namespace Compass.Controllers
                 .OrderBy(p => p)
                 .ToListAsync();
 
-            ViewBag.CurrentStatus = status;
+            ViewBag.CurrentStatus = effectiveStatus; // Use effectiveStatus (which defaults to "New")
             ViewBag.CurrentPortfolio = portfolio;
             ViewBag.CurrentSearch = search;
             ViewBag.CurrentView = view;
@@ -315,6 +447,12 @@ namespace Compass.Controllers
             if (!IsDemandManagementEnabled())
             {
                 return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
             }
 
             var meetingEntities = await _context.TriageMeetings
@@ -575,6 +713,58 @@ namespace Compass.Controllers
             return View(viewModel);
         }
 
+        // GET: DemandManagement/TriageRequest
+        public async Task<IActionResult> TriageRequest(int? id, int? meetingId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var demandRequest = await _context.DemandRequests
+                .Include(dr => dr.Prioritisation)
+                .Include(dr => dr.Assessments)
+                .Include(dr => dr.Notes)
+                .Include(dr => dr.Contacts)
+                .Include(dr => dr.RiskTypeLinks)
+                    .ThenInclude(link => link.RiskType)
+                .FirstOrDefaultAsync(m => m.Id == id);
+
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            TriageMeeting? meeting = null;
+            if (meetingId.HasValue)
+            {
+                meeting = await _context.TriageMeetings.FindAsync(meetingId.Value);
+            }
+            else if (demandRequest.TriageMeetingId.HasValue)
+            {
+                meeting = await _context.TriageMeetings.FindAsync(demandRequest.TriageMeetingId.Value);
+            }
+
+            ViewBag.Meeting = meeting;
+            ViewBag.MeetingId = meeting?.Id;
+            ViewBag.ReturnUrl = meetingId.HasValue 
+                ? Url.Action("Triage", new { meetingId = meetingId.Value })
+                : Url.Action("Triage");
+
+            return View(demandRequest);
+        }
+
         // GET: DemandManagement/ManageMeetings
         public async Task<IActionResult> ManageMeetings(int? meetingId)
         {
@@ -714,7 +904,7 @@ namespace Compass.Controllers
 
         private static string GetMonthKey(DateTime date) => date.ToString("yyyy-MM");
 
-    // GET: DemandManagement/CreateRequest
+    // GET: DemandManagement/CreateRequest (public route - authenticated users only, no group requirement)
     // GET: api/DemandManagement/CreateRequest
     [Route("api/DemandManagement/CreateRequest")]
     [HttpGet]
@@ -725,6 +915,7 @@ namespace Compass.Controllers
             return NotFound("Demand Management is not enabled.");
         }
 
+        // Note: This action is accessible to all authenticated users (no group membership required)
         await CheckAndSetCentralOpsAdminAsync();
 
         var userEmail = User.Identity?.Name ?? string.Empty;
@@ -800,8 +991,9 @@ namespace Compass.Controllers
         }
     }
 
-        // POST: DemandManagement/CreateRequest
+        // POST: DemandManagement/CreateRequest (public route - authenticated users only, no group requirement)
         [HttpPost]
+        [Route("api/DemandManagement/CreateRequest")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateRequest(DemandRequest model, List<DemandRequestContact> contacts)
         {
@@ -809,6 +1001,8 @@ namespace Compass.Controllers
             {
                 return NotFound("Demand Management is not enabled.");
             }
+
+            // Note: This action is accessible to all authenticated users (no group membership required)
 
             // Log ModelState errors for debugging
             if (!ModelState.IsValid)
@@ -958,6 +1152,18 @@ namespace Compass.Controllers
             ViewBag.SectionContent = sectionContentViewModel;
             ViewBag.RequestSectionDefinitions = definitions.requestSections;
             ViewBag.AssessmentSectionDefinitions = definitions.assessmentSections;
+
+            // Load statuses from lookup for modals
+            ViewBag.Statuses = await _context.DemandRequestStatuses
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Label)
+                .ToListAsync();
+
+            // Load business areas for modals
+            ViewBag.BusinessAreas = await GetBusinessAreasFromCmsAsync();
+
+            await CheckAndSetCentralOpsAdminAsync();
 
             return View(viewModel);
         }
@@ -2775,6 +2981,12 @@ namespace Compass.Controllers
                 return NotFound("Demand Management is not enabled.");
             }
 
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
             // Default to "mine" if no view parameter is provided
             if (string.IsNullOrWhiteSpace(view))
             {
@@ -3031,6 +3243,12 @@ namespace Compass.Controllers
                 return NotFound("Demand Management is not enabled.");
             }
 
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
             await CheckAndSetCentralOpsAdminAsync();
 
             // Get summary statistics
@@ -3184,7 +3402,7 @@ namespace Compass.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateAssignment(int id, string? assignedToName, string? assignedToEmail, string? currentSection, string? currentView, bool clearAssignment = false)
+        public async Task<IActionResult> UpdateAssignment(int id, string? assignedToObjectId, string? assignedToName, string? assignedToEmail, string? currentSection, string? currentView, bool clearAssignment = false)
         {
             if (!IsDemandManagementEnabled())
             {
@@ -3230,6 +3448,137 @@ namespace Compass.Controllers
             TempData["SuccessMessage"] = $"Request assigned to {assignedLabel}.";
 
             return RedirectToAction(nameof(Details), new { id, s = sectionKey, view = viewMode });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateTitle(int id, string title, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                TempData["ErrorMessage"] = "Title cannot be empty.";
+                return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+            }
+
+            demandRequest.ProposedTitle = title.Trim();
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Title updated successfully.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBusinessArea(int id, string? businessArea, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            demandRequest.BusinessArea = string.IsNullOrWhiteSpace(businessArea) ? null : businessArea.Trim();
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Business area updated successfully.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateRequestor(int id, string? requestorObjectId, string? requestorName, string? requestorEmail, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            requestorEmail = requestorEmail?.Trim();
+            requestorName = requestorName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(requestorEmail))
+            {
+                TempData["ErrorMessage"] = "Email is required.";
+                return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+            }
+
+            demandRequest.ApplicantEmail = requestorEmail;
+            demandRequest.ApplicantName = string.IsNullOrWhiteSpace(requestorName) ? null : requestorName;
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Requestor updated successfully.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSubmittedDate(int id, DateTime? submittedDate, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            demandRequest.SubmittedAt = submittedDate.HasValue ? submittedDate.Value.ToUniversalTime() : (DateTime?)null;
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = submittedDate.HasValue ? "Submitted date updated successfully." : "Submitted date cleared.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSensitivity(int id, bool isSensitiveRequest, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            demandRequest.IsSensitiveRequest = isSensitiveRequest;
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Request marked as {(isSensitiveRequest ? "sensitive" : "not sensitive")}.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
         }
 
         private static void ValidatePrioritisationModel(DemandRequestPrioritisation model, ModelStateDictionary modelState)
