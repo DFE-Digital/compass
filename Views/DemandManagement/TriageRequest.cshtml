@@ -1,0 +1,758 @@
+@model Compass.Models.DemandRequest
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using Compass.Models
+
+@functions {
+    private static readonly CultureInfo UkCulture = CultureInfo.GetCultureInfo("en-GB");
+
+    private static string FormatPersonName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var parts = name.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 2)
+        {
+            return $"{parts[1]} {parts[0]}".Trim();
+        }
+
+        return name.Trim();
+    }
+
+    private static string FormatBoolean(bool? value) => value.HasValue ? (value.Value ? "Yes" : "No") : "Not answered";
+
+    private static string FormatCurrency(decimal? value) => value.HasValue ? value.Value.ToString("C0", UkCulture) : "Not specified";
+
+    private static string FormatNumber(int? value) => value.HasValue ? value.Value.ToString(UkCulture) : "Not specified";
+
+    private static string FormatNullableString(string? value, string fallback = "Not specified") => string.IsNullOrWhiteSpace(value) ? fallback : value!;
+
+    private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("dd MMM yyyy", UkCulture) : "Not set";
+
+    private static string FormatDateTime(DateTime? value) => value.HasValue ? value.Value.ToString("dd MMM yyyy HH:mm", UkCulture) : "Not recorded";
+
+    private static IReadOnlyList<string> SplitCommaSeparated(string? value) => string.IsNullOrWhiteSpace(value)
+        ? Array.Empty<string>()
+        : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .Select(item => item.Trim())
+               .Where(item => !string.IsNullOrWhiteSpace(item))
+               .ToArray();
+
+    private static string GetAssessmentContent(IEnumerable<DemandRequestAssessment>? assessments, string type)
+    {
+        if (assessments == null)
+        {
+            return "Not recorded";
+        }
+
+        var match = assessments.FirstOrDefault(a => string.Equals(a.AssessmentType, type, StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(match?.AssessmentContent) ? "Not recorded" : match!.AssessmentContent!;
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Draft" => "badge badge-secondary",
+        "Submitted" => "badge badge-info",
+        "Explore" => "badge badge-info",
+        "Prioritisation" => "badge badge-primary",
+        "Triage" => "badge badge-warning",
+        "Delivery" => "badge badge-success",
+        "Run" => "badge badge-success",
+        "Deferred" => "badge badge-secondary",
+        "Rejected" => "badge badge-danger",
+        _ => "badge badge-light"
+    };
+
+    private static string GetPriorityBadgeClass(string? tier) => tier switch
+    {
+        "Tier 1 – Critical" => "badge badge-danger",
+        "Tier 2 – High" => "badge badge-warning",
+        "Tier 3 – Medium" => "badge badge-info",
+        "Tier 4 – Low" => "badge badge-secondary",
+        _ => "badge badge-light"
+    };
+
+    private static string GetPriorityShortLabel(string? tier) => string.IsNullOrWhiteSpace(tier)
+        ? "Unprioritised"
+        : tier.Split('–')[0].Trim();
+
+    private sealed class PriorityFactor
+    {
+        public string Label { get; init; } = string.Empty;
+        public int Score { get; init; }
+    }
+
+    private sealed class PriorityCategory
+    {
+        public string Label { get; init; } = string.Empty;
+        public int Total { get; init; }
+        public IReadOnlyList<PriorityFactor> Factors { get; init; } = Array.Empty<PriorityFactor>();
+    }
+
+    private static IReadOnlyList<PriorityCategory> BuildPriorityCategories(DemandRequestPrioritisation? prioritisation)
+    {
+        if (prioritisation == null)
+        {
+            return Array.Empty<PriorityCategory>();
+        }
+
+        return new[]
+        {
+            new PriorityCategory
+            {
+                Label = "Strategic alignment",
+                Total = prioritisation.StrategicAlignmentTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Statutory or manifesto commitment", Score = prioritisation.StatutoryManifestoScore },
+                    new PriorityFactor { Label = "Mission pillar support", Score = prioritisation.OpportunityMissionScore },
+                    new PriorityFactor { Label = "Strategic framework theme", Score = prioritisation.DdatStrategicThemeScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "User impact",
+                Total = prioritisation.UserImpactTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Scale of users", Score = prioritisation.ScaleOfUsersScore },
+                    new PriorityFactor { Label = "Evidence of user need", Score = prioritisation.EvidenceOfUserNeedScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Risk and urgency",
+                Total = prioritisation.RiskUrgencyTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Risk if not delivered", Score = prioritisation.RiskIfNotDeliveredScore },
+                    new PriorityFactor { Label = "Delivery urgency", Score = prioritisation.TargetDeliveryUrgencyScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Feasibility",
+                Total = prioritisation.FeasibilityTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Funding available", Score = prioritisation.FundingAvailableScore },
+                    new PriorityFactor { Label = "Headcount available", Score = prioritisation.HeadcountAvailableScore },
+                    new PriorityFactor { Label = "Portfolio fit", Score = prioritisation.PortfolioFitScore }
+                }
+            },
+            new PriorityCategory
+            {
+                Label = "Value and outcome",
+                Total = prioritisation.ValueOutcomeTotal,
+                Factors = new[]
+                {
+                    new PriorityFactor { Label = "Expected benefits", Score = prioritisation.ExpectedBenefitsScore }
+                }
+            }
+        };
+    }
+
+    private static string FormatLevel(int? score)
+    {
+        if (!score.HasValue || score.Value <= 0)
+        {
+            return "Not scored";
+        }
+
+        return score.Value switch
+        {
+            >= 4 => "High",
+            3 => "Medium",
+            _ => "Low"
+        };
+    }
+
+    private static string Summarize(string? value, int maxLength = 140)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Not recorded";
+        }
+
+        var sanitized = value.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (sanitized.Length <= maxLength)
+        {
+            return sanitized;
+        }
+
+        return sanitized.Substring(0, maxLength).TrimEnd() + "...";
+    }
+}
+
+@{
+    ViewData["Title"] = $"Triage request: {Model.ProposedTitle}";
+
+    var requestorName = FormatPersonName(Model.ApplicantName);
+    var hasRequestorEmail = !string.IsNullOrWhiteSpace(Model.ApplicantEmail) && !string.IsNullOrWhiteSpace(requestorName);
+    var priorityTier = Model.Prioritisation?.PriorityTier;
+    var priorityBadgeClass = GetPriorityBadgeClass(priorityTier);
+    var priorityShort = GetPriorityShortLabel(priorityTier);
+    var totalScore = Model.Prioritisation?.TotalPriorityScore;
+    var missionPillars = SplitCommaSeparated(Model.OpportunityMissionPillars);
+    var strategicThemes = SplitCommaSeparated(Model.DdatStrategicThemes);
+    var rolesProvided = SplitCommaSeparated(Model.RolesProvided);
+    var riskCategories = Model.RiskTypeLinks?
+        .Where(link => link.RiskType != null)
+        .Select(link => link.RiskType!.Name)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(name => name)
+        .ToList() ?? new List<string>();
+    var assessments = Model.Assessments?.OrderByDescending(a => a.UpdatedAt).ToList() ?? new List<DemandRequestAssessment>();
+    var notes = Model.Notes?.OrderByDescending(n => n.CreatedAt).ToList() ?? new List<DemandRequestNote>();
+    var contacts = Model.Contacts?.OrderBy(c => c.Name).ToList() ?? new List<DemandRequestContact>();
+    var scoringCategories = BuildPriorityCategories(Model.Prioritisation);
+    var riskScore = Model.Prioritisation != null
+        ? (int?)Math.Round((Model.Prioritisation.RiskIfNotDeliveredScore + Model.Prioritisation.TargetDeliveryUrgencyScore) / 2.0, MidpointRounding.AwayFromZero)
+        : null;
+    var impactScore = Model.Prioritisation != null
+        ? (int?)Math.Round((Model.Prioritisation.ScaleOfUsersScore + Model.Prioritisation.EvidenceOfUserNeedScore) / 2.0, MidpointRounding.AwayFromZero)
+        : null;
+    var timescaleSummary = !string.IsNullOrWhiteSpace(Model.DeliveryTimescales)
+        ? Model.DeliveryTimescales
+        : (Model.TargetDeliveryDate.HasValue ? $"Target delivery {Model.TargetDeliveryDate.Value:dd MMM yyyy}" : "Not specified");
+    var fundingSummary = Model.HasFunding == true
+        ? (Model.FundingAmount.HasValue ? $"Confirmed ({FormatCurrency(Model.FundingAmount)})" : "Funding confirmed")
+        : Model.HasFunding == false ? "Not funded" : "Not specified";
+    var headcountSummary = Model.HasHeadcount == true
+        ? (Model.NumberOfFTE.HasValue ? $"{Model.NumberOfFTE} FTE" : "Headcount confirmed")
+        : Model.HasHeadcount == false ? "No additional headcount" : "Not specified";
+    var objectives = missionPillars.Concat(strategicThemes).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    var assessmentDefinitions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "NeedsAssessment", "Needs assessment" },
+        { "Recommendations", "Recommendations" },
+        { "Outcome", "Outcome" }
+    };
+
+    var meeting = ViewBag.Meeting as TriageMeeting;
+    var meetingId = ViewBag.MeetingId as int?;
+    var returnUrl = ViewBag.ReturnUrl as string ?? Url.Action("Triage");
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Triage")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Triage</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@Model.ProposedTitle</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_DemandManagementNavigation")
+
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="mb-1">@Model.ProposedTitle</h1>
+                        <p class="text-muted mb-0">Reference @Model.ReferenceNumber</p>
+                    </div>
+                    <div>
+                        <a href="@returnUrl" class="btn btn-outline-secondary">Back to triage</a>
+                        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-primary ml-2">Open request</a>
+                        @if (Model.Prioritisation != null)
+                        {
+                            <a asp-action="ScoreRequest" asp-route-id="@Model.Id" class="btn btn-outline-secondary ml-2">Review scoring</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Main Content Column -->
+            <div class="col-xxl-8 col-xl-8 col-lg-8 col-md-12 col-sm-12 col-12">
+                <!-- Request Overview Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Request overview</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-5">Business area</dt>
+                                    <dd class="col-sm-7">@(string.IsNullOrWhiteSpace(Model.BusinessArea) ? "Not specified" : Model.BusinessArea)</dd>
+                                    
+                                    <dt class="col-sm-5">Status</dt>
+                                    <dd class="col-sm-7"><span class="@GetStatusBadgeClass(Model.Status)">@Model.Status</span></dd>
+                                    
+                                    <dt class="col-sm-5">Submitted</dt>
+                                    <dd class="col-sm-7">@FormatDateTime(Model.SubmittedAt)</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-5">Last updated</dt>
+                                    <dd class="col-sm-7">@FormatDateTime(Model.UpdatedAt)</dd>
+                                    
+                                    <dt class="col-sm-5">Converted project</dt>
+                                    <dd class="col-sm-7">
+                                        @if (Model.ConvertedProjectId.HasValue)
+                                        {
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@Model.ConvertedProjectId">View project</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not converted</span>
+                                        }
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                        
+                        <div class="border-top pt-3 mt-3">
+                            <h5 class="mb-3">Overview and need</h5>
+                            <div class="triage-text-content">
+                                @(Model.OverviewAndBusinessNeed ?? "No overview provided")
+                            </div>
+                        </div>
+                        
+                        <div class="border-top pt-3 mt-3">
+                            <h5 class="mb-3">Expected outcome</h5>
+                            <div class="triage-text-content">
+                                @(Model.ExpectedBenefits ?? "Not provided")
+                            </div>
+                        </div>
+                        
+                        <div class="border-top pt-3 mt-3">
+                            <h5 class="mb-3">Risk if not delivered</h5>
+                            <div class="triage-text-content">
+                                @(Model.RiskIfNotDelivered ?? "Not provided")
+                            </div>
+                        </div>
+                        
+                        @if (contacts.Any())
+                        {
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Contacts</h5>
+                                <ul class="list-unstyled mb-0">
+                                    @foreach (var contact in contacts)
+                                    {
+                                        var contactName = FormatPersonName(contact.Name);
+                                        <li class="mb-2">
+                                            @if (!string.IsNullOrWhiteSpace(contact.Email))
+                                            {
+                                                <a href="mailto:@contact.Email">@(string.IsNullOrWhiteSpace(contactName) ? contact.Email : contactName)</a>
+                                            }
+                                            else
+                                            {
+                                                @contactName
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(contact.Role))
+                                            {
+                                                <span class="text-muted">&middot; @contact.Role</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Delivery & Timing Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Delivery &amp; timing</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Timescales</dt>
+                            <dd class="col-sm-8">@FormatNullableString(Model.DeliveryTimescales)</dd>
+                            
+                            <dt class="col-sm-4">Target delivery date</dt>
+                            <dd class="col-sm-8">@FormatDate(Model.TargetDeliveryDate)</dd>
+                        </dl>
+                        
+                        @if (riskCategories.Any())
+                        {
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Risk categories</h5>
+                                <ul class="mb-0">
+                                    @foreach (var risk in riskCategories)
+                                    {
+                                        <li>@risk</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Strategic Alignment Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Strategic alignment</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-3">
+                            <dt class="col-sm-4">Statutory or manifesto</dt>
+                            <dd class="col-sm-8">
+                                @FormatNullableString(Model.IsManifestoOrStatutory, "Not answered")
+                                @if (!string.IsNullOrWhiteSpace(Model.ManifestoStatutoryDetails))
+                                {
+                                    <div class="text-muted small mt-1">@Model.ManifestoStatutoryDetails</div>
+                                }
+                            </dd>
+                        </dl>
+                        
+                        <div class="border-top pt-3">
+                            <h5 class="mb-3">Mission pillars</h5>
+                            @if (missionPillars.Any())
+                            {
+                                <ul class="mb-0">
+                                    @foreach (var pillar in missionPillars)
+                                    {
+                                        <li>@pillar</li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0">No pillars selected.</p>
+                            }
+                        </div>
+                        
+                        <div class="border-top pt-3 mt-3">
+                            <h5 class="mb-3">Strategic themes</h5>
+                            @if (strategicThemes.Any())
+                            {
+                                <ul class="mb-0">
+                                    @foreach (var theme in strategicThemes)
+                                    {
+                                        <li>@theme</li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0">No themes selected.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Funding & Resourcing Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Funding &amp; resourcing</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Funding confirmed</dt>
+                            <dd class="col-sm-7">@FormatBoolean(Model.HasFunding)</dd>
+                            
+                            <dt class="col-sm-5">Funding amount</dt>
+                            <dd class="col-sm-7">@FormatCurrency(Model.FundingAmount)</dd>
+                            
+                            <dt class="col-sm-5">Funding source</dt>
+                            <dd class="col-sm-7">@FormatNullableString(Model.FundingSource)</dd>
+                            
+                            <dt class="col-sm-5">Headcount required</dt>
+                            <dd class="col-sm-7">@FormatBoolean(Model.HasHeadcount)</dd>
+                            
+                            <dt class="col-sm-5">FTE provided</dt>
+                            <dd class="col-sm-7">@FormatNumber(Model.NumberOfFTE)</dd>
+                        </dl>
+                        
+                        @if (rolesProvided.Any())
+                        {
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Roles provided</h5>
+                                <ul class="mb-0">
+                                    @foreach (var role in rolesProvided)
+                                    {
+                                        <li>@role</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrWhiteSpace(Model.FundingNotes) || !string.IsNullOrWhiteSpace(Model.HeadcountNotes))
+                        {
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Additional notes</h5>
+                                @if (!string.IsNullOrWhiteSpace(Model.FundingNotes))
+                                {
+                                    <div class="triage-text-content mb-2">
+                                        @Model.FundingNotes
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(Model.HeadcountNotes))
+                                {
+                                    <div class="triage-text-content mb-0">
+                                        @Model.HeadcountNotes
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Assessments & Recommendations Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Assessments &amp; recommendations</h3>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var assessmentList = assessmentDefinitions.ToList();
+                        }
+                        @for (int i = 0; i < assessmentList.Count; i++)
+                        {
+                            var assessment = assessmentList[i];
+                            var content = GetAssessmentContent(assessments, assessment.Key);
+                            var hasContent = !string.Equals(content, "Not recorded", StringComparison.OrdinalIgnoreCase);
+                            <div class="@(i < assessmentList.Count - 1 ? "border-bottom pb-3 mb-3" : "")">
+                                <h5>@assessment.Value</h5>
+                                <div class="triage-text-content @(hasContent ? "" : "text-muted")">
+                                    @content
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Notes & Comments Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Notes &amp; comments</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrWhiteSpace(Model.TriageNotes))
+                        {
+                            <div class="alert alert-warning">
+                                <strong>Triage pack note</strong>
+                                <div class="triage-text-content mt-2 mb-0">
+                                    @Model.TriageNotes
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (notes.Any())
+                        {
+                            <div class="@(string.IsNullOrWhiteSpace(Model.TriageNotes) ? "" : "border-top pt-3 mt-3")">
+                                @foreach (var note in notes)
+                                {
+                                    var author = FormatPersonName(note.CreatedByName);
+                                    <div class="mb-3 @(note != notes.Last() ? "border-bottom pb-3" : "")">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong>@(string.IsNullOrWhiteSpace(author) ? note.CreatedByEmail ?? "Unknown" : author)</strong>
+                                            <small class="text-muted">@note.CreatedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                        </div>
+                                        <div class="triage-text-content">
+                                            @note.NoteText
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (string.IsNullOrWhiteSpace(Model.TriageNotes))
+                        {
+                            <p class="text-muted mb-0">No notes captured yet.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Column -->
+            <div class="col-xxl-4 col-xl-4 col-lg-4 col-md-12 col-sm-12 col-12">
+                <!-- Key Summary Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Key summary</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Statutory</dt>
+                            <dd class="col-sm-7">@FormatNullableString(Model.IsManifestoOrStatutory, "Not answered")</dd>
+                            
+                            <dt class="col-sm-5">Timescales</dt>
+                            <dd class="col-sm-7">@timescaleSummary</dd>
+                            
+                            <dt class="col-sm-5">Risk level</dt>
+                            <dd class="col-sm-7">@FormatLevel(riskScore)</dd>
+                            
+                            <dt class="col-sm-5">Impact level</dt>
+                            <dd class="col-sm-7">@FormatLevel(impactScore)</dd>
+                            
+                            <dt class="col-sm-5">Funding</dt>
+                            <dd class="col-sm-7">@fundingSummary</dd>
+                            
+                            <dt class="col-sm-5">Headcount</dt>
+                            <dd class="col-sm-7">@headcountSummary</dd>
+                        </dl>
+                        
+                        @if (objectives.Any())
+                        {
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Strategic objectives</h5>
+                                <ul class="mb-0">
+                                    @foreach (var objective in objectives)
+                                    {
+                                        <li>@objective</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                        
+                        <div class="border-top pt-3 mt-3">
+                            <h5 class="mb-3">Assessment outcomes</h5>
+                            <ul class="mb-0">
+                                <li><strong>Needs:</strong> @Summarize(GetAssessmentContent(assessments, "NeedsAssessment"), 140)</li>
+                                <li><strong>Recommendations:</strong> @Summarize(GetAssessmentContent(assessments, "Recommendations"), 140)</li>
+                                <li><strong>Outcome:</strong> @Summarize(GetAssessmentContent(assessments, "Outcome"), 140)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prioritisation Card -->
+                @if (Model.Prioritisation != null)
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title mb-0">Prioritisation</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-3 pb-3 border-bottom">
+                                <div class="display-4 font-weight-bold">@Model.Prioritisation.TotalPriorityScore</div>
+                                <div class="text-muted small">Overall score</div>
+                                @if (!string.IsNullOrWhiteSpace(priorityTier))
+                                {
+                                    <div class="mt-2">
+                                        <span class="@priorityBadgeClass">@priorityTier</span>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <dl class="row mb-3">
+                                <dt class="col-sm-5">Scored by</dt>
+                                <dd class="col-sm-7">@FormatNullableString(Model.Prioritisation.ScoredBy, "Not recorded")</dd>
+                                
+                                <dt class="col-sm-5">Scored at</dt>
+                                <dd class="col-sm-7">@FormatDateTime(Model.Prioritisation.ScoredAt)</dd>
+                            </dl>
+                            
+                            @if (!string.IsNullOrWhiteSpace(Model.Prioritisation.ScoringNotes))
+                            {
+                                <div class="border-top pt-3">
+                                    <h6 class="mb-2">Scoring notes</h6>
+                                    <div class="triage-text-content small">
+                                        @Model.Prioritisation.ScoringNotes
+                                    </div>
+                                </div>
+                            }
+                            
+                            <div class="border-top pt-3 mt-3">
+                                <h5 class="mb-3">Scoring breakdown</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var category in scoringCategories)
+                                            {
+                                                <tr>
+                                                    <td>@category.Label</td>
+                                                    <td><strong>@category.Total</strong></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <style>
+        .triage-text-content {
+            color: #101828;
+            line-height: 1.6;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        
+        .triage-text-content p {
+            margin-bottom: 0.5rem;
+        }
+        
+        .triage-text-content p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .card-body dl.row dt {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #475467;
+        }
+        
+        .card-body dl.row dd {
+            font-size: 0.9rem;
+            color: #101828;
+        }
+        
+        .card-body h5 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0c1d3e;
+        }
+        
+        .card-body h6 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0c1d3e;
+        }
+        
+        .card-body ul {
+            padding-left: 1.25rem;
+        }
+        
+        .card-body ul li {
+            margin-bottom: 0.25rem;
+        }
+        
+        .display-4 {
+            font-size: 2.5rem;
+        }
+    </style>
+}
+

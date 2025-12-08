@@ -1,9 +1,11 @@
 @model List<Compass.Models.ProductMetricValue>
+@inject Compass.Services.IReturnStatusService ReturnStatusService
 @{
     ViewData["Title"] = "Submit operational reports";
     var product = ViewBag.Product as Compass.Models.ProductDto;
     var productReturn = ViewBag.ProductReturn as Compass.Models.ProductReturn;
     var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+    var dueDate = ReturnStatusService.GetReturnDueDate(productReturn.Year, productReturn.Month);
 }
 
 @{
@@ -13,7 +15,6 @@
         new { Text = "Performance metrics", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = (string)null, IsButton = false, IsActive = false }
     };
 }
-@await Html.PartialAsync("_ModuleNavbar")
 
 @section Breadcrumbs {
     <style>
@@ -62,22 +63,10 @@
     }
 </style>
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">@product.Title</h1>
-                <p class="mb-0 text-muted">Document ID: @(product.DocumentId ?? product.FipsId)</p>
-            </div>
-            <div class="col-sm-6">
-               
-            </div>
-        </div>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+  
         <div class="row">
             <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
                 <partial name="_ProductSummarySidebar" model="product" />
@@ -107,13 +96,13 @@
 
                 <div class="row mb-4">
                     <!-- Card 1: Reporting Period -->
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="card border-left-info shadow h-100">
                             <div class="card-body">
                                 <div class="row no-gutters align-items-center">
                                     <div class="col mr-2">
                                         <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Reporting Period</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMMM yyyy"))</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(new DateTime(productReturn.Year, productReturn.Month, 1).ToString("d MMM")) to @(new DateTime(productReturn.Year, productReturn.Month, DateTime.DaysInMonth(productReturn.Year, productReturn.Month)).ToString("d MMM yyyy"))</div>
                                     </div>
                                     <div class="col-auto">
                                         <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
@@ -123,8 +112,29 @@
                         </div>
                     </div>
 
-                    <!-- Card 2: Status -->
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <!-- Card 2: Due Date -->
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        @{
+                            var dueDateBorderClass = DateTime.UtcNow > dueDate ? "border-left-danger" : "border-left-warning";
+                            var dueDateTextClass = DateTime.UtcNow > dueDate ? "text-danger" : "text-warning";
+                        }
+                        <div class="card @dueDateBorderClass shadow h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold @dueDateTextClass text-uppercase mb-1">Due Date</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@dueDate.ToString("d MMM yyyy")</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Status -->
+                    <div class="col-md-6 col-lg-3 mb-3">
                         @{
                             var statusBorderClass = productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "border-left-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "border-left-danger" : "border-left-warning";
                             var statusTextClass = productReturn.Status == Compass.Models.ReturnStatus.Submitted ? "text-success" : productReturn.Status == Compass.Models.ReturnStatus.Late ? "text-danger" : "text-warning";
@@ -144,8 +154,8 @@
                         </div>
                     </div>
 
-                    <!-- Card 3: Progress -->
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <!-- Card 4: Progress -->
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="card border-left-primary shadow h-100">
                             <div class="card-body">
                                 <div class="row no-gutters align-items-center">
@@ -170,20 +180,30 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Identifier</th>
                                     <th>Metric</th>
                                     <th>Value</th>
                                     <th>Status</th>
-                                    <th class="text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var metricValue in Model)
                                 {
                                     <tr id="row-@metricValue.Id">
-                                        <td>@metricValue.PerformanceMetric?.Identifier</td>
                                         <td>
-                                            <strong>@metricValue.PerformanceMetric?.Title</strong>
+                                            <a href="#" class="edit-metric-link @(isReadOnly ? "read-only-link" : "")" style="color: inherit; text-decoration: none; cursor: pointer;"
+                                               data-id="@metricValue.Id" 
+                                               data-identifier="@metricValue.PerformanceMetric?.Identifier"
+                                               data-title="@metricValue.PerformanceMetric?.Title"
+                                               data-value="@metricValue.Value"
+                                               data-previous-value="@metricValue.PreviousValue"
+                                               data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
+                                               data-not-captured-reason="@metricValue.NotCapturedReason"
+                                               data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
+                                               data-rules="@metricValue.PerformanceMetric?.ValidationRules"
+                                               data-hint="@metricValue.PerformanceMetric?.HintText"
+                                               data-read-only="@isReadOnly.ToString().ToLower()">
+                                                <strong style="color: #005ea5;">@metricValue.PerformanceMetric?.Title</strong>
+                                            </a>
                                             <br />
                                             <small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
                                         </td>
@@ -217,28 +237,6 @@
                                                 <span class="badge badge-secondary">Pending</span>
                                             }
                                         </td>
-                                        <td class="col-actions">
-                                            @if (!isReadOnly)
-                                            {
-                                                <button type="button" class="btn btn-sm btn-primary edit-metric" 
-                                                        data-id="@metricValue.Id" 
-                                                        data-identifier="@metricValue.PerformanceMetric?.Identifier"
-                                                        data-title="@metricValue.PerformanceMetric?.Title"
-                                                        data-value="@metricValue.Value"
-                                                        data-previous-value="@metricValue.PreviousValue"
-                                                        data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
-                                                        data-not-captured-reason="@metricValue.NotCapturedReason"
-                                                        data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
-                                                        data-rules="@metricValue.PerformanceMetric?.ValidationRules"
-                                                        data-hint="@metricValue.PerformanceMetric?.HintText">
-                                                    Edit
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">Read-only</span>
-                                            }
-                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -252,7 +250,7 @@
                                 <button type="submit" class="btn btn-success">
                                     Submit return
                                 </button>
-                                <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-documentId="@(product.DocumentId ?? product.FipsId)" class="btn btn-default">
+                                <a asp-controller="ProductReporting" asp-action="ProductHistory" asp-route-documentId="@(product.DocumentId ?? product.FipsId)" class="btn btn-primary">
                                     Back to returns
                                 </a>
                             </form>
@@ -291,6 +289,9 @@
                 </button>
             </div>
             <div class="modal-body">
+                <div id="readOnlyNotice" class="alert alert-info" style="display: none;">
+                    <strong>View only:</strong> This return is not yet due. You can view the metric details but cannot enter data yet.
+                </div>
                 <div class="form-group" id="previousValueContainer" style="display: none;">
                     <div class="alert alert-info mb-3">
                         <strong>Previous month value:</strong> <span id="previousValueDisplay"></span>
@@ -327,7 +328,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">
-                    Cancel
+                    Close
                 </button>
                 <button type="button" class="btn btn-success" id="saveMetricBtn">
                     Save value
@@ -372,7 +373,9 @@
             var currentPreviousValue = null;
             var currentValueType = null;
 
-            $('.edit-metric').click(function() {
+            // Handle clicks on edit-metric buttons and links
+            $(document).on('click', '.edit-metric, .edit-metric-link', function(e) {
+                e.preventDefault();
                 currentMetricId = $(this).data('id');
                 var identifier = $(this).data('identifier');
                 var title = $(this).data('title');
@@ -383,17 +386,29 @@
                 var hintText = $(this).data('hint') || '';
                 var isNotCaptured = $(this).data('is-not-captured') === true || $(this).data('is-not-captured') === 'true';
                 var notCapturedReason = $(this).data('not-captured-reason') || '';
+                var isReadOnly = $(this).data('read-only') === true || $(this).data('read-only') === 'true';
 
                 $('#modalIdentifier').text(identifier);
                 $('#modalTitle').text(title);
-                $('#modalValue').val(currentValue).removeClass('is-invalid').prop('disabled', false);
+                $('#modalValue').val(currentValue).removeClass('is-invalid').prop('disabled', isReadOnly);
                 $('#modalError').text('').addClass('d-none').removeClass('d-block');
-                $('#reasonForDifference').val('').removeClass('is-invalid');
+                $('#reasonForDifference').val('').removeClass('is-invalid').prop('disabled', isReadOnly);
                 $('#reasonError').text('').addClass('d-none').removeClass('d-block');
                 $('#reasonForDifferenceContainer').hide();
-                $('#notCapturedReason').val('').removeClass('is-invalid');
+                $('#notCapturedReason').val('').removeClass('is-invalid').prop('disabled', isReadOnly);
                 $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
                 $('#notCapturedReasonContainer').hide();
+                
+                // Show/hide read-only notice and save button
+                if (isReadOnly) {
+                    $('#readOnlyNotice').show();
+                    $('#saveMetricBtn').hide();
+                    $('#metricNotCaptured').prop('disabled', true);
+                } else {
+                    $('#readOnlyNotice').hide();
+                    $('#saveMetricBtn').show();
+                    $('#metricNotCaptured').prop('disabled', false);
+                }
                 
                 // Show previous value if it exists and is numeric
                 if (currentPreviousValue && (currentValueType == 1 || currentValueType == 2 || currentValueType == 3)) {
@@ -430,6 +445,14 @@
                     $('#nullCheckboxContainer').hide();
                     $('#metricNotCaptured').prop('checked', false);
                 }
+                
+                // Ensure all form fields respect read-only state
+                if (isReadOnly) {
+                    $('#modalValue').prop('disabled', true);
+                    $('#notCapturedReason').prop('disabled', true);
+                    $('#reasonForDifference').prop('disabled', true);
+                    $('#metricNotCaptured').prop('disabled', true);
+                }
 
                 // Set help text based on hint text or type
                 var helpText = hintText;
@@ -446,13 +469,19 @@
             
             // Handle checkbox change event
             $('#metricNotCaptured').change(function() {
+                if ($(this).is(':disabled')) {
+                    return; // Don't handle changes if disabled (read-only mode)
+                }
                 if ($(this).is(':checked')) {
                     $('#modalValue').val('').prop('disabled', true).removeClass('is-invalid');
                     $('#modalError').text('').addClass('d-none').removeClass('d-block');
                     $('#reasonForDifferenceContainer').hide();
                     $('#notCapturedReasonContainer').show();
+                    $('#notCapturedReason').prop('disabled', false);
                 } else {
-                    $('#modalValue').prop('disabled', false);
+                    var isReadOnly = $('.edit-metric-link[data-id="' + currentMetricId + '"]').data('read-only') === true || 
+                                     $('.edit-metric-link[data-id="' + currentMetricId + '"]').data('read-only') === 'true';
+                    $('#modalValue').prop('disabled', isReadOnly);
                     $('#notCapturedReasonContainer').hide();
                     $('#notCapturedReason').val('').removeClass('is-invalid');
                     $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
@@ -592,7 +621,7 @@
                             $('#display-' + currentMetricId).html(displayText);
                             
                             // Update status badge - mark as Complete if not captured
-                            var statusCell = $('#row-' + currentMetricId).find('td:eq(3)');
+                            var statusCell = $('#row-' + currentMetricId).find('td:eq(2)');
                             if (value || isNotCaptured) {
                                 statusCell.html('<span class="badge badge-success">Complete</span>');
                             } else {

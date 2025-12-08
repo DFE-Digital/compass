@@ -1,17 +1,40 @@
+@using Compass.Models
 @{
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     var isCentralOpsAdmin = ViewBag.IsCentralOpsAdmin as bool? ?? false;
+    var currentView = ViewBag.CurrentView as string ?? "mine";
+    var assignedToMeCount = ViewBag.AssignedToMeCount as int? ?? 0;
     
     var navLinks = new List<object>
     {
-        new { Text = "Requests", Action = "Requests", Controller = "DemandManagement", IsActive = currentAction == "Requests" },
-        new { Text = "Prioritisation", Action = "Prioritisation", Controller = "DemandManagement", IsActive = currentAction == "Prioritisation" },
-        new { Text = "Triage", Action = "Triage", Controller = "DemandManagement", IsActive = currentAction == "Triage" },
-        new { Text = "Reporting", Action = "Reporting", Controller = "DemandManagement", IsActive = currentAction == "Reporting" }
+        new { 
+            Text = "Requests", 
+            Action = "Requests", 
+            Controller = "DemandManagement", 
+            IsActive = currentAction == "Requests" && !string.Equals(currentView, "assigned", StringComparison.OrdinalIgnoreCase)
+        }
     };
     
+    // Add "Assigned to me" to top navbar if we're in Requests view
+    if (currentAction == "Requests")
+    {
+        navLinks.Add(new 
+        { 
+            Text = "Assigned to me", 
+            Action = "Requests", 
+            Controller = "DemandManagement",
+            RouteValues = new { view = "assigned" },
+            Count = assignedToMeCount,
+            IsActive = string.Equals(currentView, "assigned", StringComparison.OrdinalIgnoreCase)
+        });
+    }
+    
+    navLinks.Add(new { Text = "Prioritisation", Action = "Prioritisation", Controller = "DemandManagement", IsActive = currentAction == "Prioritisation" });
+    navLinks.Add(new { Text = "Triage", Action = "Triage", Controller = "DemandManagement", IsActive = currentAction == "Triage" });
+    navLinks.Add(new { Text = "Reporting", Action = "Reporting", Controller = "DemandManagement", IsActive = currentAction == "Reporting" });
+    
     if (isCentralOpsAdmin)
-            {
+    {
         navLinks.Add(new { Text = "Manage meetings", Action = "ManageMeetings", Controller = "DemandManagement", IsActive = currentAction == "ManageMeetings" });
     }
     
@@ -19,6 +42,6 @@
     
     ViewBag.BrandText = "Demand Management";
     ViewBag.NavLinks = navLinks;
-    }
+}
 @await Html.PartialAsync("_ModuleNavbar")
 

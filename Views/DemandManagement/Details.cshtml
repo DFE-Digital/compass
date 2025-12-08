@@ -98,6 +98,12 @@
     ViewBag.DemandStageName = Model.CurrentStageName;
     ViewBag.DemandStageSummary = Model.CurrentStageSummary;
 
+    ViewBag.BrandText = "Request details";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "Back to requests", Action = "Requests", Controller = "DemandManagement", IsActive = false }
+    };
+
     var applicantDisplayName = FormatPersonName(request.ApplicantName);
     var hasApplicantName = !string.IsNullOrWhiteSpace(applicantDisplayName);
     if (!hasApplicantName)
@@ -140,25 +146,21 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-3 align-items-center">
-            <div class="col-sm-12">
-                <h1 class="m-0">Demand request</h1>
-                <p class="text-muted mb-0">
-                    Reference @request.ReferenceNumber
-                    @if (!string.IsNullOrWhiteSpace(request.BusinessArea))
-                    {
-                        <text>&middot; @request.BusinessArea</text>
-                    }
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-3 align-items-center">
+                    <div class="col-sm-12">
+                        <h1 class="m-0">@(string.IsNullOrWhiteSpace(request.ProposedTitle) ? "Untitled" : request.ProposedTitle)</h1>
+                        <p class="text-muted mb-0">
+                            @request.ReferenceNumber
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
         @if (TempData["SuccessMessage"] is string success)
         {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -179,7 +181,7 @@
         }
 
         <div class="row">
-            <div class="col-xl-3 col-lg-4 order-2 order-lg-1">
+            <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
                 <div class="card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h3 class="card-title mb-0">Request summary</h3>
@@ -188,16 +190,35 @@
                         <dl class="definition-list">
                             <div class="definition-item">
                                 <dt>Title</dt>
-                                <dd>@(string.IsNullOrWhiteSpace(request.ProposedTitle) ? "Untitled" : request.ProposedTitle)</dd>
+                                <dd>
+                                    @(string.IsNullOrWhiteSpace(request.ProposedTitle) ? "Untitled" : request.ProposedTitle)
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeTitleModal">
+                                            Change
+                                        </button>
+                                    </div>
+                                </dd>
                             </div>
                             <div class="definition-item">
                                 <dt>Business area</dt>
-                                <dd>@(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Not specified" : request.BusinessArea)</dd>
+                                <dd>
+                                    @(string.IsNullOrWhiteSpace(request.BusinessArea) ? "Not specified" : request.BusinessArea)
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeBusinessAreaModal">
+                                            Change
+                                        </button>
+                                    </div>
+                                </dd>
                             </div>
                             <div class="definition-item">
                                 <dt>Status</dt>
                                 <dd>
                                     <span class="badge badge-pill @GetStatusBadgeClass(request.Status)">@request.Status</span>
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeStatusModal">
+                                            Change
+                                        </button>
+                                    </div>
                                 </dd>
                             </div>
                             <div class="definition-item">
@@ -225,7 +246,7 @@
                                     {
                                         <span class="text-muted">Not assigned</span>
                                     }
-                                    <div class="mt-2">
+                                    <div class="mt-1">
                                         <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#assignRequestModal">
                                             @(hasAssignment ? "Change" : "Assign")
                                         </button>
@@ -243,6 +264,11 @@
                                     {
                                         <span class="font-weight-semibold">@applicantDisplayName</span>
                                     }
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeRequestorModal">
+                                            Change
+                                        </button>
+                                    </div>
                                 </dd>
                             </div>
                             <div class="definition-item">
@@ -251,6 +277,29 @@
                                     @(request.SubmittedAt.HasValue
                                         ? request.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm")
                                         : "Not submitted")
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeSubmittedDateModal">
+                                            Change
+                                        </button>
+                                    </div>
+                                </dd>
+                            </div>
+                            <div class="definition-item">
+                                <dt>Sensitivity</dt>
+                                <dd>
+                                    @if (request.IsSensitiveRequest)
+                                    {
+                                        <span class="badge badge-warning">Sensitive</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not sensitive</span>
+                                    }
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-link btn-sm p-0" data-toggle="modal" data-target="#changeSensitivityModal">
+                                            Change
+                                        </button>
+                                    </div>
                                 </dd>
                             </div>
                             <div class="definition-item">
@@ -270,7 +319,7 @@
 
             </div>
 
-            <div class="col-xl-9 col-lg-8 order-1 order-lg-2">
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
                 @if (Model.IsDocumentView)
                 {
                     @await Html.PartialAsync("_DocumentView", request)
@@ -524,6 +573,131 @@
     </div>
 </section>
 
+<!-- Change Title Modal -->
+<div class="modal fade" id="changeTitleModal" tabindex="-1" role="dialog" aria-labelledby="changeTitleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeTitleModalLabel">Change title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateTitle" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@request.Id" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newTitle">Title</label>
+                        <input type="text" class="form-control" id="newTitle" name="title" value="@request.ProposedTitle" maxlength="120" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Business Area Modal -->
+<div class="modal fade" id="changeBusinessAreaModal" tabindex="-1" role="dialog" aria-labelledby="changeBusinessAreaModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeBusinessAreaModalLabel">Change business area</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateBusinessArea" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@request.Id" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newBusinessArea">Business area</label>
+                        @{
+                            var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+                        }
+                        <select class="form-control" id="newBusinessArea" name="businessArea">
+                            <option value="">Not specified</option>
+                            @foreach (var ba in businessAreas)
+                            {
+                                if (string.Equals(ba, request.BusinessArea, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@ba" selected>@ba</option>
+                                }
+                                else
+                                {
+                                    <option value="@ba">@ba</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Status Modal -->
+<div class="modal fade" id="changeStatusModal" tabindex="-1" role="dialog" aria-labelledby="changeStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeStatusModalLabel">Change status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateStatus" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@request.Id" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newStatus">Status</label>
+                        @{
+                            var statuses = ViewBag.Statuses as List<Compass.Models.DemandRequestStatus> ?? new List<Compass.Models.DemandRequestStatus>();
+                        }
+                        <select class="form-control" id="newStatus" name="status" required>
+                            @foreach (var status in statuses.Where(s => s.IsActive).OrderBy(s => s.SortOrder).ThenBy(s => s.Label))
+                            {
+                                if (string.Equals(status.Label, request.Status, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@status.Label" selected>@status.Label</option>
+                                }
+                                else
+                                {
+                                    <option value="@status.Label">@status.Label</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="statusReason">Status reason</label>
+                        <textarea class="form-control" id="statusReason" name="statusReason" rows="3" placeholder="Explain why this status is being set"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Assign Request Modal -->
 <div class="modal fade" id="assignRequestModal" tabindex="-1" role="dialog" aria-labelledby="assignRequestModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -541,20 +715,40 @@
                 <input type="hidden" name="currentView" value="@currentView" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="assignmentName">Name <span class="text-muted small">(optional)</span></label>
-                        <input type="text" class="form-control" id="assignmentName" name="assignedToName" value="@request.AssignedToName" autocomplete="off" />
-                    </div>
-                    <div class="form-group">
-                        <label for="assignmentEmail">Email</label>
-                        <input type="email" class="form-control" id="assignmentEmail" name="assignedToEmail" value="@request.AssignedToEmail" placeholder="name@example.com" autocomplete="off" />
-                        <small class="form-text text-muted">We'll notify them when this request changes.</small>
+                        <label for="assignedToSearch">Assigned to</label>
+                        <small class="form-text text-muted">Search the Entra directory. Leave blank if unassigned.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="assignedToSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                       value="@(request.AssignedToName ?? string.Empty)" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="assignedToObjectId" class="js-user-picker-objectid" />
+                            <input type="hidden" name="assignedToEmail" class="js-user-picker-email" value="@request.AssignedToEmail" />
+                            <input type="hidden" name="assignedToName" class="js-user-picker-name" value="@request.AssignedToName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
+                                @if (hasAssignment && assignedHasEmail)
+                                {
+                                    <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; margin-top: 0.5rem;">
+                                        <div style="font-weight: 500;">@(request.AssignedToName ?? request.AssignedToEmail)</div>
+                                        <div style="font-size: 0.875rem; color: #6c757d;">@request.AssignedToEmail</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer d-flex justify-content-between align-items-center">
                     <button type="submit" class="btn btn-link text-danger" name="clearAssignment" value="true" @(hasAssignment ? string.Empty : "disabled")>Clear assignment</button>
                     <div>
                         <button type="button" class="btn btn-secondary mr-2" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Save assignment</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
                     </div>
                 </div>
             </form>
@@ -562,60 +756,120 @@
     </div>
 </div>
 
-<!-- Update Status Modal -->
-<div class="modal fade" id="updateStatusModal" tabindex="-1" role="dialog" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+<!-- Change Requestor Modal -->
+<div class="modal fade" id="changeRequestorModal" tabindex="-1" role="dialog" aria-labelledby="changeRequestorModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="updateStatusModalLabel">Update status</h5>
+                <h5 class="modal-title" id="changeRequestorModalLabel">Change requestor</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form asp-action="UpdateStatus" method="post" id="updateStatusForm">
+            <form asp-action="UpdateRequestor" method="post">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="id" value="@request.Id" />
-                <input type="hidden" name="currentSection" value="@Model.ActiveSectionKey" />
-                <input type="hidden" name="currentView" value="@(Model.IsDocumentView ? "document" : "details")" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
                 <div class="modal-body">
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="workflowStatusSelect">New status</label>
-                            <select class="form-control" id="workflowStatusSelect" name="status" required>
-                                @foreach (var option in new[] { "Draft", "Submitted", "Explore", "Prioritisation", "Triage", "Delivery", "Run", "Deferred", "Rejected" })
+                    <div class="form-group">
+                        <label for="requestorSearch">Requestor</label>
+                        <small class="form-text text-muted">Search the Entra directory.</small>
+                        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select">
+                            <div class="position-relative">
+                                <input type="text"
+                                       class="form-control js-user-picker-input"
+                                       id="requestorSearch"
+                                       autocomplete="off"
+                                       placeholder="e.g. Alex Smith or alex.smith@education.gov.uk"
+                                       value="@(request.ApplicantName ?? string.Empty)" />
+                                <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching…</span>
+                                <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+                            </div>
+                            <p class="form-text text-muted js-user-picker-message"></p>
+                            <input type="hidden" name="requestorObjectId" class="js-user-picker-objectid" />
+                            <input type="hidden" name="requestorEmail" class="js-user-picker-email" value="@request.ApplicantEmail" />
+                            <input type="hidden" name="requestorName" class="js-user-picker-name" value="@request.ApplicantName" />
+                            <div class="user-picker__selected js-user-picker-summary" data-default-text="No user selected.">
+                                @if (applicantHasEmail)
                                 {
-                                    if (string.Equals(option, request.Status, StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        <option value="@option" selected>@option</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
+                                    <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; margin-top: 0.5rem;">
+                                        <div style="font-weight: 500;">@request.ApplicantName</div>
+                                        <div style="font-size: 0.875rem; color: #6c757d;">@request.ApplicantEmail</div>
+                                    </div>
                                 }
-                            </select>
-                        </div>
-                        <div class="form-group col-md-6" id="nextReviewContainer" style="display:@(request.Status == "Deferred" && request.NextReviewDate.HasValue ? "block" : "none")">
-                            <label for="workflowNextReview">Next review date</label>
-                            <input type="date" class="form-control" id="workflowNextReview" name="nextReviewDate" value="@request.NextReviewDate?.ToString("yyyy-MM-dd")" />
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group" id="decisionReasonContainer" style="display:none;">
-                        <label for="workflowStatusReason">Decision reason</label>
-                        <textarea class="form-control" id="workflowStatusReason" name="statusReason" rows="4" placeholder="Explain why this status is being set"></textarea>
-                        <small class="form-text text-muted">Reason is required when changing status.</small>
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(request.StatusChangeReason))
-                    {
-                        <div class="alert alert-light border mb-0">
-                            <strong>Latest decision reason:</strong>
-                            <div class="mt-2">@request.StatusChangeReason</div>
-                        </div>
-                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Update status</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Submitted Date Modal -->
+<div class="modal fade" id="changeSubmittedDateModal" tabindex="-1" role="dialog" aria-labelledby="changeSubmittedDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeSubmittedDateModalLabel">Change submitted date</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSubmittedDate" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@request.Id" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newSubmittedDate">Submitted date and time</label>
+                        <input type="datetime-local" class="form-control" id="newSubmittedDate" name="submittedDate" value="@(request.SubmittedAt?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+                        <small class="form-text text-muted">Leave blank to clear the submitted date.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Sensitivity Modal -->
+<div class="modal fade" id="changeSensitivityModal" tabindex="-1" role="dialog" aria-labelledby="changeSensitivityModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeSensitivityModalLabel">Change sensitivity status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form asp-action="UpdateSensitivity" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@request.Id" />
+                <input type="hidden" name="currentSection" value="@activeSection" />
+                <input type="hidden" name="currentView" value="@currentView" />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isSensitiveRequest" name="isSensitiveRequest" value="true" @(request.IsSensitiveRequest ? "checked" : "") />
+                            <label class="form-check-label" for="isSensitiveRequest">
+                                This is a sensitive request
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </div>
@@ -624,40 +878,13 @@
 
 
 
+
+<script src="~/js/user-picker.js" asp-append-version="true"></script>
 <script nonce="@Context.Items["Nonce"]">
     (function () {
         const requestId = '@request.Id';
-        const statusSelect = document.getElementById('workflowStatusSelect');
-        const statusReasonContainer = document.getElementById('decisionReasonContainer');
-        const statusReasonInput = document.getElementById('workflowStatusReason');
-        const nextReviewContainer = document.getElementById('nextReviewContainer');
-        const nextReviewInput = document.getElementById('workflowNextReview');
-        const originalStatus = '@request.Status';
         const antiForgeryTokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
         const antiForgeryToken = antiForgeryTokenElement ? antiForgeryTokenElement.value : '';
-
-        function toggleReasonVisibility() {
-            if (!statusSelect) return;
-            const newStatus = statusSelect.value;
-            const statusChanged = newStatus !== originalStatus;
-            if (statusReasonContainer) {
-                statusReasonContainer.style.display = statusChanged ? 'block' : 'none';
-            }
-            if (statusReasonInput) {
-                statusReasonInput.required = statusChanged;
-            }
-
-            const shouldShowReview = newStatus === 'Deferred';
-            if (nextReviewContainer) {
-                nextReviewContainer.style.display = shouldShowReview ? 'block' : 'none';
-            }
-            if (nextReviewInput) {
-                nextReviewInput.required = shouldShowReview;
-            }
-        }
-
-        statusSelect?.addEventListener('change', toggleReasonVisibility);
-        toggleReasonVisibility();
 
         function updateSectionStatus(sectionKey, status, panel) {
             const message = panel?.querySelector('.status-message');
