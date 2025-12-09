@@ -39,50 +39,24 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">Manage DDT Standards</h1>
-                <p class="text-muted mb-0">Create, review, and manage DDT standards</p>
-            </div>
-            <div class="col-sm-6">
-                <div class="d-flex justify-content-end align-items-center">
-                    @if (isStandardsManager)
-                    {
-                        <form asp-action="MigrateVersionsToSemantic" method="post" class="mr-2" onsubmit="return confirm('This will migrate all standard versions to semantic versioning format (MAJOR.MINOR.PATCH) and link related standards. This action cannot be undone. Do you want to continue?');">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-warning btn-sm">
-                                <i class="fas fa-sync-alt mr-1"></i>Migrate Versions to Semantic
-                            </button>
-                        </form>
-                        <form asp-action="UpdateLegacyReferencesFromCms" method="post" class="mr-2" onsubmit="return confirm('This will update LegacyReference for all standards from CMS StandardId. Standards with LegacyId will get STD-{StandardId}, standards with parents will inherit, and others will get new numbers. Continue?');">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-info btn-sm">
-                                <i class="fas fa-database mr-1"></i>Update Legacy References
-                            </button>
-                        </form>
-                    }
-                    @if (Model.ActiveView == "drafts")
-                    {
-                        <a href="@Url.Action("Create", "DdtStandards")" class="btn btn-primary" id="createStandardBtn">
-                            Create Standard
-                        </a>
-                    }
-                    else
-                    {
-                    <a href="@Url.Action("Create", "DdtStandards")" class="btn btn-primary">
-                        Create Standard
-                    </a>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Standards";
+            var navLinks = new List<object>
+            {
+                new { Text = "My standards", Action = "Index", Controller = "DdtStandards", Url = Url.Action("Index", "DdtStandards", new { view = "my" }), IsButton = false, IsActive = false },
+                new { Text = "All standards", Action = "Index", Controller = "DdtStandards", Url = Url.Action("Index", "DdtStandards", new { view = "published" }), IsButton = false, IsActive = currentAction == "Index" },
+                new { Text = "Updates", Action = "Updates", Controller = "DdtStandards", Url = Url.Action("Updates", "DdtStandards"), IsButton = false, IsActive = false }
+            };
+            if (isStandardsManager)
+            {
+                navLinks.Add(new { Text = "Management", Action = "Management", Controller = "DdtStandards", Url = Url.Action("ApprovedProducts", "DdtStandards"), IsButton = false, IsActive = false });
+            }
+            ViewBag.NavLinks = navLinks;
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
 
         @if (TempData["SuccessMessage"] != null)
         {
@@ -138,33 +112,6 @@
                     </div>
                 </div>
 
-                @if (isStandardsManager)
-                {
-                    <!-- Standards Management Card -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h3 class="card-title">Standards Management</h3>
-                        </div>
-                        <div class="card-body p-0">
-                            <ul class="nav nav-pills flex-column">
-                                <li class="nav-item">
-                                    <a href="@Url.Action("ApprovedProducts", "DdtStandards")"
-                                       class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "ApprovedProducts" ? "active" : "") d-flex justify-content-between align-items-center">
-                                        <span>Manage approved products</span>
-                                        <span class="badge badge-secondary badge-pill">@(ViewBag.ApprovedProductsCount ?? 0)</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="@Url.Action("Exceptions", "DdtStandards")"
-                                       class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "Exceptions" ? "active" : "") d-flex justify-content-between align-items-center">
-                                        <span>Manage Exceptions</span>
-                                        <span class="badge badge-secondary badge-pill">@(ViewBag.ExceptionsCount ?? 0)</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                }
 
                 <!-- Filters Card -->
                 <div class="card">
@@ -253,131 +200,6 @@
 
             <!-- Right Column: Standards List -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
-                <!-- Recent Changes and Published Standards -->
-                <div class="row mb-4">
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">Recent Changes (Last 30 Days)</h3>
-                            </div>
-                            <div class="card-body p-0">
-                                @{
-                                    var recentChanges = ViewBag.RecentChanges as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
-                                }
-                                @if (recentChanges.Any())
-                                {
-                                    <div class="table-responsive">
-                                        <table class="table table-hover mb-0">
-                                            <thead>
-                                                <tr>
-                                                    <th style="width: 40%;">Title</th>
-                                                    <th style="width: 15%;">Version</th>
-                                                    <th style="width: 20%;">Stage</th>
-                                                    <th style="width: 25%;">Updated</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var standard in recentChanges.Take(10))
-                                                {
-                                                    <tr>
-                                                        <td>
-                                                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })" style="font-weight: 600; color: #005ea5; text-decoration: none;">
-                                                                @standard.Title
-                                                            </a>
-                                                        </td>
-                                                        <td>@standard.Version</td>
-                                                        <td>
-                                                            <span class="badge badge-@(standard.Stage == "Published" ? "success" : standard.Stage == "Draft" ? "secondary" : standard.Stage == "For Approval" ? "warning" : "info")">
-                                                                @standard.Stage
-                                                            </span>
-                                                        </td>
-                                                        <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    @if (recentChanges.Count > 10)
-                                    {
-                                        <div class="card-footer text-center">
-                                            <small class="text-muted">Showing 10 of @recentChanges.Count recent changes</small>
-                                        </div>
-                                    }
-                                }
-                                else
-                                {
-                                    <div class="p-4 text-center">
-                                        <p class="text-muted mb-0">No recent changes in the last 30 days.</p>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">Recently Published (Last 30 Days)</h3>
-                            </div>
-                            <div class="card-body p-0">
-                                @{
-                                    var recentPublished = ViewBag.RecentPublished as List<Compass.Models.DdtStandard> ?? new List<Compass.Models.DdtStandard>();
-                                }
-                                @if (recentPublished.Any())
-                                {
-                                    <div class="table-responsive">
-                                        <table class="table table-hover mb-0">
-                                            <thead>
-                                                <tr>
-                                                    <th style="width: 40%;">Title</th>
-                                                    <th style="width: 15%;">Version</th>
-                                                    <th style="width: 20%;">Published</th>
-                                                    <th style="width: 25%;">Updated</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var standard in recentPublished.Take(10))
-                                                {
-                                                    <tr>
-                                                        <td>
-                                                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })" style="font-weight: 600; color: #005ea5; text-decoration: none;">
-                                                                @standard.Title
-                                                            </a>
-                                                        </td>
-                                                        <td>@standard.Version</td>
-                                                        <td>
-                                                            @if (standard.PublishedAt.HasValue)
-                                                            {
-                                                                @standard.PublishedAt.Value.ToString("dd MMM yyyy")
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="text-muted">-</span>
-                                                            }
-                                                        </td>
-                                                        <td>@standard.UpdatedAt.ToString("dd MMM yyyy")</td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    @if (recentPublished.Count > 10)
-                                    {
-                                        <div class="card-footer text-center">
-                                            <small class="text-muted">Showing 10 of @recentPublished.Count recently published</small>
-                                        </div>
-                                    }
-                                }
-                                else
-                                {
-                                    <div class="p-4 text-center">
-                                        <p class="text-muted mb-0">No standards published in the last 30 days.</p>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 @if (Model.ActiveView == "drafts")
                 {
                     <div class="mb-3">

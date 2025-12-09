@@ -199,6 +199,36 @@ namespace Compass.Controllers
         }
 
         // ==========================================
+        // INDEX - DEMAND TRIAGE OVERVIEW
+        // ==========================================
+
+        // GET: DemandManagement/Index
+        public async Task<IActionResult> Index()
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            
+            // Get user's request counts for display
+            var myRequestsCount = 0;
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                myRequestsCount = await _context.DemandRequests
+                    .AsNoTracking()
+                    .Where(dr => dr.ApplicantEmail == userEmail)
+                    .CountAsync();
+            }
+
+            ViewBag.MyRequestsCount = myRequestsCount;
+            ViewBag.UserEmail = userEmail;
+
+            return View();
+        }
+
+        // ==========================================
         // REQUESTS SECTION
         // ==========================================
 
@@ -1028,9 +1058,10 @@ namespace Compass.Controllers
                     model.CreatedAt = DateTime.UtcNow;
                     model.UpdatedAt = DateTime.UtcNow;
                     
-                    // If submitting (not draft), set submitted timestamp
-                    if (model.Status == "Submitted")
+                    // If submitting (not draft), set status to "New" and submitted timestamp
+                    if (model.Status == "Submitted" || string.IsNullOrWhiteSpace(model.Status))
                     {
+                        model.Status = "New";
                         model.SubmittedAt = DateTime.UtcNow;
                     }
 

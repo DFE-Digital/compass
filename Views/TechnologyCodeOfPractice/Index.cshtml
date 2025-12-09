@@ -9,8 +9,14 @@
 @await Html.PartialAsync("_DashboardStyles")
 
 @section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
     <nav aria-label="Breadcrumb">
-        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
             </li>
@@ -19,17 +25,18 @@
     </nav>
 }
 
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-            </div>
-        </div>
-    </div>
-</div>
-
 <section class="content">
     <div class="container-fluid">
+        @{
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+            ViewBag.BrandText = "Technology Code of Practice";
+            ViewBag.NavLinks = new[]
+            {
+                new { Text = "Technology Code of Practice", Action = "Index", Controller = "TechnologyCodeOfPractice", Url = (string)null, IsButton = false, IsActive = currentAction == "Index" }
+            };
+        }
+        @await Html.PartialAsync("_ModuleNavbar")
+
         @if (TempData["SuccessMessage"] != null)
         {
             <div class="alert alert-success alert-dismissible fade show">
@@ -45,34 +52,52 @@
             </div>
         }
 
-        <!-- Dashboard Header -->
-        <div class="dashboard-header">
-            <h1>Technology Code of Practice</h1>
-            <p>A set of criteria to help government design, build and buy technology. The TCoP is used for the Cabinet Office spend control process and the Local Digital Declaration. <a href="https://www.gov.uk/guidance/the-technology-code-of-practice" target="_blank" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">View on GOV.UK <i class="fas fa-external-link-alt"></i></a></p>
-        </div>
-
         <!-- Summary Cards -->
-        <div class="dashboard-summary-cards mb-4">
-            <div class="dashboard-card bg-primary">
-                <div class="dashboard-card-value">@totalPoints</div>
-                <div class="dashboard-card-label">Total Points</div>
-                <div class="dashboard-card-icon"><i class="fas fa-list-alt"></i></div>
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Points</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@totalPoints</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-list-alt fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="dashboard-card bg-success">
-                <div class="dashboard-card-value">@activePoints</div>
-                <div class="dashboard-card-label">Active Points</div>
-                <div class="dashboard-card-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="col-md-6 mb-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active Points</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@activePoints</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- TCoP Points List -->
-        <div class="dashboard-section">
-            <div class="dashboard-section-header">
-                <h2><i class="fas fa-code"></i> The 13 Technology Code of Practice Points</h2>
-                <p class="dashboard-section-description">Click on any point to view details and manage guidance.</p>
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">The 13 Technology Code of Practice Points</h3>
             </div>
-            
-            <div class="standards-list">
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    A set of criteria to help government design, build and buy technology. The TCoP is used for the Cabinet Office spend control process and the Local Digital Declaration. 
+                    <a href="https://www.gov.uk/guidance/the-technology-code-of-practice" target="_blank" rel="noopener noreferrer" style="color: #005ea5;">View on GOV.UK <i class="fas fa-external-link-alt"></i></a>
+                </p>
+                <p class="text-muted mb-3">Click on any point to view details and manage guidance.</p>
+                <div class="standards-list">
                 @foreach (var point in Model.OrderBy(p => p.PointNumber))
                 {
                     <div class="standard-item @(point.IsActive ? "" : "standard-item-inactive")">
@@ -131,18 +156,37 @@
                         </div>
                     </div>
                 }
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="alert alert-info mt-3">
+                        <h4><i class="fas fa-info-circle"></i> No Technology Code of Practice Points Found</h4>
+                        <p class="mb-0">The 13 Technology Code of Practice points need to be seeded into the database. Please contact an administrator to initialize the points.</p>
+                    </div>
+                }
             </div>
         </div>
-
-        @if (!Model.Any())
-        {
-            <div class="dashboard-section">
-                <div class="alert alert-info">
-                    <h4><i class="fas fa-info-circle"></i> No Technology Code of Practice Points Found</h4>
-                    <p>The 13 Technology Code of Practice points need to be seeded into the database. Please contact an administrator to initialize the points.</p>
-                </div>
-            </div>
-        }
     </div>
 </section>
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .text-xs {
+        font-size: 0.7rem;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .shadow {
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+    }
+</style>
 

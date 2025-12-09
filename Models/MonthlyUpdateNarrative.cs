@@ -19,7 +19,7 @@ public class MonthlyUpdateNarrative
     public ProjectMonthlyUpdate ProjectMonthlyUpdate { get; set; } = null!;
 
     [Required]
-    [MaxLength(450)]
+    [MaxLength(4000)]
     public string Narrative { get; set; } = string.Empty;
 
     // EntraUser fields
