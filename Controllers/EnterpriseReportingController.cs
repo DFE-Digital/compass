@@ -416,6 +416,12 @@ public class EnterpriseReportingController : Controller
         return View("~/Views/EnterpriseReporting/FunctionalStandards/SelectStandard.cshtml");
     }
 
+    // GET: EnterpriseReporting/FunctionalStandardsGuidance
+    public IActionResult FunctionalStandardsGuidance()
+    {
+        return View("~/Views/EnterpriseReporting/FunctionalStandards/Guidance.cshtml");
+    }
+
     // POST: EnterpriseReporting/StartAssessment
     [HttpPost]
     [ValidateAntiForgeryToken]

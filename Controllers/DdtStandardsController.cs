@@ -602,6 +602,34 @@ public class DdtStandardsController : Controller
         ViewBag.AllPublishedCount = allPublishedCount;
         ViewBag.AllUnpublishedCount = allUnpublishedCount;
 
+        // Add data for edit modal (only if user is Standards Manager)
+        if (isStandardsManager)
+        {
+            ViewBag.AllUsers = await _context.Users
+                .OrderBy(u => u.Name)
+                .ToListAsync();
+            ViewBag.AllCategories = await _context.StandardCategories
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+            ViewBag.AllSubCategories = await _context.StandardSubCategories
+                .Include(sc => sc.Category)
+                .Where(sc => sc.IsActive)
+                .OrderBy(sc => sc.Category.Name)
+                .ThenBy(sc => sc.Name)
+                .ToListAsync();
+        }
+
+        return View(viewModel);
+    }
+
+    /// <summary>
+    /// Updates view - shows recent changes and recently published standards
+    /// </summary>
+    public async Task<IActionResult> Updates()
+    {
+        var isStandardsManager = await IsStandardsManagerAsync();
+
         // Get recent changes (standards updated in last 30 days)
         var recentChanges = await _context.DdtStandards
             .AsNoTracking()
@@ -624,26 +652,9 @@ public class DdtStandardsController : Controller
 
         ViewBag.RecentChanges = recentChanges;
         ViewBag.RecentPublished = recentPublished;
+        ViewBag.IsStandardsManager = isStandardsManager;
 
-        // Add data for edit modal (only if user is Standards Manager)
-        if (isStandardsManager)
-        {
-            ViewBag.AllUsers = await _context.Users
-                .OrderBy(u => u.Name)
-                .ToListAsync();
-            ViewBag.AllCategories = await _context.StandardCategories
-                .Where(c => c.IsActive)
-                .OrderBy(c => c.Name)
-                .ToListAsync();
-            ViewBag.AllSubCategories = await _context.StandardSubCategories
-                .Include(sc => sc.Category)
-                .Where(sc => sc.IsActive)
-                .OrderBy(sc => sc.Category.Name)
-                .ThenBy(sc => sc.Name)
-                .ToListAsync();
-        }
-
-        return View(viewModel);
+        return View();
     }
 
     /// <summary>
