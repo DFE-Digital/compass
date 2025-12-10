@@ -15,6 +15,7 @@ public class FipsCompletionViewModel
 public class ProductCompletionItem
 {
     public string FipsId { get; set; } = string.Empty;
+    public string DocumentId { get; set; } = string.Empty;
     public string ProductTitle { get; set; } = string.Empty;
     public string BusinessArea { get; set; } = string.Empty;
     public string? PhaseName { get; set; }
