@@ -8,6 +8,7 @@ using Compass.Services;
 using Compass.ViewModels;
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using ClosedXML.Excel;
 
 namespace Compass.Controllers;
@@ -171,6 +172,7 @@ public class BulkUpdateRequest
     public List<int>? DirectorateIds { get; set; }
     public bool ClearDirectorates { get; set; }
 }
+
 
 [Authorize]
 [RequireCentralOpsAdmin]
@@ -596,6 +598,243 @@ public class CentralOpsController : Controller
             _logger.LogError(ex, "Error loading monthly reporting");
             TempData["ErrorMessage"] = "An error occurred while loading monthly reporting. Please try again.";
             return View();
+        }
+    }
+
+    // GET: CentralOps/GenerateMonthlyReport
+    public async Task<IActionResult> GenerateMonthlyReport(int? year, int? month, string? format)
+    {
+        try
+        {
+            // Determine reporting period
+            var currentDate = DateTime.UtcNow;
+            var currentYear = currentDate.Year;
+            var currentMonth = currentDate.Month;
+            
+            var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+            var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+            
+            var reportYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : (currentMonth == 1 ? currentYear - 1 : currentYear);
+            var reportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+
+            var filterYear = year ?? reportYear;
+            var filterMonth = month ?? reportMonth;
+            
+            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(filterYear, filterMonth);
+            var monthName = new DateTime(filterYear, filterMonth, 1).ToString("MMMM yyyy");
+
+            // Get all projects with submitted monthly updates for the period
+            var projectsWithUpdates = await _context.Projects
+                .Include(p => p.MonthlyUpdates)
+                    .ThenInclude(mu => mu.MonthlyUpdateNarratives)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted)
+                .Select(p => new
+                {
+                    Project = p,
+                    MonthlyUpdate = p.MonthlyUpdates.FirstOrDefault(u => u.Year == filterYear && u.Month == filterMonth && u.SubmittedAt.HasValue)
+                })
+                .Where(x => x.MonthlyUpdate != null)
+                .OrderBy(x => x.Project.Title)
+                .ToListAsync();
+
+            var reportItems = projectsWithUpdates.Select(x => new ViewModels.MonthlyReportItem
+            {
+                ProjectId = x.Project.Id,
+                ProjectCode = $"DFE-DDT-{x.Project.Id}",
+                ProjectTitle = x.Project.Title,
+                BusinessArea = x.Project.BusinessAreaLookup?.Name ?? "Not assigned",
+                PrimaryContact = x.Project.PrimaryContactUser?.Name ?? "-",
+                ServiceOwner = x.Project.ServiceOwners?.FirstOrDefault()?.User?.Name ?? "-",
+                RagStatus = NormalizeRagStatus(x.Project.RagStatus) ?? "Not set",
+                PathToGreen = x.Project.PathToGreen,
+                RagJustification = x.Project.RagJustification,
+                UpdateNarratives = x.MonthlyUpdate!.MonthlyUpdateNarratives
+                    .OrderBy(n => n.CreatedAt)
+                    .Select(n => new ViewModels.MonthlyReportNarrative
+                    {
+                        Narrative = n.Narrative,
+                        SubmittedBy = !string.IsNullOrEmpty(n.CreatedByName) ? n.CreatedByName : n.CreatedByUser?.Name ?? "Unknown",
+                        SubmittedByEmail = n.CreatedByEmail ?? n.CreatedByUser?.Email ?? "",
+                        SubmittedAt = n.CreatedAt
+                    })
+                    .ToList(),
+                SubmittedAt = x.MonthlyUpdate.SubmittedAt!.Value,
+                SubmittedBy = !string.IsNullOrEmpty(x.MonthlyUpdate.CreatedByName) 
+                    ? x.MonthlyUpdate.CreatedByName 
+                    : x.MonthlyUpdate.CreatedByUser?.Name ?? "Unknown",
+                SubmittedByEmail = x.MonthlyUpdate.CreatedByEmail ?? x.MonthlyUpdate.CreatedByUser?.Email ?? ""
+            }).ToList();
+
+            ViewBag.ReportYear = filterYear;
+            ViewBag.ReportMonth = filterMonth;
+            ViewBag.MonthName = monthName;
+            ViewBag.DueDate = dueDate;
+            ViewBag.TotalSubmissions = reportItems.Count;
+
+            // If Excel format requested, generate Excel document
+            if (format?.ToLower() == "excel")
+            {
+                return await GenerateMonthlyReportExcel(reportItems, monthName, filterYear, filterMonth);
+            }
+
+            return View(reportItems);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating monthly report");
+            TempData["ErrorMessage"] = "An error occurred while generating the monthly report. Please try again.";
+            return RedirectToAction("MonthlyReporting");
+        }
+    }
+
+    private async Task<IActionResult> GenerateMonthlyReportExcel(List<ViewModels.MonthlyReportItem> reportItems, string monthName, int year, int month)
+    {
+        try
+        {
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Monthly Report");
+            
+            // Add title row
+            worksheet.Row(1).Height = 30;
+            worksheet.Cell(1, 1).Value = $"Monthly Update Report - {monthName}";
+            worksheet.Cell(1, 1).Style.Font.Bold = true;
+            worksheet.Cell(1, 1).Style.Font.FontSize = 14;
+            worksheet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            worksheet.Range(1, 1, 1, 14).Merge();
+            
+            worksheet.Cell(2, 1).Value = $"Report Generated: {DateTime.UtcNow:dd MMMM yyyy HH:mm} UTC | Total Submissions: {reportItems.Count}";
+            worksheet.Cell(2, 1).Style.Font.Italic = true;
+            worksheet.Range(2, 1, 2, 14).Merge();
+            
+            // Header row
+            var headerRow = worksheet.Row(3);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = XLColor.LightGray;
+            headerRow.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            
+            worksheet.Cell(3, 1).Value = "Project Code";
+            worksheet.Cell(3, 2).Value = "Project Title";
+            worksheet.Cell(3, 3).Value = "Business Area";
+            worksheet.Cell(3, 4).Value = "RAG Status";
+            worksheet.Cell(3, 5).Value = "Path to Green";
+            worksheet.Cell(3, 6).Value = "RAG Justification";
+            worksheet.Cell(3, 7).Value = "Primary Contact";
+            worksheet.Cell(3, 8).Value = "Service Owner";
+            worksheet.Cell(3, 9).Value = "Submitted By";
+            worksheet.Cell(3, 10).Value = "Submitted By Email";
+            worksheet.Cell(3, 11).Value = "Submitted At";
+            worksheet.Cell(3, 12).Value = "Update Narratives";
+            worksheet.Cell(3, 13).Value = "Narrative Submitted By";
+            worksheet.Cell(3, 14).Value = "Narrative Submitted At";
+            
+            // Data rows - one row per project
+            int row = 4;
+            foreach (var item in reportItems)
+            {
+                // Combine all narratives into a single text
+                var allNarratives = new System.Text.StringBuilder();
+                var narrativeSubmitters = new System.Text.StringBuilder();
+                var narrativeDates = new System.Text.StringBuilder();
+                
+                if (item.UpdateNarratives.Any())
+                {
+                    foreach (var narrative in item.UpdateNarratives)
+                    {
+                        if (allNarratives.Length > 0)
+                        {
+                            allNarratives.AppendLine();
+                            allNarratives.AppendLine("---");
+                            allNarratives.AppendLine();
+                        }
+                        allNarratives.AppendLine(narrative.Narrative);
+                        
+                        if (narrativeSubmitters.Length > 0)
+                        {
+                            narrativeSubmitters.AppendLine();
+                        }
+                        narrativeSubmitters.Append(narrative.SubmittedBy);
+                        if (!string.IsNullOrEmpty(narrative.SubmittedByEmail))
+                        {
+                            narrativeSubmitters.Append($" ({narrative.SubmittedByEmail})");
+                        }
+                        
+                        if (narrativeDates.Length > 0)
+                        {
+                            narrativeDates.AppendLine();
+                        }
+                        narrativeDates.Append(narrative.SubmittedAt.ToString("dd MMM yyyy HH:mm") + " UTC");
+                    }
+                }
+                else
+                {
+                    allNarratives.Append("No narratives provided.");
+                }
+                
+                worksheet.Cell(row, 1).Value = item.ProjectCode;
+                worksheet.Cell(row, 2).Value = item.ProjectTitle;
+                worksheet.Cell(row, 3).Value = item.BusinessArea;
+                worksheet.Cell(row, 4).Value = item.RagStatus;
+                worksheet.Cell(row, 5).Value = item.PathToGreen ?? "";
+                worksheet.Cell(row, 6).Value = item.RagJustification ?? "";
+                worksheet.Cell(row, 7).Value = item.PrimaryContact;
+                worksheet.Cell(row, 8).Value = item.ServiceOwner;
+                worksheet.Cell(row, 9).Value = item.SubmittedBy;
+                worksheet.Cell(row, 10).Value = item.SubmittedByEmail;
+                worksheet.Cell(row, 11).Value = item.SubmittedAt;
+                worksheet.Cell(row, 11).Style.DateFormat.Format = "dd MMM yyyy HH:mm";
+                worksheet.Cell(row, 12).Value = allNarratives.ToString();
+                worksheet.Cell(row, 13).Value = narrativeSubmitters.ToString();
+                worksheet.Cell(row, 14).Value = narrativeDates.ToString();
+                
+                // Set text wrap for text columns
+                worksheet.Cell(row, 5).Style.Alignment.WrapText = true; // Path to Green
+                worksheet.Cell(row, 6).Style.Alignment.WrapText = true; // RAG Justification
+                worksheet.Cell(row, 12).Style.Alignment.WrapText = true; // Update Narratives
+                worksheet.Cell(row, 13).Style.Alignment.WrapText = true; // Narrative Submitted By
+                worksheet.Cell(row, 14).Style.Alignment.WrapText = true; // Narrative Submitted At
+                
+                row++;
+            }
+            
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            
+            // Set minimum widths for better readability
+            worksheet.Column(1).Width = 15; // Project Code
+            worksheet.Column(2).Width = 30; // Project Title
+            worksheet.Column(3).Width = 20; // Business Area
+            worksheet.Column(4).Width = 12; // RAG Status
+            worksheet.Column(5).Width = 40; // Path to Green
+            worksheet.Column(6).Width = 40; // RAG Justification
+            worksheet.Column(7).Width = 20; // Primary Contact
+            worksheet.Column(8).Width = 20; // Service Owner
+            worksheet.Column(9).Width = 20; // Submitted By
+            worksheet.Column(10).Width = 25; // Submitted By Email
+            worksheet.Column(11).Width = 18; // Submitted At
+            worksheet.Column(12).Width = 60; // Update Narratives
+            worksheet.Column(13).Width = 25; // Narrative Submitted By
+            worksheet.Column(14).Width = 20; // Narrative Submitted At
+            
+            // Freeze title and header rows
+            worksheet.SheetView.FreezeRows(3);
+            
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Position = 0;
+            
+            var fileName = $"Monthly_Report_{year}_{month:00}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Excel document");
+            TempData["ErrorMessage"] = "An error occurred while generating the Excel document. Please try again.";
+            return RedirectToAction("GenerateMonthlyReport", new { year, month });
         }
     }
 
