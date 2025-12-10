@@ -51,6 +51,7 @@ public class ProjectCompletionItem
     public List<int> BudgetOwnerBusinessAreaLookupIds { get; set; } = new();
     
     // Completion criteria
+    public bool HasPhase { get; set; }
     public bool HasSro { get; set; }
     public bool HasPmoContact { get; set; }
     public bool HasServiceOwner { get; set; }
