@@ -356,6 +356,27 @@ builder.Services.AddScoped<IAccessibilityTrainingService, AccessibilityTrainingS
 // Register HttpClientFactory for PerformanceReportingManagementController
 builder.Services.AddHttpClient();
 
+// FIPS Sync Services
+builder.Services.Configure<Compass.Models.Fips.FipsSyncConfiguration>(
+    builder.Configuration.GetSection("FipsSync"));
+builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Services.Fips.CmdbService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
+
+// FIPS Sync Configuration and Services
+builder.Services.Configure<Compass.Models.Fips.FipsSyncConfiguration>(
+    builder.Configuration.GetSection("FipsSync"));
+
+builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Services.Fips.CmdbService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
+
 builder.Services.AddHttpContextAccessor();
 
 // Add memory caching
