@@ -651,8 +651,6 @@ public class CentralOpsController : Controller
                 PrimaryContact = x.Project.PrimaryContactUser?.Name ?? "-",
                 ServiceOwner = x.Project.ServiceOwners?.FirstOrDefault()?.User?.Name ?? "-",
                 RagStatus = NormalizeRagStatus(x.Project.RagStatus) ?? "Not set",
-                PathToGreen = x.Project.PathToGreen,
-                RagJustification = x.Project.RagJustification,
                 UpdateNarratives = x.MonthlyUpdate!.MonthlyUpdateNarratives
                     .OrderBy(n => n.CreatedAt)
                     .Select(n => new ViewModels.MonthlyReportNarrative
@@ -676,10 +674,10 @@ public class CentralOpsController : Controller
             ViewBag.DueDate = dueDate;
             ViewBag.TotalSubmissions = reportItems.Count;
 
-            // If Excel format requested, generate Excel document
-            if (format?.ToLower() == "excel")
+            // If Word format requested, generate Word document
+            if (format?.ToLower() == "word")
             {
-                return await GenerateMonthlyReportExcel(reportItems, monthName, filterYear, filterMonth);
+                return await GenerateMonthlyReportWord(reportItems, monthName, filterYear, filterMonth);
             }
 
             return View(reportItems);
@@ -692,148 +690,126 @@ public class CentralOpsController : Controller
         }
     }
 
-    private async Task<IActionResult> GenerateMonthlyReportExcel(List<ViewModels.MonthlyReportItem> reportItems, string monthName, int year, int month)
+    private async Task<IActionResult> GenerateMonthlyReportWord(List<ViewModels.MonthlyReportItem> reportItems, string monthName, int year, int month)
     {
         try
         {
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Monthly Report");
+            // For Word export, we'll use a simple HTML approach that Word can open
+            // In a production environment, you might want to use a library like DocX or OpenXML
             
-            // Add title row
-            worksheet.Row(1).Height = 30;
-            worksheet.Cell(1, 1).Value = $"Monthly Update Report - {monthName}";
-            worksheet.Cell(1, 1).Style.Font.Bold = true;
-            worksheet.Cell(1, 1).Style.Font.FontSize = 14;
-            worksheet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
-            worksheet.Range(1, 1, 1, 14).Merge();
-            
-            worksheet.Cell(2, 1).Value = $"Report Generated: {DateTime.UtcNow:dd MMMM yyyy HH:mm} UTC | Total Submissions: {reportItems.Count}";
-            worksheet.Cell(2, 1).Style.Font.Italic = true;
-            worksheet.Range(2, 1, 2, 14).Merge();
-            
-            // Header row
-            var headerRow = worksheet.Row(3);
-            headerRow.Style.Font.Bold = true;
-            headerRow.Style.Fill.BackgroundColor = XLColor.LightGray;
-            headerRow.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            
-            worksheet.Cell(3, 1).Value = "Project Code";
-            worksheet.Cell(3, 2).Value = "Project Title";
-            worksheet.Cell(3, 3).Value = "Business Area";
-            worksheet.Cell(3, 4).Value = "RAG Status";
-            worksheet.Cell(3, 5).Value = "Path to Green";
-            worksheet.Cell(3, 6).Value = "RAG Justification";
-            worksheet.Cell(3, 7).Value = "Primary Contact";
-            worksheet.Cell(3, 8).Value = "Service Owner";
-            worksheet.Cell(3, 9).Value = "Submitted By";
-            worksheet.Cell(3, 10).Value = "Submitted By Email";
-            worksheet.Cell(3, 11).Value = "Submitted At";
-            worksheet.Cell(3, 12).Value = "Update Narratives";
-            worksheet.Cell(3, 13).Value = "Narrative Submitted By";
-            worksheet.Cell(3, 14).Value = "Narrative Submitted At";
-            
-            // Data rows - one row per project
-            int row = 4;
+            var html = $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <title>Monthly Report - {monthName}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        h1 {{ color: #005ea5; }}
+        h2 {{ color: #003078; margin-top: 30px; }}
+        table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+        th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+        th {{ background-color: #f8f9fa; font-weight: bold; }}
+        .rag-red {{ background-color: #d4351c; color: white; padding: 4px 8px; border-radius: 3px; }}
+        .rag-amber-red {{ background-color: #f47738; color: white; padding: 4px 8px; border-radius: 3px; }}
+        .rag-amber {{ background-color: #ffbf47; color: #0b0c0c; padding: 4px 8px; border-radius: 3px; }}
+        .rag-amber-green {{ background-color: #85994b; color: white; padding: 4px 8px; border-radius: 3px; }}
+        .rag-green {{ background-color: #00703c; color: white; padding: 4px 8px; border-radius: 3px; }}
+        .narrative {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-left: 3px solid #005ea5; }}
+        .narrative-meta {{ font-size: 0.9em; color: #666; margin-top: 5px; }}
+    </style>
+</head>
+<body>
+    <h1>Monthly Update Report - {monthName}</h1>
+    <p><strong>Report Generated:</strong> {DateTime.UtcNow:dd MMMM yyyy HH:mm} UTC</p>
+    <p><strong>Total Submissions:</strong> {reportItems.Count}</p>
+    
+    <h2>Summary</h2>
+    <table>
+        <tr>
+            <th>Project Code</th>
+            <th>Project Title</th>
+            <th>Business Area</th>
+            <th>RAG Status</th>
+            <th>Primary Contact</th>
+            <th>Service Owner</th>
+            <th>Submitted By</th>
+            <th>Submitted At</th>
+        </tr>";
+
             foreach (var item in reportItems)
             {
-                // Combine all narratives into a single text
-                var allNarratives = new System.Text.StringBuilder();
-                var narrativeSubmitters = new System.Text.StringBuilder();
-                var narrativeDates = new System.Text.StringBuilder();
-                
+                var ragClass = item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "rag-not-set");
+                html += $@"
+        <tr>
+            <td>{WebUtility.HtmlEncode(item.ProjectCode)}</td>
+            <td>{WebUtility.HtmlEncode(item.ProjectTitle)}</td>
+            <td>{WebUtility.HtmlEncode(item.BusinessArea)}</td>
+            <td><span class=""rag-{ragClass}"">{WebUtility.HtmlEncode(item.RagStatus)}</span></td>
+            <td>{WebUtility.HtmlEncode(item.PrimaryContact)}</td>
+            <td>{WebUtility.HtmlEncode(item.ServiceOwner)}</td>
+            <td>{WebUtility.HtmlEncode(item.SubmittedBy)}<br/><small>{WebUtility.HtmlEncode(item.SubmittedByEmail)}</small></td>
+            <td>{item.SubmittedAt:dd MMM yyyy HH:mm}</td>
+        </tr>";
+            }
+
+            html += @"
+    </table>
+    
+    <h2>Detailed Updates</h2>";
+
+            foreach (var item in reportItems)
+            {
+                html += $@"
+    <div style=""page-break-before: always; margin-top: 30px;"">
+        <h3>{WebUtility.HtmlEncode(item.ProjectCode)} - {WebUtility.HtmlEncode(item.ProjectTitle)}</h3>
+        <p><strong>Business Area:</strong> {WebUtility.HtmlEncode(item.BusinessArea)} | 
+           <strong>RAG Status:</strong> <span class=""rag-{item.RagStatus.ToLower().Replace(" ", "-")}"">{WebUtility.HtmlEncode(item.RagStatus)}</span> | 
+           <strong>Primary Contact:</strong> {WebUtility.HtmlEncode(item.PrimaryContact)} | 
+           <strong>Service Owner:</strong> {WebUtility.HtmlEncode(item.ServiceOwner)}</p>
+        <p><strong>Submitted:</strong> {item.SubmittedAt:dd MMMM yyyy HH:mm} UTC by {WebUtility.HtmlEncode(item.SubmittedBy)} ({WebUtility.HtmlEncode(item.SubmittedByEmail)})</p>
+        
+        <h4>Update Narratives:</h4>";
+
                 if (item.UpdateNarratives.Any())
                 {
                     foreach (var narrative in item.UpdateNarratives)
                     {
-                        if (allNarratives.Length > 0)
-                        {
-                            allNarratives.AppendLine();
-                            allNarratives.AppendLine("---");
-                            allNarratives.AppendLine();
-                        }
-                        allNarratives.AppendLine(narrative.Narrative);
+                        var encodedNarrative = WebUtility.HtmlEncode(narrative.Narrative).Replace("\n", "<br/>");
+                        var narrativeMeta = !string.IsNullOrEmpty(narrative.SubmittedByEmail)
+                            ? $"Submitted by {WebUtility.HtmlEncode(narrative.SubmittedBy)} ({WebUtility.HtmlEncode(narrative.SubmittedByEmail)}) on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC"
+                            : $"Submitted by {WebUtility.HtmlEncode(narrative.SubmittedBy)} on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC";
                         
-                        if (narrativeSubmitters.Length > 0)
-                        {
-                            narrativeSubmitters.AppendLine();
-                        }
-                        narrativeSubmitters.Append(narrative.SubmittedBy);
-                        if (!string.IsNullOrEmpty(narrative.SubmittedByEmail))
-                        {
-                            narrativeSubmitters.Append($" ({narrative.SubmittedByEmail})");
-                        }
-                        
-                        if (narrativeDates.Length > 0)
-                        {
-                            narrativeDates.AppendLine();
-                        }
-                        narrativeDates.Append(narrative.SubmittedAt.ToString("dd MMM yyyy HH:mm") + " UTC");
+                        html += $@"
+        <div class=""narrative"">
+            <p>{encodedNarrative}</p>
+            <div class=""narrative-meta"">
+                {narrativeMeta}
+            </div>
+        </div>";
                     }
                 }
                 else
                 {
-                    allNarratives.Append("No narratives provided.");
+                    html += "<p><em>No narratives provided.</em></p>";
                 }
-                
-                worksheet.Cell(row, 1).Value = item.ProjectCode;
-                worksheet.Cell(row, 2).Value = item.ProjectTitle;
-                worksheet.Cell(row, 3).Value = item.BusinessArea;
-                worksheet.Cell(row, 4).Value = item.RagStatus;
-                worksheet.Cell(row, 5).Value = item.PathToGreen ?? "";
-                worksheet.Cell(row, 6).Value = item.RagJustification ?? "";
-                worksheet.Cell(row, 7).Value = item.PrimaryContact;
-                worksheet.Cell(row, 8).Value = item.ServiceOwner;
-                worksheet.Cell(row, 9).Value = item.SubmittedBy;
-                worksheet.Cell(row, 10).Value = item.SubmittedByEmail;
-                worksheet.Cell(row, 11).Value = item.SubmittedAt;
-                worksheet.Cell(row, 11).Style.DateFormat.Format = "dd MMM yyyy HH:mm";
-                worksheet.Cell(row, 12).Value = allNarratives.ToString();
-                worksheet.Cell(row, 13).Value = narrativeSubmitters.ToString();
-                worksheet.Cell(row, 14).Value = narrativeDates.ToString();
-                
-                // Set text wrap for text columns
-                worksheet.Cell(row, 5).Style.Alignment.WrapText = true; // Path to Green
-                worksheet.Cell(row, 6).Style.Alignment.WrapText = true; // RAG Justification
-                worksheet.Cell(row, 12).Style.Alignment.WrapText = true; // Update Narratives
-                worksheet.Cell(row, 13).Style.Alignment.WrapText = true; // Narrative Submitted By
-                worksheet.Cell(row, 14).Style.Alignment.WrapText = true; // Narrative Submitted At
-                
-                row++;
+
+                html += @"
+    </div>";
             }
+
+            html += @"
+</body>
+</html>";
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(html);
+            var fileName = $"Monthly_Report_{year}_{month:00}_{DateTime.UtcNow:yyyyMMdd}.doc";
             
-            // Auto-fit columns
-            worksheet.Columns().AdjustToContents();
-            
-            // Set minimum widths for better readability
-            worksheet.Column(1).Width = 15; // Project Code
-            worksheet.Column(2).Width = 30; // Project Title
-            worksheet.Column(3).Width = 20; // Business Area
-            worksheet.Column(4).Width = 12; // RAG Status
-            worksheet.Column(5).Width = 40; // Path to Green
-            worksheet.Column(6).Width = 40; // RAG Justification
-            worksheet.Column(7).Width = 20; // Primary Contact
-            worksheet.Column(8).Width = 20; // Service Owner
-            worksheet.Column(9).Width = 20; // Submitted By
-            worksheet.Column(10).Width = 25; // Submitted By Email
-            worksheet.Column(11).Width = 18; // Submitted At
-            worksheet.Column(12).Width = 60; // Update Narratives
-            worksheet.Column(13).Width = 25; // Narrative Submitted By
-            worksheet.Column(14).Width = 20; // Narrative Submitted At
-            
-            // Freeze title and header rows
-            worksheet.SheetView.FreezeRows(3);
-            
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            stream.Position = 0;
-            
-            var fileName = $"Monthly_Report_{year}_{month:00}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
-            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            return File(bytes, "application/msword", fileName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating Excel document");
-            TempData["ErrorMessage"] = "An error occurred while generating the Excel document. Please try again.";
+            _logger.LogError(ex, "Error generating Word document");
+            TempData["ErrorMessage"] = "An error occurred while generating the Word document. Please try again.";
             return RedirectToAction("GenerateMonthlyReport", new { year, month });
         }
     }
