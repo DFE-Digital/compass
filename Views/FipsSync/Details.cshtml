@@ -1,0 +1,241 @@
+@model Compass.Models.FipsSyncHistory
+
+@{
+    ViewData["Title"] = "Sync Details";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Admin")" style="color: #005ea5; text-decoration: none;">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "FipsSync")" style="color: #005ea5; text-decoration: none;">FIPS Sync</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Details</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Sync Operation Details</h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-right">
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            General Information
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr>
+                                <th style="width: 40%;">Sync Type:</th>
+                                <td><span class="badge badge-info">@Model.SyncType</span></td>
+                            </tr>
+                            <tr>
+                                <th>Source Environment:</th>
+                                <td>@(Model.SourceEnvironment ?? "CMDB")</td>
+                            </tr>
+                            <tr>
+                                <th>Target Environment:</th>
+                                <td>@Model.TargetEnvironment</td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td>
+                                    @if (Model.Status == "Completed")
+                                    {
+                                        <span class="badge badge-success">
+                                            <i class="fas fa-check-circle mr-1"></i>
+                                            Completed
+                                        </span>
+                                    }
+                                    else if (Model.Status == "Failed")
+                                    {
+                                        <span class="badge badge-danger">
+                                            <i class="fas fa-times-circle mr-1"></i>
+                                            Failed
+                                        </span>
+                                    }
+                                    else if (Model.Status == "Running")
+                                    {
+                                        <span class="badge badge-primary">
+                                            <i class="fas fa-spinner fa-spin mr-1"></i>
+                                            Running
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">@Model.Status</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Started:</th>
+                                <td>@Model.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+                            </tr>
+                            @if (Model.CompletedAt.HasValue)
+                            {
+                                <tr>
+                                    <th>Completed:</th>
+                                    <td>@Model.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+                                </tr>
+                            }
+                            @if (Model.DurationSeconds.HasValue)
+                            {
+                                var duration = TimeSpan.FromSeconds(Model.DurationSeconds.Value);
+                                <tr>
+                                    <th>Duration:</th>
+                                    <td>
+                                        @if (duration.TotalMinutes < 1)
+                                        {
+                                            <text>@duration.Seconds seconds</text>
+                                        }
+                                        else if (duration.TotalHours < 1)
+                                        {
+                                            <text>@duration.Minutes minutes @duration.Seconds seconds</text>
+                                        }
+                                        else
+                                        {
+                                            <text>@((int)duration.TotalHours) hours @duration.Minutes minutes</text>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            <tr>
+                                <th>Initiated By:</th>
+                                <td>@(Model.InitiatedBy ?? "Unknown")</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-bar mr-2"></i>
+                            Statistics
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr>
+                                <th style="width: 50%;">Products Created:</th>
+                                <td><span class="badge badge-success badge-pill">@Model.ProductsCreated</span></td>
+                            </tr>
+                            <tr>
+                                <th>Products Updated:</th>
+                                <td><span class="badge badge-info badge-pill">@Model.ProductsUpdated</span></td>
+                            </tr>
+                            <tr>
+                                <th>Products Skipped:</th>
+                                <td><span class="badge badge-secondary badge-pill">@Model.ProductsSkipped</span></td>
+                            </tr>
+                            <tr>
+                                <th>Assurances Synced:</th>
+                                <td><span class="badge badge-primary badge-pill">@Model.AssurancesSynced</span></td>
+                            </tr>
+                            <tr>
+                                <th>Accessibility Records:</th>
+                                <td><span class="badge badge-primary badge-pill">@Model.AccessibilitySynced</span></td>
+                            </tr>
+                            <tr>
+                                <th>Errors Encountered:</th>
+                                <td>
+                                    @if (Model.ErrorsEncountered > 0)
+                                    {
+                                        <span class="badge badge-danger badge-pill">@Model.ErrorsEncountered</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-success">
+                                            <i class="fas fa-check"></i> None
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorDetails))
+        {
+            <div class="card mt-3">
+                <div class="card-header bg-danger">
+                    <h3 class="card-title text-white">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Error Details
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">@Model.ErrorDetails</pre>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Model.ActionsLog))
+        {
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-file-alt mr-2"></i>
+                        Sync Log
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 600px; overflow-y: auto; font-size: 0.875rem;">@Model.ActionsLog</pre>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Auto-refresh page every 10 seconds if sync is still running
+            @if (Model.Status == "Running")
+            {
+                <text>
+                setTimeout(function() {
+                    location.reload();
+                }, 10000);
+                </text>
+            }
+        });
+    </script>
+}
