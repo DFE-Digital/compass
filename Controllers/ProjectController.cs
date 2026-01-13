@@ -106,7 +106,7 @@ namespace Compass.Controllers
         // GET: Project
         [HttpGet]
         [Route("api/project")]
-        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false, string view = null)
+        public async Task<IActionResult> Index(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false, string view = null)
         {
             // Redirect to specific view routes if view parameter is provided
             if (!string.IsNullOrEmpty(view))
@@ -118,7 +118,8 @@ namespace Compass.Controllers
                     { "businessArea", businessArea },
                     { "phase", phase },
                     { "flagship", flagship },
-                    { "priority", priority }
+                    { "priority", priority },
+                    { "status", status }
                 };
 
                 // Only include page if it's not 1 (default), and clearFilters if it's true
@@ -151,7 +152,8 @@ namespace Compass.Controllers
                 { "businessArea", businessArea },
                 { "phase", phase },
                 { "flagship", flagship },
-                { "priority", priority }
+                { "priority", priority },
+                { "status", status }
             };
 
             // Only include page if it's not 1 (default), and clearFilters if it's true
@@ -172,29 +174,29 @@ namespace Compass.Controllers
         // GET: Project/YourWork
         [HttpGet]
         [Route("api/project/your-work")]
-        public async Task<IActionResult> YourWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        public async Task<IActionResult> YourWork(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
         {
-            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters);
         }
 
         // GET: Project/Watched
         [HttpGet]
         [Route("api/project/watched")]
-        public async Task<IActionResult> Watched(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        public async Task<IActionResult> Watched(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
         {
-            return await GetProjectsView("watched", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+            return await GetProjectsView("watched", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters);
         }
 
         // GET: Project/All
         [HttpGet]
         [Route("api/project/all")]
-        public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page = 1, bool clearFilters = false)
+        public async Task<IActionResult> All(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
         {
-            return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, page, clearFilters);
+            return await GetProjectsView("all", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters);
         }
 
         // Helper method to handle the common logic for all project views
-        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, int page, bool clearFilters)
+        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page, bool clearFilters)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
@@ -207,6 +209,7 @@ namespace Compass.Controllers
             var sessionKeyPhase = $"{sessionKeyPrefix}_Phase";
             var sessionKeyFlagship = $"{sessionKeyPrefix}_Flagship";
             var sessionKeyPriority = $"{sessionKeyPrefix}_Priority";
+            var sessionKeyStatus = $"{sessionKeyPrefix}_Status";
 
             // Clear filters from session if requested
             if (clearFilters)
@@ -217,12 +220,14 @@ namespace Compass.Controllers
                 HttpContext.Session.Remove(sessionKeyPhase);
                 HttpContext.Session.Remove(sessionKeyFlagship);
                 HttpContext.Session.Remove(sessionKeyPriority);
+                HttpContext.Session.Remove(sessionKeyStatus);
                 search = null;
                 ragStatus = null;
                 businessArea = null;
                 phase = null;
                 flagship = null;
                 priority = null;
+                status = null;
             }
             else
             {
@@ -234,6 +239,7 @@ namespace Compass.Controllers
                 var hasPhaseParam = requestQuery.ContainsKey("phase");
                 var hasFlagshipParam = requestQuery.ContainsKey("flagship");
                 var hasPriorityParam = requestQuery.ContainsKey("priority");
+                var hasStatusParam = requestQuery.ContainsKey("status");
 
                 // Handle search filter
                 if (hasSearchParam)
@@ -314,6 +320,19 @@ namespace Compass.Controllers
                     if (sessionPriority.HasValue)
                         priority = sessionPriority.Value;
                 }
+
+                // Handle Status filter
+                if (hasStatusParam)
+                {
+                    if (string.IsNullOrEmpty(status))
+                        HttpContext.Session.Remove(sessionKeyStatus);
+                    else
+                        HttpContext.Session.SetString(sessionKeyStatus, status);
+                }
+                else
+                {
+                    status = HttpContext.Session.GetString(sessionKeyStatus);
+                }
             }
 
             // Get current user's email
@@ -341,12 +360,15 @@ namespace Compass.Controllers
             // Get current user
             var currentUser = await GetCurrentUserAsync();
             
-            // Get user's projects (where they are a named contact or primary contact)
+            // Get user's projects (where they are a named contact, primary contact, or in any governance role)
             var userProjectsQuery = _context.Projects
                 .Where(p => !p.IsDeleted && (
                     !string.IsNullOrEmpty(userEmail) && (
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
-                        (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+                        (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower()) ||
+                        p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == userEmail.ToLower()) ||
+                        p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == userEmail.ToLower()) ||
+                        p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == userEmail.ToLower())
                     )
                 ))
                 .Include(p => p.DeliveryPriority)
@@ -362,6 +384,12 @@ namespace Compass.Controllers
                 .Include(p => p.Outcomes)
                 .Include(p => p.ProjectContacts)
                     .ThenInclude(pc => pc.User)
+                .Include(p => p.SeniorResponsibleOfficers)
+                    .ThenInclude(sro => sro.User)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Include(p => p.PmoContacts)
+                    .ThenInclude(pmo => pmo.User)
                 .Include(p => p.MonthlyUpdates)
                 .AsQueryable();
 
@@ -390,6 +418,18 @@ namespace Compass.Controllers
             if (priority.HasValue)
             {
                 userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+            
+            // For "Your work" view, default to Active status if no status filter is specified
+            var effectiveStatus = status;
+            if (viewType == "your-work" && string.IsNullOrEmpty(effectiveStatus))
+            {
+                effectiveStatus = "Active";
+            }
+            
+            if (!string.IsNullOrEmpty(effectiveStatus))
+            {
+                userProjectsQuery = userProjectsQuery.Where(p => p.Status == effectiveStatus);
             }
 
             var userProjects = await userProjectsQuery
@@ -451,6 +491,10 @@ namespace Compass.Controllers
             {
                 watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
             }
+            if (!string.IsNullOrEmpty(status))
+            {
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Status == status);
+            }
 
             var watchedProjects = await watchedProjectsQuery
                 .AsNoTracking()
@@ -510,6 +554,12 @@ namespace Compass.Controllers
                 query = query.Where(p => p.DeliveryPriorityId == priority.Value);
             }
 
+            // Apply Status filter
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(p => p.Status == status);
+            }
+
             var orderedQuery = query
                 .OrderBy(p => p.Title)
                 .AsNoTracking();
@@ -528,6 +578,8 @@ namespace Compass.Controllers
             ViewBag.CurrentPhase = phase;
             ViewBag.CurrentFlagship = flagship;
             ViewBag.CurrentPriority = priority;
+            // For "Your work" view, show Active as the current status if no explicit status is set
+            ViewBag.CurrentStatus = (viewType == "your-work" && string.IsNullOrEmpty(status)) ? "Active" : status;
 
             // Get business areas from admin settings and phases from CMS
             ViewBag.BusinessAreas = await _context.BusinessAreaLookups
@@ -576,9 +628,9 @@ namespace Compass.Controllers
                 foreach (var project in userProjects)
                 {
                     var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == currentYear && u.Month == currentMonth);
-                    var status = _monthlyUpdateService.CalculateUpdateStatus(currentYear, currentMonth, update?.SubmittedAt);
+                    var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(currentYear, currentMonth, update?.SubmittedAt);
                     
-                    switch (status)
+                    switch (updateStatus)
                     {
                         case UpdateSubmissionStatus.Submitted:
                             submittedCount++;
@@ -609,6 +661,66 @@ namespace Compass.Controllers
             ViewBag.CurrentReportingMonthName = new DateTime(currentYear, currentMonth, 1).ToString("MMMM yyyy");
             ViewBag.CurrentView = viewType;
 
+            // Calculate status counts based on the current view
+            IQueryable<Project> statusCountQuery;
+            if (viewType == "your-work")
+            {
+                // Get base query for user projects (without status filter, including governance roles)
+                statusCountQuery = _context.Projects
+                    .Where(p => !p.IsDeleted && (
+                        !string.IsNullOrEmpty(userEmail) && (
+                            p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
+                            (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower()) ||
+                            p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == userEmail.ToLower()) ||
+                            p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == userEmail.ToLower()) ||
+                            p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == userEmail.ToLower())
+                        )
+                    ));
+            }
+            else if (viewType == "watched")
+            {
+                statusCountQuery = _context.Projects
+                    .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id));
+            }
+            else // all
+            {
+                statusCountQuery = _context.Projects
+                    .Where(p => !p.IsDeleted);
+            }
+
+            // Apply all filters except status
+            if (!string.IsNullOrEmpty(search))
+            {
+                statusCountQuery = statusCountQuery.Where(p => p.Title.Contains(search) || p.ProjectCode.Contains(search));
+            }
+            if (!string.IsNullOrEmpty(ragStatus))
+            {
+                statusCountQuery = statusCountQuery.Where(p => p.RagStatus == ragStatus);
+            }
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                statusCountQuery = statusCountQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+            if (!string.IsNullOrEmpty(phase))
+            {
+                statusCountQuery = statusCountQuery.Where(p => p.PhaseLookup != null && p.PhaseLookup.Name == phase);
+            }
+            if (!string.IsNullOrEmpty(flagship))
+            {
+                var isFlagship = flagship == "true";
+                statusCountQuery = statusCountQuery.Where(p => p.IsFlagship == isFlagship);
+            }
+            if (priority.HasValue)
+            {
+                statusCountQuery = statusCountQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+            }
+
+            // Calculate counts for each status
+            ViewBag.StatusActiveCount = await statusCountQuery.CountAsync(p => p.Status == "Active");
+            ViewBag.StatusPausedCount = await statusCountQuery.CountAsync(p => p.Status == "Paused");
+            ViewBag.StatusCompletedCount = await statusCountQuery.CountAsync(p => p.Status == "Completed");
+            ViewBag.StatusCancelledCount = await statusCountQuery.CountAsync(p => p.Status == "Cancelled");
+
             var viewModel = new ProjectIndexViewModel
             {
                 Projects = projects.AsReadOnly(),
@@ -623,7 +735,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportUserProjects
-        public async Task<IActionResult> ExportUserProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+        public async Task<IActionResult> ExportUserProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status)
         {
             try
             {
@@ -636,11 +748,14 @@ namespace Compass.Controllers
                     return RedirectToAction("Index");
                 }
 
-                // Get user's projects with all necessary includes
+                // Get user's projects with all necessary includes (including governance roles)
                 var userProjectsQuery = _context.Projects
                     .Where(p => !p.IsDeleted && (
                         p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
-                        (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+                        (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower()) ||
+                        p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == userEmail.ToLower()) ||
+                        p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == userEmail.ToLower()) ||
+                        p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == userEmail.ToLower())
                     ))
                     .Include(p => p.DeliveryPriority)
                     .Include(p => p.BusinessAreaLookup)
@@ -686,6 +801,14 @@ namespace Compass.Controllers
                     var isFlagship = flagship == "true";
                     userProjectsQuery = userProjectsQuery.Where(p => p.IsFlagship == isFlagship);
                 }
+                
+                // Default to Active status if no status filter is specified for export
+                var effectiveStatusForExport = string.IsNullOrEmpty(status) ? "Active" : status;
+                if (!string.IsNullOrEmpty(effectiveStatusForExport))
+                {
+                    userProjectsQuery = userProjectsQuery.Where(p => p.Status == effectiveStatusForExport);
+                }
+                
                 if (priority.HasValue)
                 {
                     userProjectsQuery = userProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
@@ -939,7 +1062,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportWatchedProjects
-        public async Task<IActionResult> ExportWatchedProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+        public async Task<IActionResult> ExportWatchedProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status)
         {
             try
             {
@@ -1013,6 +1136,10 @@ namespace Compass.Controllers
                 if (priority.HasValue)
                 {
                     watchedProjectsQuery = watchedProjectsQuery.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+                if (!string.IsNullOrEmpty(status))
+                {
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.Status == status);
                 }
 
                 var watchedProjects = await watchedProjectsQuery
@@ -1263,7 +1390,7 @@ namespace Compass.Controllers
         }
 
         // GET: Project/ExportAllProjects
-        public async Task<IActionResult> ExportAllProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority)
+        public async Task<IActionResult> ExportAllProjects(string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status)
         {
             try
             {
@@ -1316,6 +1443,10 @@ namespace Compass.Controllers
                 if (priority.HasValue)
                 {
                     query = query.Where(p => p.DeliveryPriorityId == priority.Value);
+                }
+                if (!string.IsNullOrEmpty(status))
+                {
+                    query = query.Where(p => p.Status == status);
                 }
 
                 var allProjects = await query
