@@ -46,8 +46,8 @@
                     <i class="fas fa-file-alt mr-2"></i>Monthly Update Report - @monthName
                 </h3>
                 <div class="card-tools">
-                    <a asp-action="GenerateMonthlyReport" asp-route-year="@reportYear" asp-route-month="@reportMonth" asp-route-format="excel" class="text-success">
-                        <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                    <a asp-action="GenerateMonthlyReport" asp-route-year="@reportYear" asp-route-month="@reportMonth" asp-route-format="word" class="btn btn-sm btn-success">
+                        <i class="fas fa-file-word mr-1"></i> Export to Word
                     </a>
                 </div>
             </div>
@@ -65,165 +65,122 @@
 
                 @if (Model.Any())
                 {
-                    <style>
-                        #reportAccordion .card-header {
-                            background-color: #f8f9fa;
-                            border-bottom: 1px solid #dee2e6;
-                            transition: background-color 0.2s ease;
-                        }
-                        #reportAccordion .card-header:hover {
-                            background-color: #e9ecef;
-                        }
-                        #reportAccordion .card-header i {
-                            transition: transform 0.3s ease;
-                        }
-                        #reportAccordion .card-header[aria-expanded="true"] i {
-                            transform: rotate(180deg);
-                        }
-                        #reportAccordion .card-header[aria-expanded="false"] i {
-                            transform: rotate(0deg);
-                        }
-                    </style>
-                    
-                    <div class="card-tools mb-3">
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllReportPanels">
-                            <i class="fas fa-chevron-down"></i> Expand All
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary ml-2" id="collapseAllReportPanels">
-                            <i class="fas fa-chevron-up"></i> Collapse All
-                        </button>
-                    </div>
-                    
-                    <div class="accordion" id="reportAccordion">
-                        @{
-                            var groupedByRag = Model.GroupBy(m => m.RagStatus).OrderBy(g => 
-                                g.Key switch {
-                                    "Red" => 1,
-                                    "Amber-Red" => 2,
-                                    "Amber" => 3,
-                                    "Amber-Green" => 4,
-                                    "Green" => 5,
-                                    _ => 6
-                                });
-                        }
-                        @foreach (var ragGroup in groupedByRag)
-                        {
-                            var ragStatus = ragGroup.Key;
-                            var ragClass = ragStatus.ToLower().Replace(" ", "-").Replace("not-set", "secondary");
-                            var headingId = $"ragHeading{ragStatus.Replace(" ", "").Replace("-", "")}";
-                            var collapseId = $"ragCollapse{ragStatus.Replace(" ", "").Replace("-", "")}";
-                            var count = ragGroup.Count();
-                            
-                            <div class="card mb-2">
-                                <div class="card-header" id="@headingId" style="cursor: pointer;" data-toggle="collapse" data-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-chevron-down mr-3"></i>
-                                        <div class="flex-grow-1">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="badge badge-@ragClass" style="font-size: 1rem;">@ragStatus</span>
-                                                </div>
-                                                <div>
-                                                    <span class="badge badge-primary">@count @(count == 1 ? "project" : "projects")</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div id="@collapseId" class="collapse" aria-labelledby="@headingId" data-parent="#reportAccordion">
-                                    <div class="card-body p-0">
-                                        <div class="accordion" id="projectAccordion@(ragStatus.Replace(" ", "").Replace("-", ""))">
-                                            @foreach (var item in ragGroup.OrderBy(i => i.ProjectTitle))
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="reportTable">
+                            <thead>
+                                <tr>
+                                    <th>Project Code</th>
+                                    <th>Project Title</th>
+                                    <th>Business Area</th>
+                                    <th>RAG Status</th>
+                                    <th>Primary Contact</th>
+                                    <th>Service Owner</th>
+                                    <th>Submitted By</th>
+                                    <th>Submitted At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model)
+                                {
+                                    var ragClass = item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "secondary");
+                                    <tr>
+                                        <td>@item.ProjectCode</td>
+                                        <td>
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@item.ProjectId" style="font-weight: bold; color: #005ea5;">
+                                                @item.ProjectTitle
+                                            </a>
+                                        </td>
+                                        <td>@item.BusinessArea</td>
+                                        <td>
+                                            <span class="badge badge-@ragClass">@item.RagStatus</span>
+                                        </td>
+                                        <td>@item.PrimaryContact</td>
+                                        <td>@item.ServiceOwner</td>
+                                        <td>
+                                            @item.SubmittedBy
+                                            @if (!string.IsNullOrEmpty(item.SubmittedByEmail))
                                             {
-                                                var itemCollapseId = $"itemCollapse{item.ProjectId}";
-                                                var itemHeadingId = $"itemHeading{item.ProjectId}";
-                                                <div class="card mb-2" style="border-left: 0.25rem solid #4e73df;">
-                                                    <div class="card-header bg-white" id="@itemHeadingId" style="cursor: pointer;" data-toggle="collapse" data-target="#@itemCollapseId" aria-expanded="false" aria-controls="@itemCollapseId">
-                                                        <div class="d-flex align-items-center">
-                                                            <i class="fas fa-chevron-down mr-2"></i>
-                                                            <div class="flex-grow-1">
-                                                                <div class="d-flex justify-content-between align-items-center">
-                                                                    <div>
-                                                                        <a asp-controller="Project" asp-action="Details" asp-route-id="@item.ProjectId" style="font-weight: bold; color: #005ea5; text-decoration: none;">
-                                                                            @item.ProjectTitle
-                                                                        </a>
-                                                                        <br />
-                                                                        <small class="text-muted">@item.ProjectCode</small>
-                                                                    </div>
-                                                                    <div class="text-right">
-                                                                        <div><strong>Business Area:</strong> @item.BusinessArea</div>
-                                                                        <div><strong>Submitted:</strong> @item.SubmittedAt.ToString("dd MMM yyyy HH:mm") UTC</div>
-                                                                        <div><small class="text-muted">by @item.SubmittedBy</small></div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div id="@itemCollapseId" class="collapse" aria-labelledby="@itemHeadingId" data-parent="#projectAccordion@(ragStatus.Replace(" ", "").Replace("-", ""))">
+                                                <br /><small class="text-muted">@item.SubmittedByEmail</small>
+                                            }
+                                        </td>
+                                        <td>@item.SubmittedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal@(item.ProjectId)">
+                                                <i class="fas fa-eye"></i> View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Detail Modals -->
+                    @foreach (var item in Model)
+                    {
+                        <div class="modal fade" id="detailsModal@(item.ProjectId)" tabindex="-1" role="dialog">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">@item.ProjectCode - @item.ProjectTitle</h5>
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <p><strong>Business Area:</strong> @item.BusinessArea</p>
+                                                <p><strong>RAG Status:</strong> <span class="badge badge-@(item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "secondary"))">@item.RagStatus</span></p>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <p><strong>Primary Contact:</strong> @item.PrimaryContact</p>
+                                                <p><strong>Service Owner:</strong> @item.ServiceOwner</p>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <p><strong>Submitted:</strong> @item.SubmittedAt.ToString("dd MMMM yyyy HH:mm") UTC</p>
+                                            <p><strong>Submitted By:</strong> @item.SubmittedBy 
+                                                @if (!string.IsNullOrEmpty(item.SubmittedByEmail))
+                                                {
+                                                    <span>(@item.SubmittedByEmail)</span>
+                                                }
+                                            </p>
+                                        </div>
+                                        <hr />
+                                        <h6>Update Narratives:</h6>
+                                        @if (item.UpdateNarratives.Any())
+                                        {
+                                            @foreach (var narrative in item.UpdateNarratives)
+                                            {
+                                                <div class="card mb-3">
                                                     <div class="card-body">
-                                                        <div class="row mb-3">
-                                                            <div class="col-md-6">
-                                                                <p><strong>Project Code:</strong> @item.ProjectCode</p>
-                                                                <p><strong>Business Area:</strong> @item.BusinessArea</p>
-                                                                <p><strong>RAG Status:</strong> <span class="badge badge-@ragClass">@item.RagStatus</span></p>
-                                                                @if (!string.IsNullOrEmpty(item.PathToGreen))
-                                                                {
-                                                                    <p><strong>Path to Green:</strong></p>
-                                                                    <div class="alert alert-info mb-2">@Html.Raw(item.PathToGreen.Replace("\n", "<br/>"))</div>
-                                                                }
-                                                                @if (!string.IsNullOrEmpty(item.RagJustification))
-                                                                {
-                                                                    <p><strong>RAG Justification:</strong></p>
-                                                                    <div class="alert alert-warning mb-2">@Html.Raw(item.RagJustification.Replace("\n", "<br/>"))</div>
-                                                                }
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <p><strong>Primary Contact:</strong> @item.PrimaryContact</p>
-                                                                <p><strong>Service Owner:</strong> @item.ServiceOwner</p>
-                                                                <p><strong>Submitted:</strong> @item.SubmittedAt.ToString("dd MMMM yyyy HH:mm") UTC</p>
-                                                                <p><strong>Submitted By:</strong> @item.SubmittedBy 
-                                                                    @if (!string.IsNullOrEmpty(item.SubmittedByEmail))
-                                                                    {
-                                                                        <br /><small class="text-muted">@item.SubmittedByEmail</small>
-                                                                    }
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <hr />
-                                                        <h6>Update Narratives:</h6>
-                                                        @if (item.UpdateNarratives.Any())
-                                                        {
-                                                            @foreach (var narrative in item.UpdateNarratives)
+                                                        <p class="card-text">@Html.Raw(narrative.Narrative.Replace("\n", "<br/>"))</p>
+                                                        <small class="text-muted">
+                                                            Submitted by <strong>@narrative.SubmittedBy</strong>
+                                                            @if (!string.IsNullOrEmpty(narrative.SubmittedByEmail))
                                                             {
-                                                                <div class="card mb-3">
-                                                                    <div class="card-body">
-                                                                        <p class="card-text">@Html.Raw(narrative.Narrative.Replace("\n", "<br/>"))</p>
-                                                                        <small class="text-muted">
-                                                                            Submitted by <strong>@narrative.SubmittedBy</strong>
-                                                                            @if (!string.IsNullOrEmpty(narrative.SubmittedByEmail))
-                                                                            {
-                                                                                <span>(@narrative.SubmittedByEmail)</span>
-                                                                            }
-                                                                            on @narrative.SubmittedAt.ToString("dd MMM yyyy HH:mm") UTC
-                                                                        </small>
-                                                                    </div>
-                                                                </div>
+                                                                <span>(@narrative.SubmittedByEmail)</span>
                                                             }
-                                                        }
-                                                        else
-                                                        {
-                                                            <p class="text-muted"><em>No narratives provided.</em></p>
-                                                        }
+                                                            on @narrative.SubmittedAt.ToString("dd MMM yyyy HH:mm") UTC
+                                                        </small>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            }
                                         }
-                                        </div>
+                                        else
+                                        {
+                                            <p class="text-muted"><em>No narratives provided.</em></p>
+                                        }
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                                     </div>
                                 </div>
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                 }
                 else
                 {
@@ -239,90 +196,14 @@
 @section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
-            // Handle accordion collapse/expand events to update chevron icons for RAG groups
-            $('#reportAccordion').on('show.bs.collapse', function(e) {
-                var header = $(e.target).prev('.card-header');
-                header.attr('aria-expanded', 'true');
-            });
-
-            $('#reportAccordion').on('hide.bs.collapse', function(e) {
-                var header = $(e.target).prev('.card-header');
-                header.attr('aria-expanded', 'false');
-            });
-            
-            // Handle nested project accordion collapse/expand events
-            $('[id^="projectAccordion"]').on('show.bs.collapse', function(e) {
-                var header = $(e.target).prev('.card-header');
-                header.attr('aria-expanded', 'true');
-            });
-
-            $('[id^="projectAccordion"]').on('hide.bs.collapse', function(e) {
-                var header = $(e.target).prev('.card-header');
-                header.attr('aria-expanded', 'false');
-            });
-
-            // Expand all panels
-            $('#expandAllReportPanels').on('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                // Expand RAG group panels
-                $('#reportAccordion .collapse').each(function() {
-                    var $collapse = $(this);
-                    var $header = $collapse.prev('.card-header');
-                    if (!$collapse.hasClass('show')) {
-                        $collapse.removeAttr('data-parent');
-                        $collapse.addClass('show');
-                        $header.attr('aria-expanded', 'true');
-                        $collapse.trigger('shown.bs.collapse');
-                    }
+            // Initialize DataTables if available, or use basic sorting
+            if ($.fn.DataTable) {
+                $('#reportTable').DataTable({
+                    order: [[1, 'asc']], // Sort by Project Title
+                    pageLength: 25,
+                    responsive: true
                 });
-                // Expand all project panels
-                $('[id^="projectAccordion"] .collapse').each(function() {
-                    var $collapse = $(this);
-                    var $header = $collapse.prev('.card-header');
-                    if (!$collapse.hasClass('show')) {
-                        var parentId = $collapse.attr('data-parent');
-                        $collapse.removeAttr('data-parent');
-                        $collapse.addClass('show');
-                        $header.attr('aria-expanded', 'true');
-                        $collapse.trigger('shown.bs.collapse');
-                        if (parentId) {
-                            $collapse.attr('data-parent', parentId);
-                        }
-                    }
-                });
-            });
-
-            // Collapse all panels
-            $('#collapseAllReportPanels').on('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                // Collapse all project panels first
-                $('[id^="projectAccordion"] .collapse').each(function() {
-                    var $collapse = $(this);
-                    var $header = $collapse.prev('.card-header');
-                    if ($collapse.hasClass('show')) {
-                        var parentId = $collapse.attr('data-parent');
-                        $collapse.removeClass('show');
-                        $header.attr('aria-expanded', 'false');
-                        $collapse.trigger('hidden.bs.collapse');
-                        if (parentId) {
-                            $collapse.attr('data-parent', parentId);
-                        }
-                    }
-                });
-                // Collapse RAG group panels
-                $('#reportAccordion .collapse').each(function() {
-                    var $collapse = $(this);
-                    var $header = $collapse.prev('.card-header');
-                    if ($collapse.hasClass('show')) {
-                        $collapse.removeClass('show');
-                        $header.attr('aria-expanded', 'false');
-                        $collapse.attr('data-parent', '#reportAccordion');
-                        $collapse.trigger('hidden.bs.collapse');
-                    }
-                });
-            });
+            }
         });
     </script>
 }
