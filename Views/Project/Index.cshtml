@@ -72,27 +72,92 @@
         }
 
 
+        @{
+            // Declare variables needed for both Project Status and Filters sections
+            var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
+            var currentPriorityId = ViewBag.CurrentPriority as int?;
+            var filterActionName = currentView.ToLower() switch
+            {
+                "your-work" or "mine" => "YourWork",
+                "watched" => "Watched",
+                "all" => "All",
+                _ => "YourWork"
+            };
+            var statusActive = ViewBag.StatusActiveCount as int? ?? 0;
+            var statusPaused = ViewBag.StatusPausedCount as int? ?? 0;
+            var statusCompleted = ViewBag.StatusCompletedCount as int? ?? 0;
+            var statusCancelled = ViewBag.StatusCancelledCount as int? ?? 0;
+            var currentStatus = ViewBag.CurrentStatus as string;
+        }
 
         <div class="row">
             <!-- Left Column: Filters -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Project Status Navigation -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Project status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action(filterActionName, new { 
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Active"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Active" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Active</span>
+                                <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActive</span>
+                            </a>
+                            <a href="@Url.Action(filterActionName, new { 
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Paused"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Paused" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Paused</span>
+                                <span class="badge @(currentStatus == "Paused" ? "badge-light" : "badge-secondary") badge-pill">@statusPaused</span>
+                            </a>
+                            <a href="@Url.Action(filterActionName, new { 
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Completed"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Completed" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Completed</span>
+                                <span class="badge @(currentStatus == "Completed" ? "badge-light" : "badge-secondary") badge-pill">@statusCompleted</span>
+                            </a>
+                            <a href="@Url.Action(filterActionName, new { 
+                                search = ViewBag.CurrentSearch, 
+                                ragStatus = ViewBag.CurrentRagStatus, 
+                                businessArea = ViewBag.CurrentBusinessArea, 
+                                phase = ViewBag.CurrentPhase,
+                                flagship = ViewBag.CurrentFlagship,
+                                priority = currentPriorityId,
+                                status = "Cancelled"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Cancelled" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Cancelled</span>
+                                <span class="badge @(currentStatus == "Cancelled" ? "badge-light" : "badge-secondary") badge-pill">@statusCancelled</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Filters -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
-                        @{
-                            var deliveryPriorities = ViewBag.DeliveryPriorities as IEnumerable<Compass.Models.DeliveryPriority> ?? Array.Empty<Compass.Models.DeliveryPriority>();
-                            var currentPriorityId = ViewBag.CurrentPriority as int?;
-                            var filterActionName = currentView.ToLower() switch
-                            {
-                                "your-work" or "mine" => "YourWork",
-                                "watched" => "Watched",
-                                "all" => "All",
-                                _ => "YourWork"
-                            };
-                        }
                         <form method="get" id="filterForm" asp-action="@filterActionName">
                             <div class="form-group">
                                 <label>Search</label>
@@ -240,19 +305,35 @@
                              !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
-                             currentPriorityId.HasValue)
+                             currentPriorityId.HasValue ||
+                             !string.IsNullOrEmpty(currentStatus))
                         {
                             <div class="mt-3 pt-3 border-top">
                                 <strong class="d-block mb-2">Active Filters:</strong>
-                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                                @if (!string.IsNullOrEmpty(currentStatus))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
-                                        search = "",
+                                        search = ViewBag.CurrentSearch,
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
-                                        priority = currentPriorityId
+                                        priority = currentPriorityId,
+                                        status = (string)null
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Status: @currentStatus <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
+                                @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
+                                {
+                                    <a href="@Url.Action(filterActionName, new { 
+                                        search = (string)null,
+                                        ragStatus = ViewBag.CurrentRagStatus, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        flagship = ViewBag.CurrentFlagship,
+                                        priority = currentPriorityId,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -261,11 +342,12 @@
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
                                         search = ViewBag.CurrentSearch, 
-                                        ragStatus = "",
+                                        ragStatus = (string)null,
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
-                                        priority = currentPriorityId
+                                        priority = currentPriorityId,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         RAG: @ViewBag.CurrentRagStatus <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -275,10 +357,11 @@
                                     <a href="@Url.Action(filterActionName, new { 
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
-                                        businessArea = "",
+                                        businessArea = (string)null,
                                         phase = ViewBag.CurrentPhase, 
                                         flagship = ViewBag.CurrentFlagship,
-                                        priority = currentPriorityId
+                                        priority = currentPriorityId,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -289,9 +372,10 @@
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
-                                        phase = "",
+                                        phase = (string)null,
                                         flagship = ViewBag.CurrentFlagship,
-                                        priority = currentPriorityId
+                                        priority = currentPriorityId,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -303,8 +387,9 @@
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase,
-                                        flagship = "",
-                                        priority = currentPriorityId
+                                        flagship = (string)null,
+                                        priority = currentPriorityId,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Flagship: @(ViewBag.CurrentFlagship == "true" ? "Yes" : "No") <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -318,7 +403,8 @@
                                         businessArea = ViewBag.CurrentBusinessArea, 
                                         phase = ViewBag.CurrentPhase,
                                         flagship = ViewBag.CurrentFlagship,
-                                        priority = (int?)null
+                                        priority = (int?)null,
+                                        status = currentStatus
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Priority: @(currentPriority?.Name ?? currentPriorityId.ToString()) <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -347,6 +433,7 @@
                                        asp-route-phase="@ViewBag.CurrentPhase"
                                        asp-route-flagship="@ViewBag.CurrentFlagship"
                                        asp-route-priority="@ViewBag.CurrentPriority"
+                                       asp-route-status="@ViewBag.CurrentStatus"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
@@ -387,6 +474,7 @@
                                        asp-route-phase="@ViewBag.CurrentPhase"
                                        asp-route-flagship="@ViewBag.CurrentFlagship"
                                        asp-route-priority="@ViewBag.CurrentPriority"
+                                       asp-route-status="@ViewBag.CurrentStatus"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
@@ -423,7 +511,8 @@
                                                     !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
                                                     !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
                                                     !string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()) ||
-                                                    (ViewBag.CurrentPriority as int?).HasValue;
+                                                    (ViewBag.CurrentPriority as int?).HasValue ||
+                                                    !string.IsNullOrEmpty(ViewBag.CurrentStatus?.ToString());
                                 }
                                 @(hasFilters ? "Filtered view of work items" : "All work items")
                             </h3>
@@ -435,6 +524,7 @@
                                    asp-route-phase="@ViewBag.CurrentPhase"
                                    asp-route-flagship="@ViewBag.CurrentFlagship"
                                    asp-route-priority="@ViewBag.CurrentPriority"
+                                   asp-route-status="@ViewBag.CurrentStatus"
                                    style="color: #005ea5; text-decoration: none;">
                                     Export to Excel
                                 </a>
@@ -458,6 +548,7 @@
                             ViewData["CurrentPhase"] = ViewBag.CurrentPhase;
                             ViewData["CurrentFlagship"] = ViewBag.CurrentFlagship;
                             ViewData["CurrentPriority"] = ViewBag.CurrentPriority;
+                            ViewData["CurrentStatus"] = ViewBag.CurrentStatus;
                             ViewData["CurrentView"] = isViewAll ? "all" : (currentView ?? "all");
                             <partial name="_ProjectTable" model="Model.Projects" view-data="ViewData" />
                         }
