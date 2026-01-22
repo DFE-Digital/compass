@@ -167,6 +167,12 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(u => u.MonthlyUpdateNarratives)
             .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
 
+        // Get previous month's update
+        var previousMonthDate = new DateTime(year.Value, month.Value, 1).AddMonths(-1);
+        var previousMonthUpdate = await _context.ProjectMonthlyUpdates
+            .Include(u => u.MonthlyUpdateNarratives.OrderBy(n => n.CreatedAt))
+            .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == previousMonthDate.Year && u.Month == previousMonthDate.Month);
+
         // Check if reporting window has closed (10 days before next period's due date)
         var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year.Value, month.Value);
         var closeDate = _monthlyUpdateService.GetMonthlyUpdateCloseDate(year.Value, month.Value);
@@ -185,6 +191,8 @@ public class MilestonesUpdatesSuccessesController : Controller
         ViewBag.IsFlagship = project.IsFlagship;
         ViewBag.Project = project; // Pass full project for navigation badges
         ViewBag.ExistingUpdate = existingUpdate;
+        ViewBag.PreviousMonthUpdate = previousMonthUpdate;
+        ViewBag.PreviousMonthPeriodName = previousMonthDate.ToString("MMMM yyyy");
         ViewBag.CanEdit = canEdit;
         ViewBag.DueDate = dueDate;
         ViewBag.CanSubmit = canSubmit;

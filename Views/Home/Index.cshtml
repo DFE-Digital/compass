@@ -1,5 +1,6 @@
 @model HomeDashboardViewModel
 @using Compass.Models
+@using Compass.Services
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 
 @{
@@ -9,7 +10,7 @@
     var hasProducts = Model.MyProducts.Any();
     var hasStandards = Model.MyDdtStandards.Any();
     var totalItems = Model.MyProjects.Count + Model.MyProducts.Count + Model.MyDdtStandards.Count;
-    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count;
+    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count + Model.ProjectsNeedingMonthlyUpdates.Count + Model.ProductsNeedingReturns.Count;
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -122,6 +123,33 @@
         };
     }
 }
+
+<style>
+    /* GOV.UK link styling for task cards */
+    .work-item-card h4 {
+        color: #005ea5;
+        text-decoration: underline;
+        font-weight: 400;
+    }
+    
+    .work-item-card:hover h4 {
+        color: #003078;
+    }
+    
+    /* GOV.UK link styling for task table links */
+    .work-items-table a {
+        color: #005ea5;
+        text-decoration: underline;
+    }
+    
+    .work-items-table a:hover {
+        color: #003078;
+    }
+    
+    .work-items-table a:visited {
+        color: #4c2c92;
+    }
+</style>
 
 <section class="content mt-4">
     <div class="container-fluid">
@@ -285,12 +313,12 @@
 
             <!-- Tasks Tab -->
             <div id="tab-tasks" class="tab-content active">
-                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any())
+                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any() && !Model.ProjectsNeedingMonthlyUpdates.Any() && !Model.ProductsNeedingReturns.Any())
                 {
                     <div class="empty-state">
                         <div class="empty-state-icon">✅</div>
                         <h3>No tasks</h3>
-                        <p>You're all caught up! There are no overdue milestones, assigned actions, or high priority issues.</p>
+                        <p>You're all caught up! There are no outstanding tasks or reporting requirements.</p>
                     </div>
                 }
                 else
@@ -357,6 +385,38 @@
                                 </div>
                             </a>
                         }
+
+                        @foreach (var item in Model.ProjectsNeedingMonthlyUpdates.Take(10))
+                        {
+                            var updateYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                            var updateMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                            <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = item.Project.Id, year = updateYear, month = updateMonth })" class="work-item-card">
+                                <h4>Complete monthly update</h4>
+                                <p class="work-item-project">@item.Project.Title</p>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge @(item.Status == UpdateSubmissionStatus.Late ? "badge-danger" : "badge-warning")">Monthly update @(item.Status == UpdateSubmissionStatus.Late ? "late" : "due")</span>
+                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                                    </div>
+                                </div>
+                            </a>
+                        }
+
+                        @foreach (var item in Model.ProductsNeedingReturns.Take(10))
+                        {
+                            var metricsYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                            var metricsMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                            <a href="@Url.Action("SubmitMetrics", "ProductReporting", new { documentId = item.Product.FipsId, year = metricsYear, month = metricsMonth })" class="work-item-card">
+                                <h4>Complete performance reporting</h4>
+                                <p class="work-item-project">@item.Product.Title</p>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge @(item.Status == ReturnStatus.Late ? "badge-danger" : "badge-warning")">Performance @(item.Status == ReturnStatus.Late ? "late" : "due")</span>
+                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                                    </div>
+                                </div>
+                            </a>
+                        }
                     </div>
 
                     <!-- List View -->
@@ -365,7 +425,7 @@
                             <thead>
                                 <tr>
                                     <th>Task</th>
-                                    <th>Project</th>
+                                    <th>Item</th>
                                     <th>Type</th>
                                     <th>Due Date</th>
                                     <th>Status</th>
@@ -375,9 +435,9 @@
                                 @foreach (var milestone in Model.OverdueMilestones.Take(10))
                                 {
                                     <tr>
-                                        <td><a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })">@milestone.Name</a></td>
+                                        <td><a href="@Url.Action("MilestoneDetails", "Project", new { id = milestone.Id })">Review overdue milestone</a></td>
                                         <td>@(milestone.Project?.Title ?? "-")</td>
-                                        <td><span class="badge badge-danger">Overdue milestone</span></td>
+                                        <td>Work reporting</td>
                                         <td>@milestone.DueDate.ToString("dd MMMM yyyy")</td>
                                         <td><span class="badge badge-danger">Overdue</span></td>
                                     </tr>
@@ -387,7 +447,7 @@
                                     <tr>
                                         <td><a href="@Url.Action("Details", "Action", new { id = action.Id })">@action.Title</a></td>
                                         <td>@(action.Project?.Title ?? "-")</td>
-                                        <td><span class="badge badge-warning">Action</span></td>
+                                        <td>Work reporting</td>
                                         <td>@(action.DueDate?.ToString("dd MMMM yyyy") ?? "-")</td>
                                         <td>@if (action.PriorityLookup != null) { <span class="@GetPriorityBadgeClass(action.PriorityLookup.Label)">@action.PriorityLookup.Label</span> }</td>
                                     </tr>
@@ -397,9 +457,33 @@
                                     <tr>
                                         <td><a href="@Url.Action("Details", "Issue", new { id = issue.Id })">@issue.Title</a></td>
                                         <td>@(issue.Project?.Title ?? "-")</td>
-                                        <td><span class="badge badge-danger">High priority issue</span></td>
+                                        <td>Work reporting</td>
                                         <td>-</td>
                                         <td>@if (!string.IsNullOrEmpty(issue.Severity)) { <span class="badge badge-danger">@issue.Severity</span> }</td>
+                                    </tr>
+                                }
+                                @foreach (var item in Model.ProjectsNeedingMonthlyUpdates.Take(10))
+                                {
+                                    var updateYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                                    var updateMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                                    <tr>
+                                        <td><a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = item.Project.Id, year = updateYear, month = updateMonth })">Complete monthly update</a></td>
+                                        <td>@item.Project.Title</td>
+                                        <td>Work reporting</td>
+                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
+                                        <td><span class="badge @(item.Status == UpdateSubmissionStatus.Late ? "badge-danger" : "badge-warning")">@(item.Status == UpdateSubmissionStatus.Late ? "Late" : "Due")</span></td>
+                                    </tr>
+                                }
+                                @foreach (var item in Model.ProductsNeedingReturns.Take(10))
+                                {
+                                    var metricsYear = item.DueDate.Month == 1 ? item.DueDate.Year - 1 : item.DueDate.Year;
+                                    var metricsMonth = item.DueDate.Month == 1 ? 12 : item.DueDate.Month - 1;
+                                    <tr>
+                                        <td><a href="@Url.Action("SubmitMetrics", "ProductReporting", new { documentId = item.Product.FipsId, year = metricsYear, month = metricsMonth })">Complete performance reporting</a></td>
+                                        <td>@item.Product.Title</td>
+                                        <td>Operational reporting</td>
+                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
+                                        <td><span class="badge @(item.Status == ReturnStatus.Late ? "badge-danger" : "badge-warning")">@(item.Status == ReturnStatus.Late ? "Late" : "Due")</span></td>
                                     </tr>
                                 }
                             </tbody>
