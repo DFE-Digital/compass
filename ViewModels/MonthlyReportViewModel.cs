@@ -9,8 +9,6 @@ public class MonthlyReportItem
     public string PrimaryContact { get; set; } = string.Empty;
     public string ServiceOwner { get; set; } = string.Empty;
     public string RagStatus { get; set; } = string.Empty;
-    public string? PathToGreen { get; set; }
-    public string? RagJustification { get; set; }
     public List<MonthlyReportNarrative> UpdateNarratives { get; set; } = new();
     public DateTime SubmittedAt { get; set; }
     public string SubmittedBy { get; set; } = string.Empty;
