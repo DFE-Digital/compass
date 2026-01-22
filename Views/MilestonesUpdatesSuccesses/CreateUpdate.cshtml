@@ -290,6 +290,86 @@
                                         <textarea name="narrative" id="newNarrative" class="form-control" rows="6" placeholder="Enter your monthly update..." required></textarea>
                                     </div>
                                     
+                                    @{
+                                        var previousMonthUpdate = ViewBag.PreviousMonthUpdate as Compass.Models.ProjectMonthlyUpdate;
+                                        var previousMonthPeriodName = ViewBag.PreviousMonthPeriodName as string ?? "";
+                                        var hasPreviousUpdate = previousMonthUpdate != null;
+                                        var previousNarratives = previousMonthUpdate?.MonthlyUpdateNarratives?.OrderBy(n => n.CreatedAt).ToList() ?? new List<Compass.Models.MonthlyUpdateNarrative>();
+                                        var isPreviousNilReturn = hasPreviousUpdate && previousNarratives.Any() && previousNarratives.Any(n => n.Narrative == "No update provided this month");
+                                    }
+                                    
+                                    @if (!string.IsNullOrEmpty(previousMonthPeriodName))
+                                    {
+                                        <div class="form-group">
+                                            <div class="card border-secondary">
+                                                <div class="card-header bg-light" style="cursor: pointer;" data-toggle="collapse" data-target="#previousMonthUpdatePanel" aria-expanded="false" aria-controls="previousMonthUpdatePanel">
+                                                    <h6 class="mb-0 d-flex justify-content-between align-items-center">
+                                                        <span>
+                                                            <i class="fas fa-chevron-down mr-2"></i>
+                                                            Previous month update (@previousMonthPeriodName)
+                                                        </span>
+                                                        <small class="text-muted">
+                                                            @if (hasPreviousUpdate)
+                                                            {
+                                                                if (isPreviousNilReturn)
+                                                                {
+                                                                    <span class="badge badge-warning">Nil Return</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-info">@previousNarratives.Count update(s)</span>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge badge-secondary">No update submitted</span>
+                                                            }
+                                                        </small>
+                                                    </h6>
+                                                </div>
+                                                <div id="previousMonthUpdatePanel" class="collapse">
+                                                    <div class="card-body">
+                                                        @if (hasPreviousUpdate)
+                                                        {
+                                                            if (isPreviousNilReturn)
+                                                            {
+                                                                <div class="alert alert-warning mb-0">
+                                                                    <i class="fas fa-ban mr-2"></i>
+                                                                    <strong>Nil Return:</strong> No update was provided for @previousMonthPeriodName.
+                                                                </div>
+                                                            }
+                                                            else if (previousNarratives.Any())
+                                                            {
+                                                                <p class="text-muted mb-3"><strong>Submitted on:</strong> @previousMonthUpdate.SubmittedAt?.ToString("dd MMM yyyy HH:mm") ?? "Not submitted"</p>
+                                                                @foreach (var narrative in previousNarratives)
+                                                                {
+                                                                    <div class="mb-3 p-3 border rounded bg-light">
+                                                                        <p class="mb-2 text-break">@narrative.Narrative</p>
+                                                                        <small class="text-muted">
+                                                                            <i class="fas fa-clock mr-1"></i>Added @narrative.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                                                                            @if (!string.IsNullOrEmpty(narrative.CreatedByName))
+                                                                            {
+                                                                                <text> by <strong>@narrative.CreatedByName</strong></text>
+                                                                            }
+                                                                        </small>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <p class="text-muted mb-0">No updates were added for @previousMonthPeriodName.</p>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <p class="text-muted mb-0">No update was submitted for @previousMonthPeriodName.</p>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    
                                     <div class="form-group mb-0">
                                         <button type="submit" class="btn btn-success mr-3">Save update</button>
                                         <a href="@Url.Action("Details", "Project", new { id = projectId, tab = "monthlyupdates" })" class="btn btn-outline-secondary">Cancel</a>

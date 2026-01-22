@@ -197,6 +197,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<ActivityTypeLookup> ActivityTypeLookups { get; set; }
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
     public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
+    public DbSet<RagStatusLookup> RagStatusLookups { get; set; }
     
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
