@@ -2336,6 +2336,7 @@ public class CentralOpsController : Controller
 
         var project = await _context.Projects
             .Include(p => p.DeliveryPriority)
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.BusinessAreaLookup)
             .Include(p => p.PhaseLookup)
@@ -2389,7 +2390,11 @@ public class CentralOpsController : Controller
             .ThenBy(d => d.Name)
             .ToListAsync();
         
-        ViewBag.RagStatuses = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
         ViewBag.Statuses = new[] { "Active", "Paused", "Completed", "Cancelled" };
 
         return View(project);
@@ -2427,7 +2432,7 @@ public class CentralOpsController : Controller
     // POST: CentralOps/UpdateField
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateField(int id, string field, string? value, string? statusChangeReason)
+    public async Task<IActionResult> UpdateField(int id, string field, string? value, string? statusChangeReason, int? ragStatusLookupId)
     {
         var project = await _context.Projects.FindAsync(id);
         if (project == null || project.IsDeleted)
@@ -2484,7 +2489,21 @@ public class CentralOpsController : Controller
                     }
                     break;
                 case "ragstatus":
-                    project.RagStatus = value;
+                    if (ragStatusLookupId.HasValue && ragStatusLookupId.Value > 0)
+                    {
+                        project.RagStatusLookupId = ragStatusLookupId.Value;
+                        // Also update the legacy RagStatus field for backward compatibility
+                        var ragStatusLookup = await _context.RagStatusLookups.FindAsync(ragStatusLookupId.Value);
+                        if (ragStatusLookup != null)
+                        {
+                            project.RagStatus = ragStatusLookup.Name;
+                        }
+                    }
+                    else
+                    {
+                        project.RagStatusLookupId = null;
+                        project.RagStatus = value;
+                    }
                     break;
                 case "primarycontact":
                     if (int.TryParse(value, out var userId) && userId > 0)

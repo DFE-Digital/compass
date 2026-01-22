@@ -6,7 +6,7 @@
     var phases = ViewBag.Phases as List<Compass.Models.PhaseLookup> ?? new List<Compass.Models.PhaseLookup>();
     var activityTypes = ViewBag.ActivityTypes as List<Compass.Models.ActivityTypeLookup> ?? new List<Compass.Models.ActivityTypeLookup>();
     var directorates = ViewBag.Directorates as List<Compass.Models.DirectorateLookup> ?? new List<Compass.Models.DirectorateLookup>();
-    var ragStatuses = ViewBag.RagStatuses as string[] ?? new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
+    var ragStatuses = ViewBag.RagStatuses as List<Compass.Models.RagStatusLookup> ?? new List<Compass.Models.RagStatusLookup>();
     var statuses = ViewBag.Statuses as string[] ?? new[] { "Active", "Paused", "Completed", "Cancelled" };
     var currentTab = ViewBag.CurrentTab as string ?? "overview";
     var deliveryCode = $"DFE-DDT-{Model.Id}";
@@ -492,14 +492,10 @@
                                         <td class="summary-value">
                                             @if (Model.DeliveryPriority != null)
                                             {
-                                                var priorityClass = Model.DeliveryPriority.Name.ToLower() switch {
-                                                    var p when p.Contains("critical") => "badge-danger",
-                                                    var p when p.Contains("high") => "badge-danger",
-                                                    var p when p.Contains("medium") => "badge-warning",
-                                                    var p when p.Contains("low") => "badge-secondary",
-                                                    _ => "badge-secondary"
-                                                };
-                                                <span class="badge @priorityClass">@Model.DeliveryPriority.Name</span>
+                                                var priorityClass = !string.IsNullOrEmpty(Model.DeliveryPriority.CssClass) 
+                                                    ? Model.DeliveryPriority.CssClass 
+                                                    : "badge badge-secondary";
+                                                <span class="@priorityClass">@Model.DeliveryPriority.Name</span>
                                             }
                                             else
                                             {
@@ -513,16 +509,22 @@
                                     <tr>
                                         <td class="summary-label"><strong>RAG Status</strong></td>
                                         <td class="summary-value">
-                                            @if (!string.IsNullOrEmpty(Model.RagStatus))
+                                            @if (Model.RagStatusLookup != null)
                                             {
-                                                // Normalize the status
+                                                var ragClass = !string.IsNullOrEmpty(Model.RagStatusLookup.CssClass) 
+                                                    ? Model.RagStatusLookup.CssClass 
+                                                    : "badge badge-secondary";
+                                                <span class="@ragClass">@Model.RagStatusLookup.Name</span>
+                                            }
+                                            else if (!string.IsNullOrEmpty(Model.RagStatus))
+                                            {
+                                                // Fallback to legacy string-based logic for backward compatibility
                                                 var normalized = Model.RagStatus.Trim()
                                                     .Replace(" / ", "-")
                                                     .Replace("/", "-")
                                                     .Replace(" /", "-")
                                                     .Replace("/ ", "-");
                                                 
-                                                // Capitalize first letter of each word for consistency
                                                 var parts = normalized.Split('-');
                                                 for (int i = 0; i < parts.Length; i++)
                                                 {
@@ -814,14 +816,15 @@
                 <input type="hidden" name="field" value="ragStatus" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="ragStatusInput">RAG Status</label>
-                        <select class="form-control" id="ragStatusInput" name="value">
+                        <label for="ragStatusLookupId">RAG Status</label>
+                        <select class="form-control" id="ragStatusLookupId" name="ragStatusLookupId">
                             <option value="">None</option>
                             @foreach (var rag in ragStatuses)
                             {
-                                <option value="@rag" selected="@(Model.RagStatus == rag)">@rag</option>
+                                <option value="@rag.Id" selected="@(Model.RagStatusLookupId == rag.Id)">@rag.Name</option>
                             }
                         </select>
+                        <input type="hidden" name="value" value="" />
                     </div>
                 </div>
                 <div class="modal-footer">

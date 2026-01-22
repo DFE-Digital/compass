@@ -20,6 +20,7 @@ public class HomeController : Controller
     private readonly ICmsApiService _cmsApiService;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly CompassDbContext _context;
     private readonly IWebHostEnvironment _environment;
 
@@ -28,6 +29,7 @@ public class HomeController : Controller
         ICmsApiService cmsApiService,
         IProductsApiService productsApiService,
         IReturnStatusService returnStatusService,
+        IMonthlyUpdateService monthlyUpdateService,
         CompassDbContext context,
         IWebHostEnvironment environment)
     {
@@ -35,6 +37,7 @@ public class HomeController : Controller
         _cmsApiService = cmsApiService;
         _productsApiService = productsApiService;
         _returnStatusService = returnStatusService;
+        _monthlyUpdateService = monthlyUpdateService;
         _context = context;
         _environment = environment;
     }
@@ -326,12 +329,22 @@ public class HomeController : Controller
     private async Task<HomeDashboardViewModel> BuildDashboardViewModel(User currentUser, string userEmail, UserPreference preference)
     {
         var myProjects = await _context.Projects
-            .Where(p => !p.IsDeleted && (
+            .Where(p => !p.IsDeleted && p.Status == "Active" && (
                 p.ProjectContacts.Any(pc => pc.Email.ToLower() == userEmail.ToLower()) ||
-                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower())
+                (p.PrimaryContactUser != null && p.PrimaryContactUser.Email.ToLower() == userEmail.ToLower()) ||
+                p.SeniorResponsibleOfficers.Any(sro => sro.User != null && sro.User.Email.ToLower() == userEmail.ToLower()) ||
+                p.ServiceOwners.Any(so => so.User != null && so.User.Email.ToLower() == userEmail.ToLower()) ||
+                p.PmoContacts.Any(pmo => pmo.User != null && pmo.User.Email.ToLower() == userEmail.ToLower())
             ))
             .Include(p => p.ProjectContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
+            .Include(p => p.SeniorResponsibleOfficers)
+                .ThenInclude(sro => sro.User)
+            .Include(p => p.ServiceOwners)
+                .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pmo => pmo.User)
             .Include(p => p.DeliveryPriority)
             .Include(p => p.Milestones)
             .Include(p => p.Issues)
@@ -340,6 +353,7 @@ public class HomeController : Controller
             .Include(p => p.Decisions)
             .Include(p => p.ProjectProducts)
             .Include(p => p.Successes)
+            .Include(p => p.MonthlyUpdates)
             .OrderBy(p => p.Title)
             .ToListAsync();
 
@@ -424,6 +438,20 @@ public class HomeController : Controller
             {
                 var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
                 productsNeedingReturns.Add((product, status, dueDate));
+            }
+        }
+
+        // Calculate projects needing monthly updates
+        var projectsNeedingMonthlyUpdates = new List<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)>();
+        foreach (var project in myProjects)
+        {
+            var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == currentYear && u.Month == currentMonth);
+            var updateStatus = _monthlyUpdateService.CalculateUpdateStatus(currentYear, currentMonth, update?.SubmittedAt);
+            
+            if (updateStatus == UpdateSubmissionStatus.Due || updateStatus == UpdateSubmissionStatus.Late)
+            {
+                var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+                projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
             }
         }
 
@@ -720,6 +748,7 @@ public class HomeController : Controller
             ProjectsNeedingPathToGreen = projectsNeedingPathToGreen,
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
+            ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,
             HighestLeadershipRole = highestRole,
