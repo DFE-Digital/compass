@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Compass.Models;
 
-public class DeliveryPriority
+public class RagStatusLookup
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -12,9 +12,6 @@ public class DeliveryPriority
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
-
-    [MaxLength(200)]
-    public string? Summary { get; set; }
 
     public string? Description { get; set; }
 
@@ -31,5 +28,3 @@ public class DeliveryPriority
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
-
-

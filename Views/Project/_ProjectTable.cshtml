@@ -39,8 +39,15 @@
         return $"DFE-DDT-{project.Id}";
     }
 
-    string GetRagBadgeClass(string ragStatus)
+    string GetRagBadgeClass(Compass.Models.RagStatusLookup? ragStatusLookup, string? ragStatus)
     {
+        // Use CSS class from lookup if available
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.CssClass))
+        {
+            return ragStatusLookup.CssClass;
+        }
+        
+        // Fallback to legacy string-based logic for backward compatibility
         if (string.IsNullOrWhiteSpace(ragStatus))
         {
             return "badge badge-secondary";
@@ -64,19 +71,26 @@
         };
     }
 
-    string GetPriorityBadgeClass(string priorityName)
+    string GetPriorityBadgeClass(Compass.Models.DeliveryPriority? deliveryPriority)
     {
-        if (string.IsNullOrWhiteSpace(priorityName))
+        if (deliveryPriority == null)
         {
             return "badge badge-secondary";
         }
 
-        var normalized = priorityName.Trim().ToLowerInvariant();
+        // Use CSS class from lookup if available
+        if (!string.IsNullOrEmpty(deliveryPriority.CssClass))
+        {
+            return deliveryPriority.CssClass;
+        }
+
+        // Fallback to legacy string-based logic for backward compatibility
+        var normalized = deliveryPriority.Name.Trim().ToLowerInvariant();
         return normalized switch
         {
-            "high" => "badge badge-red",
-            "medium" => "badge badge-amber",
-            "low" => "badge badge-green",
+            "high" => "badge badge-high",
+            "medium" => "badge badge-medium",
+            "low" => "badge badge-low",
             _ => "badge badge-secondary"
         };
     }
@@ -154,7 +168,7 @@
                         <td data-label="Priority">
                         @if (project.DeliveryPriority != null)
                         {
-                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority.Name)">@project.DeliveryPriority.Name</span>
+                            <span class="@GetPriorityBadgeClass(project.DeliveryPriority)">@project.DeliveryPriority.Name</span>
                         }
                         else
                         {
@@ -162,9 +176,13 @@
                         }
                     </td>
                         <td data-label="RAG Status">
-                        @if (!string.IsNullOrEmpty(project.RagStatus))
+                        @if (project.RagStatusLookup != null)
                         {
-                            <span class="@GetRagBadgeClass(project.RagStatus)">@FormatRagStatusText(project.RagStatus)</span>
+                            <span class="@GetRagBadgeClass(project.RagStatusLookup, project.RagStatus)">@project.RagStatusLookup.Name</span>
+                        }
+                        else if (!string.IsNullOrEmpty(project.RagStatus))
+                        {
+                            <span class="@GetRagBadgeClass(null, project.RagStatus)">@FormatRagStatusText(project.RagStatus)</span>
                         }
                         else
                         {

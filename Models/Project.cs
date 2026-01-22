@@ -34,8 +34,14 @@ public class Project
     [Required]
     public bool IsAiInitiative { get; set; } = false;
 
+    // RAG Status - using foreign key to RagStatusLookup
+    public int? RagStatusLookupId { get; set; }
+    [ForeignKey(nameof(RagStatusLookupId))]
+    public RagStatusLookup? RagStatusLookup { get; set; }
+
     [MaxLength(20)]
-    public string? RagStatus { get; set; } // Green, Amber-Green, Amber, Amber-Red, Red
+    [Obsolete("Use RagStatusLookupId instead. This property is kept for backward compatibility.")]
+    public string? RagStatus { get; set; } // Deprecated: Use RagStatusLookupId
 
     public string? RagJustification { get; set; }
 
@@ -203,6 +209,21 @@ public class Project
             if (string.IsNullOrEmpty(value))
             {
                 BusinessAreaId = null;
+            }
+        }
+    }
+
+    [NotMapped]
+    public string? RagStatusName
+    {
+        get => RagStatusLookup?.Name;
+        set
+        {
+            // This setter is for backward compatibility during migration
+            // In practice, code should set RagStatusLookupId directly
+            if (string.IsNullOrEmpty(value))
+            {
+                RagStatusLookupId = null;
             }
         }
     }
