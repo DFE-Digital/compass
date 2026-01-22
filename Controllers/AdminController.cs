@@ -1663,7 +1663,7 @@ public class AdminController : Controller
     // POST: Admin/CreateDeliveryPriority
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateDeliveryPriority([Bind("Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    public async Task<IActionResult> CreateDeliveryPriority([Bind("Name,Summary,Description,SortOrder,IsActive,CssClass")] DeliveryPriority deliveryPriority)
     {
         if (ModelState.IsValid)
         {
@@ -1702,7 +1702,7 @@ public class AdminController : Controller
     // POST: Admin/EditDeliveryPriority
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditDeliveryPriority(int id, [Bind("Id,Name,Summary,Description,SortOrder,IsActive")] DeliveryPriority deliveryPriority)
+    public async Task<IActionResult> EditDeliveryPriority(int id, [Bind("Id,Name,Summary,Description,SortOrder,IsActive,CssClass")] DeliveryPriority deliveryPriority)
     {
         if (id != deliveryPriority.Id)
         {
@@ -1731,6 +1731,7 @@ public class AdminController : Controller
                 existingPriority.Description = deliveryPriority.Description;
                 existingPriority.SortOrder = deliveryPriority.SortOrder;
                 existingPriority.IsActive = deliveryPriority.IsActive;
+                existingPriority.CssClass = deliveryPriority.CssClass;
                 existingPriority.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
@@ -1742,6 +1743,40 @@ public class AdminController : Controller
 
         TempData["ErrorMessage"] = "Unable to update delivery priority. Please fix the errors and try again.";
         return await DeliveryPriorities();
+    }
+
+    // POST: Admin/DeleteDeliveryPriority
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteDeliveryPriority(int id)
+    {
+        try
+        {
+            var deliveryPriority = await _context.DeliveryPriorities.FindAsync(id);
+            if (deliveryPriority != null)
+            {
+                // Check if any projects are using this delivery priority
+                var projectCount = await _context.Projects.CountAsync(p => p.DeliveryPriorityId == deliveryPriority.Id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete delivery priority '{deliveryPriority.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.DeliveryPriorities.Remove(deliveryPriority);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Delivery priority '{deliveryPriority.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting delivery priority");
+            TempData["ErrorMessage"] = "An error occurred while deleting the delivery priority. Please try again.";
+        }
+
+        return RedirectToAction(nameof(DeliveryPriorities));
     }
 
     // GET: Admin/CreateActionSource
@@ -3288,6 +3323,175 @@ public class AdminController : Controller
         }
 
         return RedirectToAction(nameof(Phases));
+    }
+
+    // ========================================
+    // SETTINGS - RAG Statuses
+    // ========================================
+
+    // GET: Admin/RagStatuses
+    public async Task<IActionResult> RagStatuses()
+    {
+        var ragStatuses = await _context.RagStatusLookups
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/RagStatuses.cshtml", ragStatuses);
+    }
+
+    // POST: Admin/CreateRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRagStatus([Bind("Name,Description,SortOrder,IsActive,CssClass")] RagStatusLookup ragStatus)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.RagStatusLookups.AnyAsync(r => r.Name == ragStatus.Name))
+                {
+                    TempData["ErrorMessage"] = "A RAG status with this name already exists.";
+                }
+                else
+                {
+                    ragStatus.CreatedAt = DateTime.UtcNow;
+                    ragStatus.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(ragStatus);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"RAG status '{ragStatus.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating RAG status");
+                TempData["ErrorMessage"] = "An error occurred while creating the RAG status. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
+    }
+
+    // POST: Admin/EditRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRagStatus(int id, string name, string? description, int sortOrder, bool isActive = false, string? cssClass = null)
+    {
+        _logger.LogInformation("EditRagStatus POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}, CssClass: {CssClass}", 
+            id, name, description, sortOrder, isActive, cssClass);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        var formCssClass = Request.Form["cssClass"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}, cssClass: {FormCssClass}", 
+            formId, formName, formDescription, formSortOrder, formIsActive, formCssClass);
+        
+        try
+        {
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            if (string.IsNullOrEmpty(cssClass) && !string.IsNullOrEmpty(formCssClass))
+            {
+                cssClass = formCssClass;
+            }
+            
+            var existingRagStatus = await _context.RagStatusLookups.FindAsync(id);
+            if (existingRagStatus == null)
+            {
+                _logger.LogWarning("RAG status not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "RAG status not found.";
+                return RedirectToAction(nameof(RagStatuses));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.RagStatusLookups.AnyAsync(r => r.Name == name && r.Id != id))
+            {
+                TempData["ErrorMessage"] = "A RAG status with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating RAG status {Id} - Name: {Name}, IsActive: {IsActive}, CssClass: {CssClass}", id, name, isActive, cssClass);
+                
+                existingRagStatus.Name = name;
+                existingRagStatus.Description = description;
+                existingRagStatus.SortOrder = sortOrder;
+                existingRagStatus.IsActive = isActive;
+                existingRagStatus.CssClass = cssClass;
+                existingRagStatus.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"RAG status '{name}' has been updated successfully.";
+                _logger.LogInformation("RAG status {Id} updated successfully", id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating RAG status {RagStatusId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the RAG status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
+    }
+
+    // POST: Admin/DeleteRagStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRagStatus(int id)
+    {
+        try
+        {
+            var ragStatus = await _context.RagStatusLookups.FindAsync(id);
+            if (ragStatus != null)
+            {
+                // Check if any projects are using this RAG status
+                var projectCount = await _context.Projects.CountAsync(p => p.RagStatusLookupId == ragStatus.Id && !p.IsDeleted);
+                if (projectCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete RAG status '{ragStatus.Name}' as it is being used by {projectCount} project(s).";
+                }
+                else
+                {
+                    _context.RagStatusLookups.Remove(ragStatus);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"RAG status '{ragStatus.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting RAG status");
+            TempData["ErrorMessage"] = "An error occurred while deleting the RAG status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(RagStatuses));
     }
 
     // ========================================
