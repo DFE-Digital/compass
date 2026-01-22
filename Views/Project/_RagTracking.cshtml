@@ -1,8 +1,15 @@
 @model Compass.Models.Project
 
 @functions {
-    string GetRagBadgeClass(string ragStatus)
+    string GetRagBadgeClass(Compass.Models.RagStatusLookup? ragStatusLookup, string? ragStatus)
     {
+        // Use CSS class from lookup if available
+        if (ragStatusLookup != null && !string.IsNullOrEmpty(ragStatusLookup.CssClass))
+        {
+            return ragStatusLookup.CssClass;
+        }
+        
+        // Fallback to legacy string-based logic for backward compatibility
         return ragStatus switch
         {
             "Green" => "badge badge-green",
@@ -44,12 +51,15 @@
 
 
 <!-- Path to Green Required Banner -->
-@if (string.IsNullOrWhiteSpace(Model.PathToGreen) && !string.IsNullOrEmpty(Model.RagStatus) && Model.RagStatus != "Green")
+@{
+    var currentRagStatusName = Model.RagStatusLookup?.Name ?? Model.RagStatus;
+}
+@if (string.IsNullOrWhiteSpace(Model.PathToGreen) && !string.IsNullOrEmpty(currentRagStatusName) && currentRagStatusName != "Green")
 {
     <div class="row mb-3">
         <div class="col-12">
             <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                <strong>Action Required:</strong> You are required to detail a path to green status as your current status is @Model.RagStatus.
+                <strong>Action Required:</strong> You are required to detail a path to green status as your current status is @currentRagStatusName.
                 <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -71,9 +81,13 @@
                         <tr>
                             <td class="summary-label"><strong>RAG Status</strong></td>
                             <td class="summary-value">
-                                @if (!string.IsNullOrEmpty(Model.RagStatus))
+                                @if (Model.RagStatusLookup != null)
                                 {
-                                <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
+                                <span class="@GetRagBadgeClass(Model.RagStatusLookup, Model.RagStatus)">@Model.RagStatusLookup.Name</span>
+                                }
+                                else if (!string.IsNullOrEmpty(Model.RagStatus))
+                                {
+                                <span class="@GetRagBadgeClass(null, Model.RagStatus)">@Model.RagStatus</span>
                                 }
                                 else
                                 {
@@ -107,7 +121,7 @@
                                 {
                                     <div class="preserve-formatting">@Model.PathToGreen</div>
                                 }
-                                else if (Model.RagStatus != "Green")
+                                else if (currentRagStatusName != "Green")
                                 {
                                     <span>Action required - Please document path to green</span>
                                 }
@@ -183,7 +197,8 @@
                             @for (int i = 0; i < ragHistory.Count; i++)
                             {
                                 var history = ragHistory[i];
-                                var previousRag = i < ragHistory.Count - 1 ? ragHistory[i + 1].RagStatus : null;
+                                // Get previous RAG status name for trend comparison
+                                var previousRag = i < ragHistory.Count - 1 ? (ragHistory[i + 1].RagStatusLookup?.Name ?? ragHistory[i + 1].RagStatus) : null;
                                 <tr>
                                     <td>
                                         <a href="#" class="view-rag-update" 
@@ -196,13 +211,30 @@
                                         </a>
                                     </td>
                                     <td>
-                                        <span class="@GetRagBadgeClass(history.RagStatus)">
-                                            @history.RagStatus
-                                        </span>
+                                        @if (history.RagStatusLookup != null)
+                                        {
+                                            <span class="@GetRagBadgeClass(history.RagStatusLookup, history.RagStatus)">
+                                                @history.RagStatusLookup.Name
+                                            </span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(history.RagStatus))
+                                        {
+                                            <span class="@GetRagBadgeClass(null, history.RagStatus)">
+                                                @history.RagStatus
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">Unknown</span>
+                                        }
                                     </td>
                                     <td>
-                                        <i class="@GetTrendIcon(history.RagStatus, previousRag)" title="@GetTrendText(history.RagStatus, previousRag)"></i>
-                                        <small class="text-muted">@GetTrendText(history.RagStatus, previousRag)</small>
+                                        @{
+                                            var currentRagName = history.RagStatusLookup?.Name ?? history.RagStatus;
+                                            var previousRagName = i < ragHistory.Count - 1 ? (ragHistory[i + 1].RagStatusLookup?.Name ?? ragHistory[i + 1].RagStatus) : null;
+                                        }
+                                        <i class="@GetTrendIcon(currentRagName, previousRagName)" title="@GetTrendText(currentRagName, previousRagName)"></i>
+                                        <small class="text-muted">@GetTrendText(currentRagName, previousRagName)</small>
                                     </td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(history.Justification))
@@ -378,14 +410,18 @@
                 <input type="hidden" name="projectId" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="ragStatus">RAG Status</label>
-                        <select class="form-control" id="ragStatus" name="ragStatus" required>
+                        <label for="ragStatusLookupId">RAG Status</label>
+                        <select class="form-control" id="ragStatusLookupId" name="ragStatusLookupId" required>
                             <option value="">Select status...</option>
-                            <option value="Green" selected="@(Model.RagStatus == "Green")">Green - On track, no issues</option>
-                            <option value="Amber-Green" selected="@(Model.RagStatus == "Amber-Green")">Amber-Green - Minor issues, corrective action in place</option>
-                            <option value="Amber" selected="@(Model.RagStatus == "Amber")">Amber - Some issues, may impact delivery</option>
-                            <option value="Amber-Red" selected="@(Model.RagStatus == "Amber-Red")">Amber-Red - Significant issues, likely to impact delivery</option>
-                            <option value="Red" selected="@(Model.RagStatus == "Red")">Red - Critical issues, will impact delivery</option>
+                            @if (ViewBag.RagStatuses != null)
+                            {
+                                @foreach (var ragStatus in (List<Compass.Models.RagStatusLookup>)ViewBag.RagStatuses)
+                                {
+                                    <option value="@ragStatus.Id" selected="@(Model.RagStatusLookupId == ragStatus.Id)">
+                                        @ragStatus.Name@(!string.IsNullOrEmpty(ragStatus.Description) ? $" - {ragStatus.Description}" : "")
+                                    </option>
+                                }
+                            }
                         </select>
                     </div>
                     
@@ -452,8 +488,8 @@
                 <input type="hidden" name="projectId" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="alert alert-info">
-                        <strong>Current Status:</strong> <span class="@GetRagBadgeClass(Model.RagStatus)">@Model.RagStatus</span>
-                        @if (Model.RagStatus != "Green")
+                        <strong>Current Status:</strong> <span class="@GetRagBadgeClass(Model.RagStatusLookup, Model.RagStatus)">@currentRagStatusName</span>
+                        @if (currentRagStatusName != "Green")
                         {
                             <p class="mb-0 mt-2">Document the actions being taken to return this work item to green status.</p>
                         }

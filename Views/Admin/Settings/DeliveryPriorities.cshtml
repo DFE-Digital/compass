@@ -26,18 +26,6 @@
                 <h1 class="m-0">Delivery priorities</h1>
             </div>
             <div class="col-sm-6">
-                <div class="float-right">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#deliveryPriorityModal" onclick="openCreateDeliveryPriorityModal()">
-                                Create delivery priority
-                            </a>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -117,6 +105,9 @@
                             <a href="@Url.Action("Phases", "Admin")" class="nav-link @(currentAction.Contains("Phase") ? "active" : "")">
                                 Phases
                             </a>
+                            <a href="@Url.Action("RagStatuses", "Admin")" class="nav-link @(currentAction.Contains("RagStatus") ? "active" : "")">
+                                RAG Statuses
+                            </a>
                             <a href="@Url.Action("GddRoles", "Admin")" class="nav-link @(currentAction.Contains("GddRole") ? "active" : "")">
                                 GDD Roles
                             </a>
@@ -138,6 +129,11 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title mb-0">Delivery priorities</h3>
+                        <div class="card-tools">
+                            <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#deliveryPriorityModal" onclick="openCreateDeliveryPriorityModal()">
+                                Create new
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body table-responsive p-0">
                         <table class="table table-hover text-nowrap">
@@ -147,8 +143,10 @@
                                     <th class="col-width-24">Name</th>
                                     <th class="col-width-28">Summary</th>
                                     <th class="col-width-20">Description</th>
+                                    <th class="col-width-15">CSS Class</th>
                                     <th class="col-width-10">Sort order</th>
                                     <th class="col-width-10">Status</th>
+                                    <th class="col-actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -158,18 +156,7 @@
                                     {
                                         <tr class="@(!priority.IsActive ? "text-muted" : string.Empty)">
                                             <td>@priority.Id</td>
-                                            <td>
-                                                <a href="#"
-                                                   class="edit-delivery-priority font-weight-bold"
-                                                   data-id="@priority.Id"
-                                                   data-name="@priority.Name"
-                                                   data-summary="@(priority.Summary ?? string.Empty)"
-                                                   data-description="@(priority.Description ?? string.Empty)"
-                                                   data-sortorder="@priority.SortOrder"
-                                                   data-isactive="@(priority.IsActive.ToString().ToLower())">
-                                                    @priority.Name
-                                                </a>
-                                            </td>
+                                            <td><strong>@priority.Name</strong></td>
                                             <td>@(string.IsNullOrWhiteSpace(priority.Summary) ? Html.Raw("<span class=\"text-muted\">—</span>") : priority.Summary)</td>
                                             <td>
                                                 @if (!string.IsNullOrWhiteSpace(priority.Description))
@@ -179,6 +166,16 @@
                                                 else
                                                 {
                                                     <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(priority.CssClass))
+                                                {
+                                                    <code>@priority.CssClass</code>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
                                                 }
                                             </td>
                                             <td>@priority.SortOrder</td>
@@ -192,13 +189,34 @@
                                                     <span class="badge badge-secondary">Inactive</span>
                                                 }
                                             </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button type="button" class="btn btn-outline-primary edit-delivery-priority" 
+                                                            data-id="@priority.Id"
+                                                            data-name="@Html.Raw(priority.Name.Replace("'", "\\'"))"
+                                                            data-summary="@Html.Raw(priority.Summary?.Replace("'", "\\'") ?? "")"
+                                                            data-description="@Html.Raw(priority.Description?.Replace("'", "\\'") ?? "")"
+                                                            data-cssclass="@Html.Raw(priority.CssClass?.Replace("'", "\\'") ?? "")"
+                                                            data-sortorder="@priority.SortOrder"
+                                                            data-isactive="@(priority.IsActive ? "true" : "false")"
+                                                            title="Edit">
+                                                        Edit
+                                                    </button>
+                                                    <form asp-action="DeleteDeliveryPriority" asp-route-id="@priority.Id" method="post" class="d-inline delete-delivery-priority-form">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                                            Delete
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
                                         </tr>
                                     }
                                 }
                                 else
                                 {
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted">No delivery priorities defined.</td>
+                                        <td colspan="8" class="text-center text-muted">No delivery priorities defined.</td>
                                     </tr>
                                 }
                             </tbody>
@@ -245,6 +263,12 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="deliveryPriorityCssClass" class="control-label">CSS Class</label>
+                        <input type="text" id="deliveryPriorityCssClass" name="CssClass" class="form-control" maxlength="100" />
+                        <small class="form-text text-muted">CSS class for styling the badge (e.g., badge badge-high)</small>
+                    </div>
+
+                    <div class="form-group">
                         <label for="deliveryPrioritySortOrder" class="control-label">Sort order</label>
                         <input type="number" id="deliveryPrioritySortOrder" name="SortOrder" class="form-control" min="0" />
                         <small class="form-text text-muted">Lower numbers appear first in lists.</small>
@@ -277,18 +301,20 @@
             $('#deliveryPriorityName').val('');
             $('#deliveryPrioritySummary').val('');
             $('#deliveryPriorityDescription').val('');
+            $('#deliveryPriorityCssClass').val('');
             $('#deliveryPrioritySortOrder').val('0');
             $('#deliveryPriorityIsActive').prop('checked', true);
             $('#deliveryPriorityModal').modal('show');
         }
 
-        function openEditDeliveryPriorityModal(id, name, summary, description, sortOrder, isActive) {
+        function openEditDeliveryPriorityModal(id, name, summary, description, cssClass, sortOrder, isActive) {
             $('#deliveryPriorityModalLabel').text('Edit delivery priority');
             $('#deliveryPriorityForm').attr('action', '@Url.Action("EditDeliveryPriority", "Admin")');
             $('#deliveryPriorityId').val(id);
             $('#deliveryPriorityName').val(name);
             $('#deliveryPrioritySummary').val(summary || '');
             $('#deliveryPriorityDescription').val(description || '');
+            $('#deliveryPriorityCssClass').val(cssClass || '');
             $('#deliveryPrioritySortOrder').val(sortOrder || '0');
             $('#deliveryPriorityIsActive').prop('checked', isActive === 'true' || isActive === true);
             $('#deliveryPriorityModal').modal('show');
@@ -302,9 +328,18 @@
                 $item.data('name'),
                 $item.data('summary'),
                 $item.data('description'),
+                $item.data('cssclass'),
                 $item.data('sortorder'),
                 $item.data('isactive')
             );
+        });
+
+        // Handle delete confirmation
+        $(document).on('submit', '.delete-delivery-priority-form', function (e) {
+            if (!confirm('Are you sure you want to delete this delivery priority? This action cannot be undone.')) {
+                e.preventDefault();
+                return false;
+            }
         });
 
         $('#deliveryPriorityModal').on('hidden.bs.modal', function () {
