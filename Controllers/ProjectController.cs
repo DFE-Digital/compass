@@ -171,6 +171,41 @@ namespace Compass.Controllers
             return RedirectToAction("YourWork", defaultRouteValues);
         }
 
+        // GET: Project/ViewAs
+        [HttpGet]
+        public IActionResult ViewAs()
+        {
+            return View();
+        }
+
+        // GET: Project/ViewAsUser
+        [HttpGet]
+        public async Task<IActionResult> ViewAsUser(int? userId, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page = 1, bool clearFilters = false)
+        {
+            if (!userId.HasValue)
+            {
+                TempData["ErrorMessage"] = "Please select a user to view as.";
+                return RedirectToAction(nameof(ViewAs));
+            }
+
+            // Get the target user
+            var targetUser = await _context.Users.FindAsync(userId.Value);
+            if (targetUser == null)
+            {
+                TempData["ErrorMessage"] = "User not found.";
+                return RedirectToAction(nameof(ViewAs));
+            }
+
+            // Pass the target user email to GetProjectsView
+            ViewBag.TargetUserEmail = targetUser.Email;
+            ViewBag.TargetUserName = targetUser.Name;
+            ViewBag.TargetUserId = targetUser.Id;
+            ViewBag.ViewAsMode = true;
+            ViewBag.CurrentView = "view-as";
+
+            return await GetProjectsView("your-work", search, ragStatus, businessArea, phase, flagship, priority, status, page, clearFilters, targetUser.Email);
+        }
+
         // GET: Project/YourWork
         [HttpGet]
         [Route("api/project/your-work")]
@@ -196,7 +231,7 @@ namespace Compass.Controllers
         }
 
         // Helper method to handle the common logic for all project views
-        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page, bool clearFilters)
+        private async Task<IActionResult> GetProjectsView(string viewType, string search, string ragStatus, string businessArea, string phase, string flagship, int? priority, string status, int page, bool clearFilters, string? targetUserEmail = null)
         {
             const int pageSize = 15;
             var pageNumber = page < 1 ? 1 : page;
@@ -335,8 +370,8 @@ namespace Compass.Controllers
                 }
             }
 
-            // Get current user's email
-            var userEmail = User.Identity?.Name;
+            // Get current user's email (or target user email if viewing as another user)
+            var userEmail = targetUserEmail ?? User.Identity?.Name;
 
             // Check if user has admin role (now available globally via claims from middleware)
             ViewBag.HasAdminRole = User.IsCompassAdmin();
@@ -357,8 +392,16 @@ namespace Compass.Controllers
             }
             ViewBag.IsCentralOpsAdmin = isCentralOpsAdmin;
 
-            // Get current user
-            var currentUser = await GetCurrentUserAsync();
+            // Get current user (or target user if viewing as another user)
+            User? currentUser = null;
+            if (targetUserEmail != null)
+            {
+                currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == targetUserEmail.ToLower());
+            }
+            else
+            {
+                currentUser = await GetCurrentUserAsync();
+            }
             
             // Get user's projects (where they are a named contact, primary contact, or in any governance role)
             var userProjectsQuery = _context.Projects
@@ -372,6 +415,7 @@ namespace Compass.Controllers
                     )
                 ))
                 .Include(p => p.DeliveryPriority)
+                .Include(p => p.RagStatusLookup)
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.PhaseLookup)
                 .Include(p => p.PrimaryContactUser)
@@ -450,6 +494,7 @@ namespace Compass.Controllers
             var watchedProjectsQuery = _context.Projects
                 .Where(p => !p.IsDeleted && watchedProjectIds.Contains(p.Id))
                 .Include(p => p.DeliveryPriority)
+                .Include(p => p.RagStatusLookup)
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.PhaseLookup)
                 .Include(p => p.PrimaryContactUser)
@@ -1767,6 +1812,8 @@ namespace Compass.Controllers
                 .Include(p => p.Decisions)
                     .ThenInclude(d => d.OwnerUser)
                 .Include(p => p.RagHistory)
+                    .ThenInclude(rh => rh.RagStatusLookup)
+                .Include(p => p.RagStatusLookup)
                 .Include(p => p.ResourceFunding)
                 .Include(p => p.FundingHistory)
                 .Include(p => p.ActivityTypeLookup)
@@ -1853,6 +1900,13 @@ namespace Compass.Controllers
                 .OrderBy(ba => ba.SortOrder)
                 .ThenBy(ba => ba.Name)
                 .Select(ba => ba.Name)
+                .ToListAsync();
+
+            // Get RAG statuses from admin settings (RagStatusLookups table)
+            ViewBag.RagStatuses = await _context.RagStatusLookups
+                .Where(r => r.IsActive)
+                .OrderBy(r => r.SortOrder)
+                .ThenBy(r => r.Name)
                 .ToListAsync();
 
             // Get phases from admin settings (PhaseLookups table)
@@ -4607,12 +4661,13 @@ namespace Compass.Controllers
         // POST: Project/UpdateRagStatus
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateRagStatus(int projectId, string ragStatus, string ragJustification)
+        public async Task<IActionResult> UpdateRagStatus(int projectId, int? ragStatusLookupId, string ragJustification)
         {
             try
             {
                 var project = await _context.Projects
                     .Include(p => p.RagHistory)
+                    .Include(p => p.RagStatusLookup)
                     .FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
 
                 if (project == null)
@@ -4620,13 +4675,27 @@ namespace Compass.Controllers
                     return NotFound();
                 }
 
+                // Get the RAG status lookup if provided
+                RagStatusLookup? newRagStatusLookup = null;
+                if (ragStatusLookupId.HasValue)
+                {
+                    newRagStatusLookup = await _context.RagStatusLookups.FindAsync(ragStatusLookupId.Value);
+                    if (newRagStatusLookup == null)
+                    {
+                        TempData["ErrorMessage"] = "Invalid RAG status selected.";
+                        return RedirectToAction(nameof(Details), new { id = projectId, tab = "rag" });
+                    }
+                }
+
                 // Only create history entry if status has changed
-                if (project.RagStatus != ragStatus)
+                var oldRagStatusLookupId = project.RagStatusLookupId;
+                if (oldRagStatusLookupId != ragStatusLookupId)
                 {
                     var ragHistory = new ProjectRagHistory
                     {
                         ProjectId = projectId,
-                        RagStatus = ragStatus,
+                        RagStatusLookupId = ragStatusLookupId,
+                        RagStatus = newRagStatusLookup?.Name ?? string.Empty, // Keep for backward compatibility
                         Justification = ragJustification,
                         PathToGreen = project.PathToGreen, // Capture current path to green
                         ChangedAt = DateTime.UtcNow,
@@ -4637,15 +4706,17 @@ namespace Compass.Controllers
                 }
 
                 // Update current project status
-                var oldRagStatus = project.RagStatus;
-                project.RagStatus = ragStatus;
+                var oldRagStatusName = project.RagStatusLookup?.Name ?? project.RagStatus;
+                project.RagStatusLookupId = ragStatusLookupId;
+                project.RagStatus = newRagStatusLookup?.Name; // Keep for backward compatibility
                 project.RagJustification = ragJustification;
                 project.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
                 // Trigger notification for RAG status change
-                if (oldRagStatus != ragStatus)
+                var newRagStatusName = newRagStatusLookup?.Name ?? string.Empty;
+                if (oldRagStatusName != newRagStatusName)
                 {
                     try
                     {
@@ -4661,15 +4732,15 @@ namespace Compass.Controllers
                         {
                             { "project_title", project.Title },
                             { "project_code", project.ProjectCode ?? string.Empty },
-                            { "old_rag_status", oldRagStatus ?? "None" },
-                            { "new_rag_status", ragStatus },
+                            { "old_rag_status", oldRagStatusName ?? "None" },
+                            { "new_rag_status", newRagStatusName },
                             { "rag_justification", ragJustification ?? string.Empty }
                         };
 
                         await _notificationRuleService.ProcessNotificationTriggerAsync(
                             "rag_status_changed",
                             projectId: projectId,
-                            ragStatus: ragStatus,
+                            ragStatus: newRagStatusName,
                             templateVariables: templateVariables);
                     }
                     catch (Exception ex)
