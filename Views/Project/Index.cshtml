@@ -36,12 +36,14 @@
             "yourwork" => "your-work",
             "watched" => "watched",
             "all" => "all",
+            "viewas" or "viewasuser" => "view-as",
             _ => "your-work" // Default to "Your work"
         };
     }
     var isViewMine = string.Equals(currentView, "your-work", StringComparison.OrdinalIgnoreCase) || string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
     var isViewWatched = string.Equals(currentView, "watched", StringComparison.OrdinalIgnoreCase);
     var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
+    var isViewAs = string.Equals(currentView, "view-as", StringComparison.OrdinalIgnoreCase) || string.Equals(currentView, "viewas", StringComparison.OrdinalIgnoreCase);
     
     ViewBag.BrandText = "Work reporting";
     ViewBag.NavLinks = new[]
@@ -49,6 +51,7 @@
         new { Text = "Your work", Action = "YourWork", Controller = "Project", Url = Url.Action("YourWork", "Project"), IsButton = false, IsActive = isViewMine },
         new { Text = "Watched", Action = "Watched", Controller = "Project", Url = Url.Action("Watched", "Project"), IsButton = false, IsActive = isViewWatched },
         new { Text = "All work", Action = "All", Controller = "Project", Url = Url.Action("All", "Project"), IsButton = false, IsActive = isViewAll },
+        new { Text = "View as", Action = "ViewAs", Controller = "Project", Url = Url.Action("ViewAs", "Project"), IsButton = false, IsActive = isViewAs },
         new { Text = "Create work entry", Action = "Create", Controller = "Project", Url = (string)null, IsButton = true, IsActive = false }
     };
 }
@@ -78,16 +81,18 @@
             var currentPriorityId = ViewBag.CurrentPriority as int?;
             var filterActionName = currentView.ToLower() switch
             {
-                "your-work" or "mine" => "YourWork",
+                "your-work" or "mine" => ViewBag.ViewAsMode == true ? "ViewAsUser" : "YourWork",
                 "watched" => "Watched",
                 "all" => "All",
-                _ => "YourWork"
+                "view-as" => "ViewAsUser",
+                _ => ViewBag.ViewAsMode == true ? "ViewAsUser" : "YourWork"
             };
             var statusActive = ViewBag.StatusActiveCount as int? ?? 0;
             var statusPaused = ViewBag.StatusPausedCount as int? ?? 0;
             var statusCompleted = ViewBag.StatusCompletedCount as int? ?? 0;
             var statusCancelled = ViewBag.StatusCancelledCount as int? ?? 0;
             var currentStatus = ViewBag.CurrentStatus as string;
+            var targetUserId = ViewBag.TargetUserId as int?;
         }
 
         <div class="row">
@@ -101,6 +106,7 @@
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
                             <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
                                 search = ViewBag.CurrentSearch, 
                                 ragStatus = ViewBag.CurrentRagStatus, 
                                 businessArea = ViewBag.CurrentBusinessArea, 
@@ -113,6 +119,7 @@
                                 <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActive</span>
                             </a>
                             <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
                                 search = ViewBag.CurrentSearch, 
                                 ragStatus = ViewBag.CurrentRagStatus, 
                                 businessArea = ViewBag.CurrentBusinessArea, 
@@ -125,6 +132,7 @@
                                 <span class="badge @(currentStatus == "Paused" ? "badge-light" : "badge-secondary") badge-pill">@statusPaused</span>
                             </a>
                             <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
                                 search = ViewBag.CurrentSearch, 
                                 ragStatus = ViewBag.CurrentRagStatus, 
                                 businessArea = ViewBag.CurrentBusinessArea, 
@@ -137,6 +145,7 @@
                                 <span class="badge @(currentStatus == "Completed" ? "badge-light" : "badge-secondary") badge-pill">@statusCompleted</span>
                             </a>
                             <a href="@Url.Action(filterActionName, new { 
+                                userId = targetUserId,
                                 search = ViewBag.CurrentSearch, 
                                 ragStatus = ViewBag.CurrentRagStatus, 
                                 businessArea = ViewBag.CurrentBusinessArea, 
@@ -158,7 +167,7 @@
                         <h3 class="card-title">Filters</h3>
                     </div>
                     <div class="card-body">
-                        <form method="get" id="filterForm" asp-action="@filterActionName">
+                        <form method="get" id="filterForm" asp-action="@filterActionName" asp-route-userId="@targetUserId">
                             <div class="form-group">
                                 <label>Search</label>
                                 <input type="text" name="search" class="form-control form-control-sm" placeholder="Search work items..." value="@ViewBag.CurrentSearch" />
@@ -313,6 +322,7 @@
                                 @if (!string.IsNullOrEmpty(currentStatus))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch,
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -327,6 +337,7 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = (string)null,
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -341,6 +352,7 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentRagStatus?.ToString()))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = (string)null,
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -355,6 +367,7 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = (string)null,
@@ -369,6 +382,7 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -383,6 +397,7 @@
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentFlagship?.ToString()))
                                 {
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -398,6 +413,7 @@
                                 {
                                     var currentPriority = deliveryPriorities.FirstOrDefault(p => p.Id == currentPriorityId.Value);
                                     <a href="@Url.Action(filterActionName, new { 
+                                        userId = targetUserId,
                                         search = ViewBag.CurrentSearch, 
                                         ragStatus = ViewBag.CurrentRagStatus, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
@@ -417,6 +433,16 @@
 
             <!-- Right Column: Work Items Tables -->
             <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                @if (ViewBag.ViewAsMode == true && !string.IsNullOrEmpty(ViewBag.TargetUserName as string))
+                {
+                    <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                        <strong>Viewing as:</strong> @ViewBag.TargetUserName (@ViewBag.TargetUserEmail)
+                        <a href="@Url.Action("YourWork", "Project")" class="btn btn-sm btn-secondary ml-3">Return to your view</a>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                }
                 @if (isViewMine)
                 {
                     <!-- Your Work Section -->

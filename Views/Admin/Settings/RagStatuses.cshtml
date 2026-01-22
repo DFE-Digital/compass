@@ -1,6 +1,6 @@
-@model List<Compass.Models.PhaseLookup>
+@model List<Compass.Models.RagStatusLookup>
 @{
-    ViewData["Title"] = "Phases";
+    ViewData["Title"] = "RAG Statuses";
     var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
     var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
 }
@@ -14,7 +14,7 @@
             <li class="breadcrumb-item">
                 <a href="@Url.Action("Settings", "Admin")" class="breadcrumb-link-standard">Settings</a>
             </li>
-            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">Phases</li>
+            <li class="breadcrumb-item active breadcrumb-active-standard" aria-current="page">RAG Statuses</li>
         </ol>
     </nav>
 }
@@ -23,11 +23,11 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Phases</h1>
+                <h1 class="m-0">RAG Statuses</h1>
             </div>
             <div class="col-sm-6">
                 <div class="float-right">
-                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createPhaseModal">
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createRagStatusModal">
                         Create new
                     </button>
                 </div>
@@ -132,10 +132,10 @@
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Phases</h3>
+                        <h3 class="card-title">RAG Statuses</h3>
                     </div>
                     <div class="card-body">
-                <p class="text-muted">Manage phase options for projects. These are separate from the CMS phases and specific to Compass delivery tracking.</p>
+                <p class="text-muted">Manage RAG status options for projects. Set the CSS class for each status to control badge styling.</p>
 
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -144,6 +144,7 @@
                                 <th class="col-width-60px">Order</th>
                                 <th>Name</th>
                                 <th>Description</th>
+                                <th>CSS Class</th>
                                 <th>Status</th>
                                 <th class="col-actions">Actions</th>
                             </tr>
@@ -167,6 +168,16 @@
                                             }
                                         </td>
                                         <td>
+                                            @if (!string.IsNullOrEmpty(item.CssClass))
+                                            {
+                                                <code>@item.CssClass</code>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
                                             @if (item.IsActive)
                                             {
                                                 <span class="badge badge-success">Active</span>
@@ -178,16 +189,17 @@
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm" role="group">
-                                                <button type="button" class="btn btn-outline-primary edit-phase-btn" 
-                                                        data-phase-id="@item.Id"
-                                                        data-phase-name="@Html.Raw(item.Name.Replace("'", "\\'"))"
-                                                        data-phase-description="@Html.Raw(item.Description?.Replace("'", "\\'") ?? "")"
-                                                        data-phase-sortorder="@item.SortOrder"
-                                                        data-phase-isactive="@(item.IsActive ? "true" : "false")"
+                                                <button type="button" class="btn btn-outline-primary edit-rag-status-btn" 
+                                                        data-rag-status-id="@item.Id"
+                                                        data-rag-status-name="@Html.Raw(item.Name.Replace("'", "\\'"))"
+                                                        data-rag-status-description="@Html.Raw(item.Description?.Replace("'", "\\'") ?? "")"
+                                                        data-rag-status-sortorder="@item.SortOrder"
+                                                        data-rag-status-isactive="@(item.IsActive ? "true" : "false")"
+                                                        data-rag-status-cssclass="@Html.Raw(item.CssClass?.Replace("'", "\\'") ?? "")"
                                                         title="Edit">
                                                     Edit
                                                 </button>
-                                                <form asp-action="DeletePhase" asp-route-id="@item.Id" method="post" class="d-inline delete-phase-form">
+                                                <form asp-action="DeleteRagStatus" asp-route-id="@item.Id" method="post" class="d-inline delete-rag-status-form">
                                                     @Html.AntiForgeryToken()
                                                     <button type="submit" class="btn btn-outline-danger" title="Delete">
                                                         Delete
@@ -201,7 +213,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No phases found.</td>
+                                    <td colspan="6" class="text-center text-muted">No RAG statuses found.</td>
                                 </tr>
                             }
                         </tbody>
@@ -214,36 +226,41 @@
     </div>
 </section>
 
-<!-- Create Phase Modal -->
-<div class="modal fade" id="createPhaseModal" tabindex="-1" role="dialog">
+<!-- Create RAG Status Modal -->
+<div class="modal fade" id="createRagStatusModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Create Phase</h5>
+                <h5 class="modal-title">Create RAG Status</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form asp-action="CreatePhase" method="post">
+            <form asp-action="CreateRagStatus" method="post">
                 @Html.AntiForgeryToken()
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="phaseName">Name</label>
-                        <input type="text" class="form-control" id="phaseName" name="name" required maxlength="100">
+                        <label for="ragStatusName">Name</label>
+                        <input type="text" class="form-control" id="ragStatusName" name="name" required maxlength="100">
                     </div>
                     <div class="form-group">
-                        <label for="phaseDescription">Description</label>
-                        <textarea class="form-control" id="phaseDescription" name="description" rows="3"></textarea>
+                        <label for="ragStatusDescription">Description</label>
+                        <textarea class="form-control" id="ragStatusDescription" name="description" rows="3"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="phaseSortOrder">Sort Order</label>
-                        <input type="number" class="form-control" id="phaseSortOrder" name="sortOrder" value="0" min="0">
+                        <label for="ragStatusSortOrder">Sort Order</label>
+                        <input type="number" class="form-control" id="ragStatusSortOrder" name="sortOrder" value="0" min="0">
                         <small class="form-text text-muted">Lower numbers appear first</small>
                     </div>
                     <div class="form-group">
+                        <label for="ragStatusCssClass">CSS Class</label>
+                        <input type="text" class="form-control" id="ragStatusCssClass" name="cssClass" maxlength="100" placeholder="e.g., badge badge-green">
+                        <small class="form-text text-muted">CSS class for styling the badge (e.g., badge badge-green)</small>
+                    </div>
+                    <div class="form-group">
                         <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="phaseIsActive" name="isActive" value="true" checked>
-                            <label class="form-check-label" for="phaseIsActive">Active</label>
+                            <input type="checkbox" class="form-check-input" id="ragStatusIsActive" name="isActive" value="true" checked>
+                            <label class="form-check-label" for="ragStatusIsActive">Active</label>
                         </div>
                     </div>
                 </div>
@@ -256,36 +273,41 @@
     </div>
 </div>
 
-<!-- Edit Phase Modal -->
-<div class="modal fade" id="editPhaseModal" tabindex="-1" role="dialog">
+<!-- Edit RAG Status Modal -->
+<div class="modal fade" id="editRagStatusModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Phase</h5>
+                <h5 class="modal-title">Edit RAG Status</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form asp-action="EditPhase" method="post">
+            <form asp-action="EditRagStatus" method="post">
                 @Html.AntiForgeryToken()
-                <input type="hidden" id="editPhaseId" name="id">
+                <input type="hidden" id="editRagStatusId" name="id">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="editPhaseName">Name</label>
-                        <input type="text" class="form-control" id="editPhaseName" name="name" required maxlength="100">
+                        <label for="editRagStatusName">Name</label>
+                        <input type="text" class="form-control" id="editRagStatusName" name="name" required maxlength="100">
                     </div>
                     <div class="form-group">
-                        <label for="editPhaseDescription">Description</label>
-                        <textarea class="form-control" id="editPhaseDescription" name="description" rows="3"></textarea>
+                        <label for="editRagStatusDescription">Description</label>
+                        <textarea class="form-control" id="editRagStatusDescription" name="description" rows="3"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="editPhaseSortOrder">Sort Order</label>
-                        <input type="number" class="form-control" id="editPhaseSortOrder" name="sortOrder" min="0">
+                        <label for="editRagStatusSortOrder">Sort Order</label>
+                        <input type="number" class="form-control" id="editRagStatusSortOrder" name="sortOrder" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="editRagStatusCssClass">CSS Class</label>
+                        <input type="text" class="form-control" id="editRagStatusCssClass" name="cssClass" maxlength="100" placeholder="e.g., badge badge-green">
+                        <small class="form-text text-muted">CSS class for styling the badge (e.g., badge badge-green)</small>
                     </div>
                     <div class="form-group">
                         <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="editPhaseIsActive" name="isActive" value="true">
-                            <label class="form-check-label" for="editPhaseIsActive">Active</label>
+                            <input type="checkbox" class="form-check-input" id="editRagStatusIsActive" name="isActive" value="true">
+                            <label class="form-check-label" for="editRagStatusIsActive">Active</label>
                             <input type="hidden" name="isActive" value="false">
                         </div>
                     </div>
@@ -302,38 +324,40 @@
 @section Scripts {
 <script nonce="@Context.Items["Nonce"]">
 (function() {
-    function initPhasesPage() {
-        // Handle edit phase button clicks
-        $(document).on('click', '.edit-phase-btn', function() {
-            const id = $(this).data('phase-id');
-            const name = $(this).data('phase-name');
-            const description = $(this).data('phase-description') || '';
-            const sortOrder = $(this).data('phase-sortorder');
-            const isActive = $(this).data('phase-isactive');
+    function initRagStatusesPage() {
+        // Handle edit RAG status button clicks
+        $(document).on('click', '.edit-rag-status-btn', function() {
+            const id = $(this).data('rag-status-id');
+            const name = $(this).data('rag-status-name');
+            const description = $(this).data('rag-status-description') || '';
+            const sortOrder = $(this).data('rag-status-sortorder');
+            const isActive = $(this).data('rag-status-isactive');
+            const cssClass = $(this).data('rag-status-cssclass') || '';
             
-            $('#editPhaseId').val(id);
-            $('#editPhaseName').val(name);
-            $('#editPhaseDescription').val(description);
-            $('#editPhaseSortOrder').val(sortOrder);
+            $('#editRagStatusId').val(id);
+            $('#editRagStatusName').val(name);
+            $('#editRagStatusDescription').val(description);
+            $('#editRagStatusSortOrder').val(sortOrder);
+            $('#editRagStatusCssClass').val(cssClass);
             
             // Handle checkbox - convert string "true"/"false" to boolean
             const isActiveBool = isActive === true || isActive === 'true' || String(isActive).toLowerCase() === 'true';
-            $('#editPhaseIsActive').prop('checked', isActiveBool);
+            $('#editRagStatusIsActive').prop('checked', isActiveBool);
             
             // Update hidden field based on checkbox state
-            $('#editPhaseModal input[type="hidden"][name="isActive"]').val(isActiveBool ? 'true' : 'false');
+            $('#editRagStatusModal input[type="hidden"][name="isActive"]').val(isActiveBool ? 'true' : 'false');
             
             // Listen for checkbox changes
-            $('#editPhaseIsActive').off('change').on('change', function() {
-                $('#editPhaseModal input[type="hidden"][name="isActive"]').val($(this).is(':checked') ? 'true' : 'false');
+            $('#editRagStatusIsActive').off('change').on('change', function() {
+                $('#editRagStatusModal input[type="hidden"][name="isActive"]').val($(this).is(':checked') ? 'true' : 'false');
             });
             
-            $('#editPhaseModal').modal('show');
+            $('#editRagStatusModal').modal('show');
         });
         
-        // Handle delete phase form submissions
-        $(document).on('submit', '.delete-phase-form', function(e) {
-            if (!confirm('Are you sure you want to delete this phase?')) {
+        // Handle delete RAG status form submissions
+        $(document).on('submit', '.delete-rag-status-form', function(e) {
+            if (!confirm('Are you sure you want to delete this RAG status?')) {
                 e.preventDefault();
                 return false;
             }
@@ -343,14 +367,14 @@
 
     // Wait for jQuery to be available
     if (typeof jQuery !== 'undefined') {
-        $(document).ready(initPhasesPage);
+        $(document).ready(initRagStatusesPage);
     } else {
         document.addEventListener('DOMContentLoaded', function() {
             // Try again after a short delay to ensure jQuery is loaded
             var checkJQuery = setInterval(function() {
                 if (typeof jQuery !== 'undefined') {
                     clearInterval(checkJQuery);
-                    $(document).ready(initPhasesPage);
+                    $(document).ready(initRagStatusesPage);
                 }
             }, 50);
             
@@ -363,4 +387,3 @@
 })();
 </script>
 }
-

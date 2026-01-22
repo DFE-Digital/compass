@@ -551,11 +551,25 @@ app.MapRazorPages();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CompassDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     
     try
     {
+        logger.LogInformation("Starting database initialization...");
+        
+        // Test database connection first
+        if (!await context.Database.CanConnectAsync())
+        {
+            var errorMsg = "Cannot connect to database. Please check connection string and firewall settings.";
+            logger.LogError(errorMsg);
+            throw new InvalidOperationException(errorMsg);
+        }
+        logger.LogInformation("Database connection successful");
+        
         // Apply any pending migrations
+        logger.LogInformation("Applying database migrations...");
         await context.Database.MigrateAsync();
+        logger.LogInformation("Database migrations applied successfully");
         
         // Seed statement templates if they don't exist
         await SeedStatementTemplatesAsync(context);
@@ -575,11 +589,18 @@ using (var scope = app.Services.CreateScope())
         // Seed Grades
         await SeedGradesAsync(context);
         
+        logger.LogInformation("Compass database initialized successfully");
         Console.WriteLine("Compass database initialized successfully");
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Compass database initialization error: {Message}", ex.Message);
         Console.WriteLine($"Compass database initialization error: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        }
         throw;
     }
 }
