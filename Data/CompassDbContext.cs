@@ -270,6 +270,9 @@ public partial class CompassDbContext : DbContext
     // Profession and Skills Management
     public DbSet<ProfessionSkill> ProfessionSkills { get; set; }
     public DbSet<UserProfessionalProfileSkill> UserProfessionalProfileSkills { get; set; }
+    
+    // FIPS Sync Management
+    public DbSet<FipsSyncHistory> FipsSyncHistories { get; set; }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -2602,6 +2605,19 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Grade>()
             .HasIndex(g => g.DisplayOrder);
+
+        // FIPS Sync History configuration
+        modelBuilder.Entity<FipsSyncHistory>()
+            .HasIndex(fsh => fsh.StartedAt);
+
+        modelBuilder.Entity<FipsSyncHistory>()
+            .HasIndex(fsh => fsh.Status);
+
+        modelBuilder.Entity<FipsSyncHistory>()
+            .HasIndex(fsh => fsh.TargetEnvironment);
+
+        modelBuilder.Entity<FipsSyncHistory>()
+            .HasIndex(fsh => fsh.SyncType);
 
     }
 }

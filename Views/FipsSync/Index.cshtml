@@ -1,0 +1,503 @@
+@model IEnumerable<Compass.Models.FipsSyncHistory>
+
+@*
+ * ROUTE: /FipsSync/Index
+ * CONTROLLER: Compass.Controllers.FipsSyncController
+ * MODEL: IEnumerable<Compass.Models.FipsSyncHistory>
+ * 
+ * DESCRIPTION:
+ * FIPS Sync management page for running and monitoring data sync operations
+ * 
+ * AUTHOR: AI Assistant
+ * CREATED: 2026-01-13
+ *@
+
+@{
+    ViewData["Title"] = "FIPS Sync Management";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Home")" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Admin")" style="color: #005ea5; text-decoration: none; font-weight: 500;">Administration</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">FIPS Sync</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">FIPS Sync Management</h1>
+                <p class="text-muted mb-0">Manage data synchronization between FIPS environments</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Run Sync Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Run Sync Operation
+                </h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="RunSync" method="post">
+                    @Html.AntiForgeryToken()
+                    
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="syncType">Sync Type <span class="text-danger">*</span></label>
+                                <select class="form-control" id="syncType" name="syncType" required>
+                                    <option value="">Select sync type...</option>
+                                    <option value="CMDB to Strapi">CMDB to Strapi</option>
+                                    <option value="Strapi to Strapi">Strapi to Strapi</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="sourceEnvironment">Source Environment</label>
+                                <select class="form-control" id="sourceEnvironment" name="sourceEnvironment">
+                                    <option value="">N/A (CMDB sync)</option>
+                                    <option value="Production">Production</option>
+                                    <option value="Test">Test</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="targetEnvironment">Target Environment <span class="text-danger">*</span></label>
+                                <select class="form-control" id="targetEnvironment" name="targetEnvironment" required>
+                                    <option value="">Select environment...</option>
+                                    <option value="Development">Development</option>
+                                    <option value="Test">Test</option>
+                                    <option value="Production">Production</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <button type="button" id="checkSyncBtn" class="btn btn-primary btn-block">
+                                    <i class="fas fa-search mr-2"></i>
+                                    Check & Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-2">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Note:</strong> Click "Check & Confirm" to review the sync configuration before running.
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sync History Section -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-history mr-2"></i>
+                    Sync History (Last 50 Runs)
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Started</th>
+                                <th>Sync Type</th>
+                                <th>Source</th>
+                                <th>Target</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Products</th>
+                                <th>Errors</th>
+                                <th>Initiated By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.Any())
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle mr-2"></i>
+                                        No sync operations have been run yet
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var sync in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span title="@sync.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC">
+                                                @sync.StartedAt.ToString("yyyy-MM-dd HH:mm")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-info">@sync.SyncType</span>
+                                        </td>
+                                        <td>@(sync.SourceEnvironment ?? "CMDB")</td>
+                                        <td>@sync.TargetEnvironment</td>
+                                        <td>
+                                            @if (sync.Status == "Completed")
+                                            {
+                                                <span class="badge badge-success">
+                                                    <i class="fas fa-check-circle mr-1"></i>
+                                                    Completed
+                                                </span>
+                                            }
+                                            else if (sync.Status == "Failed")
+                                            {
+                                                <span class="badge badge-danger">
+                                                    <i class="fas fa-times-circle mr-1"></i>
+                                                    Failed
+                                                </span>
+                                            }
+                                            else if (sync.Status == "Running")
+                                            {
+                                                <span class="badge badge-primary">
+                                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                                    Running
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-secondary">@sync.Status</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (sync.DurationSeconds.HasValue)
+                                            {
+                                                var duration = TimeSpan.FromSeconds(sync.DurationSeconds.Value);
+                                                if (duration.TotalMinutes < 1)
+                                                {
+                                                    <text>@duration.Seconds s</text>
+                                                }
+                                                else if (duration.TotalHours < 1)
+                                                {
+                                                    <text>@duration.Minutes m @duration.Seconds s</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>@((int)duration.TotalHours) h @duration.Minutes m</text>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <text>-</text>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-success" title="Created">@sync.ProductsCreated</span>
+                                            <span class="badge badge-info" title="Updated">@sync.ProductsUpdated</span>
+                                            <span class="badge badge-secondary" title="Skipped">@sync.ProductsSkipped</span>
+                                        </td>
+                                        <td>
+                                            @if (sync.ErrorsEncountered > 0)
+                                            {
+                                                <span class="badge badge-danger">@sync.ErrorsEncountered</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success">
+                                                    <i class="fas fa-check"></i>
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>@(sync.InitiatedBy ?? "Unknown")</td>
+                                        <td>
+                                            <a href="@Url.Action("Details", new { id = sync.Id })" class="btn btn-sm btn-info" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="@Url.Action("Delete", new { id = sync.Id })" class="btn btn-sm btn-danger" title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h3 class="card-title">
+                    <i class="fas fa-question-circle mr-2"></i>
+                    How to Use
+                </h3>
+            </div>
+            <div class="card-body">
+                <h5>CMDB to Strapi Sync</h5>
+                <p>Syncs product data from ServiceNow CMDB to the specified Strapi environment. This creates or updates products with CMDB data.</p>
+                
+                <h5 class="mt-3">Strapi to Strapi Sync</h5>
+                <p>Copies data from one Strapi environment to another. Useful for refreshing development or test environments with production data.</p>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <strong>Warning:</strong> Syncing to Production should be done with caution and proper testing.
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmSyncModal" tabindex="-1" role="dialog" aria-labelledby="confirmSyncModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="confirmSyncModalLabel">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Confirm Sync Operation
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    Please review the sync configuration carefully before proceeding.
+                </div>
+
+                <h6 class="font-weight-bold mb-3">Sync Configuration:</h6>
+
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th width="30%" class="bg-light">Sync Type</th>
+                            <td id="confirm-sync-type" class="font-weight-bold"></td>
+                        </tr>
+                        <tr id="confirm-source-row">
+                            <th class="bg-light">Source Environment</th>
+                            <td>
+                                <span id="confirm-source-env" class="font-weight-bold"></span>
+                                <div id="confirm-source-details" class="mt-2 small text-muted"></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">Target Environment</th>
+                            <td>
+                                <span id="confirm-target-env" class="font-weight-bold text-danger"></span>
+                                <div id="confirm-target-details" class="mt-2 small text-muted"></div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div id="confirm-cmdb-details" style="display: none;">
+                    <h6 class="font-weight-bold mb-2 mt-4">CMDB Source Details:</h6>
+                    <table class="table table-sm table-bordered">
+                        <tr>
+                            <th width="30%" class="bg-light">Endpoint</th>
+                            <td id="confirm-cmdb-endpoint" class="small"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">Username</th>
+                            <td id="confirm-cmdb-username" class="small"></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="alert alert-danger mt-3" id="warning-production" style="display: none;">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <strong>WARNING:</strong> You are about to sync to the <strong>PRODUCTION</strong> environment. This will affect live data!
+                </div>
+
+                <div id="loading-config" class="text-center py-4" style="display: none;">
+                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                    <p class="mt-2">Loading configuration...</p>
+                </div>
+
+                <div id="config-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <span id="config-error-message"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times mr-2"></i>
+                    Cancel
+                </button>
+                <button type="button" id="confirmRunBtn" class="btn btn-danger">
+                    <i class="fas fa-play mr-2"></i>
+                    Confirm & Run Sync
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Auto-refresh page every 30 seconds if there are running syncs
+            var hasRunningSyncs = @(Model.Any(s => s.Status == "Running") ? "true" : "false");
+            if (hasRunningSyncs) {
+                setTimeout(function() {
+                    location.reload();
+                }, 30000);
+            }
+
+            // Update source environment visibility based on sync type
+            $('#syncType').change(function() {
+                var syncType = $(this).val();
+                if (syncType === 'CMDB to Strapi') {
+                    $('#sourceEnvironment').val('').prop('disabled', true).closest('.form-group').hide();
+                } else if (syncType === 'Strapi to Strapi') {
+                    $('#sourceEnvironment').prop('disabled', false).closest('.form-group').show();
+                }
+            });
+
+            // Initialize state
+            $('#syncType').trigger('change');
+
+            // Check & Confirm button click
+            $('#checkSyncBtn').click(function(e) {
+                e.preventDefault();
+
+                // Validate form
+                var syncType = $('#syncType').val();
+                var targetEnvironment = $('#targetEnvironment').val();
+                var sourceEnvironment = $('#sourceEnvironment').val();
+
+                if (!syncType) {
+                    alert('Please select a sync type');
+                    return;
+                }
+
+                if (!targetEnvironment) {
+                    alert('Please select a target environment');
+                    return;
+                }
+
+                if (syncType === 'Strapi to Strapi' && !sourceEnvironment) {
+                    alert('Please select a source environment for Strapi to Strapi sync');
+                    return;
+                }
+
+                // Show loading
+                $('#loading-config').show();
+                $('#config-error').hide();
+                $('.modal-body table, #confirm-cmdb-details, #warning-production').hide();
+                $('#confirmSyncModal').modal('show');
+
+                // Fetch configuration details
+                $.ajax({
+                    url: '@Url.Action("GetSyncConfiguration")',
+                    type: 'GET',
+                    data: {
+                        syncType: syncType,
+                        sourceEnvironment: sourceEnvironment,
+                        targetEnvironment: targetEnvironment
+                    },
+                    success: function(config) {
+                        $('#loading-config').hide();
+                        $('.modal-body table').show();
+
+                        // Populate modal
+                        $('#confirm-sync-type').text(config.syncType);
+                        
+                        // Source
+                        if (config.syncType === 'CMDB to Strapi') {
+                            $('#confirm-source-row').show();
+                            $('#confirm-source-env').text('ServiceNow CMDB');
+                            $('#confirm-source-details').html(
+                                '<strong>Endpoint:</strong> ' + config.cmdb.endpoint + '<br>' +
+                                '<strong>Username:</strong> ' + config.cmdb.username
+                            );
+                            $('#confirm-cmdb-details').show();
+                            $('#confirm-cmdb-endpoint').text(config.cmdb.endpoint);
+                            $('#confirm-cmdb-username').text(config.cmdb.username);
+                        } else {
+                            $('#confirm-source-row').show();
+                            $('#confirm-source-env').text(config.source.environment);
+                            $('#confirm-source-details').html(
+                                '<strong>Endpoint:</strong> ' + config.source.endpoint + '<br>' +
+                                '<strong>API Key:</strong> ' + config.source.apiKeyPreview
+                            );
+                            $('#confirm-cmdb-details').hide();
+                        }
+
+                        // Target
+                        $('#confirm-target-env').text(config.target.environment);
+                        $('#confirm-target-details').html(
+                            '<strong>Endpoint:</strong> ' + config.target.endpoint + '<br>' +
+                            '<strong>API Key:</strong> ' + config.target.apiKeyPreview
+                        );
+
+                        // Show production warning
+                        if (targetEnvironment === 'Production') {
+                            $('#warning-production').show();
+                        } else {
+                            $('#warning-production').hide();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#loading-config').hide();
+                        $('#config-error').show();
+                        $('#config-error-message').text('Error loading configuration: ' + error);
+                    }
+                });
+            });
+
+            // Confirm & Run button click
+            $('#confirmRunBtn').click(function() {
+                // Submit the form
+                $('form[action="@Url.Action("RunSync")"]').submit();
+            });
+        });
+    </script>
+}
