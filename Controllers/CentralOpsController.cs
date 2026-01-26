@@ -590,6 +590,24 @@ public class CentralOpsController : Controller
             ViewBag.MonthName = new DateTime(filterYear, filterMonth, 1).ToString("MMMM yyyy");
             ViewBag.DueDate = dueDate;
 
+            // Calculate previous and next months for navigation
+            var previousMonthDate = new DateTime(filterYear, filterMonth, 1).AddMonths(-1);
+            ViewBag.PreviousYear = previousMonthDate.Year;
+            ViewBag.PreviousMonth = previousMonthDate.Month;
+            ViewBag.HasPreviousMonth = true; // Always allow going back
+
+            // Calculate next month, but only allow if it's not beyond the current reporting period
+            var nextMonthDate = new DateTime(filterYear, filterMonth, 1).AddMonths(1);
+            var nextMonthYear = nextMonthDate.Year;
+            var nextMonthMonth = nextMonthDate.Month;
+            
+            // Allow next month if it's <= current reporting period
+            var nextMonthAllowed = nextMonthYear < reportYear || 
+                                  (nextMonthYear == reportYear && nextMonthMonth <= reportMonth);
+            
+            ViewBag.NextYear = nextMonthYear;
+            ViewBag.NextMonth = nextMonthMonth;
+            ViewBag.HasNextMonth = nextMonthAllowed;
 
             return View();
         }
@@ -674,10 +692,29 @@ public class CentralOpsController : Controller
             ViewBag.DueDate = dueDate;
             ViewBag.TotalSubmissions = reportItems.Count;
 
-            // If Word format requested, generate Word document
-            if (format?.ToLower() == "word")
+            // Calculate previous and next months for navigation
+            var previousMonthDate = new DateTime(filterYear, filterMonth, 1).AddMonths(-1);
+            ViewBag.PreviousYear = previousMonthDate.Year;
+            ViewBag.PreviousMonth = previousMonthDate.Month;
+            ViewBag.HasPreviousMonth = true; // Always allow going back
+
+            // Calculate next month, but only allow if it's not beyond the current reporting period
+            var nextMonthDate = new DateTime(filterYear, filterMonth, 1).AddMonths(1);
+            var nextMonthYear = nextMonthDate.Year;
+            var nextMonthMonth = nextMonthDate.Month;
+            
+            // Allow next month if it's <= current reporting period
+            var nextMonthAllowed = nextMonthYear < reportYear || 
+                                  (nextMonthYear == reportYear && nextMonthMonth <= reportMonth);
+            
+            ViewBag.NextYear = nextMonthYear;
+            ViewBag.NextMonth = nextMonthMonth;
+            ViewBag.HasNextMonth = nextMonthAllowed;
+
+            // If Excel format requested, generate Excel document
+            if (format?.ToLower() == "excel")
             {
-                return await GenerateMonthlyReportWord(reportItems, monthName, filterYear, filterMonth);
+                return await GenerateMonthlyReportExcel(reportItems, monthName, filterYear, filterMonth);
             }
 
             return View(reportItems);
@@ -690,126 +727,113 @@ public class CentralOpsController : Controller
         }
     }
 
-    private async Task<IActionResult> GenerateMonthlyReportWord(List<ViewModels.MonthlyReportItem> reportItems, string monthName, int year, int month)
+    private async Task<IActionResult> GenerateMonthlyReportExcel(List<ViewModels.MonthlyReportItem> reportItems, string monthName, int year, int month)
     {
         try
         {
-            // For Word export, we'll use a simple HTML approach that Word can open
-            // In a production environment, you might want to use a library like DocX or OpenXML
-            
-            var html = $@"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""utf-8"">
-    <title>Monthly Report - {monthName}</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; }}
-        h1 {{ color: #005ea5; }}
-        h2 {{ color: #003078; margin-top: 30px; }}
-        table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
-        th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
-        th {{ background-color: #f8f9fa; font-weight: bold; }}
-        .rag-red {{ background-color: #d4351c; color: white; padding: 4px 8px; border-radius: 3px; }}
-        .rag-amber-red {{ background-color: #f47738; color: white; padding: 4px 8px; border-radius: 3px; }}
-        .rag-amber {{ background-color: #ffbf47; color: #0b0c0c; padding: 4px 8px; border-radius: 3px; }}
-        .rag-amber-green {{ background-color: #85994b; color: white; padding: 4px 8px; border-radius: 3px; }}
-        .rag-green {{ background-color: #00703c; color: white; padding: 4px 8px; border-radius: 3px; }}
-        .narrative {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-left: 3px solid #005ea5; }}
-        .narrative-meta {{ font-size: 0.9em; color: #666; margin-top: 5px; }}
-    </style>
-</head>
-<body>
-    <h1>Monthly Update Report - {monthName}</h1>
-    <p><strong>Report Generated:</strong> {DateTime.UtcNow:dd MMMM yyyy HH:mm} UTC</p>
-    <p><strong>Total Submissions:</strong> {reportItems.Count}</p>
-    
-    <h2>Summary</h2>
-    <table>
-        <tr>
-            <th>Project Code</th>
-            <th>Project Title</th>
-            <th>Business Area</th>
-            <th>RAG Status</th>
-            <th>Primary Contact</th>
-            <th>Service Owner</th>
-            <th>Submitted By</th>
-            <th>Submitted At</th>
-        </tr>";
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Monthly Report");
 
-            foreach (var item in reportItems)
+            // Add header information
+            worksheet.Cell(1, 1).Value = "Monthly Update Report";
+            worksheet.Cell(1, 1).Style.Font.Bold = true;
+            worksheet.Cell(1, 1).Style.Font.FontSize = 16;
+            worksheet.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml("#005ea5");
+            
+            worksheet.Cell(2, 1).Value = $"Reporting Period: {monthName}";
+            worksheet.Cell(3, 1).Value = $"Report Generated: {DateTime.UtcNow:dd MMMM yyyy HH:mm} UTC";
+            worksheet.Cell(4, 1).Value = $"Total Submissions: {reportItems.Count}";
+
+            // Add table headers - all data on one row
+            var headerRow = 6;
+            var headers = new[]
             {
-                var ragClass = item.RagStatus.ToLower().Replace(" ", "-").Replace("not-set", "rag-not-set");
-                html += $@"
-        <tr>
-            <td>{WebUtility.HtmlEncode(item.ProjectCode)}</td>
-            <td>{WebUtility.HtmlEncode(item.ProjectTitle)}</td>
-            <td>{WebUtility.HtmlEncode(item.BusinessArea)}</td>
-            <td><span class=""rag-{ragClass}"">{WebUtility.HtmlEncode(item.RagStatus)}</span></td>
-            <td>{WebUtility.HtmlEncode(item.PrimaryContact)}</td>
-            <td>{WebUtility.HtmlEncode(item.ServiceOwner)}</td>
-            <td>{WebUtility.HtmlEncode(item.SubmittedBy)}<br/><small>{WebUtility.HtmlEncode(item.SubmittedByEmail)}</small></td>
-            <td>{item.SubmittedAt:dd MMM yyyy HH:mm}</td>
-        </tr>";
+                "Project Code",
+                "Project Title",
+                "Business Area",
+                "RAG Status",
+                "Primary Contact",
+                "Service Owner",
+                "Submitted By",
+                "Submitted By Email",
+                "Submitted At",
+                "Update Narratives"
+            };
+
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var cell = worksheet.Cell(headerRow, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f8f9fa");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
             }
 
-            html += @"
-    </table>
-    
-    <h2>Detailed Updates</h2>";
-
+            // Add data - all information on one row per project
+            var currentRow = headerRow + 1;
             foreach (var item in reportItems)
             {
-                html += $@"
-    <div style=""page-break-before: always; margin-top: 30px;"">
-        <h3>{WebUtility.HtmlEncode(item.ProjectCode)} - {WebUtility.HtmlEncode(item.ProjectTitle)}</h3>
-        <p><strong>Business Area:</strong> {WebUtility.HtmlEncode(item.BusinessArea)} | 
-           <strong>RAG Status:</strong> <span class=""rag-{item.RagStatus.ToLower().Replace(" ", "-")}"">{WebUtility.HtmlEncode(item.RagStatus)}</span> | 
-           <strong>Primary Contact:</strong> {WebUtility.HtmlEncode(item.PrimaryContact)} | 
-           <strong>Service Owner:</strong> {WebUtility.HtmlEncode(item.ServiceOwner)}</p>
-        <p><strong>Submitted:</strong> {item.SubmittedAt:dd MMMM yyyy HH:mm} UTC by {WebUtility.HtmlEncode(item.SubmittedBy)} ({WebUtility.HtmlEncode(item.SubmittedByEmail)})</p>
-        
-        <h4>Update Narratives:</h4>";
-
+                worksheet.Cell(currentRow, 1).Value = item.ProjectCode;
+                worksheet.Cell(currentRow, 2).Value = item.ProjectTitle;
+                worksheet.Cell(currentRow, 3).Value = item.BusinessArea;
+                worksheet.Cell(currentRow, 4).Value = item.RagStatus;
+                worksheet.Cell(currentRow, 5).Value = item.PrimaryContact;
+                worksheet.Cell(currentRow, 6).Value = item.ServiceOwner;
+                worksheet.Cell(currentRow, 7).Value = item.SubmittedBy;
+                worksheet.Cell(currentRow, 8).Value = item.SubmittedByEmail;
+                worksheet.Cell(currentRow, 9).Value = item.SubmittedAt;
+                worksheet.Cell(currentRow, 9).Style.DateFormat.Format = "dd MMM yyyy HH:mm";
+                
+                // Combine all narratives into one cell
                 if (item.UpdateNarratives.Any())
                 {
+                    var narrativesText = new System.Text.StringBuilder();
                     foreach (var narrative in item.UpdateNarratives)
                     {
-                        var encodedNarrative = WebUtility.HtmlEncode(narrative.Narrative).Replace("\n", "<br/>");
-                        var narrativeMeta = !string.IsNullOrEmpty(narrative.SubmittedByEmail)
-                            ? $"Submitted by {WebUtility.HtmlEncode(narrative.SubmittedBy)} ({WebUtility.HtmlEncode(narrative.SubmittedByEmail)}) on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC"
-                            : $"Submitted by {WebUtility.HtmlEncode(narrative.SubmittedBy)} on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC";
+                        if (narrativesText.Length > 0)
+                        {
+                            narrativesText.AppendLine();
+                            narrativesText.AppendLine("---");
+                            narrativesText.AppendLine();
+                        }
                         
-                        html += $@"
-        <div class=""narrative"">
-            <p>{encodedNarrative}</p>
-            <div class=""narrative-meta"">
-                {narrativeMeta}
-            </div>
-        </div>";
+                        narrativesText.AppendLine(narrative.Narrative);
+                        
+                        var narrativeMeta = !string.IsNullOrEmpty(narrative.SubmittedByEmail)
+                            ? $"Submitted by {narrative.SubmittedBy} ({narrative.SubmittedByEmail}) on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC"
+                            : $"Submitted by {narrative.SubmittedBy} on {narrative.SubmittedAt:dd MMM yyyy HH:mm} UTC";
+                        narrativesText.AppendLine();
+                        narrativesText.Append($"({narrativeMeta})");
                     }
+                    worksheet.Cell(currentRow, 10).Value = narrativesText.ToString();
                 }
                 else
                 {
-                    html += "<p><em>No narratives provided.</em></p>";
+                    worksheet.Cell(currentRow, 10).Value = "No narratives provided.";
                 }
-
-                html += @"
-    </div>";
+                
+                // Enable text wrapping for narratives column
+                worksheet.Cell(currentRow, 10).Style.Alignment.WrapText = true;
+                
+                currentRow++;
             }
 
-            html += @"
-</body>
-</html>";
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            worksheet.Column(2).Style.Alignment.WrapText = true; // Project Title
+            worksheet.Column(10).Style.Alignment.WrapText = true; // Update Narratives
+            worksheet.SheetView.FreezeRows(headerRow);
 
-            var bytes = System.Text.Encoding.UTF8.GetBytes(html);
-            var fileName = $"Monthly_Report_{year}_{month:00}_{DateTime.UtcNow:yyyyMMdd}.doc";
-            
-            return File(bytes, "application/msword", fileName);
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"Monthly_Report_{year}_{month:00}_{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating Word document");
-            TempData["ErrorMessage"] = "An error occurred while generating the Word document. Please try again.";
+            _logger.LogError(ex, "Error generating Excel document");
+            TempData["ErrorMessage"] = "An error occurred while generating the Excel document. Please try again.";
             return RedirectToAction("GenerateMonthlyReport", new { year, month });
         }
     }
