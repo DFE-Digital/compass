@@ -46,8 +46,8 @@
                     <i class="fas fa-file-alt mr-2"></i>Monthly Update Report - @monthName
                 </h3>
                 <div class="card-tools">
-                    <a asp-action="GenerateMonthlyReport" asp-route-year="@reportYear" asp-route-month="@reportMonth" asp-route-format="word" class="btn btn-sm btn-success">
-                        <i class="fas fa-file-word mr-1"></i> Export to Word
+                    <a asp-action="GenerateMonthlyReport" asp-route-year="@reportYear" asp-route-month="@reportMonth" asp-route-format="excel" class="btn btn-sm btn-success">
+                        <i class="fas fa-file-excel mr-1"></i> Export to Excel
                     </a>
                 </div>
             </div>
@@ -60,6 +60,73 @@
                     <div class="col-md-6">
                         <p><strong>Total Submissions:</strong> @totalSubmissions</p>
                         <p><strong>Report Generated:</strong> @DateTime.UtcNow.ToString("dd MMMM yyyy HH:mm") UTC</p>
+                    </div>
+                </div>
+                
+                <!-- Period Selection -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="card border-secondary">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Change Reporting Period</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-end">
+                                    <div class="col-md-3">
+                                        <label for="reportYear" class="form-label">Year</label>
+                                        <select id="reportYear" class="form-control">
+                                            @for (int y = DateTime.UtcNow.Year; y >= DateTime.UtcNow.Year - 5; y--)
+                                            {
+                                                @if (y == reportYear)
+                                                {
+                                                    <option value="@y" selected>@y</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@y">@y</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="reportMonth" class="form-label">Month</label>
+                                        <select id="reportMonth" class="form-control">
+                                            @for (int m = 1; m <= 12; m++)
+                                            {
+                                                var monthDate = new DateTime(2000, m, 1);
+                                                @if (m == reportMonth)
+                                                {
+                                                    <option value="@m" selected>@monthDate.ToString("MMMM")</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@m">@monthDate.ToString("MMMM")</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" id="changePeriodBtn" class="btn btn-primary">
+                                            <i class="fas fa-search mr-1"></i> View Report
+                                        </button>
+                                    </div>
+                                    <div class="col-md-3">
+                                        @if (ViewBag.HasPreviousMonth == true)
+                                        {
+                                            <a asp-action="GenerateMonthlyReport" asp-route-year="@ViewBag.PreviousYear" asp-route-month="@ViewBag.PreviousMonth" class="btn btn-sm btn-outline-secondary mr-1">
+                                                <i class="fas fa-chevron-left mr-1"></i> Previous month
+                                            </a>
+                                        }
+                                        @if (ViewBag.HasNextMonth == true)
+                                        {
+                                            <a asp-action="GenerateMonthlyReport" asp-route-year="@ViewBag.NextYear" asp-route-month="@ViewBag.NextMonth" class="btn btn-sm btn-outline-secondary">
+                                                Next month <i class="fas fa-chevron-right ml-1"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -204,6 +271,13 @@
                     responsive: true
                 });
             }
+            
+            // Handle period change
+            $('#changePeriodBtn').on('click', function() {
+                var year = $('#reportYear').val();
+                var month = $('#reportMonth').val();
+                window.location.href = '@Url.Action("GenerateMonthlyReport", "CentralOps")?year=' + year + '&month=' + month;
+            });
         });
     </script>
 }
