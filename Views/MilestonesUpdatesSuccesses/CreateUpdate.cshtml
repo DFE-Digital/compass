@@ -173,9 +173,10 @@
                     var isWithinCloseDate = DateTime.UtcNow <= closeDate;
                     var canSubmitOrUnsubmit = canSubmit && isWithinCloseDate;
                     var project = ViewBag.Project as Compass.Models.Project;
-                    var currentRagStatus = project?.RagStatus ?? "";
+                    var currentRagStatus = project?.RagStatusLookup?.Name ?? project?.RagStatus ?? "";
                     var currentRagJustification = project?.RagJustification ?? "";
                     var currentPathToGreen = project?.PathToGreen ?? "";
+                    var ragStatuses = ViewBag.RagStatuses as List<Compass.Models.RagStatusLookup> ?? new List<Compass.Models.RagStatusLookup>();
                 }
 
                 <!-- Monthly Update Form -->
@@ -412,14 +413,23 @@
                             <div class="mb-2">
                                 @if (!string.IsNullOrEmpty(currentRagStatus))
                                 {
-                                    var ragClass = currentRagStatus.Trim().Replace(" / ", "-").Replace("/", "-") switch {
-                                        "Red" => "badge badge-red",
-                                        "Amber-Red" => "badge badge-amber-red",
-                                        "Amber" => "badge badge-amber",
-                                        "Amber-Green" => "badge badge-amber-green",
-                                        "Green" => "badge badge-green",
-                                        _ => "badge badge-secondary"
-                                    };
+                                    var currentRagLookup = project?.RagStatusLookup;
+                                    string ragClass;
+                                    if (currentRagLookup != null && !string.IsNullOrEmpty(currentRagLookup.CssClass))
+                                    {
+                                        ragClass = currentRagLookup.CssClass;
+                                    }
+                                    else
+                                    {
+                                        ragClass = currentRagStatus.Trim().Replace(" / ", "-").Replace("/", "-") switch {
+                                            "Red" => "badge badge-red",
+                                            "Amber-Red" => "badge badge-amber-red",
+                                            "Amber" => "badge badge-amber",
+                                            "Amber-Green" => "badge badge-amber-green",
+                                            "Green" => "badge badge-green",
+                                            _ => "badge badge-secondary"
+                                        };
+                                    }
                                     <span class="@ragClass" style="font-size: 1rem;">@currentRagStatus</span>
                                 }
                                 else
@@ -433,45 +443,16 @@
                             <label for="ragStatusSelect">RAG Status <span class="text-danger">*</span></label>
                             <select id="ragStatusSelect" name="ragStatus" class="form-control" required>
                                 <option value="">Select RAG status</option>
-                                @if (currentRagStatus == "Green")
+                                @foreach (var ragStatus in ragStatuses)
                                 {
-                                    <option value="Green" selected>Green</option>
-                                }
-                                else
-                                {
-                                    <option value="Green">Green</option>
-                                }
-                                @if (currentRagStatus == "Amber-Green")
-                                {
-                                    <option value="Amber-Green" selected>Amber-Green</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber-Green">Amber-Green</option>
-                                }
-                                @if (currentRagStatus == "Amber")
-                                {
-                                    <option value="Amber" selected>Amber</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber">Amber</option>
-                                }
-                                @if (currentRagStatus == "Amber-Red")
-                                {
-                                    <option value="Amber-Red" selected>Amber-Red</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber-Red">Amber-Red</option>
-                                }
-                                @if (currentRagStatus == "Red")
-                                {
-                                    <option value="Red" selected>Red</option>
-                                }
-                                else
-                                {
-                                    <option value="Red">Red</option>
+                                    @if (currentRagStatus == ragStatus.Name)
+                                    {
+                                        <option value="@ragStatus.Name" selected>@ragStatus.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@ragStatus.Name">@ragStatus.Name</option>
+                                    }
                                 }
                             </select>
                             <small class="form-text text-muted">Confirm or update the RAG status for this reporting period</small>
