@@ -140,6 +140,7 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(so => so.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.Directorates)
                 .ThenInclude(d => d.DirectorateLookup)
             .Include(p => p.Milestones)
@@ -180,6 +181,13 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         // Check if current user can submit (must be SRO, Service Owner, or Primary Contact)
         var canSubmit = await CanUserSubmitMonthlyUpdate(project);
+
+        // Get RAG statuses from admin settings (RagStatusLookups table)
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
