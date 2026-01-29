@@ -1,0 +1,1818 @@
+@using Compass.Controllers
+@using Compass.ViewModels
+@{
+    ViewData["Title"] = "Monthly Summary V2";
+}
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-secondary {
+        border-left: 0.25rem solid #858796 !important;
+    }
+    .text-xs {
+        font-size: 0.7rem;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+</style>
+
+@{
+    var year = ViewBag.Year as int? ?? DateTime.UtcNow.Year;
+    var month = ViewBag.Month as int? ?? DateTime.UtcNow.Month;
+    var monthName = ViewBag.MonthName as string ?? "";
+    var businessAreaId = ViewBag.BusinessAreaId as int?;
+    var businessAreas = ViewBag.BusinessAreas as List<Compass.Models.BusinessAreaLookup> ?? new List<Compass.Models.BusinessAreaLookup>();
+    var totalActiveProjects = ViewBag.TotalActiveProjects as int? ?? 0;
+    var newProjectsThisMonth = ViewBag.NewProjectsThisMonth as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var milestonesAchieved = ViewBag.MilestonesAchieved as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var monthlyUpdateStats = ViewBag.MonthlyUpdateStats as MonthlyUpdateStats;
+    var ragDistribution = ViewBag.RagDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var priorityDistribution = ViewBag.PriorityDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var upcomingMilestones = ViewBag.UpcomingMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var lateMilestones = ViewBag.LateMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
+    var businessAreaSummaries = ViewBag.BusinessAreaSummaries as List<BusinessAreaSummaryViewModel> ?? new List<BusinessAreaSummaryViewModel>();
+    var projectsWithPathToGreen = ViewBag.ProjectsWithPathToGreen as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var businessAreaRisks = ViewBag.BusinessAreaRisks as List<RiskWithProject> ?? new List<RiskWithProject>();
+    var businessAreaIssues = ViewBag.BusinessAreaIssues as List<IssueWithProject> ?? new List<IssueWithProject>();
+    var businessAreaActiveProjects = ViewBag.BusinessAreaActiveProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var selectedBusinessArea = businessAreaId.HasValue ? businessAreas.FirstOrDefault(ba => ba.Id == businessAreaId.Value) : null;
+    
+    // Month-over-month trends data
+    var prevMonthTotalProjects = ViewBag.PrevMonthTotalProjects as int? ?? 0;
+    var prevMonthNewProjects = ViewBag.PrevMonthNewProjects as int? ?? 0;
+    var prevMonthMilestonesAchieved = ViewBag.PrevMonthMilestonesAchieved as int? ?? 0;
+    var prevMonthUpdateStats = ViewBag.PrevMonthUpdateStats as MonthlyUpdateStats;
+    var prevMonthRagDistribution = ViewBag.PrevMonthRagDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var prevMonthName = ViewBag.PrevMonthName as string ?? "";
+    var projectsWithRagChange = ViewBag.ProjectsWithRagChange as int? ?? 0;
+    var projectsWithStatusChange = ViewBag.ProjectsWithStatusChange as int? ?? 0;
+    var projectsWithPriorityChange = ViewBag.ProjectsWithPriorityChange as int? ?? 0;
+    
+    // Flagship projects
+    var flagshipProjects = ViewBag.FlagshipProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    
+    // Resource summary
+    var totalPermFte = ViewBag.TotalPermFte as decimal? ?? 0;
+    var totalMspFte = ViewBag.TotalMspFte as decimal? ?? 0;
+    var totalFte = ViewBag.TotalFte as decimal? ?? 0;
+    var resourceByBusinessArea = ViewBag.ResourceByBusinessArea as List<object> ?? new List<object>();
+    
+    // Prepare data for charts (like original)
+    var ragData = new {
+        Red = ragDistribution.ContainsKey("Red") ? ragDistribution["Red"] : 0,
+        AmberRed = ragDistribution.ContainsKey("Amber-Red") ? ragDistribution["Amber-Red"] : 0,
+        Amber = ragDistribution.ContainsKey("Amber") ? ragDistribution["Amber"] : 0,
+        AmberGreen = ragDistribution.ContainsKey("Amber-Green") ? ragDistribution["Amber-Green"] : 0,
+        Green = ragDistribution.ContainsKey("Green") ? ragDistribution["Green"] : 0,
+        NotSet = ragDistribution.ContainsKey("Not Set") ? ragDistribution["Not Set"] : 0
+    };
+    
+    var priorityData = new {
+        Critical = priorityDistribution.ContainsKey("Critical") ? priorityDistribution["Critical"] : 0,
+        High = priorityDistribution.ContainsKey("High") ? priorityDistribution["High"] : 0,
+        Medium = priorityDistribution.ContainsKey("Medium") ? priorityDistribution["Medium"] : 0,
+        Low = priorityDistribution.ContainsKey("Low") ? priorityDistribution["Low"] : 0,
+        NotSet = priorityDistribution.ContainsKey("Not Set") ? priorityDistribution["Not Set"] : 0
+    };
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Monthly Summary V2</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="content-header mb-4">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col-sm-6">
+                        <h1 class="m-0" style="font-size: 1.75rem; font-weight: 600;">
+                            @if (businessAreaId.HasValue && selectedBusinessArea != null)
+                            {
+                                @selectedBusinessArea.Name
+                            }
+                            else
+                            {
+                                <text>Monthly report dashboard</text>
+                            }
+                        </h1>
+                        <p class="text-muted mb-0 mt-1" style="font-size: 1.1rem;">@monthName</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Block -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0" style="font-weight: 600;">
+                    <i class="fas fa-filter mr-2"></i>Filters
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="get" asp-controller="CentralOps" asp-action="MonthlySummaryV2">
+                    <div class="row align-items-end">
+                        <div class="col-md-3">
+                            <div class="form-group mb-0">
+                                <label for="year" class="form-label" style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem;">Year</label>
+                                <select name="year" id="year" class="form-control">
+                                    <option value="2026" selected="@(year == 2026)">2026</option>
+                                    <option value="2025" selected="@(year == 2025)">2025</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-0">
+                                <label for="month" class="form-label" style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem;">Month</label>
+                                <select name="month" id="month" class="form-control">
+                                    @for (int m = 1; m <= 12; m++)
+                                    {
+                                        <option value="@m" selected="@(m == month)">@(new DateTime(year, m, 1).ToString("MMMM"))</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-0">
+                                <label for="businessAreaId" class="form-label" style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem;">Business Area</label>
+                                <select name="businessAreaId" id="businessAreaId" class="form-control">
+                                    <option value="">All Areas</option>
+                                    @foreach (var ba in businessAreas)
+                                    {
+                                        <option value="@ba.Id" selected="@(ba.Id == businessAreaId)">@ba.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group mb-0">
+                                <button type="submit" class="btn btn-primary btn-block" style="font-weight: 500;">
+                                    <i class="fas fa-filter mr-1"></i>Apply
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Loading Modal -->
+        <div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-4">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        <h5 class="mt-3 mb-0">Loading report...</h5>
+                        <p class="text-muted mb-0">Please wait while we fetch the data</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Modal -->
+        <div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-4">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        <h5 class="mt-3 mb-0">Loading report...</h5>
+                        <p class="text-muted mb-0">Please wait while we fetch the data</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white">
+                <h3 class="card-title mb-0">Summary for @monthName</h3>
+                @if (ViewBag.NarrativeSummary != null)
+                {
+                    var narrativeSummary = ViewBag.NarrativeSummary as string ?? "";
+                    if (!string.IsNullOrEmpty(narrativeSummary))
+                    {
+                        <div class="card-tools">
+                            <a href="#" class="card-link" data-toggle="modal" data-target="#narrativeModal">
+                                View narrative
+                            </a>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="card border-left-primary shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">All</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@totalActiveProjects</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-project-diagram fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-left-success shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Submitted</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(monthlyUpdateStats?.Submitted ?? 0)</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-check fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-left-warning shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Milestones Achieved</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@milestonesAchieved.Count</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-check-double fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-left-info shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">New</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@newProjectsThisMonth.Count</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-plus-circle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-left-danger shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Late</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(monthlyUpdateStats?.Late ?? 0)</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-times fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-left-secondary shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Not Started</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">@(monthlyUpdateStats?.NotStarted ?? 0)</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-circle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Summary (shown when in business area view) -->
+        @if (businessAreaId.HasValue)
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Business Area Summary</h3>
+                </div>
+                <div class="card-body p-0">
+                    @if (businessAreaSummaries.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2">Business Area</th>
+                                        <th rowspan="2" class="text-center">Total Projects</th>
+                                        <th rowspan="2" class="text-center">New This Month</th>
+                                        <th rowspan="2" class="text-center">Milestones Achieved</th>
+                                        <th rowspan="2" class="text-center">Upcoming</th>
+                                        <th rowspan="2" class="text-center">Late</th>
+                                        <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">RAG Status</th>
+                                        <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">Priority</th>
+                                    </tr>
+                                    <tr>
+                                        <th class="text-center">Red</th>
+                                        <th class="text-center">Amber-Red</th>
+                                        <th class="text-center">Amber-Green</th>
+                                        <th class="text-center">Green</th>
+                                        <th class="text-center">Not Set</th>
+                                        <th class="text-center" style="border-left: 2px solid #dee2e6;">Critical</th>
+                                        <th class="text-center">High</th>
+                                        <th class="text-center">Medium</th>
+                                        <th class="text-center">Low</th>
+                                        <th class="text-center">Not Set</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var summary in businessAreaSummaries)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (summary.BusinessAreaId.HasValue)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlySummaryV2" asp-route-year="@year" asp-route-month="@month" asp-route-businessAreaId="@summary.BusinessAreaId" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @summary.BusinessArea
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    @summary.BusinessArea
+                                                }
+                                            </td>
+                                            <td class="text-center">@summary.TotalProjects</td>
+                                            <td class="text-center">@summary.NewThisMonth</td>
+                                            <td class="text-center">@summary.MilestonesAchieved</td>
+                                            <td class="text-center">@summary.UpcomingMilestones</td>
+                                            <td class="text-center">@summary.LateMilestones</td>
+                                            <!-- RAG Status columns -->
+                                            <td class="text-center"><span class="badge badge-danger">@summary.RedCount</span></td>
+                                            <td class="text-center"><span class="badge" style="background-color: #fd7e14;">@summary.AmberRedCount</span></td>
+                                            <td class="text-center"><span class="badge" style="background-color: #ffeb3b; color: #000;">@summary.AmberGreenCount</span></td>
+                                            <td class="text-center"><span class="badge badge-success">@summary.GreenCount</span></td>
+                                            <td class="text-center"><span class="badge badge-secondary">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
+                                            <!-- Priority columns -->
+                                            <td class="text-center" style="border-left: 2px solid #dee2e6;"><span class="badge badge-danger">@summary.CriticalCount</span></td>
+                                            <td class="text-center"><span class="badge badge-warning">@summary.HighCount</span></td>
+                                            <td class="text-center"><span class="badge badge-info">@summary.MediumCount</span></td>
+                                            <td class="text-center"><span class="badge badge-secondary">@summary.LowCount</span></td>
+                                            <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.CriticalCount - summary.HighCount - summary.MediumCount - summary.LowCount)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">No business area data available</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Month-over-Month Trends -->
+        @if (!string.IsNullOrEmpty(prevMonthName))
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Month-over-Month Trends</h3>
+                    <div class="card-tools">
+                        <small class="text-muted">Comparing @monthName to @prevMonthName</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                <div class="text-muted mb-1" style="font-size: 0.875rem;">Total Projects</div>
+                                <div class="h4 mb-1">@totalActiveProjects</div>
+                                @{
+                                    var projectChange = totalActiveProjects - prevMonthTotalProjects;
+                                    var projectChangePct = prevMonthTotalProjects > 0 ? (projectChange * 100.0 / prevMonthTotalProjects) : 0;
+                                }
+                                @if (projectChange != 0)
+                                {
+                                    <div class="@(projectChange > 0 ? "text-success" : "text-danger")" style="font-size: 0.875rem;">
+                                        @if (projectChange > 0)
+                                        {
+                                            <span>↑ +@projectChange</span>
+                                        }
+                                        else
+                                        {
+                                            <span>↓ @projectChange</span>
+                                        }
+                                        (@(projectChangePct > 0 ? "+" : "")@projectChangePct.ToString("F1")%)
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted" style="font-size: 0.875rem;">No change</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                <div class="text-muted mb-1" style="font-size: 0.875rem;">New Projects</div>
+                                <div class="h4 mb-1">@newProjectsThisMonth.Count</div>
+                                @{
+                                    var newProjectsChange = newProjectsThisMonth.Count - prevMonthNewProjects;
+                                }
+                                @if (newProjectsChange != 0)
+                                {
+                                    <div class="@(newProjectsChange > 0 ? "text-success" : "text-danger")" style="font-size: 0.875rem;">
+                                        @if (newProjectsChange > 0)
+                                        {
+                                            <span>↑ +@newProjectsChange</span>
+                                        }
+                                        else
+                                        {
+                                            <span>↓ @newProjectsChange</span>
+                                        }
+                                        (@(prevMonthNewProjects > 0 ? ((newProjectsChange * 100.0 / prevMonthNewProjects).ToString("F1")) : "N/A")%)
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted" style="font-size: 0.875rem;">No change</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                <div class="text-muted mb-1" style="font-size: 0.875rem;">Milestones Achieved</div>
+                                <div class="h4 mb-1">@milestonesAchieved.Count</div>
+                                @{
+                                    var milestonesChange = milestonesAchieved.Count - prevMonthMilestonesAchieved;
+                                }
+                                @if (milestonesChange != 0)
+                                {
+                                    <div class="@(milestonesChange > 0 ? "text-success" : "text-danger")" style="font-size: 0.875rem;">
+                                        @if (milestonesChange > 0)
+                                        {
+                                            <span>↑ +@milestonesChange</span>
+                                        }
+                                        else
+                                        {
+                                            <span>↓ @milestonesChange</span>
+                                        }
+                                        (@(prevMonthMilestonesAchieved > 0 ? ((milestonesChange * 100.0 / prevMonthMilestonesAchieved).ToString("F1")) : "N/A")%)
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted" style="font-size: 0.875rem;">No change</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                <div class="text-muted mb-1" style="font-size: 0.875rem;">Reports Submitted</div>
+                                <div class="h4 mb-1">@(monthlyUpdateStats?.Submitted ?? 0)</div>
+                                @if (prevMonthUpdateStats != null)
+                                {
+                                    var submittedChange = (monthlyUpdateStats?.Submitted ?? 0) - prevMonthUpdateStats.Submitted;
+                                    var submittedChangePct = prevMonthUpdateStats.Submitted > 0 ? (submittedChange * 100.0 / prevMonthUpdateStats.Submitted) : 0;
+                                    @if (submittedChange != 0)
+                                    {
+                                        <div class="@(submittedChange > 0 ? "text-success" : "text-danger")" style="font-size: 0.875rem;">
+                                            @if (submittedChange > 0)
+                                            {
+                                                <span>↑ +@submittedChange</span>
+                                            }
+                                            else
+                                            {
+                                                <span>↓ @submittedChange</span>
+                                            }
+                                            (@(submittedChangePct > 0 ? "+" : "")@submittedChangePct.ToString("F1")%)
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted" style="font-size: 0.875rem;">No change</div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-muted" style="font-size: 0.875rem;">No previous data</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Flagship Projects Spotlight -->
+        @if (flagshipProjects.Any())
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Flagship Projects</h3>
+                    <div class="card-tools">
+                        <span class="badge badge-primary">@flagshipProjects.Count</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th>Business Area</th>
+                                    <th>RAG Status</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Primary Contact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in flagshipProjects)
+                                {
+                                    var ragStatusRaw = project.RagStatusLookup?.Name ?? project.RagStatus ?? "";
+                                    var currentRag = ragStatusRaw;
+                                    if (!string.IsNullOrWhiteSpace(ragStatusRaw))
+                                    {
+                                        var ragLower = ragStatusRaw.ToLower();
+                                        if (ragLower.Contains("red") && ragLower.Contains("amber")) currentRag = "Amber-Red";
+                                        else if (ragLower.Contains("amber") && ragLower.Contains("green")) currentRag = "Amber-Green";
+                                        else if (ragLower.Contains("red")) currentRag = "Red";
+                                        else if (ragLower.Contains("amber")) currentRag = "Amber";
+                                        else if (ragLower.Contains("green")) currentRag = "Green";
+                                    }
+                                    else
+                                    {
+                                        currentRag = "Not Set";
+                                    }
+                                    var ragBadgeClass = currentRag switch {
+                                        "Red" => "badge-danger",
+                                        "Amber-Red" => "badge",
+                                        "Amber" => "badge-warning",
+                                        "Amber-Green" => "badge",
+                                        "Green" => "badge-success",
+                                        _ => "badge-secondary"
+                                    };
+                                    var ragBadgeStyle = currentRag switch {
+                                        "Amber-Red" => "background-color: #fd7e14;",
+                                        "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                        _ => ""
+                                    };
+                                    var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
+                                    var priorityBadgeClass = priorityName.ToLower() switch {
+                                        var p when p.Contains("critical") => "badge-danger",
+                                        var p when p.Contains("high") => "badge-warning",
+                                        var p when p.Contains("medium") => "badge-info",
+                                        var p when p.Contains("low") => "badge-secondary",
+                                        _ => "badge-light"
+                                    };
+                                    <tr>
+                                        <td>
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                @project.Title
+                                            </a>
+                                            <br />
+                                            <small class="text-muted">DFE-DDT-@project.Id</small>
+                                        </td>
+                                        <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                        <td>
+                                            <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge @priorityBadgeClass">@priorityName</span>
+                                        </td>
+                                        <td>@project.Status</td>
+                                        <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Resource Summary -->
+        @if (totalFte > 0 || resourceByBusinessArea.Any())
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Resource Summary</h3>
+                </div>
+                <div class="card-body">
+                    @if (businessAreaId.HasValue)
+                    {
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">Permanent FTE</div>
+                                    <div class="h4 mb-0">@totalPermFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">MSP FTE</div>
+                                    <div class="h4 mb-0">@totalMspFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">Total FTE</div>
+                                    <div class="h4 mb-0">@totalFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">Total Permanent FTE</div>
+                                    <div class="h4 mb-0">@totalPermFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">Total MSP FTE</div>
+                                    <div class="h4 mb-0">@totalMspFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3" style="border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                                    <div class="text-muted mb-1" style="font-size: 0.875rem;">Total FTE</div>
+                                    <div class="h4 mb-0">@totalFte.ToString("F1")</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        @if (resourceByBusinessArea.Any())
+                        {
+                            <div class="mb-3">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#resourceByBusinessAreaTable" aria-expanded="false" aria-controls="resourceByBusinessAreaTable">
+                                    <i class="fas fa-chevron-down" id="resourceTableToggleIcon"></i> View by Business Area
+                                </button>
+                            </div>
+                            <div class="collapse" id="resourceByBusinessAreaTable">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Business Area</th>
+                                                <th class="text-center">Projects</th>
+                                                <th class="text-center">Permanent FTE</th>
+                                                <th class="text-center">MSP FTE</th>
+                                                <th class="text-center">Total FTE</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (dynamic item in resourceByBusinessArea)
+                                            {
+                                                var businessAreaProjects = item.Projects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+                                                <tr>
+                                                    <td>
+                                                        @if (item.BusinessAreaId != null)
+                                                        {
+                                                            <a href="#" class="business-area-resource-link" 
+                                                               data-business-area-id="@item.BusinessAreaId"
+                                                               data-business-area-name="@item.BusinessAreaName"
+                                                               data-project-count="@item.ProjectCount"
+                                                               data-total-perm-fte="@item.TotalPermFte.ToString("F1")"
+                                                               data-total-msp-fte="@item.TotalMspFte.ToString("F1")"
+                                                               data-total-fte="@item.TotalFte.ToString("F1")"
+                                                               style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                                @item.BusinessAreaName
+                                                            </a>
+                                                            <input type="hidden" class="business-area-projects-data" 
+                                                                   data-business-area-id="@item.BusinessAreaId"
+                                                                   value="@System.Text.Json.JsonSerializer.Serialize(businessAreaProjects.Select(p => new { Id = p.Id, Title = p.Title, ProjectCode = $"DFE-DDT-{p.Id}", TotalPermFte = p.TotalPermFte ?? 0, TotalMspFte = p.TotalMspFte ?? 0, TotalFte = (p.TotalPermFte ?? 0) + (p.TotalMspFte ?? 0) }).ToList())" />
+                                                        }
+                                                        else
+                                                        {
+                                                            @item.BusinessAreaName
+                                                        }
+                                                    </td>
+                                                    <td class="text-center">@item.ProjectCount</td>
+                                                    <td class="text-center">@item.TotalPermFte.ToString("F1")</td>
+                                                    <td class="text-center">@item.TotalMspFte.ToString("F1")</td>
+                                                    <td class="text-center"><strong>@item.TotalFte.ToString("F1")</strong></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- RAG and Priority Distribution Charts -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">RAG Status Distribution</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="ragStatusChart"></canvas>
+                        </div>
+                        <div class="mt-3">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green + ragData.NotSet;
+                                            var ragItems = new[] {
+                                                new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
+                                                new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
+                                                new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
+                                                new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
+                                                new { Label = "Green", Count = ragData.Green, Color = "#28a745" },
+                                                new { Label = "Not Set", Count = ragData.NotSet, Color = "#6c757d" }
+                                            };
+                                        }
+                                        @foreach (var item in ragItems)
+                                        {
+                                            var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                                            <tr>
+                                                <td>
+                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" || item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                </td>
+                                                <td>@item.Count</td>
+                                                <td>@percentage%</td>
+                                            </tr>
+                                        }
+                                        @if (ragTotal > 0)
+                                        {
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@ragTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Priority Distribution</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="priorityChart"></canvas>
+                        </div>
+                        <div class="mt-3">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Priority</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
+                                            var priorityItems = new[] {
+                                                new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
+                                                new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
+                                                new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
+                                                new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
+                                                new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
+                                            };
+                                        }
+                                        @foreach (var item in priorityItems)
+                                        {
+                                            var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                                            <tr>
+                                                <td>
+                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                </td>
+                                                <td>@item.Count</td>
+                                                <td>@percentage%</td>
+                                            </tr>
+                                        }
+                                        @if (priorityTotal > 0)
+                                        {
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@priorityTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity This Month -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">New Projects This Month</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (newProjectsThisMonth.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Business Area</th>
+                                            <th>Created</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in newProjectsThisMonth)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="#" class="project-link" data-project-id="@project.Id" data-project-title="@project.Title" data-project-code="DFE-DDT-@project.Id" data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")" data-created="@project.CreatedAt.ToString("dd MMM yyyy")" data-primary-contact="@(project.PrimaryContactUser?.Name ?? "-")" style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                        @project.Title
+                                                    </a>
+                                                    <br />
+                                                    <small class="text-muted">DFE-DDT-@project.Id</small>
+                                                </td>
+                                                <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                                <td>@project.CreatedAt.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No new projects added this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Milestones Achieved</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (milestonesAchieved.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in milestonesAchieved)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="#" class="milestone-link" data-milestone-id="@item.Milestone.Id" data-milestone-name="@item.Milestone.Name" data-project-id="@item.Project.Id" data-project-title="@item.Project.Title" data-date="@item.Milestone.ActualDate?.ToString("dd MMM yyyy")" data-primary-contact="@(item.Project.PrimaryContactUser?.Name ?? "-")" style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.ActualDate?.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No milestones achieved this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming and Late Milestones -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Upcoming Milestones</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (upcomingMilestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Due Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in upcomingMilestones)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="#" class="milestone-link" data-milestone-id="@item.Milestone.Id" data-milestone-name="@item.Milestone.Name" data-project-id="@item.Project.Id" data-project-title="@item.Project.Title" data-date="@item.Milestone.DueDate.ToString("dd MMM yyyy")" data-primary-contact="@(item.Project.PrimaryContactUser?.Name ?? "-")" style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No upcoming milestones for this month</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Late Milestones</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (lateMilestones.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Milestone</th>
+                                            <th>Project</th>
+                                            <th>Due Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in lateMilestones)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="#" class="milestone-link" data-milestone-id="@item.Milestone.Id" data-milestone-name="@item.Milestone.Name" data-project-id="@item.Project.Id" data-project-title="@item.Project.Title" data-date="@item.Milestone.DueDate.ToString("dd MMM yyyy")" data-primary-contact="@(item.Project.PrimaryContactUser?.Name ?? "-")" style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                        @item.Milestone.Name
+                                                    </a>
+                                                </td>
+                                                <td>@item.Project.Title</td>
+                                                <td>@item.Milestone.DueDate.ToString("dd MMM yyyy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">No late milestones</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Projects for Selected Business Area -->
+        @if (businessAreaId.HasValue && selectedBusinessArea != null)
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Active Projects - @selectedBusinessArea.Name</h3>
+                </div>
+                <div class="card-body p-0">
+                    @if (businessAreaActiveProjects.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>RAG Status</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Primary Contact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in businessAreaActiveProjects)
+                                    {
+                                        var ragStatusRaw = project.RagStatusLookup?.Name ?? project.RagStatus ?? "";
+                                        var currentRag = ragStatusRaw;
+                                        // Normalize RAG status
+                                        if (!string.IsNullOrWhiteSpace(ragStatusRaw))
+                                        {
+                                            var ragLower = ragStatusRaw.ToLower();
+                                            if (ragLower.Contains("red") && ragLower.Contains("amber")) currentRag = "Amber-Red";
+                                            else if (ragLower.Contains("amber") && ragLower.Contains("green")) currentRag = "Amber-Green";
+                                            else if (ragLower.Contains("red")) currentRag = "Red";
+                                            else if (ragLower.Contains("amber")) currentRag = "Amber";
+                                            else if (ragLower.Contains("green")) currentRag = "Green";
+                                        }
+                                        else
+                                        {
+                                            currentRag = "Not Set";
+                                        }
+                                        var ragBadgeClass = currentRag switch {
+                                            "Red" => "badge-danger",
+                                            "Amber-Red" => "badge",
+                                            "Amber" => "badge-warning",
+                                            "Amber-Green" => "badge",
+                                            "Green" => "badge-success",
+                                            _ => "badge-secondary"
+                                        };
+                                        var ragBadgeStyle = currentRag switch {
+                                            "Amber-Red" => "background-color: #fd7e14;",
+                                            "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                            _ => ""
+                                        };
+                                        var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
+                                        var priorityBadgeClass = priorityName.ToLower() switch {
+                                            var p when p.Contains("critical") => "badge-danger",
+                                            var p when p.Contains("high") => "badge-warning",
+                                            var p when p.Contains("medium") => "badge-info",
+                                            var p when p.Contains("low") => "badge-secondary",
+                                            _ => "badge-light"
+                                        };
+                                        var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
+                                        var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
+                                        var aimText = project.Aim ?? "Not provided";
+                                        var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                        var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                        <tr>
+                                            <td>
+                                                <a href="#" class="project-detail-link" 
+                                                   data-project-id="@project.Id" 
+                                                   data-project-title="@project.Title" 
+                                                   data-project-code="DFE-DDT-@project.Id"
+                                                   data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")"
+                                                   data-rag-status="@currentRag"
+                                                   data-priority="@priorityName"
+                                                   data-status="@project.Status"
+                                                   data-primary-contact="@(project.PrimaryContactUser?.Name ?? "-")"
+                                                   data-aim="@aimEncoded"
+                                                   data-problem-statement="@problemStatementEncoded"
+                                                   style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                    @project.Title
+                                                </a>
+                                                <br />
+                                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge @priorityBadgeClass">@priorityName</span>
+                                            </td>
+                                            <td>@project.Status</td>
+                                            <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">No active projects found for this business area</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Business Area Summary (shown when NOT in business area view) -->
+        @if (!businessAreaId.HasValue)
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Business Area Summary</h3>
+                </div>
+                <div class="card-body p-0">
+                    @if (businessAreaSummaries.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2">Business Area</th>
+                                        <th rowspan="2" class="text-center">Total Projects</th>
+                                        <th rowspan="2" class="text-center">New This Month</th>
+                                        <th rowspan="2" class="text-center">Milestones Achieved</th>
+                                        <th rowspan="2" class="text-center">Upcoming</th>
+                                        <th rowspan="2" class="text-center">Late</th>
+                                        <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">RAG Status</th>
+                                        <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">Priority</th>
+                                    </tr>
+                                    <tr>
+                                        <th class="text-center">Red</th>
+                                        <th class="text-center">Amber-Red</th>
+                                        <th class="text-center">Amber-Green</th>
+                                        <th class="text-center">Green</th>
+                                        <th class="text-center">Not Set</th>
+                                        <th class="text-center" style="border-left: 2px solid #dee2e6;">Critical</th>
+                                        <th class="text-center">High</th>
+                                        <th class="text-center">Medium</th>
+                                        <th class="text-center">Low</th>
+                                        <th class="text-center">Not Set</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var summary in businessAreaSummaries)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (summary.BusinessAreaId.HasValue)
+                                                {
+                                                    <a asp-controller="CentralOps" asp-action="MonthlySummaryV2" asp-route-year="@year" asp-route-month="@month" asp-route-businessAreaId="@summary.BusinessAreaId" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        @summary.BusinessArea
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    @summary.BusinessArea
+                                                }
+                                            </td>
+                                            <td class="text-center">@summary.TotalProjects</td>
+                                            <td class="text-center">@summary.NewThisMonth</td>
+                                            <td class="text-center">@summary.MilestonesAchieved</td>
+                                            <td class="text-center">@summary.UpcomingMilestones</td>
+                                            <td class="text-center">@summary.LateMilestones</td>
+                                            <!-- RAG Status columns -->
+                                            <td class="text-center"><span class="badge badge-danger">@summary.RedCount</span></td>
+                                            <td class="text-center"><span class="badge" style="background-color: #fd7e14;">@summary.AmberRedCount</span></td>
+                                            <td class="text-center"><span class="badge" style="background-color: #ffeb3b; color: #000;">@summary.AmberGreenCount</span></td>
+                                            <td class="text-center"><span class="badge badge-success">@summary.GreenCount</span></td>
+                                            <td class="text-center"><span class="badge badge-secondary">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
+                                            <!-- Priority columns -->
+                                            <td class="text-center" style="border-left: 2px solid #dee2e6;"><span class="badge badge-danger">@summary.CriticalCount</span></td>
+                                            <td class="text-center"><span class="badge badge-warning">@summary.HighCount</span></td>
+                                            <td class="text-center"><span class="badge badge-info">@summary.MediumCount</span></td>
+                                            <td class="text-center"><span class="badge badge-secondary">@summary.LowCount</span></td>
+                                            <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.CriticalCount - summary.HighCount - summary.MediumCount - summary.LowCount)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">No business area data available</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Path to Green -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white">
+                <h3 class="card-title mb-0">Projects with Path to Green</h3>
+            </div>
+            <div class="card-body p-0">
+                @if (projectsWithPathToGreen.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th>Business Area</th>
+                                    <th>Current RAG</th>
+                                    <th>Path to Green</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in projectsWithPathToGreen)
+                                {
+                                    var ragStatusRaw = project.RagStatusLookup?.Name ?? project.RagStatus ?? "";
+                                    var currentRag = ragStatusRaw;
+                                    // Normalize RAG status
+                                    if (!string.IsNullOrWhiteSpace(ragStatusRaw))
+                                    {
+                                        var ragLower = ragStatusRaw.ToLower();
+                                        if (ragLower.Contains("red") && ragLower.Contains("amber")) currentRag = "Amber-Red";
+                                        else if (ragLower.Contains("amber") && ragLower.Contains("green")) currentRag = "Amber-Green";
+                                        else if (ragLower.Contains("red")) currentRag = "Red";
+                                        else if (ragLower.Contains("amber")) currentRag = "Amber";
+                                        else if (ragLower.Contains("green")) currentRag = "Green";
+                                    }
+                                    else
+                                    {
+                                        currentRag = "Not Set";
+                                    }
+                                    var ragBadgeClass = currentRag switch {
+                                        "Red" => "badge-danger",
+                                        "Amber-Red" => "badge",
+                                        "Amber" => "badge-warning",
+                                        "Amber-Green" => "badge",
+                                        "Green" => "badge-success",
+                                        _ => "badge-secondary"
+                                    };
+                                    var ragBadgeStyle = currentRag switch {
+                                        "Amber-Red" => "background-color: #fd7e14;",
+                                        "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                        _ => ""
+                                    };
+                                    var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
+                                    var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
+                                    var aimText = project.Aim ?? "Not provided";
+                                    var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                    var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
+                                    var pathToGreenEncoded = (project.PathToGreen ?? "").Replace("\"", "&quot;").Replace("'", "&#39;");
+                                    <tr>
+                                        <td>
+                                            <a href="#" class="project-detail-link" 
+                                               data-project-id="@project.Id" 
+                                               data-project-title="@project.Title" 
+                                               data-project-code="DFE-DDT-@project.Id"
+                                               data-business-area="@(project.BusinessAreaLookup?.Name ?? "-")"
+                                               data-rag-status="@currentRag"
+                                               data-path-to-green="@pathToGreenEncoded"
+                                               data-aim="@aimEncoded"
+                                               data-problem-statement="@problemStatementEncoded"
+                                               style="color: #005ea5; text-decoration: none; font-weight: 600; cursor: pointer;">
+                                                @project.Title
+                                            </a>
+                                            <br />
+                                            <small class="text-muted">DFE-DDT-@project.Id</small>
+                                        </td>
+                                        <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                        <td>
+                                            <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
+                                        </td>
+                                        <td>@project.PathToGreen</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">No projects with path to green defined</div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Narrative Summary Modal -->
+<div class="modal fade" id="narrativeModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Summary & Insights - @monthName</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (ViewBag.NarrativeSummary != null)
+                {
+                    var narrativeSummary = ViewBag.NarrativeSummary as string ?? "";
+                    if (!string.IsNullOrEmpty(narrativeSummary))
+                    {
+                        <div style="line-height: 1.6;">
+                            @Html.Raw(narrativeSummary)
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No narrative summary available for this period.</p>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">No narrative summary available for this period.</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Project Details Modal -->
+<div class="modal fade" id="projectModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="projectModalTitle">Project Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Project Information</h6>
+                        <table class="table table-sm table-borderless mb-3">
+                            <tr>
+                                <td class="text-muted" style="width: 30%;">Project:</td>
+                                <td id="projectModalName" class="font-weight-bold"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Code:</td>
+                                <td id="projectModalCode"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Business Area:</td>
+                                <td id="projectModalBusinessArea"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">RAG Status:</td>
+                                <td id="projectModalRagStatus"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Priority:</td>
+                                <td id="projectModalPriority"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Status:</td>
+                                <td id="projectModalStatus"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Primary Contact:</td>
+                                <td id="projectModalContact"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Aim</h6>
+                        <div id="projectModalAim" class="mb-3" style="white-space: pre-wrap; word-wrap: break-word;"></div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Problem Statement</h6>
+                        <div id="projectModalProblemStatement" style="white-space: pre-wrap; word-wrap: break-word;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <a id="projectModalLink" href="#" class="btn btn-primary">Go to Project</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Business Area Resource Details Modal -->
+<div class="modal fade" id="businessAreaResourceModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="businessAreaResourceModalTitle">Business Area Resource Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Resource Summary</h6>
+                        <table class="table table-sm table-borderless mb-3">
+                            <tr>
+                                <td class="text-muted" style="width: 30%;">Business Area:</td>
+                                <td id="businessAreaResourceModalName" class="font-weight-bold"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Total Projects:</td>
+                                <td id="businessAreaResourceModalProjectCount"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Permanent FTE:</td>
+                                <td id="businessAreaResourceModalPermFte"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">MSP FTE:</td>
+                                <td id="businessAreaResourceModalMspFte"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Total FTE:</td>
+                                <td id="businessAreaResourceModalTotalFte" class="font-weight-bold"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold">Projects</h6>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th class="text-center">Permanent FTE</th>
+                                        <th class="text-center">MSP FTE</th>
+                                        <th class="text-center">Total FTE</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="businessAreaResourceModalProjectsList">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <a id="businessAreaResourceModalLink" href="#" class="btn btn-primary">View Business Area</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Milestone Details Modal -->
+<div class="modal fade" id="milestoneModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="milestoneModalTitle">Milestone Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold">Milestone Information</h6>
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="text-muted" style="width: 40%;">Milestone:</td>
+                                <td id="milestoneModalName" class="font-weight-bold"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Project:</td>
+                                <td id="milestoneModalProject"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Date:</td>
+                                <td id="milestoneModalDate"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Primary Contact:</td>
+                                <td id="milestoneModalContact"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <a id="milestoneModalLink" href="#" class="btn btn-primary">Go to Project</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            // Show loading modal when form is submitted
+            $('#filterForm').on('submit', function() {
+                $('#loadingModal').modal('show');
+            });
+            
+            // Project link click handler (for new projects)
+            $('.project-link').on('click', function(e) {
+                e.preventDefault();
+                var projectId = $(this).data('project-id');
+                var projectTitle = $(this).data('project-title');
+                var projectCode = $(this).data('project-code');
+                var businessArea = $(this).data('business-area');
+                var created = $(this).data('created');
+                var primaryContact = $(this).data('primary-contact');
+                
+                $('#projectModalTitle').text(projectTitle);
+                $('#projectModalName').text(projectTitle);
+                $('#projectModalCode').text(projectCode);
+                $('#projectModalBusinessArea').text(businessArea);
+                $('#projectModalCreated').text(created);
+                $('#projectModalContact').text(primaryContact);
+                $('#projectModalLink').attr('href', '/Project/Details/' + projectId);
+                
+                $('#projectModal').modal('show');
+            });
+            
+            // Project detail link click handler (for active projects and path to green)
+            $(document).on('click', '.project-detail-link', function(e) {
+                e.preventDefault();
+                var $link = $(this);
+                var projectId = $link.data('project-id');
+                var projectTitle = $link.data('project-title');
+                var projectCode = $link.data('project-code');
+                var businessArea = $link.data('business-area');
+                var ragStatus = $link.data('rag-status');
+                var priority = $link.data('priority');
+                var status = $link.data('status');
+                var primaryContact = $link.data('primary-contact');
+                var aim = $link.attr('data-aim') || 'Not provided';
+                var problemStatement = $link.attr('data-problem-statement') || 'Not provided';
+                var pathToGreen = $link.attr('data-path-to-green');
+                
+                // Decode HTML entities
+                function decodeHtml(html) {
+                    var txt = document.createElement("textarea");
+                    txt.innerHTML = html;
+                    return txt.value;
+                }
+                
+                aim = decodeHtml(aim);
+                problemStatement = decodeHtml(problemStatement);
+                
+                // Determine RAG badge class
+                var ragBadgeClass = 'badge-secondary';
+                var ragBadgeStyle = '';
+                if (ragStatus === 'Red') ragBadgeClass = 'badge-danger';
+                else if (ragStatus === 'Amber-Red') { ragBadgeClass = 'badge'; ragBadgeStyle = 'background-color: #fd7e14;'; }
+                else if (ragStatus === 'Amber') ragBadgeClass = 'badge-warning';
+                else if (ragStatus === 'Amber-Green') { ragBadgeClass = 'badge'; ragBadgeStyle = 'background-color: #ffeb3b; color: #000;'; }
+                else if (ragStatus === 'Green') ragBadgeClass = 'badge-success';
+                
+                $('#projectModalTitle').text(projectTitle);
+                $('#projectModalName').text(projectTitle);
+                $('#projectModalCode').text(projectCode);
+                $('#projectModalBusinessArea').text(businessArea);
+                $('#projectModalRagStatus').html('<span class="badge ' + ragBadgeClass + '" style="' + ragBadgeStyle + '">' + ragStatus + '</span>');
+                $('#projectModalPriority').text(priority || 'Not Set');
+                $('#projectModalStatus').text(status || 'Active');
+                $('#projectModalContact').text(primaryContact || '-');
+                
+                // Display Aim
+                if (aim && aim !== 'Not provided') {
+                    $('#projectModalAim').text(aim);
+                } else {
+                    $('#projectModalAim').html('<em class="text-muted">Not provided</em>');
+                }
+                
+                // Display Problem Statement
+                if (problemStatement && problemStatement !== 'Not provided') {
+                    $('#projectModalProblemStatement').text(problemStatement);
+                } else {
+                    $('#projectModalProblemStatement').html('<em class="text-muted">Not provided</em>');
+                }
+                
+                $('#projectModalLink').attr('href', '/Project/Details/' + projectId);
+                
+                $('#projectModal').modal('show');
+            });
+            
+            // Business area resource link click handler
+            $(document).on('click', '.business-area-resource-link', function(e) {
+                e.preventDefault();
+                var $link = $(this);
+                var businessAreaId = $link.data('business-area-id');
+                var businessAreaName = $link.data('business-area-name');
+                var projectCount = $link.data('project-count');
+                var totalPermFte = $link.data('total-perm-fte');
+                var totalMspFte = $link.data('total-msp-fte');
+                var totalFte = $link.data('total-fte');
+                
+                // Get projects data from hidden input
+                var $hiddenInput = $('.business-area-projects-data[data-business-area-id="' + businessAreaId + '"]');
+                var projectsJson = $hiddenInput.val();
+                var projects = [];
+                
+                try {
+                    projects = JSON.parse(projectsJson);
+                } catch (e) {
+                    console.error('Error parsing projects JSON:', e);
+                }
+                
+                $('#businessAreaResourceModalTitle').text(businessAreaName + ' - Resource Details');
+                $('#businessAreaResourceModalName').text(businessAreaName);
+                $('#businessAreaResourceModalProjectCount').text(projectCount);
+                $('#businessAreaResourceModalPermFte').text(totalPermFte);
+                $('#businessAreaResourceModalMspFte').text(totalMspFte);
+                $('#businessAreaResourceModalTotalFte').text(totalFte);
+                
+                // Populate projects list
+                var $projectsList = $('#businessAreaResourceModalProjectsList');
+                $projectsList.empty();
+                
+                if (projects.length > 0) {
+                    projects.forEach(function(project) {
+                        var row = '<tr>' +
+                            '<td><a href="/Project/Details/' + project.Id + '" style="color: #005ea5; text-decoration: none; font-weight: 600;">' + 
+                            project.Title + '</a><br><small class="text-muted">' + project.ProjectCode + '</small></td>' +
+                            '<td class="text-center">' + project.TotalPermFte.toFixed(1) + '</td>' +
+                            '<td class="text-center">' + project.TotalMspFte.toFixed(1) + '</td>' +
+                            '<td class="text-center"><strong>' + project.TotalFte.toFixed(1) + '</strong></td>' +
+                            '</tr>';
+                        $projectsList.append(row);
+                    });
+                } else {
+                    $projectsList.append('<tr><td colspan="4" class="text-center text-muted">No projects found</td></tr>');
+                }
+                
+                $('#businessAreaResourceModalLink').attr('href', '/CentralOps/MonthlySummaryV2?year=@year&month=@month&businessAreaId=' + businessAreaId);
+                
+                $('#businessAreaResourceModal').modal('show');
+            });
+            
+            // Toggle icon for resource table collapse
+            $('#resourceByBusinessAreaTable').on('show.bs.collapse', function() {
+                $('#resourceTableToggleIcon').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            });
+            $('#resourceByBusinessAreaTable').on('hide.bs.collapse', function() {
+                $('#resourceTableToggleIcon').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            });
+            
+            // Milestone link click handler
+            $('.milestone-link').on('click', function(e) {
+                e.preventDefault();
+                var milestoneName = $(this).data('milestone-name');
+                var projectId = $(this).data('project-id');
+                var projectTitle = $(this).data('project-title');
+                var date = $(this).data('date');
+                var primaryContact = $(this).data('primary-contact');
+                
+                $('#milestoneModalTitle').text(milestoneName);
+                $('#milestoneModalName').text(milestoneName);
+                $('#milestoneModalProject').text(projectTitle);
+                $('#milestoneModalDate').text(date);
+                $('#milestoneModalContact').text(primaryContact);
+                $('#milestoneModalLink').attr('href', '/Project/Details/' + projectId);
+                
+                $('#milestoneModal').modal('show');
+            });
+            
+            // RAG Status Donut Chart
+            var ragCtx = document.getElementById('ragStatusChart');
+            if (ragCtx) {
+                new Chart(ragCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green', 'Not Set'],
+                        datasets: [{
+                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green, @ragData.NotSet],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#ffeb3b',
+                                '#28a745',
+                                '#6c757d'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Priority Distribution Donut Chart
+            var priorityCtx = document.getElementById('priorityChart');
+            if (priorityCtx) {
+                new Chart(priorityCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Critical', 'High', 'Medium', 'Low', 'Not Set'],
+                        datasets: [{
+                            data: [@priorityData.Critical, @priorityData.High, @priorityData.Medium, @priorityData.Low, @priorityData.NotSet],
+                            backgroundColor: [
+                                '#dc3545',
+                                '#fd7e14',
+                                '#ffc107',
+                                '#6c757d',
+                                '#e9ecef'
+                            ],
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var label = context.label || '';
+                                        var value = context.parsed || 0;
+                                        var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                        return label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}
