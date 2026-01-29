@@ -457,7 +457,7 @@ public class CentralOpsController : Controller
     {
         try
         {
-            // Get all projects with related data
+            // Get all active projects with related data (exclude Cancelled and Completed)
             var allProjects = await _context.Projects
                 .Include(p => p.MonthlyUpdates)
                 .Include(p => p.PrimaryContactUser)
@@ -465,7 +465,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed")
                 .ToListAsync();
 
             // Determine current reporting period using 10-day rule
@@ -641,7 +641,7 @@ public class CentralOpsController : Controller
             var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(filterYear, filterMonth);
             var monthName = new DateTime(filterYear, filterMonth, 1).ToString("MMMM yyyy");
 
-            // Get all projects with submitted monthly updates for the period
+            // Get all active projects with submitted monthly updates for the period (exclude Cancelled and Completed)
             var projectsWithUpdates = await _context.Projects
                 .Include(p => p.MonthlyUpdates)
                     .ThenInclude(mu => mu.MonthlyUpdateNarratives)
@@ -650,7 +650,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed")
                 .Select(p => new
                 {
                     Project = p,
@@ -1381,13 +1381,13 @@ public class CentralOpsController : Controller
     {
         try
         {
-            // Get all projects with monthly updates
+            // Get all active projects with monthly updates (exclude Cancelled and Completed)
             var allProjects = await _context.Projects
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.MonthlyUpdates)
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed")
                 .ToListAsync();
 
             var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
@@ -1499,7 +1499,7 @@ public class CentralOpsController : Controller
     {
         try
         {
-            // Get all projects with monthly updates
+            // Get all active projects with monthly updates (exclude Cancelled and Completed)
             var allProjects = await _context.Projects
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
@@ -1507,7 +1507,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.MonthlyUpdates)
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed")
                 .ToListAsync();
 
             var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
@@ -1590,7 +1590,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Milestones)
-                .Where(p => !p.IsDeleted);
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
             // Apply filters
             if (!string.IsNullOrEmpty(search))
@@ -1706,7 +1706,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
-                .Where(p => !p.IsDeleted);
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
             // Apply filters (same as ManageWork)
             if (!string.IsNullOrEmpty(search))
@@ -2011,7 +2011,7 @@ public class CentralOpsController : Controller
             if (!priority.HasValue)
                 priority = HttpContext.Session.GetInt32(sessionKeyPriority);
 
-            // Build query with all necessary includes (same as ExportManageWork)
+            // Build query with all necessary includes (same as ExportManageWork) - exclude Cancelled and Completed
             var query = _context.Projects
                 .Include(p => p.DeliveryPriority)
                 .Include(p => p.BusinessAreaLookup)
@@ -2033,7 +2033,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
-                .Where(p => !p.IsDeleted);
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
             // Apply filters (same as AllWork)
             if (!string.IsNullOrEmpty(search))
@@ -3458,7 +3458,7 @@ public class CentralOpsController : Controller
             var nextMonth = reportMonth == 12 ? 1 : reportMonth + 1;
             var nextYear = reportMonth == 12 ? reportYear + 1 : reportYear;
             
-            // Get all projects
+            // Get all active projects (exclude Cancelled and Completed)
             var allProjects = await _context.Projects
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
@@ -3467,7 +3467,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.Risks)
                 .Include(p => p.Issues)
                 .Include(p => p.MonthlyUpdates)
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed")
                 .ToListAsync();
             
             // 1. New projects added this month
