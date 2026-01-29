@@ -2351,12 +2351,14 @@ public class CentralOpsController : Controller
     }
 
     // GET: CentralOps/WorkItemDetails/5
-    public async Task<IActionResult> WorkItemDetails(int? id)
+    public async Task<IActionResult> WorkItemDetails(int? id, string? tab)
     {
         if (id == null)
         {
             return NotFound();
         }
+        
+        ViewBag.CurrentTab = tab ?? "overview";
 
         var project = await _context.Projects
             .Include(p => p.DeliveryPriority)
@@ -2420,6 +2422,197 @@ public class CentralOpsController : Controller
             .ThenBy(r => r.Name)
             .ToListAsync();
         ViewBag.Statuses = new[] { "Active", "Paused", "Completed", "Cancelled" };
+
+        // Get audit logs for the project and related entities
+        var projectIdString = id.Value.ToString();
+        
+        // Get related entity IDs first for better performance
+        var milestoneIds = await _context.Milestones
+            .Where(m => m.ProjectId == id.Value && !m.IsDeleted)
+            .Select(m => m.Id.ToString())
+            .ToListAsync();
+            
+        var monthlyUpdateIds = await _context.ProjectMonthlyUpdates
+            .Where(mu => mu.ProjectId == id.Value)
+            .Select(mu => mu.Id.ToString())
+            .ToListAsync();
+            
+        var narrativeIds = await _context.MonthlyUpdateNarratives
+            .Include(n => n.ProjectMonthlyUpdate)
+            .Where(n => n.ProjectMonthlyUpdate.ProjectId == id.Value)
+            .Select(n => n.Id.ToString())
+            .ToListAsync();
+            
+        var statusUpdateIds = await _context.ProjectStatusUpdates
+            .Where(psu => psu.ProjectId == id.Value)
+            .Select(psu => psu.Id.ToString())
+            .ToListAsync();
+        
+        // Only get audit logs for THIS specific project - ensure EntityId matches exactly
+        // Filter Project entities strictly by EntityId to avoid showing other projects
+        var auditLogs = await _context.AuditLogs
+            .Where(a => 
+                (a.Entity == "Project" && a.EntityId == projectIdString) ||
+                (a.Entity == "Milestone" && milestoneIds.Contains(a.EntityId)) ||
+                (a.Entity == "ProjectMonthlyUpdate" && monthlyUpdateIds.Contains(a.EntityId)) ||
+                (a.Entity == "MonthlyUpdateNarrative" && narrativeIds.Contains(a.EntityId)) ||
+                (a.Entity == "ProjectStatusUpdate" && statusUpdateIds.Contains(a.EntityId))
+            )
+            .OrderByDescending(a => a.ChangedUtc)
+            .Take(500) // Limit to most recent 500 entries
+            .ToListAsync();
+        
+        // Additional safety check: filter out any Project audit logs that don't match this project
+        // This ensures we never show audit logs from other projects
+        auditLogs = auditLogs
+            .Where(a => a.Entity != "Project" || a.EntityId == projectIdString)
+            .ToList();
+
+        // Get direct creation/update info from entities that track it (excluding project creation to avoid duplicates)
+        var entityActions = new List<dynamic>();
+
+        // Milestones
+        var milestones = await _context.Milestones
+            .Where(m => m.ProjectId == id.Value && !m.IsDeleted)
+            .ToListAsync();
+        foreach (var milestone in milestones)
+        {
+            if (milestone.CreatedAt != default)
+            {
+                entityActions.Add(new
+                {
+                    Date = milestone.CreatedAt,
+                    Action = "Create",
+                    Entity = "Milestone",
+                    EntityId = milestone.Id.ToString(),
+                    EntityReference = milestone.Name,
+                    ChangedBy = "System",
+                    ChangedByEmail = "",
+                    ChangedByUserId = "",
+                    BeforeJson = (string?)null,
+                    AfterJson = (string?)null
+                });
+            }
+        }
+
+        // Monthly Updates
+        var monthlyUpdates = await _context.ProjectMonthlyUpdates
+            .Where(mu => mu.ProjectId == id.Value)
+            .ToListAsync();
+        foreach (var update in monthlyUpdates)
+        {
+            if (update.CreatedAt != default)
+            {
+                var createdBy = update.CreatedByName ?? update.CreatedByUser?.Name ?? update.CreatedByEmail ?? "Unknown";
+                var createdByEmail = update.CreatedByEmail ?? update.CreatedByUser?.Email ?? "";
+                entityActions.Add(new
+                {
+                    Date = update.CreatedAt,
+                    Action = "Create",
+                    Entity = "ProjectMonthlyUpdate",
+                    EntityId = update.Id.ToString(),
+                    EntityReference = $"Monthly Update - {new DateTime(update.Year, update.Month, 1):MMMM yyyy}",
+                    ChangedBy = createdBy,
+                    ChangedByEmail = createdByEmail,
+                    ChangedByUserId = update.CreatedByUserId?.ToString() ?? "",
+                    BeforeJson = (string?)null,
+                    AfterJson = (string?)null
+                });
+            }
+        }
+
+        // Monthly Update Narratives
+        var narratives = await _context.MonthlyUpdateNarratives
+            .Include(n => n.ProjectMonthlyUpdate)
+            .Where(n => n.ProjectMonthlyUpdate.ProjectId == id.Value)
+            .ToListAsync();
+        foreach (var narrative in narratives)
+        {
+            if (narrative.CreatedAt != default)
+            {
+                var createdBy = narrative.CreatedByName ?? narrative.CreatedByUser?.Name ?? narrative.CreatedByEmail ?? "Unknown";
+                var createdByEmail = narrative.CreatedByEmail ?? narrative.CreatedByUser?.Email ?? "";
+                var update = narrative.ProjectMonthlyUpdate;
+                entityActions.Add(new
+                {
+                    Date = narrative.CreatedAt,
+                    Action = "Create",
+                    Entity = "MonthlyUpdateNarrative",
+                    EntityId = narrative.Id.ToString(),
+                    EntityReference = $"Update Narrative - {new DateTime(update.Year, update.Month, 1):MMMM yyyy}",
+                    ChangedBy = createdBy,
+                    ChangedByEmail = createdByEmail,
+                    ChangedByUserId = narrative.CreatedByUserId?.ToString() ?? "",
+                    BeforeJson = (string?)null,
+                    AfterJson = (string?)null
+                });
+            }
+        }
+
+        // Status Updates
+        var statusUpdates = await _context.ProjectStatusUpdates
+            .Where(psu => psu.ProjectId == id.Value)
+            .ToListAsync();
+        foreach (var statusUpdate in statusUpdates)
+        {
+            if (statusUpdate.CreatedAt != default)
+            {
+                var createdBy = statusUpdate.CreatedByName ?? statusUpdate.CreatedByUser?.Name ?? statusUpdate.CreatedByEmail ?? "Unknown";
+                var createdByEmail = statusUpdate.CreatedByEmail ?? statusUpdate.CreatedByUser?.Email ?? "";
+                entityActions.Add(new
+                {
+                    Date = statusUpdate.CreatedAt,
+                    Action = "Create",
+                    Entity = "ProjectStatusUpdate",
+                    EntityId = statusUpdate.Id.ToString(),
+                    EntityReference = "Status Update",
+                    ChangedBy = createdBy,
+                    ChangedByEmail = createdByEmail,
+                    ChangedByUserId = statusUpdate.CreatedByUserId?.ToString() ?? "",
+                    BeforeJson = (string?)null,
+                    AfterJson = (string?)null
+                });
+            }
+        }
+
+        // Combine audit logs with entity actions and sort by date
+        var auditLogActions = auditLogs.Select(a => new
+        {
+            AuditLogId = a.AuditLogId.ToString(), // Include unique ID for modal
+            Date = a.ChangedUtc,
+            Action = a.Action,
+            Entity = a.Entity,
+            EntityId = a.EntityId,
+            EntityReference = a.EntityReference,
+            ChangedBy = a.ChangedBy,
+            ChangedByEmail = a.ChangedByEmail,
+            ChangedByUserId = a.ChangedByUserId,
+            BeforeJson = a.BeforeJson,
+            AfterJson = a.AfterJson
+        }).ToList();
+        
+        var entityActionList = entityActions.Select(ea => new
+        {
+            AuditLogId = Guid.NewGuid().ToString(), // Generate unique ID for entity actions
+            Date = (DateTime)ea.Date,
+            Action = (string)ea.Action,
+            Entity = (string)ea.Entity,
+            EntityId = (string)ea.EntityId,
+            EntityReference = (string?)ea.EntityReference,
+            ChangedBy = (string?)ea.ChangedBy,
+            ChangedByEmail = (string?)ea.ChangedByEmail,
+            ChangedByUserId = (string?)ea.ChangedByUserId,
+            BeforeJson = (string?)ea.BeforeJson,
+            AfterJson = (string?)ea.AfterJson
+        }).ToList();
+        
+        var allAuditActions = auditLogActions
+            .Concat(entityActionList)
+            .OrderByDescending(a => a.Date)
+            .Take(500)
+            .ToList();
+
+        ViewBag.AuditLogs = allAuditActions;
 
         return View(project);
     }
