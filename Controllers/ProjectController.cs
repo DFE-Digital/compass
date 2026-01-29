@@ -3250,7 +3250,7 @@ namespace Compass.Controllers
         // POST: Project/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments,BusinessCaseApproval,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
         {
             if (id != project.Id)
             {
@@ -6286,6 +6286,35 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
+        }
+
+        // POST: Project/UpdateBusinessCaseApproval
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBusinessCaseApproval(int id, string? businessCaseApproval)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.BusinessCaseApproval = string.IsNullOrWhiteSpace(businessCaseApproval) ? null : businessCaseApproval.Trim();
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Business case approval updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating business case approval");
+                TempData["ErrorMessage"] = "An error occurred while updating the business case approval.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
         }
 
         // POST: Project/UpdatePhase
