@@ -1580,6 +1580,43 @@ public class CentralOpsController : Controller
             _logger.LogInformation("ManageWork: Database has {Total} total projects, {NonDeleted} non-deleted projects", 
                 totalProjectsInDb, nonDeletedProjects);
 
+            // Default to Active status if no status is specified
+            var effectiveStatus = string.IsNullOrEmpty(status) ? "Active" : status;
+
+            // Build base query for status counts (before other filters)
+            var baseQuery = _context.Projects.Where(p => !p.IsDeleted);
+            
+            // Apply search, business area, priority, and RAG filters to base query for counts
+            if (!string.IsNullOrEmpty(search))
+            {
+                baseQuery = baseQuery.Where(p => 
+                    (p.Title != null && p.Title.Contains(search)) || 
+                    (p.ProjectCode != null && p.ProjectCode.Contains(search)) ||
+                    (p.Aim != null && p.Aim.Contains(search)));
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                baseQuery = baseQuery.Where(p => p.BusinessAreaLookup != null && p.BusinessAreaLookup.Name == businessArea);
+            }
+
+            if (!string.IsNullOrEmpty(priority))
+            {
+                baseQuery = baseQuery.Where(p => p.DeliveryPriority != null && p.DeliveryPriority.Name == priority);
+            }
+
+            if (!string.IsNullOrEmpty(rag))
+            {
+                baseQuery = baseQuery.Where(p => p.RagStatus == rag);
+            }
+
+            // Calculate status counts
+            var statusActiveCount = await baseQuery.CountAsync(p => p.Status == "Active");
+            var statusPausedCount = await baseQuery.CountAsync(p => p.Status == "Paused");
+            var statusCompletedCount = await baseQuery.CountAsync(p => p.Status == "Completed");
+            var statusCancelledCount = await baseQuery.CountAsync(p => p.Status == "Cancelled");
+
+            // Build main query with includes
             var query = _context.Projects
                 .Include(p => p.PrimaryContactUser)
                 .Include(p => p.DeliveryPriority)
@@ -1590,7 +1627,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Milestones)
-                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+                .Where(p => !p.IsDeleted);
 
             // Apply filters
             if (!string.IsNullOrEmpty(search))
@@ -1616,10 +1653,8 @@ public class CentralOpsController : Controller
                 query = query.Where(p => p.RagStatus == rag);
             }
 
-            if (!string.IsNullOrEmpty(status))
-            {
-                query = query.Where(p => p.Status == status);
-            }
+            // Apply status filter (defaults to Active)
+            query = query.Where(p => p.Status == effectiveStatus);
 
             // Get all filtered results - sorted alphabetically by title by default
             var workItems = await query
@@ -1653,13 +1688,18 @@ public class CentralOpsController : Controller
             ViewBag.BusinessArea = businessArea;
             ViewBag.Priority = priority;
             ViewBag.Rag = rag;
-            ViewBag.Status = status;
+            ViewBag.Status = effectiveStatus;
+            ViewBag.CurrentStatus = effectiveStatus;
             ViewBag.TotalCount = totalCount;
             ViewBag.BusinessAreas = businessAreas;
             ViewBag.Priorities = priorities;
             ViewBag.Directorates = directorates;
             ViewBag.Rags = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green" };
             ViewBag.Statuses = new[] { "Active", "Paused", "Completed", "Cancelled" };
+            ViewBag.StatusActiveCount = statusActiveCount;
+            ViewBag.StatusPausedCount = statusPausedCount;
+            ViewBag.StatusCompletedCount = statusCompletedCount;
+            ViewBag.StatusCancelledCount = statusCancelledCount;
 
             _logger.LogInformation("ManageWork: Passing {Count} projects to view. First item ID: {FirstId}", 
                 workItems.Count, workItems.FirstOrDefault()?.Id);
