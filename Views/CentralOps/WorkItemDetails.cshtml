@@ -1,3 +1,4 @@
+@using System.Text.Json
 @model Compass.Models.Project
 @{
     ViewData["Title"] = "Work Item Details";
@@ -10,6 +11,91 @@
     var statuses = ViewBag.Statuses as string[] ?? new[] { "Active", "Paused", "Completed", "Cancelled" };
     var currentTab = ViewBag.CurrentTab as string ?? "overview";
     var deliveryCode = $"DFE-DDT-{Model.Id}";
+}
+
+@functions {
+    string FormatFieldName(string fieldName)
+    {
+        // Convert PascalCase to readable format
+        return System.Text.RegularExpressions.Regex.Replace(fieldName, "([A-Z])", " $1").Trim();
+    }
+    
+    string FormatValue(JsonElement value)
+    {
+        try
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.String:
+                    var str = value.GetString();
+                    if (string.IsNullOrEmpty(str)) return "<em>Empty</em>";
+                    // Check if it's a date string
+                    if (DateTime.TryParse(str, out var dateVal))
+                    {
+                        return dateVal.ToString("dd MMM yyyy HH:mm");
+                    }
+                    // Truncate long strings
+                    if (str.Length > 200)
+                    {
+                        return System.Net.WebUtility.HtmlEncode(str.Substring(0, 200)) + " <small class='text-muted'>(truncated)</small>";
+                    }
+                    return System.Net.WebUtility.HtmlEncode(str);
+                    
+                case JsonValueKind.True:
+                    return "<span class='badge badge-success'>Yes</span>";
+                case JsonValueKind.False:
+                    return "<span class='badge badge-secondary'>No</span>";
+                    
+                case JsonValueKind.Number:
+                    return value.GetRawText();
+                    
+                case JsonValueKind.Null:
+                    return "<em class='text-muted'>null</em>";
+                    
+                case JsonValueKind.Array:
+                    var arrayItems = new List<string>();
+                    foreach (var item in value.EnumerateArray())
+                    {
+                        arrayItems.Add(FormatValue(item));
+                    }
+                    return string.Join("<br/>", arrayItems);
+                    
+                case JsonValueKind.Object:
+                    var objItems = new List<string>();
+                    foreach (var prop in value.EnumerateObject())
+                    {
+                        objItems.Add($"<strong>{FormatFieldName(prop.Name)}:</strong> {FormatValue(prop.Value)}");
+                    }
+                    return string.Join("<br/>", objItems);
+                    
+                default:
+                    return System.Net.WebUtility.HtmlEncode(value.GetRawText());
+            }
+        }
+        catch
+        {
+            return System.Net.WebUtility.HtmlEncode(value.GetRawText());
+        }
+    }
+    
+    Dictionary<string, JsonElement>? ParseJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            var doc = JsonDocument.Parse(json);
+            var dict = new Dictionary<string, JsonElement>();
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                dict[prop.Name] = prop.Value;
+            }
+            return dict;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
 
 @section Breadcrumbs {
@@ -87,6 +173,7 @@
                             <a href="#strategic" class="list-group-item list-group-item-action @(currentTab == "strategic" ? "active" : "")" data-tab="strategic">Strategic Alignment</a>
                             <a href="#dates" class="list-group-item list-group-item-action @(currentTab == "dates" ? "active" : "")" data-tab="dates">Dates & Timeline</a>
                             <a href="#status" class="list-group-item list-group-item-action @(currentTab == "status" ? "active" : "")" data-tab="status">Status & Priority</a>
+                            <a href="#audit" class="list-group-item list-group-item-action @(currentTab == "audit" ? "active" : "")" data-tab="audit">Audit actions</a>
                         </div>
                     </div>
                 </div>
@@ -556,6 +643,255 @@
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audit Actions Section -->
+                <div id="audit-section" class="tab-section @(currentTab == "audit" ? "" : "d-none")">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Audit actions</h3>
+                        </div>
+                        <div class="card-body">
+                            @{
+                                var auditLogs = ViewBag.AuditLogs as IEnumerable<dynamic> ?? new List<dynamic>();
+                            }
+                            @if (auditLogs.Any())
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Date & Time</th>
+                                                <th>Action</th>
+                                                <th>Entity</th>
+                                                <th>Changed By</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var log in auditLogs)
+                                            {
+                                                var logDate = (DateTime)log.Date;
+                                                var logAction = (string)log.Action;
+                                                var logEntity = (string)log.Entity;
+                                                var logEntityReference = log.EntityReference?.ToString() ?? "";
+                                                var logChangedBy = log.ChangedBy?.ToString() ?? "";
+                                                var logChangedByEmail = log.ChangedByEmail?.ToString() ?? "";
+                                                var logBeforeJson = log.BeforeJson?.ToString();
+                                                var logAfterJson = log.AfterJson?.ToString();
+                                                // Use AuditLogId for unique modal ID, fallback to EntityId + Date if not available
+                                                var logAuditLogId = log.AuditLogId?.ToString() ?? "";
+                                                var logEntityId = log.EntityId?.ToString() ?? "";
+                                                var logId = !string.IsNullOrEmpty(logAuditLogId) 
+                                                    ? logAuditLogId 
+                                                    : $"{logEntityId}_{logDate:yyyyMMddHHmmss}";
+                                                var modalId = $"auditDetailsModal{logId.Replace("-", "").Replace(" ", "").Replace(":", "").Replace("/", "")}";
+                                                
+                                                var actionBadgeClass = logAction switch
+                                                {
+                                                    "Create" => "badge-success",
+                                                    "Update" => "badge-info",
+                                                    "Delete" => "badge-danger",
+                                                    _ => "badge-secondary"
+                                                };
+                                                
+                                                var entityDisplayName = logEntity switch
+                                                {
+                                                    "Project" => "Project",
+                                                    "Milestone" => "Milestone",
+                                                    "ProjectMonthlyUpdate" => "Monthly Update",
+                                                    "MonthlyUpdateNarrative" => "Update Narrative",
+                                                    "ProjectStatusUpdate" => "Status Update",
+                                                    _ => logEntity
+                                                };
+                                                
+                                                <tr>
+                                                    <td>@logDate.ToString("dd MMM yyyy HH:mm") UTC</td>
+                                                    <td>
+                                                        <span class="badge @actionBadgeClass">@logAction</span>
+                                                    </td>
+                                                    <td>@entityDisplayName</td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(logChangedBy))
+                                                        {
+                                                            <div>@logChangedBy</div>
+                                                            @if (!string.IsNullOrEmpty(logChangedByEmail))
+                                                            {
+                                                                <small class="text-muted">@logChangedByEmail</small>
+                                                            }
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(logChangedByEmail))
+                                                        {
+                                                            <div>@logChangedByEmail</div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Unknown</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (logEntity == "Project")
+                                                        {
+                                                            <small class="text-muted">@Model.Title</small>
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(logEntityReference))
+                                                        {
+                                                            <small class="text-muted">@logEntityReference</small>
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(logBeforeJson) || !string.IsNullOrEmpty(logAfterJson))
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-outline-info ml-2" data-toggle="modal" data-target="#@modalId">
+                                                                <i class="fas fa-info-circle"></i> View changes
+                                                            </button>
+                                                            
+                                                            <!-- Audit Details Modal -->
+                                                            <div class="modal fade" id="@modalId" tabindex="-1" role="dialog">
+                                                                <div class="modal-dialog modal-lg" role="document">
+                                                                    <div class="modal-content">
+                                                                        <div class="modal-header">
+                                                                            <h5 class="modal-title">Audit Details - @logAction @entityDisplayName</h5>
+                                                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                                                <span aria-hidden="true">&times;</span>
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="modal-body">
+                                                                            <div class="row mb-3">
+                                                                                <div class="col-md-6">
+                                                                                    <p><strong>Date:</strong> @logDate.ToString("dd MMMM yyyy HH:mm") UTC</p>
+                                                                                </div>
+                                                                                <div class="col-md-6">
+                                                                                    <p><strong>Changed By:</strong> @(logChangedBy ?? logChangedByEmail ?? "Unknown")</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            
+                                                                            @{
+                                                                                var beforeData = ParseJson(logBeforeJson);
+                                                                                var afterData = ParseJson(logAfterJson);
+                                                                                
+                                                                                if (beforeData != null || afterData != null)
+                                                                                {
+                                                                                    var allKeys = new HashSet<string>();
+                                                                                    if (beforeData != null)
+                                                                                    {
+                                                                                        foreach (var key in beforeData.Keys)
+                                                                                        {
+                                                                                            allKeys.Add(key);
+                                                                                        }
+                                                                                    }
+                                                                                    if (afterData != null)
+                                                                                    {
+                                                                                        foreach (var key in afterData.Keys)
+                                                                                        {
+                                                                                            allKeys.Add(key);
+                                                                                        }
+                                                                                    }
+                                                                                    
+                                                                                    <style>
+                                                                                        .audit-comparison-table th {
+                                                                                            font-weight: bold;
+                                                                                            vertical-align: middle;
+                                                                                        }
+                                                                                        .audit-comparison-table .changed-row {
+                                                                                            background-color: #fff3cd !important;
+                                                                                        }
+                                                                                        .audit-comparison-table .changed-row td {
+                                                                                            border-left: 3px solid #ffc107;
+                                                                                        }
+                                                                                        .audit-comparison-table .before-cell {
+                                                                                            background-color: #f8d7da;
+                                                                                        }
+                                                                                        .audit-comparison-table .after-cell {
+                                                                                            background-color: #d4edda;
+                                                                                        }
+                                                                                        .audit-comparison-table td {
+                                                                                            word-wrap: break-word;
+                                                                                            max-width: 0;
+                                                                                        }
+                                                                                    </style>
+                                                                                    <div class="table-responsive">
+                                                                                        <table class="table table-sm table-bordered audit-comparison-table">
+                                                                                            <thead>
+                                                                                                <tr>
+                                                                                                    <th style="width: 30%;">Field</th>
+                                                                                                    <th style="width: 35%;" class="before-cell text-dark">Before</th>
+                                                                                                    <th style="width: 35%;" class="after-cell text-dark">After</th>
+                                                                                                </tr>
+                                                                                            </thead>
+                                                                                            <tbody>
+                                                                                                @foreach (var key in allKeys.OrderBy(k => k))
+                                                                                                {
+                                                                                                    JsonElement? beforeValue = beforeData?.ContainsKey(key) == true ? beforeData[key] : (JsonElement?)null;
+                                                                                                    JsonElement? afterValue = afterData?.ContainsKey(key) == true ? afterData[key] : (JsonElement?)null;
+                                                                                                    
+                                                                                                    // Compare values
+                                                                                                    bool hasChanged = false;
+                                                                                                    if (beforeValue.HasValue && afterValue.HasValue)
+                                                                                                    {
+                                                                                                        hasChanged = beforeValue.Value.GetRawText() != afterValue.Value.GetRawText();
+                                                                                                    }
+                                                                                                    else if (beforeValue.HasValue != afterValue.HasValue)
+                                                                                                    {
+                                                                                                        hasChanged = true;
+                                                                                                    }
+                                                                                                    
+                                                                                                    <tr class="@(hasChanged ? "changed-row" : "")">
+                                                                                                        <td><strong>@FormatFieldName(key)</strong></td>
+                                                                                                        <td class="before-cell">
+                                                                                                            @if (beforeValue.HasValue)
+                                                                                                            {
+                                                                                                                <div class="text-break">@Html.Raw(FormatValue(beforeValue.Value))</div>
+                                                                                                            }
+                                                                                                            else
+                                                                                                            {
+                                                                                                                <span class="text-muted"><em>Not set</em></span>
+                                                                                                            }
+                                                                                                        </td>
+                                                                                                        <td class="after-cell">
+                                                                                                            @if (afterValue.HasValue)
+                                                                                                            {
+                                                                                                                <div class="text-break">@Html.Raw(FormatValue(afterValue.Value))</div>
+                                                                                                            }
+                                                                                                            else
+                                                                                                            {
+                                                                                                                <span class="text-muted"><em>Not set</em></span>
+                                                                                                            }
+                                                                                                        </td>
+                                                                                                    </tr>
+                                                                                                }
+                                                                                            </tbody>
+                                                                                        </table>
+                                                                                    </div>
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <div class="alert alert-info">
+                                                                                        <i class="fas fa-info-circle mr-2"></i>No detailed change information available.
+                                                                                    </div>
+                                                                                }
+                                                                            }
+                                                                        </div>
+                                                                        <div class="modal-footer">
+                                                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle mr-2"></i>No audit actions found for this work item.
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
