@@ -138,6 +138,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
             .Include(p => p.RagStatusLookup)
@@ -220,6 +222,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
             .Include(p => p.MonthlyUpdates)
@@ -832,6 +836,19 @@ public class MilestonesUpdatesSuccessesController : Controller
             return true;
         }
 
+        // Check if user is PMO Contact
+        if (currentUser != null && project.PmoContacts?.Any(pc => pc.UserId == currentUser.Id) == true)
+        {
+            return true;
+        }
+
+        // Check PMO Contacts by email
+        if (project.PmoContacts?.Any(pc => 
+            pc.User != null && pc.User.Email?.ToLower() == userEmail.ToLower()) == true)
+        {
+            return true;
+        }
+
         return false;
     }
 
@@ -849,6 +866,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -861,7 +880,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         // Check if user can submit
         if (!await CanUserSubmitMonthlyUpdate(project))
         {
-            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, Primary Contacts, and Central Operations admins can submit.";
+            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, Primary Contacts, PMO Contacts, and Central Operations admins can submit.";
             // Determine redirect action based on whether update exists
             var existingUpdateForRedirect = await _context.ProjectMonthlyUpdates
                 .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
@@ -1014,6 +1033,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
@@ -1025,7 +1046,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         // Check if user can submit/unsubmit
         if (!await CanUserSubmitMonthlyUpdate(project))
         {
-            TempData["ErrorMessage"] = "You do not have permission to unsubmit monthly updates. Only SROs, Service Owners, and Primary Contacts can unsubmit.";
+            TempData["ErrorMessage"] = "You do not have permission to unsubmit monthly updates. Only SROs, Service Owners, Primary Contacts, and PMO Contacts can unsubmit.";
             return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
