@@ -401,8 +401,8 @@ public class HomeController : Controller
         var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
         var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
 
-        var redProjects = myProjects.Where(p => p.RagStatus == "Red").ToList();
-        var amberRedProjects = myProjects.Where(p => p.RagStatus == "Amber-Red").ToList();
+        var redProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Red").ToList();
+        var amberRedProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Amber-Red").ToList();
         var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
 
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
@@ -599,8 +599,8 @@ public class HomeController : Controller
                     .ToList();
 
                 enterpriseAtRiskProjects = allProjects
-                    .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                                (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
                 enterpriseMetrics = new EnterpriseLeadershipMetrics
@@ -796,8 +796,8 @@ public class HomeController : Controller
             .Count();
 
         var atRiskProjects = oversightProjects
-            .Count(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase));
+            .Count(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                        (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)));
 
         return new DashboardMetrics
         {
