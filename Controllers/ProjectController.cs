@@ -444,7 +444,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                userProjectsQuery = userProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -517,7 +517,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -572,7 +572,7 @@ namespace Compass.Controllers
             // Apply RAG Status filter
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                query = query.Where(p => p.RagStatus == ragStatus);
+                query = query.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
 
             // Apply Business Area filter
@@ -740,7 +740,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                statusCountQuery = statusCountQuery.Where(p => p.RagStatus == ragStatus);
+                statusCountQuery = statusCountQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -831,7 +831,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                    userProjectsQuery = userProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -981,7 +981,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1163,7 +1163,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -1309,7 +1309,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1470,7 +1470,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    query = query.Where(p => p.RagStatus == ragStatus);
+                    query = query.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -1616,7 +1616,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -4251,9 +4251,9 @@ namespace Compass.Controllers
                 ModelState.AddModelError(nameof(project.StartDate), "The Start Date field is required.");
             }
             
-            if (string.IsNullOrWhiteSpace(project.RagStatus))
+            if (!project.RagStatusLookupId.HasValue)
             {
-                ModelState.AddModelError(nameof(project.RagStatus), "The RAG Status field is required.");
+                ModelState.AddModelError(nameof(project.RagStatusLookupId), "The RAG Status field is required.");
             }
             
             if (string.IsNullOrWhiteSpace(project.Status))
@@ -4781,7 +4781,7 @@ namespace Compass.Controllers
                     var ragHistory = new ProjectRagHistory
                     {
                         ProjectId = projectId,
-                        RagStatus = project.RagStatus,
+                        RagStatus = project.RagStatusLookup?.Name ?? project.RagStatus,
                         Justification = project.RagJustification,
                         PathToGreen = pathToGreen, // Record new path to green
                         ChangedAt = DateTime.UtcNow,
@@ -12663,7 +12663,7 @@ namespace Compass.Controllers
             Title = project.Title,
             ProjectCode = project.ProjectCode,
             Status = project.Status ?? string.Empty,
-            RagStatus = project.RagStatus,
+            RagStatus = project.RagStatusLookup?.Name,
             Phase = project.Phase,
             BusinessArea = project.BusinessArea,
             StartDate = project.StartDate,

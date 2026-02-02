@@ -29,211 +29,219 @@
         
         periodDate = periodDate.AddMonths(1);
     }
+    
+    // Group periods by status and sort by date (latest first)
+    var dueOrLate = periods
+        .Where(p => p.Status == "Due" || p.Status == "Late")
+        .OrderByDescending(p => p.Year)
+        .ThenByDescending(p => p.Month)
+        .ToList();
+    
+    var upcoming = periods
+        .Where(p => p.Status == "Upcoming")
+        .OrderByDescending(p => p.Year)
+        .ThenByDescending(p => p.Month)
+        .ToList();
+    
+    var completed = periods
+        .Where(p => p.Status == "Submitted")
+        .OrderByDescending(p => p.Year)
+        .ThenByDescending(p => p.Month)
+        .ToList();
 }
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
+        <!-- Due or Late Updates Card -->
+        <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title">Monthly Updates</h3>
+                <h3 class="card-title">Due or Late Updates</h3>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover text-nowrap sortable-table mb-0">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-column="Period" tabindex="0" role="button" aria-label="Sort by Period">
-                                    Period
-                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                </th>
-                                <th class="sortable" data-column="DueDate" tabindex="0" role="button" aria-label="Sort by Due Date">
-                                    Due Date
-                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                </th>
-                                <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">
-                                    Status
-                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                </th>
-                                <th class="sortable" data-column="SubmittedDate" tabindex="0" role="button" aria-label="Sort by Submitted Date">
-                                    Submitted
-                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                </th>
-                                <th class="sortable" data-column="Count" tabindex="0" role="button" aria-label="Sort by Count">
-                                    Updates
-                                    <i class="fas fa-sort float-right" style="opacity: 0.3;"></i>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var period in periods)
-                            {
+                @if (dueOrLate.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        @if (period.Update != null)
-                                        {
-                                            <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                        }
-                                        else
-                                        {
-                                            <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
-                                        }
-                                    </td>
-                                    <td>@period.DueDate.ToString("dd MMM yyyy")</td>
-                                    <td>
-                                        @if (period.Status == "Submitted")
-                                        {
-                                            <span class="badge badge-success">Complete</span>
-                                        }
-                                        else if (period.Status == "Late")
-                                        {
-                                            <span class="badge badge-danger">Late</span>
-                                        }
-                                        else if (period.Status == "Due")
-                                        {
-                                            <span class="badge badge-warning">Due</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge badge-secondary">Upcoming</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (period.Update != null)
-                                        {
-                                            var update = (Compass.Models.ProjectMonthlyUpdate)period.Update;
-                                            @if (update.SubmittedAt.HasValue)
+                                    <th style="width: 35%;">Period</th>
+                                    <th style="width: 20%;">Due Date</th>
+                                    <th style="width: 15%;">Status</th>
+                                    <th style="width: 30%;">Updates</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var period in dueOrLate)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (period.Update != null)
                                             {
-                                                @update.SubmittedAt.Value.ToString("dd MMM yyyy")
+                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                        </td>
+                                        <td>@period.DueDate.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            @if (period.Status == "Late")
+                                            {
+                                                <span class="badge badge-danger">Late</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-warning">Due</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @{
+                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
+                                            }
+                                            @narrativeCount
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0 p-3">No due or late updates.</p>
+                }
+            </div>
+        </div>
+
+        <!-- Upcoming Updates Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Upcoming Updates</h3>
+            </div>
+            <div class="card-body p-0">
+                @if (upcoming.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 35%;">Period</th>
+                                    <th style="width: 20%;">Due Date</th>
+                                    <th style="width: 15%;">Status</th>
+                                    <th style="width: 30%;">Updates</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var period in upcoming)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (period.Update != null)
+                                            {
+                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                        </td>
+                                        <td>@period.DueDate.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            <span class="badge badge-secondary">Upcoming</span>
+                                        </td>
+                                        <td>
+                                            @{
+                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
+                                            }
+                                            @narrativeCount
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0 p-3">No upcoming updates.</p>
+                }
+            </div>
+        </div>
+
+        <!-- Completed Updates Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Completed Updates</h3>
+            </div>
+            <div class="card-body p-0">
+                @if (completed.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%;">Period</th>
+                                    <th style="width: 15%;">Due Date</th>
+                                    <th style="width: 12%;">Status</th>
+                                    <th style="width: 18%;">Submitted</th>
+                                    <th style="width: 30%;">Updates</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var period in completed)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (period.Update != null)
+                                            {
+                                                <a href="@Url.Action("EditUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Url.Action("CreateUpdate", "MilestonesUpdatesSuccesses", new { projectId = Model.Id, year = period.Year, month = period.Month })">@period.PeriodName</a>
+                                            }
+                                        </td>
+                                        <td>@period.DueDate.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            <span class="badge badge-success">Complete</span>
+                                        </td>
+                                        <td>
+                                            @if (period.Update != null)
+                                            {
+                                                var update = (Compass.Models.ProjectMonthlyUpdate)period.Update;
+                                                @if (update.SubmittedAt.HasValue)
+                                                {
+                                                    @update.SubmittedAt.Value.ToString("dd MMM yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
                                             }
                                             else
                                             {
                                                 <span class="text-muted">-</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @{
-                                            var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
-                                        }
-                                        @narrativeCount
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                                        </td>
+                                        <td>
+                                            @{
+                                                var narrativeCount = period.Update?.MonthlyUpdateNarratives?.Count ?? 0;
+                                            }
+                                            @narrativeCount
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0 p-3">No completed updates.</p>
+                }
             </div>
         </div>
     </div>
 </div>
-
-<script nonce="@Context.Items["Nonce"]">
-    (function() {
-        var table = document.querySelector('.sortable-table');
-        if (!table) return;
-        
-        function initSorting(table) {
-            var sortableHeaders = table.querySelectorAll('.sortable');
-            var currentSort = { column: null, direction: 'asc' };
-            
-            sortableHeaders.forEach(function(header) {
-                header.style.cursor = 'pointer';
-                
-                header.addEventListener('click', function(e) {
-                    handleSort(e, header);
-                });
-                
-                header.addEventListener('keypress', function(e) {
-                    if (e.which === 13 || e.which === 32) {
-                        e.preventDefault();
-                        handleSort(e, header);
-                    }
-                });
-            });
-            
-            function handleSort(e, header) {
-                var column = header.getAttribute('data-column');
-                var direction = 'asc';
-                
-                if (currentSort.column === column && currentSort.direction === 'asc') {
-                    direction = 'desc';
-                }
-                
-                sortTable(column, direction);
-                currentSort = { column: column, direction: direction };
-            }
-            
-            function sortTable(column, direction) {
-                var tbody = table.querySelector('tbody');
-                var rows = Array.from(tbody.querySelectorAll('tr'));
-                var colIndex = Array.from(table.querySelectorAll('thead th')).findIndex(function(th) {
-                    return th.getAttribute('data-column') === column;
-                });
-                
-                rows.sort(function(a, b) {
-                    var aVal, bVal;
-                    var aCell = a.querySelectorAll('td')[colIndex];
-                    var bCell = b.querySelectorAll('td')[colIndex];
-                    
-                    if (column === 'DueDate' || column === 'SubmittedDate') {
-                        var aDate = Date.parse(aCell.textContent.trim());
-                        var bDate = Date.parse(bCell.textContent.trim());
-                        aVal = isNaN(aDate) ? 0 : aDate;
-                        bVal = isNaN(bDate) ? 0 : bDate;
-                    } else if (column === 'Count') {
-                        var aText = aCell.textContent.trim();
-                        var bText = bCell.textContent.trim();
-                        aVal = parseInt(aText) || 0;
-                        bVal = parseInt(bText) || 0;
-                    } else if (column === 'Period') {
-                        // Handle Period column which may contain links
-                        var aLink = aCell.querySelector('a');
-                        var bLink = bCell.querySelector('a');
-                        aVal = aLink ? aLink.textContent.trim().toLowerCase() : aCell.textContent.trim().toLowerCase();
-                        bVal = bLink ? bLink.textContent.trim().toLowerCase() : bCell.textContent.trim().toLowerCase();
-                    } else {
-                        aVal = aCell.textContent.trim().toLowerCase();
-                        bVal = bCell.textContent.trim().toLowerCase();
-                    }
-                    
-                    if (direction === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                    } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    }
-                });
-                
-                tbody.innerHTML = '';
-                rows.forEach(function(row) {
-                    tbody.appendChild(row);
-                });
-                
-                updateSortIcons(column, direction);
-            }
-            
-            function updateSortIcons(column, direction) {
-                var allHeaders = table.querySelectorAll('.sortable i');
-                allHeaders.forEach(function(icon) {
-                    icon.className = 'fas fa-sort float-right';
-                    icon.style.opacity = '0.3';
-                });
-                
-                var activeHeader = table.querySelector('.sortable[data-column="' + column + '"]');
-                if (activeHeader) {
-                    var icon = activeHeader.querySelector('i');
-                    if (icon) {
-                        icon.className = direction === 'asc' ? 'fas fa-sort-up float-right' : 'fas fa-sort-down float-right';
-                        icon.style.opacity = '1';
-                    }
-                }
-            }
-        }
-        
-        initSorting(table);
-    })();
-</script>
 
