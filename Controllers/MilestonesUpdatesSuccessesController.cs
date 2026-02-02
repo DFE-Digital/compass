@@ -507,7 +507,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             Title = project.Title,
             ProjectCode = project.ProjectCode,
             Status = project.Status ?? string.Empty,
-            RagStatus = project.RagStatus,
+            RagStatus = project.RagStatusLookup?.Name,
             Phase = project.Phase,
             BusinessArea = project.BusinessArea,
             StartDate = project.StartDate,
@@ -902,7 +902,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        var oldRagStatus = project.RagStatus;
+        var oldRagStatus = project.RagStatusLookup?.Name;
         var ragChanged = oldRagStatus != ragStatus;
         var isNotGreen = ragStatus != "Green";
 

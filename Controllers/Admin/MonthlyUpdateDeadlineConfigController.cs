@@ -115,8 +115,8 @@ namespace Compass.Controllers.Admin
                 _context.MonthlyUpdateDeadlineConfigs.Add(model);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Created MonthlyUpdateDeadlineConfig {Id} (WorkingDayDeadline: {Day}, EffectiveFrom: {From}) by {User}", 
-                    model.Id, model.WorkingDayDeadline, model.EffectiveFrom, GetUserEmail());
+                _logger.LogInformation("Created MonthlyUpdateDeadlineConfig {Id} (WorkingDayDeadline: {Day}, CommissionDays: {CommissionDays}, EffectiveFrom: {From}) by {User}", 
+                    model.Id, model.WorkingDayDeadline, model.CommissionDaysBeforeMonthEnd, model.EffectiveFrom, GetUserEmail());
 
                 TempData["SuccessMessage"] = $"Successfully created monthly update deadline configuration '{model.Name}'.";
                 return RedirectToAction(nameof(Index));
@@ -188,6 +188,7 @@ namespace Compass.Controllers.Admin
 
                     existing.Name = model.Name;
                     existing.WorkingDayDeadline = model.WorkingDayDeadline;
+                    existing.CommissionDaysBeforeMonthEnd = model.CommissionDaysBeforeMonthEnd;
                     existing.EffectiveFrom = model.EffectiveFrom;
                     existing.EffectiveUntil = model.EffectiveUntil;
                     existing.IsActive = model.IsActive;
