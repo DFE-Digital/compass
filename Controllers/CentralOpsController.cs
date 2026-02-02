@@ -3822,13 +3822,15 @@ public class CentralOpsController : Controller
                 .OrderBy(x => x.Milestone.DueDate)
                 .ToList();
             
-            // 7. Late milestones (overdue as of month end)
+            // 7. Late milestones (only count as late if due date is before today)
+            var todayUtcDate = DateTime.UtcNow.Date;
             var lateMilestones = allProjects
                 .SelectMany(p => p.Milestones
                     .Where(m => !m.IsDeleted && 
                                m.Status != "complete" && 
                                m.Status != "cancelled" &&
-                               m.DueDate < monthEnd)
+                               m.DueDate < monthEnd &&
+                               m.DueDate.Date < todayUtcDate)
                     .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
                 .OrderBy(x => x.Milestone.DueDate)
                 .ToList();
