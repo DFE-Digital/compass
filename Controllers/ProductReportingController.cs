@@ -5,6 +5,7 @@ using Compass.Models;
 using Compass.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Text.Json;
+using ClosedXML.Excel;
 
 namespace Compass.Controllers;
 
@@ -38,7 +39,12 @@ public class ProductReportingController : Controller
         string phase = "", 
         string businessArea = "", 
         string reportingStatus = "",
-        bool clearFilters = false)
+        bool clearFilters = false,
+        int? year = null,
+        int? month = null,
+        string? period = null,
+        int page = 1,
+        int pageSize = 50)
     {
         // Handle guidance view - redirect to guidance page
         if (view == "guidance")
@@ -67,31 +73,77 @@ public class ProductReportingController : Controller
             .Select(g => g.First())
             .ToList();
         
-        // Get current reporting period (previous month)
+        // Get current reporting period (previous month) or use selected period
         var now = DateTime.UtcNow;
-        var currentYear = now.Month == 1 ? now.Year - 1 : now.Year;
-        var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
+        var defaultYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var defaultMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        // Parse period from query string if provided (format: "YYYY-MM")
+        // This handles the period dropdown which sends "year-month" as a single value
+        int? parsedYear = year;
+        int? parsedMonth = month;
+        
+        if (!string.IsNullOrEmpty(period))
+        {
+            var periodParts = period.Split('-');
+            if (periodParts.Length == 2 && 
+                int.TryParse(periodParts[0], out var pYear) && 
+                int.TryParse(periodParts[1], out var pMonth))
+            {
+                parsedYear = pYear;
+                parsedMonth = pMonth;
+            }
+        }
+        
+        // Use selected period if provided, otherwise use current period
+        var selectedYear = parsedYear ?? defaultYear;
+        var selectedMonth = parsedMonth ?? defaultMonth;
+        
+        // Validate the selected period
+        var reportingStartDate = new DateTime(2025, 10, 1);
+        var maxAllowedDate = now.AddMonths(1); // Allow current month + 1 month ahead
+        var selectedPeriodDate = new DateTime(selectedYear, selectedMonth, 1);
+        
+        // Period must be October 2025 or later
+        if (selectedPeriodDate < reportingStartDate)
+        {
+            selectedYear = defaultYear;
+            selectedMonth = defaultMonth;
+            selectedPeriodDate = new DateTime(selectedYear, selectedMonth, 1);
+        }
+        
+        // Period must not be too far in the future - only allow periods that are due or past
+        // A period is "due" when we've reached the end of that month
+        if (selectedPeriodDate > maxAllowedDate)
+        {
+            selectedYear = defaultYear;
+            selectedMonth = defaultMonth;
+        }
+        
+        var currentYear = selectedYear;
+        var currentMonth = selectedMonth;
         
         // PERFORMANCE OPTIMIZATION: Load eligibility cache once upfront
         var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
         
         // Get all returns for current period in one query
+        // PERFORMANCE OPTIMIZATION: Use AsNoTracking() for read-only query
         var fipsIds = userProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId).ToList();
         var userReturns = await _context.ProductReturns
+            .AsNoTracking()
             .Include(pr => pr.MetricValues)
             .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
             .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
 
         // Create view model for user's products (show ALL products user is responsible for)
-        var userProductStatuses = new List<ProductReturnStatusViewModel>();
-        foreach (var product in userProducts)
+        // PERFORMANCE OPTIMIZATION: Process products in parallel instead of sequentially
+        var userViewModelTasks = userProducts.Select(async product =>
         {
-            var vm = await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-            if (vm != null)
-            {
-                userProductStatuses.Add(vm);
-            }
-        }
+            return await CreateProductStatusViewModelAsync(product, userReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+        });
+        
+        var userViewModels = await Task.WhenAll(userViewModelTasks);
+        var userProductStatuses = userViewModels.Where(vm => vm != null).ToList();
         
         // Calculate counts for navigation badges
         // Tasks count: products that require reporting AND are Due or Late
@@ -116,19 +168,21 @@ public class ProductReportingController : Controller
                 .Select(p => p.FipsId!)
                 .ToList();
             
+            // PERFORMANCE OPTIMIZATION: Use AsNoTracking() for read-only query and only load MetricValues when needed
             var allReturns = await _context.ProductReturns
+                .AsNoTracking()
                 .Include(pr => pr.MetricValues)
                 .Where(pr => allFipsIds.Contains(pr.FipsId) && pr.Year == currentYear && pr.Month == currentMonth)
                 .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
             
-            foreach (var product in activeProducts)
+            // PERFORMANCE OPTIMIZATION: Process products in parallel instead of sequentially
+            var viewModelTasks = activeProducts.Select(async product =>
             {
-                var vm = await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
-                if (vm != null)
-                {
-                    allProductStatuses.Add(vm);
-                }
-            }
+                return await CreateProductStatusViewModelAsync(product, allReturns, currentYear, currentMonth, userEmail, eligibilityCache);
+            });
+            
+            var viewModels = await Task.WhenAll(viewModelTasks);
+            allProductStatuses = viewModels.Where(vm => vm != null).ToList();
             
             allProductsCount = allProductStatuses.Count;
         }
@@ -139,11 +193,6 @@ public class ProductReportingController : Controller
         if (view == "mine" || string.IsNullOrEmpty(view))
         {
             displayData = userProductStatuses;
-        }
-        else if (view == "watched")
-        {
-            // Watched products not yet implemented - show empty list
-            displayData = new List<ProductReturnStatusViewModel>();
         }
         else if (view == "all")
         {
@@ -209,6 +258,19 @@ public class ProductReportingController : Controller
             {
                 displayData = displayData.Where(p => !p.IsReportingRequired).ToList();
             }
+        }
+        
+        // Apply pagination for "all" view only
+        var totalCount = displayData.Count;
+        var totalPages = 0;
+        if (view == "all")
+        {
+            totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            page = Math.Max(1, Math.Min(page, totalPages)); // Ensure page is within valid range
+            displayData = displayData
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
         }
         
         // Check if current period is excluded and there are no business area overrides
@@ -289,11 +351,44 @@ public class ProductReportingController : Controller
             .OrderBy(ba => ba)
             .ToList();
 
+        // Generate list of valid reporting periods for the period filter
+        // Only include periods that are due or past (not too far in the future)
+        // Reuse reportingStartDate and maxAllowedDate from validation above
+        var validPeriods = new List<(int Year, int Month, string DisplayName)>();
+        
+        for (var date = reportingStartDate; date <= maxAllowedDate; date = date.AddMonths(1))
+        {
+            var periodYear = date.Year;
+            var periodMonth = date.Month;
+            
+            // Skip if this period is excluded
+            var isExcluded = eligibilityCache.PeriodExclusions.Any(e => e.Year == periodYear && e.Month == periodMonth);
+            if (isExcluded)
+            {
+                continue;
+            }
+            
+            var periodName = date.ToString("MMMM yyyy");
+            validPeriods.Add((periodYear, periodMonth, periodName));
+        }
+        
         ViewBag.CurrentView = view;
         ViewBag.YourProductsCount = yourProductsCount;
         ViewBag.AllProductsCount = allProductsCount;
         ViewBag.CurrentYear = currentYear;
         ViewBag.CurrentMonth = currentMonth;
+        ViewBag.SelectedYear = selectedYear;
+        ViewBag.SelectedMonth = selectedMonth;
+        ViewBag.ValidPeriods = validPeriods;
+        
+        // Pagination info for "all" view - always set these values when on "all" view
+        if (view == "all")
+        {
+            ViewBag.CurrentPage = page;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+            ViewBag.TotalPages = totalPages > 0 ? totalPages : 1; // Ensure at least 1 page
+        }
         ViewBag.GlobalSuspensionMessage = globalSuspensionMessage;
         ViewBag.GlobalNextReportingPeriod = globalNextReportingPeriod;
         ViewBag.GlobalNextReportingPeriodDueDate = globalNextReportingPeriodDueDate;
@@ -725,6 +820,7 @@ public class ProductReportingController : Controller
     {
         var productReturn = await _context.ProductReturns
             .Include(pr => pr.MetricValues)
+                .ThenInclude(mv => mv.PerformanceMetric)
             .FirstOrDefaultAsync(pr => pr.Id == returnId);
 
         if (productReturn == null)
@@ -733,8 +829,30 @@ public class ProductReportingController : Controller
             return RedirectToAction(nameof(PerformanceMetrics));
         }
 
-        // Check if all metrics are complete
-        var incompleteCount = productReturn.MetricValues.Count(mv => !mv.IsComplete);
+        // Get product to determine applicable metrics
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => 
+            p.DocumentId == productReturn.ProductDocumentId || 
+            p.FipsId == productReturn.ProductDocumentId || 
+            p.FipsId == productReturn.FipsId);
+        
+        if (product == null)
+        {
+            TempData["ErrorMessage"] = "Product not found";
+            return RedirectToAction(nameof(PerformanceMetrics));
+        }
+
+        // Get applicable metrics for this product (filtered by phase, type, and conditional dependencies)
+        var applicableMetrics = await GetApplicableMetricsForProductAsync(product, productReturn.Year, productReturn.Month);
+        var applicableMetricIds = applicableMetrics.Select(m => m.Id).ToHashSet();
+
+        // Only check metrics that are applicable to this product
+        var applicableMetricValues = productReturn.MetricValues
+            .Where(mv => applicableMetricIds.Contains(mv.PerformanceMetricId))
+            .ToList();
+
+        // Check if all applicable metrics are complete
+        var incompleteCount = applicableMetricValues.Count(mv => !mv.IsComplete);
         if (incompleteCount > 0)
         {
             TempData["ErrorMessage"] = $"Cannot submit: {incompleteCount} metric(s) still need to be completed";
@@ -1069,6 +1187,260 @@ public class ProductReportingController : Controller
             IsPeriodExcluded = periodExcluded,
             HasBusinessAreaOverride = businessAreaReporting
         };
+    }
+
+    /// <summary>
+    /// Gets the list of metrics that are applicable to a product for a given reporting period.
+    /// Filters by phase, type, and conditional dependencies.
+    /// </summary>
+    private async Task<List<PerformanceMetric>> GetApplicableMetricsForProductAsync(ProductDto product, int year, int month)
+    {
+        // Get all performance metrics that are valid for this reporting period
+        var allMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled && 
+                   (m.ValidFromYear < year || 
+                   (m.ValidFromYear == year && m.ValidFromMonth <= month)))
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+        
+        // Filter by phase - only include metrics that apply to the product's phase
+        var phaseFilteredMetrics = allMetrics.Where(m => 
+        {
+            // If no phases specified, metric applies to all phases
+            if (string.IsNullOrEmpty(m.ApplicablePhases))
+                return true;
+            
+            // If product has no phase, show all metrics
+            if (string.IsNullOrEmpty(product.Phase))
+                return true;
+            
+            // Check if product's phase is in the metric's applicable phases
+            var applicablePhases = m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            
+            return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
+        }).ToList();
+
+        // Get all product types from category values
+        var productTypes = new List<string>();
+        if (product.CategoryValues != null)
+        {
+            productTypes = product.CategoryValues
+                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList();
+        }
+
+        // Filter by type - only include metrics where ANY of the product's types match ANY of the metric's applicable types
+        var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
+        {
+            // If no types specified, metric applies to all types
+            if (string.IsNullOrEmpty(m.ApplicableTypes))
+                return true;
+            
+            // If product has no types, show all metrics anyway
+            if (!productTypes.Any())
+                return true;
+            
+            // Check if ANY of the product's types match ANY of the metric's applicable types
+            var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .ToList();
+            
+            return productTypes.Any(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase));
+        }).ToList();
+
+        // Get existing metric values for this return to check conditional dependencies
+        var productDocumentId = product.DocumentId ?? product.FipsId;
+        var productReturn = await _context.ProductReturns
+            .FirstOrDefaultAsync(pr => 
+                (pr.ProductDocumentId == productDocumentId || 
+                 (string.IsNullOrEmpty(pr.ProductDocumentId) && pr.FipsId == product.FipsId)) &&
+                pr.Year == year && 
+                pr.Month == month);
+
+        if (productReturn == null)
+        {
+            // If no return exists yet, we can't check conditional dependencies, so return all type-filtered metrics
+            return typeFilteredMetrics;
+        }
+
+        var existingMetricValues = await _context.ProductMetricValues
+            .Where(mv => mv.ProductReturnId == productReturn.Id)
+            .ToListAsync();
+
+        // Filter by conditional dependencies - only show metrics whose conditions are met
+        var metrics = typeFilteredMetrics.Where(m => 
+        {
+            // If no conditional dependency, always show
+            if (!m.ConditionalOnMetricId.HasValue)
+                return true;
+            
+            // Check if the parent metric has a value
+            var parentMetricValue = existingMetricValues
+                .FirstOrDefault(mv => mv.PerformanceMetricId == m.ConditionalOnMetricId.Value);
+            
+            // Show if parent metric exists and has a value
+            return parentMetricValue != null && !string.IsNullOrWhiteSpace(parentMetricValue.Value);
+        }).ToList();
+
+        return metrics;
+    }
+
+    /// <summary>
+    /// Generates an Excel export for products with their performance metrics
+    /// </summary>
+    private async Task<IActionResult> GenerateExcelExportAsync(List<ProductDto> products, int year, int month, string sheetName)
+    {
+        if (!products.Any())
+        {
+            TempData["ErrorMessage"] = "No products found to export.";
+            return RedirectToAction("PerformanceMetrics");
+        }
+
+        // Get all metrics that might be used (we'll filter per product)
+        var allMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled && 
+                   (m.ValidFromYear < year || 
+                   (m.ValidFromYear == year && m.ValidFromMonth <= month)))
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+
+        // Get all returns for the period
+        var fipsIds = products.Where(p => !string.IsNullOrEmpty(p.FipsId)).Select(p => p.FipsId!).ToList();
+        var returns = await _context.ProductReturns
+            .AsNoTracking()
+            .Include(pr => pr.MetricValues)
+                .ThenInclude(mv => mv.PerformanceMetric)
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == year && pr.Month == month)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
+        // Collect all unique metrics across all products
+        var allMetricIds = new HashSet<int>();
+        foreach (var product in products)
+        {
+            if (string.IsNullOrEmpty(product.FipsId)) continue;
+            var applicableMetrics = await GetApplicableMetricsForProductAsync(product, year, month);
+            foreach (var metric in applicableMetrics)
+            {
+                allMetricIds.Add(metric.Id);
+            }
+        }
+
+        // Create workbook
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add(sheetName);
+
+        // Build headers
+        var headers = new List<string>
+        {
+            "Product",
+            "FIPS ID",
+            "Status",
+            "Reporting Period",
+            "Due Date"
+        };
+
+        // Add metric columns
+        var metricColumns = allMetrics
+            .Where(m => allMetricIds.Contains(m.Id))
+            .OrderBy(m => m.Identifier)
+            .ToList();
+
+        foreach (var metric in metricColumns)
+        {
+            headers.Add(metric.Title);
+        }
+
+        // Add headers to worksheet
+        for (int col = 0; col < headers.Count; col++)
+        {
+            var cell = worksheet.Cell(1, col + 1);
+            cell.Value = headers[col];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+            cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+        }
+
+        // Add data rows
+        int currentRow = 2;
+        var periodName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+        var dueDate = _returnStatusService.GetReturnDueDate(year, month);
+
+        foreach (var product in products.OrderBy(p => p.Title))
+        {
+            if (string.IsNullOrEmpty(product.FipsId)) continue;
+
+            int col = 1;
+            
+            // Product name
+            worksheet.Cell(currentRow, col++).Value = product.Title;
+            
+            // FIPS ID
+            worksheet.Cell(currentRow, col++).Value = product.FipsId;
+            
+            // Status
+            var productReturn = returns.TryGetValue(product.FipsId, out var returnValue) ? returnValue : null;
+            var status = productReturn != null 
+                ? _returnStatusService.CalculateReturnStatus(year, month, productReturn.SubmittedDate).ToString()
+                : "Not Started";
+            worksheet.Cell(currentRow, col++).Value = status;
+            
+            // Reporting Period
+            worksheet.Cell(currentRow, col++).Value = periodName;
+            
+            // Due Date
+            worksheet.Cell(currentRow, col++).Value = dueDate.ToString("dd/MM/yyyy");
+
+            // Get applicable metrics for this product
+            var applicableMetrics = await GetApplicableMetricsForProductAsync(product, year, month);
+            var applicableMetricIds = applicableMetrics.Select(m => m.Id).ToHashSet();
+
+            // Add metric values
+            foreach (var metric in metricColumns)
+            {
+                if (!applicableMetricIds.Contains(metric.Id))
+                {
+                    // Metric not applicable to this product
+                    worksheet.Cell(currentRow, col++).Value = "N/A";
+                }
+                else if (productReturn != null)
+                {
+                    var metricValue = productReturn.MetricValues?
+                        .FirstOrDefault(mv => mv.PerformanceMetricId == metric.Id);
+                    
+                    if (metricValue != null && !string.IsNullOrWhiteSpace(metricValue.Value))
+                    {
+                        worksheet.Cell(currentRow, col++).Value = metricValue.Value;
+                    }
+                    else if (metricValue != null && metricValue.IsNotCaptured)
+                    {
+                        worksheet.Cell(currentRow, col++).Value = $"Not Captured: {metricValue.NotCapturedReason ?? "No reason provided"}";
+                    }
+                    else
+                    {
+                        worksheet.Cell(currentRow, col++).Value = "";
+                    }
+                }
+                else
+                {
+                    worksheet.Cell(currentRow, col++).Value = "";
+                }
+            }
+
+            currentRow++;
+        }
+
+        // Auto-fit columns
+        worksheet.Columns().AdjustToContents();
+        worksheet.SheetView.FreezeRows(1);
+
+        // Save to memory stream
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var fileName = $"performance-metrics-export-{year}-{month:D2}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     private (bool IsValid, string? ErrorMessage) ValidateMetricValue(string value, PerformanceMetric metric)
@@ -1481,7 +1853,7 @@ public class ProductReportingController : Controller
     }
 
     // GET: ProductReporting/ExportUserProducts
-    public async Task<IActionResult> ExportUserProducts(string search, string phase, string businessArea, string reportingStatus)
+    public async Task<IActionResult> ExportUserProducts(string search, string phase, string businessArea, string reportingStatus, int? year = null, int? month = null, string? period = null)
     {
         try
         {
@@ -1494,10 +1866,70 @@ public class ProductReportingController : Controller
                 return RedirectToAction("PerformanceMetrics", new { view = "mine" });
             }
 
-            // This is a placeholder - actual export implementation would go here
-            // For now, redirect back with a message
-            TempData["ErrorMessage"] = "Export functionality is being implemented.";
-            return RedirectToAction("PerformanceMetrics", new { view = "mine" });
+            // Get reporting period
+            var now = DateTime.UtcNow;
+            var defaultYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var defaultMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            int? parsedYear = year;
+            int? parsedMonth = month;
+            
+            if (!string.IsNullOrEmpty(period))
+            {
+                var periodParts = period.Split('-');
+                if (periodParts.Length == 2 && 
+                    int.TryParse(periodParts[0], out var pYear) && 
+                    int.TryParse(periodParts[1], out var pMonth))
+                {
+                    parsedYear = pYear;
+                    parsedMonth = pMonth;
+                }
+            }
+            
+            var exportYear = parsedYear ?? defaultYear;
+            var exportMonth = parsedMonth ?? defaultMonth;
+
+            // Get user's products
+            var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+            var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+            
+            var userProducts = productsByContact
+                .Concat(productsByServiceOwner)
+                .GroupBy(p => p.FipsId)
+                .Where(g => !string.IsNullOrEmpty(g.Key))
+                .Select(g => g.First())
+                .ToList();
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(search))
+            {
+                userProducts = userProducts.Where(p => 
+                    p.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (p.FipsId != null && p.FipsId.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(p.Phase) && p.Phase.Contains(search, StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(phase))
+            {
+                userProducts = userProducts.Where(p => 
+                    !string.IsNullOrEmpty(p.Phase) && 
+                    p.Phase.Equals(phase, StringComparison.OrdinalIgnoreCase)
+                ).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                userProducts = userProducts.Where(p => 
+                    p.CategoryValues != null &&
+                    p.CategoryValues.Any(cv => 
+                        cv.CategoryType != null &&
+                        cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase) &&
+                        cv.Name.Equals(businessArea, StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+            }
+
+            return await GenerateExcelExportAsync(userProducts, exportYear, exportMonth, "Your Products");
         }
         catch (Exception ex)
         {
@@ -1508,14 +1940,69 @@ public class ProductReportingController : Controller
     }
 
     // GET: ProductReporting/ExportAllProducts
-    public async Task<IActionResult> ExportAllProducts(string search, string phase, string businessArea, string reportingStatus)
+    public async Task<IActionResult> ExportAllProducts(string search, string phase, string businessArea, string reportingStatus, int? year = null, int? month = null, string? period = null)
     {
         try
         {
-            // This is a placeholder - actual export implementation would go here
-            // For now, redirect back with a message
-            TempData["ErrorMessage"] = "Export functionality is being implemented.";
-            return RedirectToAction("PerformanceMetrics", new { view = "all" });
+            // Get reporting period
+            var now = DateTime.UtcNow;
+            var defaultYear = now.Month == 1 ? now.Year - 1 : now.Year;
+            var defaultMonth = now.Month == 1 ? 12 : now.Month - 1;
+            
+            int? parsedYear = year;
+            int? parsedMonth = month;
+            
+            if (!string.IsNullOrEmpty(period))
+            {
+                var periodParts = period.Split('-');
+                if (periodParts.Length == 2 && 
+                    int.TryParse(periodParts[0], out var pYear) && 
+                    int.TryParse(periodParts[1], out var pMonth))
+                {
+                    parsedYear = pYear;
+                    parsedMonth = pMonth;
+                }
+            }
+            
+            var exportYear = parsedYear ?? defaultYear;
+            var exportMonth = parsedMonth ?? defaultMonth;
+
+            // Get all products
+            var allProducts = await _productsApiService.GetAllProductsAsync();
+            var activeProducts = allProducts
+                .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(search))
+            {
+                activeProducts = activeProducts.Where(p => 
+                    p.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (p.FipsId != null && p.FipsId.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(p.Phase) && p.Phase.Contains(search, StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(phase))
+            {
+                activeProducts = activeProducts.Where(p => 
+                    !string.IsNullOrEmpty(p.Phase) && 
+                    p.Phase.Equals(phase, StringComparison.OrdinalIgnoreCase)
+                ).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                activeProducts = activeProducts.Where(p => 
+                    p.CategoryValues != null &&
+                    p.CategoryValues.Any(cv => 
+                        cv.CategoryType != null &&
+                        cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase) &&
+                        cv.Name.Equals(businessArea, StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+            }
+
+            return await GenerateExcelExportAsync(activeProducts, exportYear, exportMonth, "All Products");
         }
         catch (Exception ex)
         {
@@ -1525,6 +2012,188 @@ public class ProductReportingController : Controller
         }
     }
 
+    // GET: ProductReporting/ReportingCompletionByBusinessArea
+    public async Task<IActionResult> ReportingCompletionByBusinessArea(int? year = null, int? month = null, string? period = null)
+    {
+        // Get reporting period
+        var now = DateTime.UtcNow;
+        var defaultYear = now.Month == 1 ? now.Year - 1 : now.Year;
+        var defaultMonth = now.Month == 1 ? 12 : now.Month - 1;
+        
+        int? parsedYear = year;
+        int? parsedMonth = month;
+        
+        if (!string.IsNullOrEmpty(period))
+        {
+            var periodParts = period.Split('-');
+            if (periodParts.Length == 2 && 
+                int.TryParse(periodParts[0], out var pYear) && 
+                int.TryParse(periodParts[1], out var pMonth))
+            {
+                parsedYear = pYear;
+                parsedMonth = pMonth;
+            }
+        }
+        
+        var reportYear = parsedYear ?? defaultYear;
+        var reportMonth = parsedMonth ?? defaultMonth;
+
+        // Load eligibility cache
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+
+        // Get all active products
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var activeProducts = allProducts
+            .Where(p => p.State != null && p.State.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !string.IsNullOrEmpty(p.FipsId))
+            .ToList();
+
+        // Get all returns for the period
+        var fipsIds = activeProducts.Select(p => p.FipsId!).ToList();
+        var returns = await _context.ProductReturns
+            .AsNoTracking()
+            .Include(pr => pr.MetricValues)
+            .Where(pr => fipsIds.Contains(pr.FipsId) && pr.Year == reportYear && pr.Month == reportMonth)
+            .ToDictionaryAsync(pr => pr.FipsId, pr => pr);
+
+        // Group products by business area and calculate completion stats
+        var businessAreaStats = new Dictionary<string, BusinessAreaCompletionStats>();
+        
+        foreach (var product in activeProducts)
+        {
+            if (string.IsNullOrEmpty(product.FipsId)) continue;
+
+            // Get business area
+            var businessArea = product.CategoryValues?
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                ?.Name ?? "Unknown";
+
+            if (!businessAreaStats.ContainsKey(businessArea))
+            {
+                businessAreaStats[businessArea] = new BusinessAreaCompletionStats
+                {
+                    BusinessArea = businessArea,
+                    TotalProducts = 0,
+                    ProductsRequiringReporting = 0,
+                    ProductsSubmitted = 0,
+                    ProductsDue = 0,
+                    ProductsLate = 0,
+                    ProductsNotStarted = 0
+                };
+            }
+
+            var stats = businessAreaStats[businessArea];
+            stats.TotalProducts++;
+
+            // Check if reporting is required
+            var reportingRequired = _eligibilityService.IsReportingRequired(
+                product.FipsId, 
+                businessArea, 
+                reportYear, 
+                reportMonth,
+                eligibilityCache);
+
+            if (!reportingRequired)
+            {
+                continue; // Skip products that don't require reporting
+            }
+
+            stats.ProductsRequiringReporting++;
+
+            // Get return status
+            if (returns.TryGetValue(product.FipsId, out var productReturn))
+            {
+                var status = _returnStatusService.CalculateReturnStatus(
+                    reportYear, 
+                    reportMonth, 
+                    productReturn.SubmittedDate);
+
+                switch (status)
+                {
+                    case ReturnStatus.Submitted:
+                        stats.ProductsSubmitted++;
+                        break;
+                    case ReturnStatus.Due:
+                        stats.ProductsDue++;
+                        break;
+                    case ReturnStatus.Late:
+                        stats.ProductsLate++;
+                        break;
+                    case ReturnStatus.Upcoming:
+                        stats.ProductsNotStarted++;
+                        break;
+                }
+            }
+            else
+            {
+                // No return exists - check if period has started
+                var periodStart = new DateTime(reportYear, reportMonth, 1);
+                if (periodStart >= new DateTime(2025, 10, 1))
+                {
+                    var status = _returnStatusService.CalculateReturnStatus(reportYear, reportMonth, null);
+                    if (status == ReturnStatus.Due)
+                    {
+                        stats.ProductsDue++;
+                    }
+                    else if (status == ReturnStatus.Late)
+                    {
+                        stats.ProductsLate++;
+                    }
+                    else
+                    {
+                        stats.ProductsNotStarted++;
+                    }
+                }
+                else
+                {
+                    stats.ProductsNotStarted++;
+                }
+            }
+        }
+
+        // Calculate completion percentages
+        foreach (var stats in businessAreaStats.Values)
+        {
+            if (stats.ProductsRequiringReporting > 0)
+            {
+                stats.CompletionPercentage = (double)stats.ProductsSubmitted / stats.ProductsRequiringReporting * 100;
+            }
+        }
+
+        // Generate list of valid reporting periods for the period filter
+        var validPeriods = new List<(int Year, int Month, string DisplayName)>();
+        var reportingStartDate = new DateTime(2025, 10, 1);
+        var maxAllowedDate = now.AddMonths(1);
+        
+        for (var date = reportingStartDate; date <= maxAllowedDate; date = date.AddMonths(1))
+        {
+            var periodYear = date.Year;
+            var periodMonth = date.Month;
+            
+            var isExcluded = eligibilityCache.PeriodExclusions.Any(e => e.Year == periodYear && e.Month == periodMonth);
+            if (isExcluded)
+            {
+                continue;
+            }
+            
+            var periodName = date.ToString("MMMM yyyy");
+            validPeriods.Add((periodYear, periodMonth, periodName));
+        }
+
+        var sortedStats = businessAreaStats.Values
+            .OrderByDescending(s => s.CompletionPercentage)
+            .ThenBy(s => s.BusinessArea)
+            .ToList();
+
+        ViewBag.ReportYear = reportYear;
+        ViewBag.ReportMonth = reportMonth;
+        ViewBag.SelectedYear = reportYear;
+        ViewBag.SelectedMonth = reportMonth;
+        ViewBag.ValidPeriods = validPeriods;
+        ViewBag.PeriodName = new DateTime(reportYear, reportMonth, 1).ToString("MMMM yyyy");
+
+        return View("~/Views/ProductReporting/ReportingCompletionByBusinessArea.cshtml", sortedStats);
+    }
+
     #endregion
 }
-

@@ -4,7 +4,6 @@
     ViewData["Title"] = "Monthly operational performance reporting";
     var currentView = ViewBag.CurrentView as string ?? "mine";
     var isViewMine = string.Equals(currentView, "mine", StringComparison.OrdinalIgnoreCase);
-    var isViewWatched = string.Equals(currentView, "watched", StringComparison.OrdinalIgnoreCase);
     var isViewAll = string.Equals(currentView, "all", StringComparison.OrdinalIgnoreCase);
 }
 
@@ -22,12 +21,14 @@
 }
 
 @{
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    var isReportingCompletionPage = currentAction == "ReportingCompletionByBusinessArea";
     ViewBag.BrandText = "Performance reporting";
     ViewBag.NavLinks = new[]
     {
         new { Text = "Your products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }), IsButton = false, IsActive = isViewMine },
-        new { Text = "Watched", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "watched" }), IsButton = false, IsActive = isViewWatched },
         new { Text = "All products", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "all" }), IsButton = false, IsActive = isViewAll },
+        new { Text = "Reporting", Action = "ReportingCompletionByBusinessArea", Controller = "ProductReporting", Url = Url.Action("ReportingCompletionByBusinessArea", "ProductReporting"), IsButton = false, IsActive = isReportingCompletionPage },
         new { Text = "Guidance", Action = "PerformanceMetrics", Controller = "ProductReporting", Url = Url.Action("PerformanceMetrics", "ProductReporting", new { view = "guidance" }), IsButton = false, IsActive = false }
     };
 }
@@ -62,9 +63,25 @@
                         @{
                             var phases = ViewBag.Phases as List<string> ?? new List<string>();
                             var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
+                            var validPeriods = ViewBag.ValidPeriods as List<(int Year, int Month, string DisplayName)> ?? new List<(int Year, int Month, string DisplayName)>();
+                            var selectedYear = ViewBag.SelectedYear as int? ?? ViewBag.CurrentYear as int?;
+                            var selectedMonth = ViewBag.SelectedMonth as int? ?? ViewBag.CurrentMonth as int?;
                         }
                         <form method="get" id="filterForm">
                             <input type="hidden" name="view" value="@currentView" />
+                            <div class="form-group">
+                                <label for="period">Reporting Period</label>
+                                <select name="period" id="period" class="form-control form-control-sm">
+                                    @if (validPeriods != null && validPeriods.Any())
+                                    {
+                                        @foreach (var period in validPeriods)
+                                        {
+                                            var isSelected = selectedYear == period.Year && selectedMonth == period.Month;
+                                            <option value="@period.Year-@period.Month.ToString("D2")" selected="@isSelected">@period.DisplayName</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label>Search</label>
                                 <input type="text" name="search" class="form-control form-control-sm" placeholder="Search products..." value="@ViewBag.CurrentSearch" />
@@ -173,13 +190,30 @@
                             </div>
                         </form>
                         
+                        @{
+                            var isDefaultPeriod = (selectedYear == ViewBag.CurrentYear && selectedMonth == ViewBag.CurrentMonth);
+                        }
                         @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentPhase?.ToString()) || 
                              !string.IsNullOrEmpty(ViewBag.CurrentBusinessArea?.ToString()) || 
-                             !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString()))
+                             !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString()) ||
+                             !isDefaultPeriod)
                         {
                             <div class="mt-3 pt-3 border-top">
                                 <strong class="d-block mb-2">Active Filters:</strong>
+                                @if (!isDefaultPeriod)
+                                {
+                                    var periodDisplay = new DateTime(selectedYear ?? ViewBag.CurrentYear, selectedMonth ?? ViewBag.CurrentMonth, 1).ToString("MMMM yyyy");
+                                    <a href="@Url.Action("PerformanceMetrics", new { 
+                                        view = currentView,
+                                        search = ViewBag.CurrentSearch, 
+                                        phase = ViewBag.CurrentPhase, 
+                                        businessArea = ViewBag.CurrentBusinessArea, 
+                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                    })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
+                                        Period: @periodDisplay <i class="fas fa-times ml-2"></i>
+                                    </a>
+                                }
                                 @if (!string.IsNullOrEmpty(ViewBag.CurrentSearch?.ToString()))
                                 {
                                     <a href="@Url.Action("PerformanceMetrics", new { 
@@ -187,7 +221,8 @@
                                         search = "",
                                         phase = ViewBag.CurrentPhase, 
                                         businessArea = ViewBag.CurrentBusinessArea, 
-                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                        reportingStatus = ViewBag.CurrentReportingStatus,
+                                        period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Search: @ViewBag.CurrentSearch <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -199,7 +234,8 @@
                                         search = ViewBag.CurrentSearch, 
                                         phase = "",
                                         businessArea = ViewBag.CurrentBusinessArea, 
-                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                        reportingStatus = ViewBag.CurrentReportingStatus,
+                                        period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Phase: @ViewBag.CurrentPhase <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -211,7 +247,8 @@
                                         search = ViewBag.CurrentSearch, 
                                         phase = ViewBag.CurrentPhase, 
                                         businessArea = "",
-                                        reportingStatus = ViewBag.CurrentReportingStatus
+                                        reportingStatus = ViewBag.CurrentReportingStatus,
+                                        period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Area: @ViewBag.CurrentBusinessArea <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -223,7 +260,8 @@
                                         search = ViewBag.CurrentSearch, 
                                         phase = ViewBag.CurrentPhase, 
                                         businessArea = ViewBag.CurrentBusinessArea,
-                                        reportingStatus = ""
+                                        reportingStatus = "",
+                                        period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
                                     })" class="badge badge-info mb-2 mr-2 d-inline-flex align-items-center badge-link" title="Remove filter">
                                         Status: @ViewBag.CurrentReportingStatus <i class="fas fa-times ml-2"></i>
                                     </a>
@@ -243,13 +281,22 @@
                     {
                         <div class="card mb-4">
                             <div class="card-header">
-                                <h3 class="card-title">Your products</h3>
+                                <h3 class="card-title">
+                                    Your products
+                                    @if (!isDefaultPeriod)
+                                    {
+                                        <span class="text-muted" style="font-size: 0.85em; font-weight: normal;">
+                                            - @(new DateTime(selectedYear ?? ViewBag.CurrentYear, selectedMonth ?? ViewBag.CurrentMonth, 1).ToString("MMMM yyyy"))
+                                        </span>
+                                    }
+                                </h3>
                                 <div class="card-tools">
                                     <a asp-action="ExportUserProducts" 
                                        asp-route-search="@ViewBag.CurrentSearch"
                                        asp-route-phase="@ViewBag.CurrentPhase"
                                        asp-route-businessArea="@ViewBag.CurrentBusinessArea"
                                        asp-route-reportingStatus="@ViewBag.CurrentReportingStatus"
+                                       asp-route-period="@(!isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null)"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
@@ -364,6 +411,72 @@
                                     </tbody>
                                 </table>
                             </div>
+                            @if (isViewAll && ViewBag.TotalPages != null && ViewBag.TotalCount != null)
+                            {
+                                <div class="card-footer">
+                                    @{
+                                        var currentPage = ViewBag.CurrentPage as int? ?? 1;
+                                        var totalPages = ViewBag.TotalPages as int? ?? 1;
+                                        var totalCount = ViewBag.TotalCount as int? ?? 0;
+                                        var pageSize = ViewBag.PageSize as int? ?? 50;
+                                        var startRecord = (currentPage - 1) * pageSize + 1;
+                                        var endRecord = Math.Min(currentPage * pageSize, totalCount);
+                                    }
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <small class="text-muted">
+                                                Showing @startRecord to @endRecord of @totalCount products
+                                            </small>
+                                        </div>
+                                        <nav>
+                                            <ul class="pagination pagination-sm mb-0">
+                                                @if (currentPage > 1)
+                                                {
+                                                    <li class="page-item">
+                                                        <a class="page-link" href="@Url.Action("PerformanceMetrics", new { 
+                                                            view = "all",
+                                                            page = currentPage - 1,
+                                                            search = ViewBag.CurrentSearch,
+                                                            phase = ViewBag.CurrentPhase,
+                                                            businessArea = ViewBag.CurrentBusinessArea,
+                                                            reportingStatus = ViewBag.CurrentReportingStatus,
+                                                            period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
+                                                        })">Previous</a>
+                                                    </li>
+                                                }
+                                                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                                                {
+                                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                                        <a class="page-link" href="@Url.Action("PerformanceMetrics", new { 
+                                                            view = "all",
+                                                            page = i,
+                                                            search = ViewBag.CurrentSearch,
+                                                            phase = ViewBag.CurrentPhase,
+                                                            businessArea = ViewBag.CurrentBusinessArea,
+                                                            reportingStatus = ViewBag.CurrentReportingStatus,
+                                                            period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
+                                                        })">@i</a>
+                                                    </li>
+                                                }
+                                                @if (currentPage < totalPages)
+                                                {
+                                                    <li class="page-item">
+                                                        <a class="page-link" href="@Url.Action("PerformanceMetrics", new { 
+                                                            view = "all",
+                                                            page = currentPage + 1,
+                                                            search = ViewBag.CurrentSearch,
+                                                            phase = ViewBag.CurrentPhase,
+                                                            businessArea = ViewBag.CurrentBusinessArea,
+                                                            reportingStatus = ViewBag.CurrentReportingStatus,
+                                                            period = !isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null
+                                                        })">Next</a>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
                     else
@@ -374,15 +487,6 @@
                             </div>
                         </div>
                     }
-                }
-                else if (isViewWatched)
-                {
-                    <!-- Watched Products Section -->
-                    <div class="card mb-4">
-                        <div class="card-body text-center py-5">
-                            <p class="text-muted mb-0">Watched products functionality is not yet available.</p>
-                        </div>
-                    </div>
                 }
                 else if (isViewAll)
                 {
@@ -399,6 +503,12 @@
                                                         !string.IsNullOrEmpty(ViewBag.CurrentReportingStatus?.ToString());
                                     }
                                     @(hasFilters ? "Filtered view of products" : "All products")
+                                    @if (!isDefaultPeriod)
+                                    {
+                                        <span class="text-muted" style="font-size: 0.85em; font-weight: normal;">
+                                            - @(new DateTime(selectedYear ?? ViewBag.CurrentYear, selectedMonth ?? ViewBag.CurrentMonth, 1).ToString("MMMM yyyy"))
+                                        </span>
+                                    }
                                 </h3>
                                 <div class="card-tools">
                                     <a asp-action="ExportAllProducts" 
@@ -406,6 +516,7 @@
                                        asp-route-phase="@ViewBag.CurrentPhase"
                                        asp-route-businessArea="@ViewBag.CurrentBusinessArea"
                                        asp-route-reportingStatus="@ViewBag.CurrentReportingStatus"
+                                       asp-route-period="@(!isDefaultPeriod ? $"{selectedYear}-{selectedMonth:D2}" : null)"
                                        style="color: #005ea5; text-decoration: none;">
                                         Export to Excel
                                     </a>
