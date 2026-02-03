@@ -4032,6 +4032,22 @@ public class CentralOpsController : Controller
             var prevMonthUpdateStats = CalculateMonthlyUpdateStats(prevMonthProjects, prevYear, prevMonth, _monthlyUpdateService);
             
             // Calculate previous month RAG distribution
+            // Get RAG history up to the end of the previous month to find what RAG status each project had
+            var prevMonthProjectIds = prevMonthProjects.Select(p => p.Id).ToList();
+            var ragHistoryUpToPrevMonth = await _context.ProjectRagHistories
+                .Include(rh => rh.RagStatusLookup)
+                .Where(rh => rh.ChangedAt < monthStart && 
+                            prevMonthProjectIds.Contains(rh.ProjectId) && 
+                            !rh.Project.IsDeleted)
+                .OrderByDescending(rh => rh.ChangedAt)
+                .ToListAsync();
+            
+            // Create a dictionary of project ID to their last RAG status before the current month
+            // Group by project and take the most recent entry for each project
+            var projectRagStatusAtPrevMonthEnd = ragHistoryUpToPrevMonth
+                .GroupBy(rh => rh.ProjectId)
+                .ToDictionary(g => g.Key, g => NormalizeRagStatus(g.First().RagStatusLookup?.Name ?? g.First().RagStatus));
+            
             var prevMonthRagDistribution = new Dictionary<string, int>
             {
                 { "Red", 0 },
@@ -4044,7 +4060,18 @@ public class CentralOpsController : Controller
             
             foreach (var project in prevMonthProjects)
             {
-                var ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
+                string ragStatus;
+                // If we have history for this project, use the last RAG status before current month
+                if (projectRagStatusAtPrevMonthEnd.ContainsKey(project.Id))
+                {
+                    ragStatus = projectRagStatusAtPrevMonthEnd[project.Id];
+                }
+                else
+                {
+                    // No history, use current RAG status (assumes it hasn't changed since project creation)
+                    ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
+                }
+                
                 if (string.IsNullOrWhiteSpace(ragStatus))
                 {
                     prevMonthRagDistribution["Not Set"]++;
@@ -4052,6 +4079,48 @@ public class CentralOpsController : Controller
                 else if (prevMonthRagDistribution.ContainsKey(ragStatus))
                 {
                     prevMonthRagDistribution[ragStatus]++;
+                }
+            }
+            
+            // Calculate previous month Priority distribution
+            var prevMonthPriorityDistribution = new Dictionary<string, int>
+            {
+                { "Critical", 0 },
+                { "High", 0 },
+                { "Medium", 0 },
+                { "Low", 0 },
+                { "Not Set", 0 }
+            };
+            
+            foreach (var project in prevMonthProjects)
+            {
+                if (project.DeliveryPriority == null)
+                {
+                    prevMonthPriorityDistribution["Not Set"]++;
+                }
+                else
+                {
+                    var priorityName = project.DeliveryPriority.Name.ToLower();
+                    if (priorityName.Contains("critical"))
+                    {
+                        prevMonthPriorityDistribution["Critical"]++;
+                    }
+                    else if (priorityName.Contains("high"))
+                    {
+                        prevMonthPriorityDistribution["High"]++;
+                    }
+                    else if (priorityName.Contains("medium"))
+                    {
+                        prevMonthPriorityDistribution["Medium"]++;
+                    }
+                    else if (priorityName.Contains("low"))
+                    {
+                        prevMonthPriorityDistribution["Low"]++;
+                    }
+                    else
+                    {
+                        prevMonthPriorityDistribution["Not Set"]++;
+                    }
                 }
             }
             
@@ -4098,6 +4167,7 @@ public class CentralOpsController : Controller
             ViewBag.PrevMonthMilestonesAchieved = prevMonthMilestonesAchieved;
             ViewBag.PrevMonthUpdateStats = prevMonthUpdateStats;
             ViewBag.PrevMonthRagDistribution = prevMonthRagDistribution;
+            ViewBag.PrevMonthPriorityDistribution = prevMonthPriorityDistribution;
             ViewBag.PrevMonthName = prevMonthStart.ToString("MMMM yyyy");
             ViewBag.ProjectsWithRagChange = projectsWithRagChange;
             ViewBag.ProjectsWithStatusChange = projectsWithStatusChange;
@@ -4136,6 +4206,154 @@ public class CentralOpsController : Controller
             _logger.LogError(ex, "Error loading monthly summary v2 for {Year}-{Month}", year, month);
             TempData["ErrorMessage"] = "An error occurred while loading the monthly summary. Please try again.";
             return RedirectToAction(nameof(Dashboard));
+        }
+    }
+
+    // GET: CentralOps/MonthlySummaryV2ByRagStatus
+    public async Task<IActionResult> MonthlySummaryV2ByRagStatus(int year, int month, string ragStatus, int? businessAreaId)
+    {
+        try
+        {
+            // Calculate month boundaries
+            var monthStart = new DateTime(year, month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+            
+            // Get all active projects (exclude Cancelled and Completed)
+            var query = _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.RagStatusLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+            
+            if (businessAreaId.HasValue)
+            {
+                query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+            }
+            
+            var allProjects = await query.ToListAsync();
+            
+            // Filter by RAG status
+            List<Project> filteredProjects;
+            if (ragStatus == "Not Set" || string.IsNullOrEmpty(ragStatus))
+            {
+                filteredProjects = allProjects
+                    .Where(p => string.IsNullOrWhiteSpace(NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus)))
+                    .OrderBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                    .ThenBy(p => p.Title)
+                    .ToList();
+            }
+            else
+            {
+                filteredProjects = allProjects
+                    .Where(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == ragStatus)
+                    .OrderBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                    .ThenBy(p => p.Title)
+                    .ToList();
+            }
+            
+            ViewBag.Year = year;
+            ViewBag.Month = month;
+            ViewBag.RagStatus = ragStatus;
+            ViewBag.BusinessAreaId = businessAreaId;
+            ViewBag.MonthName = monthStart.ToString("MMMM yyyy");
+            ViewBag.FilteredProjects = filteredProjects;
+            ViewBag.TotalCount = filteredProjects.Count;
+            
+            var businessAreas = await _context.BusinessAreaLookups.OrderBy(ba => ba.Name).ToListAsync();
+            ViewBag.BusinessAreas = businessAreas;
+            
+            if (businessAreaId.HasValue)
+            {
+                var selectedBusinessArea = businessAreas.FirstOrDefault(ba => ba.Id == businessAreaId.Value);
+                ViewBag.SelectedBusinessAreaName = selectedBusinessArea?.Name;
+            }
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly summary v2 by RAG status for {Year}-{Month}-{RagStatus}", year, month, ragStatus);
+            TempData["ErrorMessage"] = "An error occurred while loading the filtered projects. Please try again.";
+            return RedirectToAction("MonthlySummaryV2", new { year, month, businessAreaId });
+        }
+    }
+
+    // GET: CentralOps/MonthlySummaryV2ByPriority
+    public async Task<IActionResult> MonthlySummaryV2ByPriority(int year, int month, string priority, int? businessAreaId)
+    {
+        try
+        {
+            // Calculate month boundaries
+            var monthStart = new DateTime(year, month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+            
+            // Get all active projects (exclude Cancelled and Completed)
+            var query = _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.RagStatusLookup)
+                .Include(p => p.ServiceOwners)
+                    .ThenInclude(so => so.User)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+            
+            if (businessAreaId.HasValue)
+            {
+                query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+            }
+            
+            var allProjects = await query.ToListAsync();
+            
+            // Filter by Priority
+            List<Project> filteredProjects;
+            if (priority == "Not Set" || string.IsNullOrEmpty(priority))
+            {
+                filteredProjects = allProjects
+                    .Where(p => p.DeliveryPriority == null)
+                    .OrderBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                    .ThenBy(p => p.Title)
+                    .ToList();
+            }
+            else
+            {
+                filteredProjects = allProjects
+                    .Where(p => p.DeliveryPriority != null && 
+                               (priority == "Critical" && p.DeliveryPriority.Name.ToLower().Contains("critical")) ||
+                               (priority == "High" && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")) ||
+                               (priority == "Medium" && p.DeliveryPriority.Name.ToLower().Contains("medium")) ||
+                               (priority == "Low" && p.DeliveryPriority.Name.ToLower().Contains("low")))
+                    .OrderBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                    .ThenBy(p => p.Title)
+                    .ToList();
+            }
+            
+            ViewBag.Year = year;
+            ViewBag.Month = month;
+            ViewBag.Priority = priority;
+            ViewBag.BusinessAreaId = businessAreaId;
+            ViewBag.MonthName = monthStart.ToString("MMMM yyyy");
+            ViewBag.FilteredProjects = filteredProjects;
+            ViewBag.TotalCount = filteredProjects.Count;
+            
+            var businessAreas = await _context.BusinessAreaLookups.OrderBy(ba => ba.Name).ToListAsync();
+            ViewBag.BusinessAreas = businessAreas;
+            
+            if (businessAreaId.HasValue)
+            {
+                var selectedBusinessArea = businessAreas.FirstOrDefault(ba => ba.Id == businessAreaId.Value);
+                ViewBag.SelectedBusinessAreaName = selectedBusinessArea?.Name;
+            }
+            
+            return View();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading monthly summary v2 by Priority for {Year}-{Month}-{Priority}", year, month, priority);
+            TempData["ErrorMessage"] = "An error occurred while loading the filtered projects. Please try again.";
+            return RedirectToAction("MonthlySummaryV2", new { year, month, businessAreaId });
         }
     }
 
@@ -4315,10 +4533,15 @@ public class CentralOpsController : Controller
             if (businessAreaRisks.Count > 0)
             {
                 var highRiskCount = businessAreaRisks.Count(r => r.Risk.RiskScore >= 20);
+                var risksWithoutPriority = businessAreaRisks.Count(r => r.Risk.RiskPriorityId == null);
                 narrative.Append($"Risk management shows {businessAreaRisks.Count} open risk{(businessAreaRisks.Count != 1 ? "s" : "")}");
                 if (highRiskCount > 0)
                 {
                     narrative.Append($", including {highRiskCount} high-risk item{(highRiskCount != 1 ? "s" : "")} with a risk score of 20 or higher");
+                }
+                if (risksWithoutPriority > 0)
+                {
+                    narrative.Append($". <strong>Risk:</strong> {risksWithoutPriority} risk{(risksWithoutPriority != 1 ? "s do" : " does")} not have a priority set, which makes it difficult to assess their relative importance and allocate resources appropriately");
                 }
                 narrative.Append(". ");
             }
@@ -4327,14 +4550,36 @@ public class CentralOpsController : Controller
             {
                 var criticalIssues = businessAreaIssues.Count(i => i.Issue.Severity.ToLower() == "critical");
                 var highIssues = businessAreaIssues.Count(i => i.Issue.Severity.ToLower() == "high");
+                var issuesWithoutPriority = businessAreaIssues.Count(i => i.Issue.PriorityId == null && string.IsNullOrWhiteSpace(i.Issue.Priority));
                 narrative.Append($"There are {businessAreaIssues.Count} open issue{(businessAreaIssues.Count != 1 ? "s" : "")}");
                 if (criticalIssues > 0 || highIssues > 0)
                 {
                     narrative.Append($" ({criticalIssues} critical, {highIssues} high severity)");
                 }
+                if (issuesWithoutPriority > 0)
+                {
+                    narrative.Append($". <strong>Risk:</strong> {issuesWithoutPriority} issue{(issuesWithoutPriority != 1 ? "s do" : " does")} not have a priority set, which makes it difficult to assess their relative importance and allocate resources appropriately");
+                }
                 narrative.Append(". ");
             }
             
+            narrative.Append("</p>");
+        }
+        
+        // Flag projects with "Not Set" RAG status as a risk
+        var notSetRagCount = ragDistribution.ContainsKey("Not Set") ? ragDistribution["Not Set"] : 0;
+        if (notSetRagCount > 0)
+        {
+            narrative.Append("<p class='mb-3'><strong>Risk:</strong> ");
+            if (isBusinessAreaView)
+            {
+                narrative.Append($"{notSetRagCount} project{(notSetRagCount != 1 ? "s in" : " in")} {businessAreaName} do{(notSetRagCount != 1 ? "" : "es")} not have a RAG status set");
+            }
+            else
+            {
+                narrative.Append($"{notSetRagCount} project{(notSetRagCount != 1 ? "s" : "")} do{(notSetRagCount != 1 ? "" : "es")} not have a RAG status set");
+            }
+            narrative.Append(", which makes it difficult to assess their current health and identify projects that may require attention. ");
             narrative.Append("</p>");
         }
         
