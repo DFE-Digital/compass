@@ -46,6 +46,8 @@
     var monthlyUpdateStats = ViewBag.MonthlyUpdateStats as MonthlyUpdateStats;
     var ragDistribution = ViewBag.RagDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
     var priorityDistribution = ViewBag.PriorityDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var prevMonthRagDistribution = ViewBag.PrevMonthRagDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var prevMonthPriorityDistribution = ViewBag.PrevMonthPriorityDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
     var upcomingMilestones = ViewBag.UpcomingMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
     var lateMilestones = ViewBag.LateMilestones as List<MilestoneWithProject> ?? new List<MilestoneWithProject>();
     var businessAreaSummaries = ViewBag.BusinessAreaSummaries as List<BusinessAreaSummaryViewModel> ?? new List<BusinessAreaSummaryViewModel>();
@@ -60,7 +62,6 @@
     var prevMonthNewProjects = ViewBag.PrevMonthNewProjects as int? ?? 0;
     var prevMonthMilestonesAchieved = ViewBag.PrevMonthMilestonesAchieved as int? ?? 0;
     var prevMonthUpdateStats = ViewBag.PrevMonthUpdateStats as MonthlyUpdateStats;
-    var prevMonthRagDistribution = ViewBag.PrevMonthRagDistribution as Dictionary<string, int> ?? new Dictionary<string, int>();
     var prevMonthName = ViewBag.PrevMonthName as string ?? "";
     var projectsWithRagChange = ViewBag.ProjectsWithRagChange as int? ?? 0;
     var projectsWithStatusChange = ViewBag.ProjectsWithStatusChange as int? ?? 0;
@@ -784,29 +785,45 @@
                                             <th>Status</th>
                                             <th>Count</th>
                                             <th>Percentage</th>
+                                            @if (!string.IsNullOrEmpty(prevMonthName))
+                                            {
+                                                <th>Change from @prevMonthName</th>
+                                            }
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @{
                                             var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green + ragData.NotSet;
                                             var ragItems = new[] {
-                                                new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
-                                                new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
-                                                new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
-                                                new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
-                                                new { Label = "Green", Count = ragData.Green, Color = "#28a745" },
-                                                new { Label = "Not Set", Count = ragData.NotSet, Color = "#6c757d" }
+                                                new { Label = "Red", Count = ragData.Red, Color = "#dc3545", Key = "Red" },
+                                                new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14", Key = "Amber-Red" },
+                                                new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107", Key = "Amber" },
+                                                new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b", Key = "Amber-Green" },
+                                                new { Label = "Green", Count = ragData.Green, Color = "#28a745", Key = "Green" },
+                                                new { Label = "Not Set", Count = ragData.NotSet, Color = "#6c757d", Key = "Not Set" }
                                             };
                                         }
                                         @foreach (var item in ragItems)
                                         {
                                             var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                                            var prevCount = prevMonthRagDistribution.ContainsKey(item.Key) ? prevMonthRagDistribution[item.Key] : 0;
+                                            var change = item.Count - prevCount;
+                                            var changeText = change > 0 ? $"+{change}" : change.ToString();
+                                            var changeColor = change > 0 ? "text-danger" : (change < 0 ? "text-success" : "text-muted");
+                                            var ragStatusParam = item.Key == "Not Set" ? "Not Set" : item.Key;
+                                            var linkUrl = Url.Action("MonthlySummaryV2ByRagStatus", "CentralOps", new { year = year, month = month, ragStatus = ragStatusParam, businessAreaId = businessAreaId });
                                             <tr>
                                                 <td>
-                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" || item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                    <a href="@linkUrl" style="text-decoration: none; color: inherit;">
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" || item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
+                                                    </a>
                                                 </td>
-                                                <td>@item.Count</td>
+                                                <td><a href="@linkUrl" style="text-decoration: none; color: inherit; font-weight: 600;">@item.Count</a></td>
                                                 <td>@percentage%</td>
+                                                @if (!string.IsNullOrEmpty(prevMonthName))
+                                                {
+                                                    <td class="@changeColor">@changeText</td>
+                                                }
                                             </tr>
                                         }
                                         @if (ragTotal > 0)
@@ -841,28 +858,44 @@
                                             <th>Priority</th>
                                             <th>Count</th>
                                             <th>Percentage</th>
+                                            @if (!string.IsNullOrEmpty(prevMonthName))
+                                            {
+                                                <th>Change from @prevMonthName</th>
+                                            }
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @{
                                             var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
                                             var priorityItems = new[] {
-                                                new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
-                                                new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
-                                                new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
-                                                new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
-                                                new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
+                                                new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545", Key = "Critical" },
+                                                new { Label = "High", Count = priorityData.High, Color = "#fd7e14", Key = "High" },
+                                                new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107", Key = "Medium" },
+                                                new { Label = "Low", Count = priorityData.Low, Color = "#6c757d", Key = "Low" },
+                                                new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef", Key = "Not Set" }
                                             };
                                         }
                                         @foreach (var item in priorityItems)
                                         {
                                             var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                                            var prevCount = prevMonthPriorityDistribution.ContainsKey(item.Key) ? prevMonthPriorityDistribution[item.Key] : 0;
+                                            var change = item.Count - prevCount;
+                                            var changeText = change > 0 ? $"+{change}" : change.ToString();
+                                            var changeColor = change > 0 ? "text-danger" : (change < 0 ? "text-success" : "text-muted");
+                                            var priorityParam = item.Key == "Not Set" ? "Not Set" : item.Key;
+                                            var linkUrl = Url.Action("MonthlySummaryV2ByPriority", "CentralOps", new { year = year, month = month, priority = priorityParam, businessAreaId = businessAreaId });
                                             <tr>
                                                 <td>
-                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                    <a href="@linkUrl" style="text-decoration: none; color: inherit;">
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
+                                                    </a>
                                                 </td>
-                                                <td>@item.Count</td>
+                                                <td><a href="@linkUrl" style="text-decoration: none; color: inherit; font-weight: 600;">@item.Count</a></td>
                                                 <td>@percentage%</td>
+                                                @if (!string.IsNullOrEmpty(prevMonthName))
+                                                {
+                                                    <td class="@changeColor">@changeText</td>
+                                                }
                                             </tr>
                                         }
                                         @if (priorityTotal > 0)
@@ -1786,7 +1819,7 @@
             // Priority Distribution Donut Chart
             var priorityCtx = document.getElementById('priorityChart');
             if (priorityCtx) {
-                new Chart(priorityCtx.getContext('2d'), {
+                var priorityChart = new Chart(priorityCtx.getContext('2d'), {
                     type: 'doughnut',
                     data: {
                         labels: ['Critical', 'High', 'Medium', 'Low', 'Not Set'],
@@ -1826,6 +1859,17 @@
                                         return label + ': ' + value + ' (' + percentage + '%)';
                                     }
                                 }
+                            }
+                        },
+                        onClick: function(event, elements) {
+                            if (elements.length > 0) {
+                                var index = elements[0].index;
+                                var labels = ['Critical', 'High', 'Medium', 'Low', 'Not Set'];
+                                var priority = labels[index];
+                                var priorityParam = priority === 'Not Set' ? 'Not Set' : priority;
+                                var url = '@Url.Action("MonthlySummaryV2ByPriority", "CentralOps", new { year = year, month = month, priority = "__PRIORITY__", businessAreaId = businessAreaId })';
+                                url = url.replace('__PRIORITY__', encodeURIComponent(priorityParam));
+                                window.location.href = url;
                             }
                         }
                     }
