@@ -1,0 +1,196 @@
+@using Compass.Controllers
+@{
+    ViewData["Title"] = "Projects by RAG Status";
+    var filteredProjects = ViewBag.FilteredProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    var year = ViewBag.Year as int? ?? 0;
+    var month = ViewBag.Month as int? ?? 0;
+    var ragStatus = ViewBag.RagStatus as string ?? "";
+    var businessAreaId = ViewBag.BusinessAreaId as int?;
+    var monthName = ViewBag.MonthName as string ?? "";
+    var selectedBusinessAreaName = ViewBag.SelectedBusinessAreaName as string;
+    var totalCount = ViewBag.TotalCount as int? ?? 0;
+}
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f8f9fa; padding: 0.75rem 1rem; border-radius: 0.375rem;">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="Dashboard" style="color: #005ea5; text-decoration: none;">Central Operations</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="CentralOps" asp-action="MonthlySummaryV2" asp-route-year="@year" asp-route-month="@month" asp-route-businessAreaId="@businessAreaId" style="color: #005ea5; text-decoration: none;">Monthly Summary</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">RAG Status: @ragStatus</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_CentralOpsNavigation")
+        
+        <div class="content-header mb-4">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">Projects by RAG Status - @monthName</h1>
+                        <p class="text-muted mb-0">
+                            RAG Status: 
+                            @{
+                                var ragColor = ragStatus switch {
+                                    "Red" => "#dc3545",
+                                    "Amber-Red" => "#fd7e14",
+                                    "Amber" => "#ffc107",
+                                    "Amber-Green" => "#ffeb3b",
+                                    "Green" => "#28a745",
+                                    _ => "#6c757d"
+                                };
+                                var ragTextColor = (ragStatus == "Amber-Green" || ragStatus == "Not Set") ? "#000" : "#fff";
+                            }
+                            <span class="badge" style="background-color: @ragColor; color: @ragTextColor;">@ragStatus</span>
+                            @if (!string.IsNullOrEmpty(selectedBusinessAreaName))
+                            {
+                                <span class="ml-2">Business Area: <strong>@selectedBusinessAreaName</strong></span>
+                            }
+                        </p>
+                    </div>
+                    <div class="col-sm-6 text-right">
+                        <a asp-controller="CentralOps" asp-action="MonthlySummaryV2" asp-route-year="@year" asp-route-month="@month" asp-route-businessAreaId="@businessAreaId" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Monthly Summary
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <!-- Projects with this RAG status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Projects with @ragStatus RAG Status (@totalCount)</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 250px;">Title</th>
+                                    <th style="width: 100px;">Priority</th>
+                                    <th style="width: 120px;">RAG</th>
+                                    <th style="width: 150px;">Business Area</th>
+                                    <th style="width: 150px;">Primary Contact</th>
+                                    <th style="width: 200px;">Service Owner</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (filteredProjects != null && filteredProjects.Any())
+                                {
+                                    @foreach (var project in filteredProjects)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="font-weight: bold; color: #005ea5; text-decoration: none;">@project.Title</a>
+                                                <br />
+                                                <small class="text-muted">DFE-DDT-@project.Id</small>
+                                            </td>
+                                            <td>
+                                                @if (project.DeliveryPriority != null && !string.IsNullOrEmpty(project.DeliveryPriority.Name))
+                                                {
+                                                    var priorityClass = project.DeliveryPriority.Name.ToLower() switch {
+                                                        var p when p.Contains("critical") => "badge-danger",
+                                                        var p when p.Contains("high") => "badge-danger",
+                                                        var p when p.Contains("medium") => "badge-warning",
+                                                        var p when p.Contains("low") => "badge-secondary",
+                                                        _ => "badge-secondary"
+                                                    };
+                                                    <span class="badge @priorityClass">@project.DeliveryPriority.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var projectRagStatus = project.RagStatusLookup?.Name ?? project.RagStatus ?? "Not Set";
+                                                    var normalized = projectRagStatus.Trim()
+                                                        .Replace(" / ", "-")
+                                                        .Replace("/", "-")
+                                                        .Replace(" /", "-")
+                                                        .Replace("/ ", "-");
+                                                    
+                                                    var ragClass = normalized switch {
+                                                        "Red" => "badge badge-danger",
+                                                        "Amber-Red" => "badge",
+                                                        "Amber" => "badge badge-warning",
+                                                        "Amber-Green" => "badge",
+                                                        "Green" => "badge badge-success",
+                                                        _ => "badge badge-secondary"
+                                                    };
+                                                    var ragStyle = normalized switch {
+                                                        "Amber-Red" => "background-color: #fd7e14; color: #fff;",
+                                                        "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                                        _ => ""
+                                                    };
+                                                }
+                                                <span class="@ragClass" style="@ragStyle">@projectRagStatus</span>
+                                            </td>
+                                            <td>@(project.BusinessAreaLookup?.Name ?? "-")</td>
+                                            <td>
+                                                @if (project.PrimaryContactUser != null)
+                                                {
+                                                    @project.PrimaryContactUser.Name
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (project.ServiceOwners != null && project.ServiceOwners.Any())
+                                                {
+                                                    var serviceOwners = project.ServiceOwners.Where(so => so.User != null).Take(2).ToList();
+                                                    @foreach (var so in serviceOwners)
+                                                    {
+                                                        <div>@so.User.Name</div>
+                                                    }
+                                                    @if (project.ServiceOwners.Count > 2)
+                                                    {
+                                                        <small class="text-muted">+ @(project.ServiceOwners.Count - 2) more</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-3">No projects found with @ragStatus RAG status</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
