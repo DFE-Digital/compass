@@ -19,6 +19,7 @@ public class DdtReportsController : Controller
     private readonly IReturnStatusService _returnStatusService;
     private readonly IUserDirectoryService _userDirectoryService;
     private readonly INotificationRuleService _notificationRuleService;
+    private readonly ICmsApiService _cmsApiService;
     private static readonly string[] UserGroupCategoryTypeNames =
     {
         "User group", "User Group", "User groups", "User Groups",
@@ -31,7 +32,7 @@ public class DdtReportsController : Controller
     private static readonly string[] DeliveryManagerRoleKeywords =
         { "delivery manager", "delivery_manager", "delivery-manager", "delivery lead", "delivery_lead", "delivery owner", "delivery_owner", "dm" };
 
-    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService, INotificationRuleService notificationRuleService)
+    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService, INotificationRuleService notificationRuleService, ICmsApiService cmsApiService)
     {
         _context = context;
         _logger = logger;
@@ -39,6 +40,7 @@ public class DdtReportsController : Controller
         _returnStatusService = returnStatusService;
         _userDirectoryService = userDirectoryService;
         _notificationRuleService = notificationRuleService;
+        _cmsApiService = cmsApiService;
     }
 
     // GET: DdtReports/Index - Landing page
@@ -1536,6 +1538,152 @@ public class DdtReportsController : Controller
             _logger.LogError(ex, "Error in ManageFipsData");
             TempData["ErrorMessage"] = "An error occurred while loading the page. Please try again.";
             return View();
+        }
+    }
+
+    // GET: DdtReports/SearchTerms
+    public async Task<IActionResult> SearchTerms(int page = 1, int pageSize = 25)
+    {
+        try
+        {
+            // Validate pagination parameters
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 25;
+            if (pageSize > 100) pageSize = 100;
+
+            // Fetch all search terms from CMS (we need all for distinct calculation)
+            var endpoint = "search-terms?sort=timestamp:desc&pagination[pageSize]=1000";
+            var response = await _cmsApiService.GetAsync<ApiCollectionResponse<SearchTerm>>(endpoint);
+            
+            var allSearchTerms = response?.Data ?? new List<SearchTerm>();
+            
+            // Group by search term (case insensitive) and count occurrences
+            var distinctSearchTerms = allSearchTerms
+                .GroupBy(st => st.SearchTermText, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new DistinctSearchTerm
+                {
+                    SearchTerm = g.First().SearchTermText, // Use first occurrence's casing
+                    Count = g.Count(),
+                    AverageResultCount = g.Average(x => x.ResultCount)
+                })
+                .OrderByDescending(dst => dst.Count)
+                .ThenBy(dst => dst.SearchTerm)
+                .ToList();
+
+            // Paginate the search terms
+            var totalCount = allSearchTerms.Count;
+            var paginatedSearchTerms = allSearchTerms
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            var viewModel = new SearchTermsViewModel
+            {
+                SearchTerms = paginatedSearchTerms,
+                DistinctSearchTerms = distinctSearchTerms,
+                TotalSearchTerms = totalCount,
+                DistinctSearchTermsCount = distinctSearchTerms.Count,
+                PageNumber = page,
+                PageSize = pageSize
+            };
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading search terms");
+            TempData["ErrorMessage"] = "An error occurred while loading search terms. Please try again.";
+            return View(new SearchTermsViewModel());
+        }
+    }
+
+    // GET: DdtReports/ExportSearchTerms
+    public async Task<IActionResult> ExportSearchTerms()
+    {
+        try
+        {
+            // Fetch all search terms from CMS
+            var endpoint = "search-terms?sort=timestamp:desc&pagination[pageSize]=1000";
+            var response = await _cmsApiService.GetAsync<ApiCollectionResponse<SearchTerm>>(endpoint);
+            
+            var allSearchTerms = response?.Data ?? new List<SearchTerm>();
+            
+            if (!allSearchTerms.Any())
+            {
+                TempData["ErrorMessage"] = "No search terms found to export.";
+                return RedirectToAction("SearchTerms");
+            }
+            
+            // Group by search term (case insensitive) and combine all results
+            var groupedSearchTerms = allSearchTerms
+                .GroupBy(st => st.SearchTermText, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new
+                {
+                    SearchTerm = g.First().SearchTermText, // Use first occurrence's casing
+                    AllResults = g.SelectMany(st => st.Results ?? new List<SearchTermResult>())
+                        .DistinctBy(r => r.DocumentId) // Remove duplicate results by DocumentId
+                        .ToList(),
+                    TotalSearches = g.Count(),
+                    TotalResultCount = g.Sum(x => x.ResultCount)
+                })
+                .OrderByDescending(x => x.TotalSearches)
+                .ThenBy(x => x.SearchTerm)
+                .ToList();
+            
+            // Create workbook
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("All Search Terms");
+            
+            // Headers
+            var headers = new[] { "Search Term", "Times Searched", "Total Results", "All Results" };
+            for (int col = 0; col < headers.Length; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+            
+            // Add data rows
+            int currentRow = 2;
+            foreach (var item in groupedSearchTerms)
+            {
+                int col = 1;
+                
+                worksheet.Cell(currentRow, col++).Value = item.SearchTerm;
+                worksheet.Cell(currentRow, col++).Value = item.TotalSearches;
+                worksheet.Cell(currentRow, col++).Value = item.TotalResultCount;
+                
+                // Combine all results into a single cell
+                var resultsText = item.AllResults.Any()
+                    ? string.Join(Environment.NewLine, item.AllResults.Select(r => $"{r.Title} ({r.DocumentId})"))
+                    : "No results";
+                
+                worksheet.Cell(currentRow, col++).Value = resultsText;
+                worksheet.Cell(currentRow, col).Style.Alignment.WrapText = true;
+                
+                currentRow++;
+            }
+            
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            // Make the results column wider and wrap text
+            worksheet.Column(4).Width = 50;
+            worksheet.Column(4).Style.Alignment.WrapText = true;
+            worksheet.SheetView.FreezeRows(1);
+            
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"all-search-terms-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting search terms to Excel");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("SearchTerms");
         }
     }
 
