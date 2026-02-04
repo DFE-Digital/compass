@@ -335,7 +335,7 @@ public class AnalysisController : Controller
                         .Where(g => g.Count() > 1 && !string.IsNullOrEmpty(g.Key))
                         .Select(g => new
                         {
-                            Title = g.First().Comments?.Length > 100 
+                            Title = !string.IsNullOrEmpty(g.First().Comments) && g.First().Comments.Length > 100 
                                 ? g.First().Comments.Substring(0, 100) + "..." 
                                 : g.First().Comments ?? "Unknown",
                             FullComment = g.First().Comments,

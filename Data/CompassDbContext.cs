@@ -238,6 +238,14 @@ public partial class CompassDbContext : DbContext
     public DbSet<DemandRequestRiskType> DemandRequestRiskTypes { get; set; }
     public DbSet<TriageMeeting> TriageMeetings { get; set; }
     
+    // Business Cases
+    public DbSet<BusinessCase> BusinessCases { get; set; }
+    public DbSet<BusinessCaseDdtFeedback> BusinessCaseDdtFeedbacks { get; set; }
+    public DbSet<BusinessCaseReviewer> BusinessCaseReviewers { get; set; }
+    public DbSet<BusinessCaseProject> BusinessCaseProjects { get; set; }
+    public DbSet<BusinessCaseProduct> BusinessCaseProducts { get; set; }
+    public DbSet<BusinessCaseStatusLookup> BusinessCaseStatusLookups { get; set; }
+    
     // DDT Standards Management
     public DbSet<DdtStandard> DdtStandards { get; set; }
     public DbSet<DdtStandardOwner> DdtStandardOwners { get; set; }
@@ -2199,6 +2207,9 @@ public partial class CompassDbContext : DbContext
             .HasIndex(dr => dr.ConvertedProjectId);
 
         modelBuilder.Entity<DemandRequest>()
+            .HasIndex(dr => dr.BusinessCaseId);
+
+        modelBuilder.Entity<DemandRequest>()
             .HasOne(dr => dr.TriageMeeting)
             .WithMany(tm => tm.DemandRequests)
             .HasForeignKey(dr => dr.TriageMeetingId)
@@ -2209,6 +2220,12 @@ public partial class CompassDbContext : DbContext
             .WithMany()
             .HasForeignKey(dr => dr.ConvertedProjectId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DemandRequest>()
+            .HasOne(dr => dr.BusinessCase)
+            .WithMany()
+            .HasForeignKey(dr => dr.BusinessCaseId)
+            .OnDelete(DeleteBehavior.SetNull);
         
         // DemandRequestContact configuration
         modelBuilder.Entity<DemandRequestContact>()
@@ -2260,6 +2277,68 @@ public partial class CompassDbContext : DbContext
             .WithMany(dr => dr.SectionCompletions)
             .HasForeignKey(drsc => drsc.DemandRequestId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        // BUSINESS CASE CONFIGURATION
+        // ========================================
+        
+        // BusinessCase configuration
+        modelBuilder.Entity<BusinessCase>()
+            .HasIndex(bc => bc.BusinessCaseId)
+            .IsUnique();
+        
+        modelBuilder.Entity<BusinessCase>()
+            .HasIndex(bc => bc.RequestorEmail);
+        
+        modelBuilder.Entity<BusinessCase>()
+            .HasIndex(bc => bc.BusinessArea);
+        
+        // BusinessCaseDdtFeedback configuration
+        modelBuilder.Entity<BusinessCaseDdtFeedback>()
+            .HasOne(f => f.BusinessCase)
+            .WithMany(bc => bc.DdtFeedbacks)
+            .HasForeignKey(f => f.BusinessCaseId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<BusinessCaseDdtFeedback>()
+            .HasIndex(f => f.BusinessCaseId);
+        
+        // BusinessCaseReviewer configuration
+        modelBuilder.Entity<BusinessCaseReviewer>()
+            .HasOne(r => r.BusinessCase)
+            .WithMany(bc => bc.Reviewers)
+            .HasForeignKey(r => r.BusinessCaseId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<BusinessCaseReviewer>()
+            .HasIndex(r => r.BusinessCaseId);
+        
+        // BusinessCaseProject configuration
+        modelBuilder.Entity<BusinessCaseProject>()
+            .HasOne(bcp => bcp.BusinessCase)
+            .WithMany(bc => bc.BusinessCaseProjects)
+            .HasForeignKey(bcp => bcp.BusinessCaseId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<BusinessCaseProject>()
+            .HasOne(bcp => bcp.Project)
+            .WithMany()
+            .HasForeignKey(bcp => bcp.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        modelBuilder.Entity<BusinessCaseProject>()
+            .HasIndex(bcp => new { bcp.BusinessCaseId, bcp.ProjectId })
+            .IsUnique();
+        
+        // BusinessCaseProduct configuration
+        modelBuilder.Entity<BusinessCaseProduct>()
+            .HasOne(bcp => bcp.BusinessCase)
+            .WithMany(bc => bc.BusinessCaseProducts)
+            .HasForeignKey(bcp => bcp.BusinessCaseId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<BusinessCaseProduct>()
+            .HasIndex(bcp => new { bcp.BusinessCaseId, bcp.ProductFipsId })
+            .IsUnique();
         
         modelBuilder.Entity<DemandRequestSectionCompletion>()
             .HasIndex(drsc => new { drsc.DemandRequestId, drsc.SectionName })

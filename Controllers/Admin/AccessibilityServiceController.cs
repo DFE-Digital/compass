@@ -72,8 +72,10 @@ namespace Compass.Controllers.Admin
                 if (!string.IsNullOrWhiteSpace(search))
                 {
                     var searchLower = search.ToLower();
-                    if (!cmsProduct.Title.ToLower().Contains(searchLower) && 
-                        !cmsProduct.FipsId.ToLower().Contains(searchLower))
+                    var title = cmsProduct.Title ?? string.Empty;
+                    var fipsId = cmsProduct.FipsId ?? string.Empty;
+                    if (!title.ToLower().Contains(searchLower) && 
+                        !fipsId.ToLower().Contains(searchLower))
                     {
                         continue;
                     }
@@ -86,7 +88,7 @@ namespace Compass.Controllers.Admin
                 // Note: Statement status filter removed from "All Products" view
                 // It only applied to enrolled products which are now shown in separate table
 
-                if (isEnrolled)
+                if (isEnrolled && enrolled != null)
                 {
                     openIssuesCount = enrolled.Issues.Count(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "wont_fix");
                     pastDueCount = enrolled.Issues.Count(i => 
