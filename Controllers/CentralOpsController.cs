@@ -10,6 +10,9 @@ using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using ClosedXML.Excel;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 
 namespace Compass.Controllers;
 
@@ -4207,6 +4210,634 @@ public class CentralOpsController : Controller
             TempData["ErrorMessage"] = "An error occurred while loading the monthly summary. Please try again.";
             return RedirectToAction(nameof(Dashboard));
         }
+    }
+
+    // GET: CentralOps/MonthlySummaryV2Pdf
+    public async Task<IActionResult> MonthlySummaryV2Pdf(int? year, int? month, int? businessAreaId)
+    {
+        try
+        {
+            // Default to current month if not specified
+            var currentDate = DateTime.UtcNow;
+            var reportYear = year ?? currentDate.Year;
+            var reportMonth = month ?? currentDate.Month;
+            
+            // Calculate month boundaries
+            var monthStart = new DateTime(reportYear, reportMonth, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+            
+            // Get all active projects (exclude Cancelled and Completed)
+            var query = _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.Milestones)
+                .Include(p => p.Risks)
+                .Include(p => p.Issues)
+                .Include(p => p.MonthlyUpdates)
+                .Include(p => p.RagStatusLookup)
+                .Include(p => p.ProblemStatements)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+            
+            // Filter by business area if specified
+            if (businessAreaId.HasValue)
+            {
+                query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+            }
+            
+            var allProjects = await query.ToListAsync();
+            
+            // Get all business areas for the filter dropdown
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync();
+            
+            // Gather all the same data as MonthlySummaryV2
+            var totalActiveProjects = allProjects.Count;
+            var newProjectsThisMonth = allProjects
+                .Where(p => p.CreatedAt >= monthStart && p.CreatedAt <= monthEnd)
+                .ToList();
+            
+            var milestonesAchieved = allProjects
+                .SelectMany(p => p.Milestones
+                    .Where(m => !m.IsDeleted && 
+                               m.Status == "complete" && 
+                               m.ActualDate.HasValue &&
+                               m.ActualDate.Value >= monthStart && 
+                               m.ActualDate.Value <= monthEnd)
+                    .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
+                .ToList();
+            
+            var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+            
+            // RAG Status distribution
+            var ragDistribution = new Dictionary<string, int>
+            {
+                { "Red", 0 },
+                { "Amber-Red", 0 },
+                { "Amber", 0 },
+                { "Amber-Green", 0 },
+                { "Green", 0 },
+                { "Not Set", 0 }
+            };
+            
+            foreach (var project in allProjects)
+            {
+                var ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
+                if (string.IsNullOrWhiteSpace(ragStatus))
+                {
+                    ragDistribution["Not Set"]++;
+                }
+                else if (ragDistribution.ContainsKey(ragStatus))
+                {
+                    ragDistribution[ragStatus]++;
+                }
+            }
+            
+            // Priority distribution
+            var priorityDistribution = new Dictionary<string, int>
+            {
+                { "Critical", 0 },
+                { "High", 0 },
+                { "Medium", 0 },
+                { "Low", 0 },
+                { "Not Set", 0 }
+            };
+            
+            foreach (var project in allProjects)
+            {
+                if (project.DeliveryPriority == null)
+                {
+                    priorityDistribution["Not Set"]++;
+                }
+                else
+                {
+                    var priorityName = project.DeliveryPriority.Name.ToLower();
+                    if (priorityName.Contains("critical"))
+                    {
+                        priorityDistribution["Critical"]++;
+                    }
+                    else if (priorityName.Contains("high"))
+                    {
+                        priorityDistribution["High"]++;
+                    }
+                    else if (priorityName.Contains("medium"))
+                    {
+                        priorityDistribution["Medium"]++;
+                    }
+                    else if (priorityName.Contains("low"))
+                    {
+                        priorityDistribution["Low"]++;
+                    }
+                    else
+                    {
+                        priorityDistribution["Not Set"]++;
+                    }
+                }
+            }
+            
+            var newProjectsList = newProjectsThisMonth
+                .OrderByDescending(p => p.CreatedAt)
+                .ToList();
+            
+            var upcomingMilestones = allProjects
+                .SelectMany(p => p.Milestones
+                    .Where(m => !m.IsDeleted && 
+                               m.Status != "complete" && 
+                               m.Status != "cancelled" &&
+                               m.DueDate >= monthStart && 
+                               m.DueDate <= monthEnd)
+                    .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
+                .OrderBy(x => x.Milestone.DueDate)
+                .ToList();
+            
+            var todayUtcDate = DateTime.UtcNow.Date;
+            var lateMilestones = allProjects
+                .SelectMany(p => p.Milestones
+                    .Where(m => !m.IsDeleted && 
+                               m.Status != "complete" && 
+                               m.Status != "cancelled" &&
+                               m.DueDate < monthEnd &&
+                               m.DueDate.Date < todayUtcDate)
+                    .Select(m => new MilestoneWithProject { Project = p, Milestone = m }))
+                .OrderBy(x => x.Milestone.DueDate)
+                .ToList();
+            
+            var businessAreaSummaries = allProjects
+                .GroupBy(p => p.BusinessAreaLookup)
+                .Select(g => new BusinessAreaSummaryViewModel
+                {
+                    BusinessArea = g.Key?.Name ?? "Not Set",
+                    BusinessAreaId = g.Key?.Id,
+                    TotalProjects = g.Count(),
+                    NewThisMonth = g.Count(p => p.CreatedAt >= monthStart && p.CreatedAt <= monthEnd),
+                    MilestonesAchieved = g.SelectMany(p => p.Milestones
+                        .Where(m => !m.IsDeleted && 
+                                   m.Status == "complete" && 
+                                   m.ActualDate.HasValue &&
+                                   m.ActualDate.Value >= monthStart && 
+                                   m.ActualDate.Value <= monthEnd)).Count(),
+                    UpcomingMilestones = g.SelectMany(p => p.Milestones
+                        .Where(m => !m.IsDeleted && 
+                                   m.Status != "complete" && 
+                                   m.Status != "cancelled" &&
+                                   m.DueDate >= monthStart && 
+                                   m.DueDate <= monthEnd)).Count(),
+                    LateMilestones = g.SelectMany(p => p.Milestones
+                        .Where(m => !m.IsDeleted && 
+                                   m.Status != "complete" && 
+                                   m.Status != "cancelled" &&
+                                   m.DueDate < monthEnd)).Count(),
+                    RedCount = g.Count(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == "Red"),
+                    AmberRedCount = g.Count(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == "Amber-Red"),
+                    AmberCount = g.Count(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == "Amber"),
+                    AmberGreenCount = g.Count(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == "Amber-Green"),
+                    GreenCount = g.Count(p => NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) == "Green"),
+                    CriticalCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    HighCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    MediumCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("medium") && !p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    LowCount = g.Count(p => p.DeliveryPriority != null && p.DeliveryPriority.Name.ToLower().Contains("low") && !p.DeliveryPriority.Name.ToLower().Contains("medium") && !p.DeliveryPriority.Name.ToLower().Contains("high") && !p.DeliveryPriority.Name.ToLower().Contains("critical")),
+                    MonthlyUpdateStats = CalculateMonthlyUpdateStats(g.ToList(), reportYear, reportMonth, _monthlyUpdateService)
+                })
+                .OrderBy(ba => ba.BusinessArea)
+                .ToList();
+            
+            var projectsWithPathToGreen = allProjects
+                .Where(p => !string.IsNullOrWhiteSpace(p.PathToGreen) && 
+                           NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus) != "Green" &&
+                           !string.IsNullOrWhiteSpace(NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus)))
+                .OrderBy(p => 
+                {
+                    var ragStatus = NormalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus);
+                    return ragStatus switch
+                    {
+                        "Red" => 1,
+                        "Amber-Red" => 2,
+                        "Amber" => 3,
+                        "Amber-Green" => 4,
+                        "Green" => 5,
+                        _ => 99
+                    };
+                })
+                .ThenBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                .ThenBy(p => p.Title)
+                .ToList();
+            
+            var businessAreaRisks = new List<RiskWithProject>();
+            var businessAreaIssues = new List<IssueWithProject>();
+            var businessAreaActiveProjects = new List<Compass.Models.Project>();
+            Compass.Models.BusinessAreaLookup? selectedBusinessArea = null;
+            
+            if (businessAreaId.HasValue)
+            {
+                selectedBusinessArea = await _context.BusinessAreaLookups.FindAsync(businessAreaId.Value);
+                if (selectedBusinessArea != null)
+                {
+                    businessAreaActiveProjects = allProjects
+                        .Where(p => p.BusinessAreaId == businessAreaId.Value)
+                        .OrderBy(p => p.Title)
+                        .ToList();
+                    
+                    businessAreaRisks = allProjects
+                        .Where(p => p.BusinessAreaId == businessAreaId.Value)
+                        .SelectMany(p => p.Risks
+                            .Where(r => !r.IsDeleted && (r.Status != "closed" || r.ClosedDate == null))
+                            .Select(r => new RiskWithProject { Project = p, Risk = r }))
+                        .OrderByDescending(x => x.Risk.RiskScore)
+                        .ThenByDescending(x => x.Risk.CreatedAt)
+                        .ToList();
+                    
+                    businessAreaIssues = allProjects
+                        .Where(p => p.BusinessAreaId == businessAreaId.Value)
+                        .SelectMany(p => p.Issues
+                            .Where(i => !i.IsDeleted && i.Status != "resolved" && i.Status != "closed")
+                            .Select(i => new IssueWithProject { Project = p, Issue = i }))
+                        .OrderByDescending(x => x.Issue.Severity == "critical" ? 2 : x.Issue.Severity == "high" ? 1 : 0)
+                        .ThenByDescending(x => x.Issue.CreatedAt)
+                        .ToList();
+                }
+            }
+            
+            // Resource summary (FTE)
+            var totalPermFte = allProjects
+                .Where(p => p.TotalPermFte.HasValue)
+                .Sum(p => p.TotalPermFte.Value);
+            var totalMspFte = allProjects
+                .Where(p => p.TotalMspFte.HasValue)
+                .Sum(p => p.TotalMspFte.Value);
+            var totalFte = totalPermFte + totalMspFte;
+            
+            // Generate PDF
+            var monthName = monthStart.ToString("MMMM yyyy");
+            var selectedBusinessAreaName = businessAreaId.HasValue 
+                ? businessAreas.FirstOrDefault(ba => ba.Id == businessAreaId.Value)?.Name 
+                : null;
+            
+            var pdfBytes = GenerateMonthlySummaryPdf(
+                monthName,
+                selectedBusinessAreaName,
+                totalActiveProjects,
+                monthlyUpdateStats,
+                milestonesAchieved.Count,
+                newProjectsList.Count,
+                ragDistribution,
+                priorityDistribution,
+                newProjectsList,
+                milestonesAchieved,
+                upcomingMilestones,
+                lateMilestones,
+                businessAreaSummaries,
+                projectsWithPathToGreen,
+                businessAreaRisks,
+                businessAreaIssues,
+                businessAreaActiveProjects,
+                totalFte);
+            
+            var fileName = $"Monthly-Summary-{monthStart:yyyy-MM}";
+            if (selectedBusinessAreaName != null)
+            {
+                fileName += $"-{selectedBusinessAreaName.Replace(" ", "-")}";
+            }
+            fileName += ".pdf";
+            
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating PDF for monthly summary v2 for {Year}-{Month}", year, month);
+            TempData["ErrorMessage"] = "An error occurred while generating the PDF report. Please try again.";
+            return RedirectToAction("MonthlySummaryV2", new { year, month, businessAreaId });
+        }
+    }
+
+    private byte[] GenerateMonthlySummaryPdf(
+        string monthName,
+        string? businessAreaName,
+        int totalActiveProjects,
+        MonthlyUpdateStats? monthlyUpdateStats,
+        int milestonesAchievedCount,
+        int newProjectsCount,
+        Dictionary<string, int> ragDistribution,
+        Dictionary<string, int> priorityDistribution,
+        List<Compass.Models.Project> newProjects,
+        List<MilestoneWithProject> milestonesAchieved,
+        List<MilestoneWithProject> upcomingMilestones,
+        List<MilestoneWithProject> lateMilestones,
+        List<BusinessAreaSummaryViewModel> businessAreaSummaries,
+        List<Compass.Models.Project> projectsWithPathToGreen,
+        List<RiskWithProject> businessAreaRisks,
+        List<IssueWithProject> businessAreaIssues,
+        List<Compass.Models.Project> businessAreaActiveProjects,
+        decimal totalFte)
+    {
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(2, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Inter"));
+                
+                page.Header()
+                    .Row(row =>
+                    {
+                        row.RelativeItem().Column(column =>
+                        {
+                            column.Item().Text(businessAreaName ?? "Monthly report dashboard")
+                                .FontSize(18)
+                                .Bold()
+                                .FontColor(Colors.Blue.Darken3);
+                            column.Item().Text(monthName)
+                                .FontSize(12)
+                                .FontColor(Colors.Grey.Darken1);
+                        });
+                        row.ConstantItem(60).AlignRight().Text("Page")
+                            .FontSize(10)
+                            .FontColor(Colors.Grey.Medium);
+                    });
+                
+                page.Content()
+                    .PaddingVertical(10)
+                    .Column(column =>
+                    {
+                        // Summary Section
+                        column.Item().PaddingBottom(15).Row(row =>
+                        {
+                            row.RelativeItem().PaddingRight(5).Column(col =>
+                            {
+                                col.Item().Background(Colors.Blue.Lighten5).Padding(10).Border(1).BorderColor(Colors.Blue.Darken1).Column(c =>
+                                {
+                                    c.Item().Text("Total Projects").FontSize(9).FontColor(Colors.Grey.Darken2);
+                                    c.Item().Text(totalActiveProjects.ToString()).FontSize(16).Bold();
+                                });
+                            });
+                            row.RelativeItem().PaddingRight(5).Column(col =>
+                            {
+                                col.Item().Background(Colors.Green.Lighten5).Padding(10).Border(1).BorderColor(Colors.Green.Darken1).Column(c =>
+                                {
+                                    c.Item().Text("Submitted Updates").FontSize(9).FontColor(Colors.Grey.Darken2);
+                                    c.Item().Text((monthlyUpdateStats?.Submitted ?? 0).ToString()).FontSize(16).Bold();
+                                });
+                            });
+                            row.RelativeItem().PaddingRight(5).Column(col =>
+                            {
+                                col.Item().Background(Colors.Orange.Lighten5).Padding(10).Border(1).BorderColor(Colors.Orange.Darken1).Column(c =>
+                                {
+                                    c.Item().Text("Milestones Achieved").FontSize(9).FontColor(Colors.Grey.Darken2);
+                                    c.Item().Text(milestonesAchievedCount.ToString()).FontSize(16).Bold();
+                                });
+                            });
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Background(Colors.Teal.Lighten5).Padding(10).Border(1).BorderColor(Colors.Teal.Darken1).Column(c =>
+                                {
+                                    c.Item().Text("New Projects").FontSize(9).FontColor(Colors.Grey.Darken2);
+                                    c.Item().Text(newProjectsCount.ToString()).FontSize(16).Bold();
+                                });
+                            });
+                        });
+                        
+                        // RAG Distribution
+                        column.Item().PaddingBottom(10).Column(col =>
+                        {
+                            col.Item().PaddingBottom(5).Text("RAG Status Distribution").FontSize(14).Bold();
+                            col.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(columns =>
+                                {
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                });
+                                
+                                table.Header(header =>
+                                {
+                                    header.Cell().Element(CellStyle).Text("Red").Bold();
+                                    header.Cell().Element(CellStyle).Text("Amber-Red").Bold();
+                                    header.Cell().Element(CellStyle).Text("Amber").Bold();
+                                    header.Cell().Element(CellStyle).Text("Amber-Green").Bold();
+                                    header.Cell().Element(CellStyle).Text("Green").Bold();
+                                    header.Cell().Element(CellStyle).Text("Not Set").Bold();
+                                });
+                                
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Red", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber-Red", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Amber-Green", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Green", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(ragDistribution.GetValueOrDefault("Not Set", 0).ToString());
+                            });
+                        });
+                        
+                        // Priority Distribution
+                        column.Item().PaddingBottom(10).Column(col =>
+                        {
+                            col.Item().PaddingBottom(5).Text("Priority Distribution").FontSize(14).Bold();
+                            col.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(columns =>
+                                {
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                    columns.RelativeColumn();
+                                });
+                                
+                                table.Header(header =>
+                                {
+                                    header.Cell().Element(CellStyle).Text("Critical").Bold();
+                                    header.Cell().Element(CellStyle).Text("High").Bold();
+                                    header.Cell().Element(CellStyle).Text("Medium").Bold();
+                                    header.Cell().Element(CellStyle).Text("Low").Bold();
+                                    header.Cell().Element(CellStyle).Text("Not Set").Bold();
+                                });
+                                
+                                table.Cell().Element(CellStyle).Text(priorityDistribution.GetValueOrDefault("Critical", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(priorityDistribution.GetValueOrDefault("High", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(priorityDistribution.GetValueOrDefault("Medium", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(priorityDistribution.GetValueOrDefault("Low", 0).ToString());
+                                table.Cell().Element(CellStyle).Text(priorityDistribution.GetValueOrDefault("Not Set", 0).ToString());
+                            });
+                        });
+                        
+                        // New Projects
+                        if (newProjects.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text($"New Projects ({newProjects.Count})").FontSize(14).Bold();
+                                foreach (var project in newProjects.Take(10))
+                                {
+                                    col.Item().PaddingBottom(3).Text($"{project.Title}").FontSize(10);
+                                }
+                                if (newProjects.Count > 10)
+                                {
+                                    col.Item().Text($"... and {newProjects.Count - 10} more").FontSize(9).Italic().FontColor(Colors.Grey.Medium);
+                                }
+                            });
+                        }
+                        
+                        // Milestones Achieved
+                        if (milestonesAchieved.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text($"Milestones Achieved ({milestonesAchieved.Count})").FontSize(14).Bold();
+                                foreach (var item in milestonesAchieved.Take(10))
+                                {
+                                    col.Item().PaddingBottom(3).Text($"{item.Project.Title}: {item.Milestone.Name}")
+                                        .FontSize(10);
+                                }
+                                if (milestonesAchieved.Count > 10)
+                                {
+                                    col.Item().Text($"... and {milestonesAchieved.Count - 10} more").FontSize(9).Italic().FontColor(Colors.Grey.Medium);
+                                }
+                            });
+                        }
+                        
+                        // Business Area Summary (if not filtered)
+                        if (businessAreaName == null && businessAreaSummaries.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text("Business Area Summary").FontSize(14).Bold();
+                                col.Item().Table(table =>
+                                {
+                                    table.ColumnsDefinition(columns =>
+                                    {
+                                        columns.RelativeColumn(2);
+                                        columns.RelativeColumn();
+                                        columns.RelativeColumn();
+                                        columns.RelativeColumn();
+                                        columns.RelativeColumn();
+                                    });
+                                    
+                                    table.Header(header =>
+                                    {
+                                        header.Cell().Element(CellStyle).Text("Business Area").Bold();
+                                        header.Cell().Element(CellStyle).Text("Total").Bold();
+                                        header.Cell().Element(CellStyle).Text("Red").Bold();
+                                        header.Cell().Element(CellStyle).Text("Amber").Bold();
+                                        header.Cell().Element(CellStyle).Text("Green").Bold();
+                                    });
+                                    
+                                    foreach (var summary in businessAreaSummaries.Take(15))
+                                    {
+                                        table.Cell().Element(CellStyle).Text(summary.BusinessArea);
+                                        table.Cell().Element(CellStyle).Text(summary.TotalProjects.ToString());
+                                        table.Cell().Element(CellStyle).Text((summary.RedCount + summary.AmberRedCount).ToString());
+                                        table.Cell().Element(CellStyle).Text((summary.AmberCount + summary.AmberGreenCount).ToString());
+                                        table.Cell().Element(CellStyle).Text(summary.GreenCount.ToString());
+                                    }
+                                });
+                            });
+                        }
+                        
+                        // Business Area Active Projects (if filtered)
+                        if (businessAreaName != null && businessAreaActiveProjects.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text($"Active Projects ({businessAreaActiveProjects.Count})").FontSize(14).Bold();
+                                foreach (var project in businessAreaActiveProjects.Take(20))
+                                {
+                                    var ragStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
+                                    var ragColor = GetRagColor(ragStatus);
+                                    col.Item().PaddingBottom(3).Row(row =>
+                                    {
+                                        row.RelativeItem().Text(project.Title).FontSize(10);
+                                        row.ConstantItem(60).Text(ragStatus).FontSize(9).FontColor(ragColor);
+                                    });
+                                }
+                                if (businessAreaActiveProjects.Count > 20)
+                                {
+                                    col.Item().Text($"... and {businessAreaActiveProjects.Count - 20} more").FontSize(9).Italic().FontColor(Colors.Grey.Medium);
+                                }
+                            });
+                        }
+                        
+                        // Risks (if filtered)
+                        if (businessAreaRisks.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text($"Open Risks ({businessAreaRisks.Count})").FontSize(14).Bold();
+                                foreach (var item in businessAreaRisks.Take(10))
+                                {
+                                    col.Item().PaddingBottom(3).Text($"{item.Project.Title}: {item.Risk.Title} (Score: {item.Risk.RiskScore})")
+                                        .FontSize(10);
+                                }
+                                if (businessAreaRisks.Count > 10)
+                                {
+                                    col.Item().Text($"... and {businessAreaRisks.Count - 10} more").FontSize(9).Italic().FontColor(Colors.Grey.Medium);
+                                }
+                            });
+                        }
+                        
+                        // Issues (if filtered)
+                        if (businessAreaIssues.Any())
+                        {
+                            column.Item().PaddingBottom(10).Column(col =>
+                            {
+                                col.Item().PaddingBottom(5).Text($"Open Issues ({businessAreaIssues.Count})").FontSize(14).Bold();
+                                foreach (var item in businessAreaIssues.Take(10))
+                                {
+                                    col.Item().PaddingBottom(3).Text($"{item.Project.Title}: {item.Issue.Title} ({item.Issue.Severity})")
+                                        .FontSize(10);
+                                }
+                                if (businessAreaIssues.Count > 10)
+                                {
+                                    col.Item().Text($"... and {businessAreaIssues.Count - 10} more").FontSize(9).Italic().FontColor(Colors.Grey.Medium);
+                                }
+                            });
+                        }
+                        
+                        // Resource Summary
+                        if (totalFte > 0)
+                        {
+                            column.Item().PaddingBottom(10).Text($"Total FTE: {totalFte:F1}").FontSize(12).Bold();
+                        }
+                    });
+                
+                page.Footer()
+                    .AlignCenter()
+                    .Text($"Generated on {DateTime.UtcNow.ToString("dd MMMM yyyy HH:mm UTC")}")
+                    .FontSize(8)
+                    .FontColor(Colors.Grey.Medium);
+            });
+        });
+        
+        return document.GeneratePdf();
+    }
+    
+    private static IContainer CellStyle(IContainer container)
+    {
+        return container
+            .Border(1)
+            .BorderColor(Colors.Grey.Lighten2)
+            .Padding(5)
+            .AlignCenter();
+    }
+    
+    private static string GetRagColor(string ragStatus)
+    {
+        return ragStatus switch
+        {
+            "Red" => Colors.Red.Darken2,
+            "Amber-Red" => Colors.Orange.Darken2,
+            "Amber" => Colors.Orange.Medium,
+            "Amber-Green" => Colors.LightGreen.Medium,
+            "Green" => Colors.Green.Darken2,
+            _ => Colors.Grey.Medium
+        };
     }
 
     // GET: CentralOps/MonthlySummaryV2ByRagStatus
