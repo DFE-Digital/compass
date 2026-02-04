@@ -902,19 +902,21 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        var oldRagStatus = project.RagStatusLookup?.Name;
+        var oldRagStatus = project.RagStatusLookup?.Name ?? project.RagStatus;
         var ragChanged = oldRagStatus != ragStatus;
         var isNotGreen = ragStatus != "Green";
+        // If both current RAG and selected RAG are Green, don't require justification or path to green
+        var bothGreen = !string.IsNullOrWhiteSpace(oldRagStatus) && oldRagStatus == "Green" && ragStatus == "Green";
 
-        // Validate justification if RAG changed or not green
-        if ((ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
+        // Validate justification if RAG changed or not green, but not if both current and selected are Green
+        if (!bothGreen && (ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
         {
             TempData["ErrorMessage"] = "RAG justification is required when RAG status has changed or is not Green.";
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        // Validate path to green if not green
-        if (isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
+        // Validate path to green if not green, but not if both current and selected are Green
+        if (!bothGreen && isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
         {
             TempData["ErrorMessage"] = "Path to Green is required when RAG status is not Green.";
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
