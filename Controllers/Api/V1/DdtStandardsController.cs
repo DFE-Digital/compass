@@ -1082,10 +1082,10 @@ public class DdtStandardsController : ControllerBase
                                       standard.ParentStandard != null &&
                                       !standard.Version.Contains("-resubmit");
 
-        if (shouldIncrementVersion)
+        if (shouldIncrementVersion && standard.ParentStandard != null)
         {
             var parentStandard = standard.ParentStandard;
-            var versionParts = parentStandard.Version.Split('.');
+            var versionParts = (parentStandard.Version ?? string.Empty).Split('.');
             
             if (versionParts.Length == 3 && 
                 int.TryParse(versionParts[0], out var major) &&
