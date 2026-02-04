@@ -113,6 +113,18 @@
 
         <form asp-action="Create" method="post" id="createProjectForm" novalidate>
             @Html.AntiForgeryToken()
+            @if (ViewBag.BusinessCaseId != null)
+            {
+                <input type="hidden" name="businessCaseId" value="@ViewBag.BusinessCaseId" />
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    <strong>Creating work item from business case:</strong> @(ViewBag.BusinessCaseIdDisplay ?? ViewBag.BusinessCaseId)
+                    @if (ViewBag.BusinessCaseTitle != null)
+                    {
+                        <br /><span class="text-muted">@ViewBag.BusinessCaseTitle</span>
+                    }
+                </div>
+            }
             
             <div id="project-create-error-summary"
                  class="@errorSummaryClasses"
@@ -196,7 +208,7 @@
                                 </label>
                                 <small class="form-text text-muted d-block mb-1">Enter a clear and descriptive title for the project</small>
                                 <span asp-validation-for="Title" class="form-error-message"></span>
-                                <input asp-for="Title" class="form-control @(hasError(nameof(Model.Title)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.Title)" />
+                                <input asp-for="Title" class="form-control @(hasError(nameof(Model.Title)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.Title)" value="@(ViewBag.BusinessCaseTitle as string ?? Model?.Title)" />
                             </div>
 
                             <div class="form-group @(hasError(nameof(Model.Aim)) ? "form-group--error" : string.Empty)">
@@ -205,7 +217,7 @@
                                 </label>
                                 <small class="form-text text-muted d-block mb-1">Describe the purpose and objectives of this project</small>
                                 <span asp-validation-for="Aim" class="form-error-message"></span>
-                                <textarea asp-for="Aim" class="form-control @(hasError(nameof(Model.Aim)) ? "form-control--error" : string.Empty)" rows="3" required id="@Html.IdFor(m => m.Aim)"></textarea>
+                                <textarea asp-for="Aim" class="form-control @(hasError(nameof(Model.Aim)) ? "form-control--error" : string.Empty)" rows="3" required id="@Html.IdFor(m => m.Aim)">@(ViewBag.BusinessCaseDescription as string ?? Model?.Aim)</textarea>
                             </div>
 
                             <div class="form-group">
@@ -246,9 +258,17 @@
                                     <option value="">Select business area</option>
                                     @if (ViewBag.BusinessAreas != null)
                                     {
+                                        var businessCaseBusinessArea = ViewBag.BusinessCaseBusinessArea as string;
                                         @foreach (var area in ViewBag.BusinessAreas)
                                         {
-                                            <option value="@area">@area</option>
+                                            @if (area == businessCaseBusinessArea)
+                                            {
+                                                <option value="@area" selected>@area</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@area">@area</option>
+                                            }
                                         }
                                     }
                                 </select>
@@ -561,11 +581,13 @@
                                 <span asp-validation-for="RagStatus" class="form-error-message"></span>
                                 <select asp-for="RagStatus" class="form-control @(hasError(nameof(Model.RagStatus)) ? "form-control--error" : string.Empty)" required id="@Html.IdFor(m => m.RagStatus)">
                                     <option value="">Select RAG status</option>
-                                    <option value="Green">Green</option>
-                                    <option value="Amber-Green">Amber-Green</option>
-                                    <option value="Amber">Amber</option>
-                                    <option value="Amber-Red">Amber-Red</option>
-                                    <option value="Red">Red</option>
+                                    @if (ViewBag.RagStatuses != null)
+                                    {
+                                        @foreach (var ragStatus in (List<Compass.Models.RagStatusLookup>)ViewBag.RagStatuses)
+                                        {
+                                            <option value="@ragStatus.Name">@ragStatus.Name@(!string.IsNullOrEmpty(ragStatus.Description) ? $" - {ragStatus.Description}" : "")</option>
+                                        }
+                                    }
                                 </select>
                             </div>
 
