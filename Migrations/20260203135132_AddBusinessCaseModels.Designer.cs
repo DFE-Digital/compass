@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260203135132_AddBusinessCaseModels")]
+    partial class AddBusinessCaseModels
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1320,13 +1323,6 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("Status")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int?>("StatusLookupId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -1343,8 +1339,6 @@ namespace Compass.Migrations
                         .IsUnique();
 
                     b.HasIndex("RequestorEmail");
-
-                    b.HasIndex("StatusLookupId");
 
                     b.ToTable("BusinessCases");
                 });
@@ -1477,44 +1471,6 @@ namespace Compass.Migrations
                     b.HasIndex("BusinessCaseId");
 
                     b.ToTable("BusinessCaseReviewers");
-                });
-
-            modelBuilder.Entity("Compass.Models.BusinessCaseStatusLookup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CssClass")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("BusinessCaseStatusLookups");
                 });
 
             modelBuilder.Entity("Compass.Models.CapabilityGap", b =>
@@ -3167,9 +3123,6 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("BusinessCaseId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("ConvertedProjectId")
                         .HasColumnType("int");
 
@@ -3382,8 +3335,6 @@ namespace Compass.Migrations
                     b.HasIndex("ApplicantEmail");
 
                     b.HasIndex("AssignedToEmail");
-
-                    b.HasIndex("BusinessCaseId");
 
                     b.HasIndex("ConvertedProjectId");
 
@@ -10905,15 +10856,6 @@ namespace Compass.Migrations
                         .HasForeignKey("DdtStandardId");
                 });
 
-            modelBuilder.Entity("Compass.Models.BusinessCase", b =>
-                {
-                    b.HasOne("Compass.Models.BusinessCaseStatusLookup", "StatusLookup")
-                        .WithMany()
-                        .HasForeignKey("StatusLookupId");
-
-                    b.Navigation("StatusLookup");
-                });
-
             modelBuilder.Entity("Compass.Models.BusinessCaseDdtFeedback", b =>
                 {
                     b.HasOne("Compass.Models.BusinessCase", "BusinessCase")
@@ -11457,11 +11399,6 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.DemandRequest", b =>
                 {
-                    b.HasOne("Compass.Models.BusinessCase", "BusinessCase")
-                        .WithMany()
-                        .HasForeignKey("BusinessCaseId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Compass.Models.Project", "ConvertedProject")
                         .WithMany()
                         .HasForeignKey("ConvertedProjectId")
@@ -11471,8 +11408,6 @@ namespace Compass.Migrations
                         .WithMany("DemandRequests")
                         .HasForeignKey("TriageMeetingId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("BusinessCase");
 
                     b.Navigation("ConvertedProject");
 
