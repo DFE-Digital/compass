@@ -4,6 +4,7 @@ using Compass.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Compass.Migrations
 {
     [DbContext(typeof(CompassDbContext))]
-    partial class CompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260203163347_AddBusinessCaseStatus")]
+    partial class AddBusinessCaseStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3167,9 +3170,6 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("BusinessCaseId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("ConvertedProjectId")
                         .HasColumnType("int");
 
@@ -3382,8 +3382,6 @@ namespace Compass.Migrations
                     b.HasIndex("ApplicantEmail");
 
                     b.HasIndex("AssignedToEmail");
-
-                    b.HasIndex("BusinessCaseId");
 
                     b.HasIndex("ConvertedProjectId");
 
@@ -11457,11 +11455,6 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.DemandRequest", b =>
                 {
-                    b.HasOne("Compass.Models.BusinessCase", "BusinessCase")
-                        .WithMany()
-                        .HasForeignKey("BusinessCaseId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Compass.Models.Project", "ConvertedProject")
                         .WithMany()
                         .HasForeignKey("ConvertedProjectId")
@@ -11471,8 +11464,6 @@ namespace Compass.Migrations
                         .WithMany("DemandRequests")
                         .HasForeignKey("TriageMeetingId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("BusinessCase");
 
                     b.Navigation("ConvertedProject");
 
