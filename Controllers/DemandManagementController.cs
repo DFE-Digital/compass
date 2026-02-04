@@ -229,6 +229,1139 @@ namespace Compass.Controllers
         }
 
         // ==========================================
+        // OVERVIEW SECTION
+        // ==========================================
+
+        // GET: DemandManagement/Overview
+        public async Task<IActionResult> Overview()
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            // Get summary statistics for overview
+            var totalRequests = await _context.DemandRequests.CountAsync();
+            var totalBusinessCases = await _context.BusinessCases.CountAsync();
+            var totalPrioritised = await _context.DemandRequests
+                .Where(dr => dr.Prioritisation != null)
+                .CountAsync();
+            var totalInTriage = await _context.DemandRequests
+                .Where(dr => dr.IsSubmittedToTriage == true)
+                .CountAsync();
+
+            ViewBag.TotalRequests = totalRequests;
+            ViewBag.TotalBusinessCases = totalBusinessCases;
+            ViewBag.TotalPrioritised = totalPrioritised;
+            ViewBag.TotalInTriage = totalInTriage;
+
+            return View();
+        }
+
+        // ==========================================
+        // BUSINESS CASES SECTION
+        // ==========================================
+
+        // GET: DemandManagement/BusinessCases
+        public async Task<IActionResult> BusinessCases(
+            string? search,
+            string? requestor,
+            string? businessArea,
+            string? status)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            // Session keys for filter persistence
+            const string sessionKeySearch = "BusinessCases_Search";
+            const string sessionKeyRequestor = "BusinessCases_Requestor";
+            const string sessionKeyBusinessArea = "BusinessCases_BusinessArea";
+            const string sessionKeyStatus = "BusinessCases_Status";
+
+            // Handle filter parameters - use session if not provided in query string
+            if (string.IsNullOrEmpty(search) && string.IsNullOrEmpty(requestor) && 
+                string.IsNullOrEmpty(businessArea) && string.IsNullOrEmpty(status))
+            {
+                // No filters in query string - check session
+                search = HttpContext.Session.GetString(sessionKeySearch);
+                requestor = HttpContext.Session.GetString(sessionKeyRequestor);
+                businessArea = HttpContext.Session.GetString(sessionKeyBusinessArea);
+                status = HttpContext.Session.GetString(sessionKeyStatus);
+            }
+            else
+            {
+                // Filters provided in query string - update session
+                if (string.IsNullOrEmpty(search))
+                    HttpContext.Session.Remove(sessionKeySearch);
+                else
+                    HttpContext.Session.SetString(sessionKeySearch, search);
+
+                if (string.IsNullOrEmpty(requestor))
+                    HttpContext.Session.Remove(sessionKeyRequestor);
+                else
+                    HttpContext.Session.SetString(sessionKeyRequestor, requestor);
+
+                if (string.IsNullOrEmpty(businessArea))
+                    HttpContext.Session.Remove(sessionKeyBusinessArea);
+                else
+                    HttpContext.Session.SetString(sessionKeyBusinessArea, businessArea);
+
+                if (string.IsNullOrEmpty(status))
+                    HttpContext.Session.Remove(sessionKeyStatus);
+                else
+                    HttpContext.Session.SetString(sessionKeyStatus, status);
+            }
+
+            // Default to Active status if no status is specified
+            var effectiveStatus = status;
+            if (string.IsNullOrEmpty(effectiveStatus))
+            {
+                effectiveStatus = "Active";
+            }
+
+            // Build base query for status counts (before other filters)
+            var baseQuery = _context.BusinessCases
+                .Include(bc => bc.StatusLookup)
+                .AsQueryable();
+
+            // Apply search, requestor, and business area filters to base query for counts
+            if (!string.IsNullOrEmpty(search))
+            {
+                baseQuery = baseQuery.Where(bc => 
+                    bc.Title.Contains(search) || 
+                    bc.BusinessCaseId.Contains(search) ||
+                    (bc.Description != null && bc.Description.Contains(search)));
+            }
+
+            if (!string.IsNullOrEmpty(requestor))
+            {
+                baseQuery = baseQuery.Where(bc => 
+                    (bc.RequestorEmail != null && bc.RequestorEmail.Contains(requestor)) ||
+                    (bc.RequestorName != null && bc.RequestorName.Contains(requestor)));
+            }
+
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                baseQuery = baseQuery.Where(bc => bc.BusinessArea == businessArea);
+            }
+
+            // Calculate status counts
+            // Treat business cases with no status as "Active" by default
+            ViewBag.StatusActiveCount = await baseQuery.CountAsync(bc => 
+                (bc.StatusLookup == null && bc.Status == null) ||
+                (bc.StatusLookup != null && bc.StatusLookup.Name == "Active") ||
+                (bc.Status == "Active"));
+            ViewBag.StatusPausedCount = await baseQuery.CountAsync(bc => 
+                (bc.StatusLookup != null && bc.StatusLookup.Name == "Paused") ||
+                (bc.Status == "Paused"));
+            ViewBag.StatusCompletedCount = await baseQuery.CountAsync(bc => 
+                (bc.StatusLookup != null && bc.StatusLookup.Name == "Completed") ||
+                (bc.Status == "Completed"));
+            ViewBag.StatusCancelledCount = await baseQuery.CountAsync(bc => 
+                (bc.StatusLookup != null && bc.StatusLookup.Name == "Cancelled") ||
+                (bc.Status == "Cancelled"));
+
+            // Build main query
+            var query = _context.BusinessCases
+                .Include(bc => bc.StatusLookup)
+                .AsQueryable();
+
+            // Apply search filter
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(bc => 
+                    bc.Title.Contains(search) || 
+                    bc.BusinessCaseId.Contains(search) ||
+                    (bc.Description != null && bc.Description.Contains(search)));
+            }
+
+            // Apply requestor filter
+            if (!string.IsNullOrEmpty(requestor))
+            {
+                query = query.Where(bc => 
+                    (bc.RequestorEmail != null && bc.RequestorEmail.Contains(requestor)) ||
+                    (bc.RequestorName != null && bc.RequestorName.Contains(requestor)));
+            }
+
+            // Apply business area filter
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                query = query.Where(bc => bc.BusinessArea == businessArea);
+            }
+
+            // Apply status filter (using effectiveStatus which defaults to Active)
+            // Treat business cases with no status as "Active" by default
+            if (effectiveStatus == "Active")
+            {
+                query = query.Where(bc => 
+                    (bc.StatusLookup == null && bc.Status == null) ||
+                    (bc.StatusLookup != null && bc.StatusLookup.Name == effectiveStatus) ||
+                    (bc.Status == effectiveStatus));
+            }
+            else
+            {
+                query = query.Where(bc => 
+                    (bc.StatusLookup != null && bc.StatusLookup.Name == effectiveStatus) ||
+                    (bc.Status == effectiveStatus));
+            }
+
+            // Order and execute query
+            var businessCases = await query
+                .OrderByDescending(bc => bc.CreatedAt)
+                .ToListAsync();
+
+            // Populate ViewBag for filters
+            ViewBag.CurrentSearch = search;
+            ViewBag.CurrentRequestor = requestor;
+            ViewBag.CurrentBusinessArea = businessArea;
+            ViewBag.CurrentStatus = effectiveStatus;
+
+            // Get distinct requestors for filter dropdown
+            var distinctRequestors = await _context.BusinessCases
+                .Where(bc => !string.IsNullOrEmpty(bc.RequestorName))
+                .Select(bc => bc.RequestorName!)
+                .Distinct()
+                .OrderBy(r => r)
+                .ToListAsync();
+            ViewBag.Requestors = distinctRequestors;
+
+            // Get business areas for filter dropdown
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading business areas for BusinessCases");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            // Get statuses for filter dropdown
+            var statuses = await _context.BusinessCaseStatusLookups
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Name)
+                .Select(s => s.Name)
+                .ToListAsync();
+            ViewBag.Statuses = statuses;
+
+            return View(businessCases);
+        }
+
+        // GET: DemandManagement/CreateBusinessCase
+        // GET: api/DemandManagement/CreateBusinessCase
+        [Route("api/DemandManagement/CreateBusinessCase")]
+        [HttpGet]
+        public async Task<IActionResult> CreateBusinessCase()
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            var userEmail = User.Identity?.Name ?? string.Empty;
+            var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? User.FindFirst("name")?.Value ?? string.Empty;
+
+            var model = new BusinessCase
+            {
+                RequestorEmail = null, // No default - user must select from Entra
+                RequestorName = null, // No default - user must select from Entra
+                BusinessCaseId = string.Empty, // Leave empty - will be generated if not provided, or user can enter their own
+                Date = DateTime.UtcNow
+            };
+
+            // Populate dropdowns
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading business areas for CreateBusinessCase");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            // Load statuses
+            var statuses = await _context.BusinessCaseStatusLookups
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Name)
+                .ToListAsync();
+            ViewBag.Statuses = statuses;
+
+            return View(model);
+        }
+
+        // POST: DemandManagement/CreateBusinessCase
+        // POST: api/DemandManagement/CreateBusinessCase
+        [HttpPost]
+        [Route("api/DemandManagement/CreateBusinessCase")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateBusinessCase(
+            BusinessCase model,
+            string? entraUserObjectId,
+            string? entraUserEmail,
+            string? entraUserName)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            // Log ModelState errors for debugging
+            if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("ModelState is invalid. Errors:");
+                foreach (var key in ModelState.Keys)
+                {
+                    var errors = ModelState[key]?.Errors;
+                    if (errors != null && errors.Any())
+                    {
+                        foreach (var error in errors)
+                        {
+                            _logger.LogWarning("Field: {Field}, Error: {Error}", key, error.ErrorMessage);
+                        }
+                    }
+                }
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    model.CreatedAt = DateTime.UtcNow;
+                    model.UpdatedAt = DateTime.UtcNow;
+
+                    // Set requestor from Entra user picker (optional - no default)
+                    if (!string.IsNullOrWhiteSpace(entraUserEmail) && !string.IsNullOrWhiteSpace(entraUserName))
+                    {
+                        model.RequestorEmail = entraUserEmail.Trim();
+                        model.RequestorName = entraUserName.Trim();
+                    }
+                    // If not provided, RequestorEmail and RequestorName remain null (optional field)
+
+                    // Set status from StatusLookupId if provided
+                    if (model.StatusLookupId.HasValue)
+                    {
+                        var status = await _context.BusinessCaseStatusLookups.FindAsync(model.StatusLookupId.Value);
+                        if (status != null)
+                        {
+                            model.Status = status.Name;
+                        }
+                    }
+                    // If not provided, StatusLookupId and Status remain null (will default to Active in queries)
+
+                    // Ensure BusinessCaseId is set - generate if empty, or validate uniqueness if provided
+                    if (string.IsNullOrWhiteSpace(model.BusinessCaseId))
+                    {
+                        model.BusinessCaseId = GenerateBusinessCaseId();
+                    }
+                    else
+                    {
+                        // Trim whitespace from provided ID
+                        model.BusinessCaseId = model.BusinessCaseId.Trim();
+                        
+                        // Check if the provided ID already exists
+                        var existingCase = await _context.BusinessCases
+                            .FirstOrDefaultAsync(bc => bc.BusinessCaseId == model.BusinessCaseId);
+                        
+                        if (existingCase != null)
+                        {
+                            ModelState.AddModelError(nameof(model.BusinessCaseId), 
+                                $"A business case with ID '{model.BusinessCaseId}' already exists. Please use a different ID.");
+                        }
+                    }
+
+                    // If validation passed, save the business case
+                    if (ModelState.IsValid)
+                    {
+                        _context.BusinessCases.Add(model);
+                        await _context.SaveChangesAsync();
+
+                        TempData["SuccessMessage"] = $"Business case {model.BusinessCaseId} has been created successfully.";
+                        return RedirectToAction(nameof(BusinessCaseDetails), new { id = model.Id });
+                    }
+                }
+                catch (DbUpdateException ex)
+                {
+                    _logger.LogError(ex, "Database error creating business case");
+                    
+                    // Check if it's a unique constraint violation
+                    if (ex.InnerException?.Message?.Contains("UNIQUE constraint") == true ||
+                        ex.InnerException?.Message?.Contains("duplicate key") == true)
+                    {
+                        ModelState.AddModelError(nameof(model.BusinessCaseId), 
+                            $"A business case with ID '{model.BusinessCaseId}' already exists. Please use a different ID.");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("", "An error occurred while creating the business case.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error creating business case");
+                    ModelState.AddModelError("", "An error occurred while creating the business case.");
+                }
+            }
+
+            // If we get here, reload the form data
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reloading business areas");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            // Reload statuses
+            var statuses = await _context.BusinessCaseStatusLookups
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Name)
+                .ToListAsync();
+            ViewBag.Statuses = statuses;
+
+            return View(model);
+        }
+
+        // GET: DemandManagement/BusinessCaseDetails/5
+        [Route("api/DemandManagement/BusinessCaseDetails/{id}")]
+        [HttpGet]
+        public async Task<IActionResult> BusinessCaseDetails(int? id, string? tab)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            // Check if user has access to DemandManagement
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            var businessCase = await _context.BusinessCases
+                .Include(bc => bc.Reviewers)
+                .Include(bc => bc.DdtFeedbacks)
+                .Include(bc => bc.BusinessCaseProjects)
+                    .ThenInclude(bcp => bcp.Project)
+                        .ThenInclude(p => p.ProjectProducts)
+                .Include(bc => bc.BusinessCaseProducts)
+                .Include(bc => bc.StatusLookup)
+                .FirstOrDefaultAsync(bc => bc.Id == id);
+            
+            // Load demand requests linked to this business case
+            if (businessCase != null && tab == "path")
+            {
+                var demandRequests = await _context.DemandRequests
+                    .Where(dr => dr.BusinessCaseId == id)
+                    .OrderBy(dr => dr.CreatedAt)
+                    .ToListAsync();
+                ViewBag.DemandRequests = demandRequests;
+            }
+
+            if (businessCase == null)
+            {
+                return NotFound();
+            }
+
+            // Load business areas and statuses for overview modals
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading business areas for BusinessCaseDetails");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            var statuses = await _context.BusinessCaseStatusLookups
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Name)
+                .ToListAsync();
+            ViewBag.Statuses = statuses;
+
+            ViewBag.CurrentTab = tab ?? "overview";
+            return View("BusinessCaseDetails", businessCase);
+        }
+
+        // GET: DemandManagement/EditBusinessCase/5
+        public async Task<IActionResult> EditBusinessCase(int? id)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            var businessCase = await _context.BusinessCases
+                .Include(bc => bc.StatusLookup)
+                .FirstOrDefaultAsync(bc => bc.Id == id);
+            if (businessCase == null)
+            {
+                return NotFound();
+            }
+
+            // Populate dropdowns
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading business areas for EditBusinessCase");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            // Load statuses
+            var statuses = await _context.BusinessCaseStatusLookups
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Name)
+                .ToListAsync();
+            ViewBag.Statuses = statuses;
+
+            return View(businessCase);
+        }
+
+        // POST: DemandManagement/EditBusinessCase/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditBusinessCase(int id, BusinessCase model, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (id != model.Id)
+            {
+                return NotFound();
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    var businessCase = await _context.BusinessCases.FindAsync(id);
+                    if (businessCase == null)
+                    {
+                        return NotFound();
+                    }
+
+                    // Update requestor from Entra user picker if provided
+                    if (!string.IsNullOrWhiteSpace(entraUserEmail) && !string.IsNullOrWhiteSpace(entraUserName))
+                    {
+                        businessCase.RequestorEmail = entraUserEmail.Trim();
+                        businessCase.RequestorName = entraUserName.Trim();
+                    }
+
+                    // Update other fields
+                    businessCase.Title = model.Title;
+                    businessCase.Description = model.Description;
+                    businessCase.BusinessCaseId = model.BusinessCaseId.Trim();
+                    businessCase.BusinessArea = model.BusinessArea;
+                    businessCase.Date = model.Date;
+                    businessCase.StatusLookupId = model.StatusLookupId;
+                    businessCase.Status = model.StatusLookupId.HasValue 
+                        ? (await _context.BusinessCaseStatusLookups.FindAsync(model.StatusLookupId.Value))?.Name 
+                        : null;
+                    businessCase.UpdatedAt = DateTime.UtcNow;
+
+                    // Validate BusinessCaseId uniqueness if changed
+                    if (businessCase.BusinessCaseId != model.BusinessCaseId)
+                    {
+                        var existingCase = await _context.BusinessCases
+                            .FirstOrDefaultAsync(bc => bc.BusinessCaseId == businessCase.BusinessCaseId && bc.Id != id);
+                        
+                        if (existingCase != null)
+                        {
+                            ModelState.AddModelError(nameof(model.BusinessCaseId), 
+                                $"A business case with ID '{businessCase.BusinessCaseId}' already exists. Please use a different ID.");
+                        }
+                    }
+
+                    if (ModelState.IsValid)
+                    {
+                        await _context.SaveChangesAsync();
+                        TempData["SuccessMessage"] = "Business case updated successfully.";
+                        return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCase.Id });
+                    }
+                }
+                catch (DbUpdateException ex)
+                {
+                    _logger.LogError(ex, "Database error updating business case");
+                    if (ex.InnerException?.Message?.Contains("UNIQUE constraint") == true ||
+                        ex.InnerException?.Message?.Contains("duplicate key") == true)
+                    {
+                        ModelState.AddModelError(nameof(model.BusinessCaseId), 
+                            $"A business case with ID '{model.BusinessCaseId}' already exists. Please use a different ID.");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("", "An error occurred while updating the business case.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error updating business case");
+                    ModelState.AddModelError("", "An error occurred while updating the business case.");
+                }
+            }
+
+            // Reload form data
+            try
+            {
+                var businessAreas = await GetBusinessAreasFromCmsAsync();
+                ViewBag.BusinessAreas = businessAreas;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reloading business areas");
+                ViewBag.BusinessAreas = new List<string>();
+            }
+
+            return View(model);
+        }
+
+        // POST: DemandManagement/AddDdtFeedback
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddDdtFeedback(int businessCaseId, string feedback, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (string.IsNullOrWhiteSpace(feedback))
+            {
+                TempData["ErrorMessage"] = "Feedback text is required.";
+                return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+            }
+
+            if (string.IsNullOrWhiteSpace(entraUserEmail) || string.IsNullOrWhiteSpace(entraUserName))
+            {
+                TempData["ErrorMessage"] = "Please select a feedback provider from Entra ID.";
+                return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+            }
+
+            try
+            {
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    return NotFound();
+                }
+
+                var ddtFeedback = new BusinessCaseDdtFeedback
+                {
+                    BusinessCaseId = businessCaseId,
+                    Feedback = feedback.Trim(),
+                    FeedbackProviderEmail = entraUserEmail.Trim(),
+                    FeedbackProviderName = entraUserName.Trim(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.BusinessCaseDdtFeedbacks.Add(ddtFeedback);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "DDT feedback added successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding DDT feedback");
+                TempData["ErrorMessage"] = "An error occurred while adding DDT feedback.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+        }
+
+        // POST: DemandManagement/EditDdtFeedback
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditDdtFeedback(int businessCaseId, int feedbackId, string feedback, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (string.IsNullOrWhiteSpace(feedback))
+            {
+                TempData["ErrorMessage"] = "Feedback text is required.";
+                return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+            }
+
+            if (string.IsNullOrWhiteSpace(entraUserEmail) || string.IsNullOrWhiteSpace(entraUserName))
+            {
+                TempData["ErrorMessage"] = "Please select a feedback provider from Entra ID.";
+                return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+            }
+
+            try
+            {
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    return NotFound();
+                }
+
+                var ddtFeedback = await _context.BusinessCaseDdtFeedbacks
+                    .FirstOrDefaultAsync(f => f.Id == feedbackId && f.BusinessCaseId == businessCaseId);
+
+                if (ddtFeedback == null)
+                {
+                    TempData["ErrorMessage"] = "Feedback not found.";
+                    return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+                }
+
+                // Update feedback
+                ddtFeedback.Feedback = feedback.Trim();
+                ddtFeedback.FeedbackProviderEmail = entraUserEmail.Trim();
+                ddtFeedback.FeedbackProviderName = entraUserName.Trim();
+                ddtFeedback.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "DDT feedback updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating DDT feedback");
+                TempData["ErrorMessage"] = "An error occurred while updating DDT feedback.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "ddtfeedback" });
+        }
+
+        // POST: DemandManagement/LinkProject
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LinkProject(int businessCaseId, int projectId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            try
+            {
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    return NotFound();
+                }
+
+                var project = await _context.Projects.FindAsync(projectId);
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Work item not found.";
+                    return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+                }
+
+                // Check if already linked
+                var existingLink = await _context.BusinessCaseProjects
+                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == projectId);
+
+                if (existingLink != null)
+                {
+                    TempData["ErrorMessage"] = "This work item is already linked to the business case.";
+                    return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+                }
+
+                var businessCaseProject = new BusinessCaseProject
+                {
+                    BusinessCaseId = businessCaseId,
+                    ProjectId = projectId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.BusinessCaseProjects.Add(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Work item '{project.Title}' linked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking project to business case");
+                TempData["ErrorMessage"] = "An error occurred while linking the work item.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+        }
+
+        // POST: DemandManagement/UnlinkProject
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UnlinkProject(int businessCaseId, int businessCaseProjectId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            try
+            {
+                var businessCaseProject = await _context.BusinessCaseProjects
+                    .FirstOrDefaultAsync(bcp => bcp.Id == businessCaseProjectId && bcp.BusinessCaseId == businessCaseId);
+
+                if (businessCaseProject == null)
+                {
+                    TempData["ErrorMessage"] = "Link not found.";
+                    return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+                }
+
+                _context.BusinessCaseProjects.Remove(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Work item unlinked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unlinking project from business case");
+                TempData["ErrorMessage"] = "An error occurred while unlinking the work item.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+        }
+
+        // POST: DemandManagement/UpdateBusinessCaseField
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBusinessCaseField(int id, string field, string? value, string? entraUserObjectId, string? entraUserEmail, string? entraUserName)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            var businessCase = await _context.BusinessCases
+                .Include(bc => bc.StatusLookup)
+                .FirstOrDefaultAsync(bc => bc.Id == id);
+
+            if (businessCase == null)
+            {
+                return NotFound();
+            }
+
+            try
+            {
+                switch (field.ToLower())
+                {
+                    case "title":
+                        businessCase.Title = value ?? string.Empty;
+                        break;
+                    case "businesscaseid":
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            ModelState.AddModelError("value", "Business case ID is required.");
+                        }
+                        else
+                        {
+                            var trimmedId = value.Trim();
+                            // Check if ID already exists for a different business case
+                            var existingCase = await _context.BusinessCases
+                                .FirstOrDefaultAsync(bc => bc.BusinessCaseId == trimmedId && bc.Id != id);
+                            if (existingCase != null)
+                            {
+                                ModelState.AddModelError("value", $"A business case with ID '{trimmedId}' already exists.");
+                            }
+                            else
+                            {
+                                businessCase.BusinessCaseId = trimmedId;
+                            }
+                        }
+                        break;
+                    case "description":
+                        businessCase.Description = value;
+                        break;
+                    case "businessarea":
+                        businessCase.BusinessArea = string.IsNullOrWhiteSpace(value) ? null : value;
+                        break;
+                    case "requestor":
+                        if (!string.IsNullOrWhiteSpace(entraUserEmail) && !string.IsNullOrWhiteSpace(entraUserName))
+                        {
+                            businessCase.RequestorEmail = entraUserEmail.Trim();
+                            businessCase.RequestorName = entraUserName.Trim();
+                        }
+                        else
+                        {
+                            businessCase.RequestorEmail = null;
+                            businessCase.RequestorName = null;
+                        }
+                        break;
+                    case "status":
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            businessCase.StatusLookupId = null;
+                            businessCase.Status = null;
+                        }
+                        else if (int.TryParse(value, out var statusId))
+                        {
+                            var status = await _context.BusinessCaseStatusLookups.FindAsync(statusId);
+                            if (status != null)
+                            {
+                                businessCase.StatusLookupId = statusId;
+                                businessCase.Status = status.Name;
+                            }
+                        }
+                        break;
+                }
+
+                if (ModelState.IsValid)
+                {
+                    businessCase.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    TempData["SuccessMessage"] = $"{field} updated successfully.";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "An error occurred while updating the field.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating {Field} for business case {BusinessCaseId}", field, id);
+                TempData["ErrorMessage"] = $"An error occurred while updating {field}.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = id, tab = "overview" });
+        }
+
+        // GET: DemandManagement/CreateProjectFromBusinessCase
+        public async Task<IActionResult> CreateProjectFromBusinessCase(int? businessCaseId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            if (businessCaseId == null)
+            {
+                return NotFound();
+            }
+
+            await CheckAndSetCentralOpsAdminAsync();
+
+            var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+            if (businessCase == null)
+            {
+                return NotFound();
+            }
+
+            // Redirect to project create with business case context
+            return RedirectToAction("Create", "Project", new { businessCaseId = businessCaseId });
+        }
+
+        // POST: DemandManagement/LinkProjectAfterCreate
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LinkProjectAfterCreate(int businessCaseId, int projectId)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            try
+            {
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    return NotFound();
+                }
+
+                var project = await _context.Projects.FindAsync(projectId);
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Work item not found.";
+                    return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+                }
+
+                // Check if already linked
+                var existingLink = await _context.BusinessCaseProjects
+                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == projectId);
+
+                if (existingLink == null)
+                {
+                    var businessCaseProject = new BusinessCaseProject
+                    {
+                        BusinessCaseId = businessCaseId,
+                        ProjectId = projectId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.BusinessCaseProjects.Add(businessCaseProject);
+                    await _context.SaveChangesAsync();
+                }
+
+                TempData["SuccessMessage"] = $"Work item '{project.Title}' created and linked to business case successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking project to business case after creation");
+                TempData["ErrorMessage"] = "An error occurred while linking the work item.";
+            }
+
+            return RedirectToAction(nameof(BusinessCaseDetails), new { id = businessCaseId, tab = "workitems" });
+        }
+
+        // GET: DemandManagement/GetActiveProjects
+        [HttpGet]
+        [Route("api/DemandManagement/GetActiveProjects")]
+        public async Task<IActionResult> GetActiveProjects([FromQuery] int? businessCaseId = null)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            try
+            {
+                var query = _context.Projects
+                    .Where(p => !p.IsDeleted && p.Status == "Active");
+
+                // Exclude projects already linked to this business case
+                if (businessCaseId.HasValue)
+                {
+                    var linkedProjectIds = await _context.BusinessCaseProjects
+                        .Where(bcp => bcp.BusinessCaseId == businessCaseId.Value)
+                        .Select(bcp => bcp.ProjectId)
+                        .ToListAsync();
+
+                    if (linkedProjectIds.Any())
+                    {
+                        query = query.Where(p => !linkedProjectIds.Contains(p.Id));
+                    }
+                }
+
+                var projects = await query
+                    .OrderBy(p => p.Title)
+                    .Select(p => new
+                    {
+                        id = p.Id,
+                        title = p.Title,
+                        code = p.ProjectCode
+                    })
+                    .ToListAsync();
+
+                return Ok(projects);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving active projects");
+                return StatusCode(500, new { error = "Failed to retrieve active projects" });
+            }
+        }
+
+        // ==========================================
         // REQUESTS SECTION
         // ==========================================
 
@@ -364,9 +1497,20 @@ namespace Compass.Controllers
             }
 
             var requests = await finalQuery
-                .Include(dr => dr.Prioritisation)
                 .OrderByDescending(dr => dr.SubmittedAt ?? dr.CreatedAt)
                 .ToListAsync();
+            
+            // Load Prioritisation separately to avoid split query issues
+            var requestIds = requests.Select(r => r.Id).ToList();
+            var prioritisations = await _context.DemandRequestPrioritisations
+                .Where(p => requestIds.Contains(p.DemandRequestId))
+                .ToListAsync();
+            
+            // Manually attach prioritisations to requests
+            foreach (var request in requests)
+            {
+                request.Prioritisation = prioritisations.FirstOrDefault(p => p.DemandRequestId == request.Id);
+            }
 
             // Calculate status counts from the pre-status query (before status filter is applied)
             var statusCountsRaw = await preStatusQuery
@@ -1141,6 +2285,7 @@ namespace Compass.Controllers
                 .Include(dr => dr.Assessments)
                 .Include(dr => dr.SectionCompletions)
                 .Include(dr => dr.RiskTypeLinks).ThenInclude(link => link.RiskType)
+                .Include(dr => dr.BusinessCase)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (demandRequest == null)
@@ -1193,6 +2338,11 @@ namespace Compass.Controllers
 
             // Load business areas for modals
             ViewBag.BusinessAreas = await GetBusinessAreasFromCmsAsync();
+
+            // Load business cases for linking
+            ViewBag.BusinessCases = await _context.BusinessCases
+                .OrderBy(bc => bc.BusinessCaseId)
+                .ToListAsync();
 
             await CheckAndSetCentralOpsAdminAsync();
 
@@ -3062,9 +4212,20 @@ namespace Compass.Controllers
             }
 
             var requests = await filteredBySearch
-                .Include(dr => dr.Prioritisation)
                 .OrderByDescending(dr => dr.SubmittedAt ?? dr.CreatedAt)
                 .ToListAsync();
+            
+            // Load Prioritisation separately to avoid split query issues
+            var requestIds = requests.Select(r => r.Id).ToList();
+            var prioritisations = await _context.DemandRequestPrioritisations
+                .Where(p => requestIds.Contains(p.DemandRequestId))
+                .ToListAsync();
+            
+            // Manually attach prioritisations to requests
+            foreach (var request in requests)
+            {
+                request.Prioritisation = prioritisations.FirstOrDefault(p => p.DemandRequestId == request.Id);
+            }
 
             ViewBag.Portfolios = await baseQuery
                 .Where(dr => !string.IsNullOrEmpty(dr.PortfolioName))
@@ -3345,6 +4506,13 @@ namespace Compass.Controllers
             return $"DR-{year}-{count:D3}";
         }
 
+        private string GenerateBusinessCaseId()
+        {
+            var year = DateTime.UtcNow.Year;
+            var count = _context.BusinessCases.Count(bc => bc.CreatedAt.Year == year) + 1;
+            return $"BC-{year}-{count:D3}";
+        }
+
         private async Task<bool> DemandRequestExists(int id)
         {
             return await _context.DemandRequests.AnyAsync(e => e.Id == id);
@@ -3608,8 +4776,112 @@ namespace Compass.Controllers
             demandRequest.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"Request marked as {(isSensitiveRequest ? "sensitive" : "not sensitive")}.";
+            TempData["SuccessMessage"] = "Sensitivity status updated successfully.";
             return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LinkBusinessCase(int demandRequestId, int? businessCaseId, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(demandRequestId);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            if (businessCaseId.HasValue)
+            {
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId.Value);
+                if (businessCase == null)
+                {
+                    TempData["ErrorMessage"] = "Business case not found.";
+                    return RedirectToAction(nameof(Details), new { id = demandRequestId, s = currentSection ?? "Overview", view = currentView ?? "details" });
+                }
+
+                demandRequest.BusinessCaseId = businessCaseId.Value;
+            }
+            else
+            {
+                demandRequest.BusinessCaseId = null;
+            }
+
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = businessCaseId.HasValue 
+                ? "Business case linked successfully." 
+                : "Business case unlinked successfully.";
+            return RedirectToAction(nameof(Details), new { id = demandRequestId, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UnlinkBusinessCase(int id, string? currentSection, string? currentView)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (!await HasDemandManagementAccessAsync())
+            {
+                return Forbid("You do not have access to Demand Management.");
+            }
+
+            var demandRequest = await _context.DemandRequests.FindAsync(id);
+            if (demandRequest == null)
+            {
+                return NotFound();
+            }
+
+            demandRequest.BusinessCaseId = null;
+            demandRequest.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Business case unlinked successfully.";
+            return RedirectToAction(nameof(Details), new { id, s = currentSection ?? "Overview", view = currentView ?? "details" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchBusinessCases(string q)
+        {
+            if (!IsDemandManagementEnabled())
+            {
+                return NotFound("Demand Management is not enabled.");
+            }
+
+            if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            {
+                return Ok(new { results = new List<object>() });
+            }
+
+            var businessCases = await _context.BusinessCases
+                .Where(bc => 
+                    bc.BusinessCaseId.Contains(q) ||
+                    bc.Title.Contains(q) ||
+                    (bc.Description != null && bc.Description.Contains(q)))
+                .OrderBy(bc => bc.BusinessCaseId)
+                .Take(20)
+                .Select(bc => new
+                {
+                    id = bc.Id,
+                    businessCaseId = bc.BusinessCaseId,
+                    title = bc.Title
+                })
+                .ToListAsync();
+
+            return Ok(new { results = businessCases });
         }
 
         private static void ValidatePrioritisationModel(DemandRequestPrioritisation model, ModelStateDictionary modelState)
