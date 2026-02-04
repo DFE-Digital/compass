@@ -991,7 +991,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "info",
                 LinkLabel = "Book review",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1006,7 +1006,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "primary",
                 LinkLabel = "Assessment guidance",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1021,7 +1021,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "warning",
                 LinkLabel = "Operational readiness checklist",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1036,7 +1036,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "success",
                 LinkLabel = "Book assessment",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1087,7 +1087,7 @@ public class HomeController : Controller
                 Title = "Book service assessment",
                 Description = "Secure a DDaT assessment slot for your service.",
                 Icon = "fas fa-clipboard",
-                Url = Url.Action("Roadmap", "Home") ?? "#"
+                Url = "#"
             },
             new()
             {
@@ -1242,11 +1242,6 @@ public class HomeController : Controller
     }
 
     public IActionResult Error()
-    {
-        return View();
-    }
-
-    public IActionResult Roadmap()
     {
         return View();
     }

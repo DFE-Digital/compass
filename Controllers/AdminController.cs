@@ -696,7 +696,9 @@ public class AdminController : Controller
             .AsQueryable();
         if (!string.IsNullOrWhiteSpace(fipsId))
         {
-            query = query.Where(r => r.SurveyInstance!.Service!.FipsId == fipsId);
+            query = query.Where(r => r.SurveyInstance != null && 
+                                     r.SurveyInstance.Service != null && 
+                                     r.SurveyInstance.Service.FipsId == fipsId);
         }
         if (from.HasValue)
         {
@@ -3495,6 +3497,175 @@ public class AdminController : Controller
     }
 
     // ========================================
+    // SETTINGS - Business Case Statuses
+    // ========================================
+
+    // GET: Admin/BusinessCaseStatuses
+    public async Task<IActionResult> BusinessCaseStatuses()
+    {
+        var statuses = await _context.BusinessCaseStatusLookups
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/BusinessCaseStatuses.cshtml", statuses);
+    }
+
+    // POST: Admin/CreateBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateBusinessCaseStatus([Bind("Name,Description,SortOrder,IsActive,CssClass")] BusinessCaseStatusLookup status)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == status.Name))
+                {
+                    TempData["ErrorMessage"] = "A business case status with this name already exists.";
+                }
+                else
+                {
+                    status.CreatedAt = DateTime.UtcNow;
+                    status.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating business case status");
+                TempData["ErrorMessage"] = "An error occurred while creating the business case status. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/EditBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditBusinessCaseStatus(int id, string name, string? description, int sortOrder, bool isActive = false, string? cssClass = null)
+    {
+        _logger.LogInformation("EditBusinessCaseStatus POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}, CssClass: {CssClass}", 
+            id, name, description, sortOrder, isActive, cssClass);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        var formCssClass = Request.Form["cssClass"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}, cssClass: {FormCssClass}", 
+            formId, formName, formDescription, formSortOrder, formIsActive, formCssClass);
+        
+        try
+        {
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            if (string.IsNullOrEmpty(cssClass) && !string.IsNullOrEmpty(formCssClass))
+            {
+                cssClass = formCssClass;
+            }
+            
+            var existingStatus = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (existingStatus == null)
+            {
+                _logger.LogWarning("Business case status not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "Business case status not found.";
+                return RedirectToAction(nameof(BusinessCaseStatuses));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == name && s.Id != id))
+            {
+                TempData["ErrorMessage"] = "A business case status with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating business case status {Id} - Name: {Name}, IsActive: {IsActive}, CssClass: {CssClass}", id, name, isActive, cssClass);
+                
+                existingStatus.Name = name;
+                existingStatus.Description = description;
+                existingStatus.SortOrder = sortOrder;
+                existingStatus.IsActive = isActive;
+                existingStatus.CssClass = cssClass;
+                existingStatus.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Business case status '{name}' has been updated successfully.";
+                _logger.LogInformation("Business case status {Id} updated successfully", id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating business case status {StatusId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/DeleteBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteBusinessCaseStatus(int id)
+    {
+        try
+        {
+            var status = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (status != null)
+            {
+                // Check if any business cases are using this status
+                var businessCaseCount = await _context.BusinessCases.CountAsync(bc => bc.StatusLookupId == status.Id);
+                if (businessCaseCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete business case status '{status.Name}' as it is being used by {businessCaseCount} business case(s).";
+                }
+                else
+                {
+                    _context.BusinessCaseStatusLookups.Remove(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting business case status");
+            TempData["ErrorMessage"] = "An error occurred while deleting the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // ========================================
     // SETTINGS - Activity Types
     // ========================================
 
@@ -5284,8 +5455,8 @@ public class AdminController : Controller
         var hops = await _context.HOPS
             .Include(h => h.User)
             .Include(h => h.DdatProfession)
-            .OrderBy(h => h.DdatProfession.Name)
-            .ThenBy(h => h.User.Name)
+            .OrderBy(h => h.DdatProfession != null ? h.DdatProfession.Name : string.Empty)
+            .ThenBy(h => h.User != null ? h.User.Name : string.Empty)
             .ToListAsync();
 
         ViewBag.Professions = await _context.DdatProfessions
