@@ -2036,6 +2036,25 @@ namespace Compass.Controllers
                 return RedirectToAction("Milestones", "MilestonesUpdatesSuccesses", new { projectId = id });
             }
             
+            // Load business cases linked to this project
+            var businessCaseProjects = await _context.BusinessCaseProjects
+                .Include(bcp => bcp.BusinessCase)
+                .Where(bcp => bcp.ProjectId == id)
+                .ToListAsync();
+            
+            ViewBag.BusinessCaseCount = businessCaseProjects.Count;
+            ViewBag.BusinessCaseProjects = businessCaseProjects;
+            
+            // Load all business cases for linking (if needed)
+            if (tab == "businesscase")
+            {
+                var allBusinessCases = await _context.BusinessCases
+                    .OrderBy(bc => bc.BusinessCaseId)
+                    .Select(bc => new { bc.Id, bc.BusinessCaseId, bc.Title })
+                    .ToListAsync();
+                ViewBag.AllBusinessCases = allBusinessCases;
+            }
+            
             ViewBag.CurrentTab = tab;
             ViewBag.IssuesView = string.Equals(issuesView, "priority", StringComparison.OrdinalIgnoreCase) ? "priority" : "table";
 
@@ -2452,6 +2471,90 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = projectId, tab = "products" });
+        }
+
+        // POST: Project/LinkBusinessCase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LinkBusinessCase(int projectId, int businessCaseId)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(projectId);
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Work item not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    TempData["ErrorMessage"] = "Business case not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                // Check if already linked
+                var existingLink = await _context.BusinessCaseProjects
+                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == projectId);
+
+                if (existingLink != null)
+                {
+                    TempData["ErrorMessage"] = "This business case is already linked to the work item.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCaseProject = new BusinessCaseProject
+                {
+                    BusinessCaseId = businessCaseId,
+                    ProjectId = projectId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.BusinessCaseProjects.Add(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Business case '{businessCase.BusinessCaseId}' linked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking business case to project");
+                TempData["ErrorMessage"] = "An error occurred while linking the business case.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+        }
+
+        // POST: Project/UnlinkBusinessCase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UnlinkBusinessCase(int projectId, int businessCaseProjectId)
+        {
+            try
+            {
+                var businessCaseProject = await _context.BusinessCaseProjects
+                    .Include(bcp => bcp.BusinessCase)
+                    .FirstOrDefaultAsync(bcp => bcp.Id == businessCaseProjectId && bcp.ProjectId == projectId);
+
+                if (businessCaseProject == null)
+                {
+                    TempData["ErrorMessage"] = "Link not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCaseId = businessCaseProject.BusinessCase?.BusinessCaseId ?? "Unknown";
+                _context.BusinessCaseProjects.Remove(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Business case '{businessCaseId}' unlinked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unlinking business case from project");
+                TempData["ErrorMessage"] = "An error occurred while unlinking the business case.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
         }
 
         // GET: Project/CreateProduct
@@ -3097,8 +3200,22 @@ namespace Compass.Controllers
         }
 
         // GET: Project/Create
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create(int? businessCaseId = null)
     {
+        // Store businessCaseId in ViewBag if provided and pre-populate fields
+        if (businessCaseId.HasValue)
+        {
+            ViewBag.BusinessCaseId = businessCaseId.Value;
+            var businessCase = await _context.BusinessCases.FindAsync(businessCaseId.Value);
+            if (businessCase != null)
+            {
+                ViewBag.BusinessCaseTitle = businessCase.Title;
+                ViewBag.BusinessCaseIdDisplay = businessCase.BusinessCaseId;
+                ViewBag.BusinessCaseDescription = businessCase.Description;
+                ViewBag.BusinessCaseBusinessArea = businessCase.BusinessArea;
+            }
+        }
+
         ViewBag.Missions = await _context.Missions
             .Where(m => !m.IsDeleted)
             .OrderBy(m => m.Title)
@@ -3172,6 +3289,13 @@ namespace Compass.Controllers
             .Where(ra => ra.IsActive)
             .OrderBy(ra => ra.SortOrder)
             .ThenBy(ra => ra.Name)
+            .ToListAsync();
+
+        // Get RAG statuses from admin settings (RagStatusLookups table)
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
             .ToListAsync();
 
         // Get business area lookups for Budget Owner
@@ -4240,6 +4364,23 @@ namespace Compass.Controllers
                 _logger.LogInformation("  {Key}: {Value}", key, Request.Form[key]);
             }
             
+            // Convert RAG Status string to RagStatusLookupId before validation
+            var ragStatusValue = Request.Form[nameof(project.RagStatus)].ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(ragStatusValue))
+            {
+                var ragStatusLookup = await _context.RagStatusLookups
+                    .FirstOrDefaultAsync(r => r.Name == ragStatusValue && r.IsActive);
+                project.RagStatusLookupId = ragStatusLookup?.Id;
+                if (ragStatusLookup == null)
+                {
+                    _logger.LogWarning("RAG Status lookup not found for: {RagStatusName}", ragStatusValue);
+                }
+                else
+                {
+                    _logger.LogInformation("RAG Status mapped: {RagStatusName} -> {RagStatusLookupId}", ragStatusValue, ragStatusLookup.Id);
+                }
+            }
+            
             // Additional server-side validation for required fields
             if (string.IsNullOrWhiteSpace(project.Aim))
             {
@@ -4251,9 +4392,14 @@ namespace Compass.Controllers
                 ModelState.AddModelError(nameof(project.StartDate), "The Start Date field is required.");
             }
             
-            if (!project.RagStatusLookupId.HasValue)
+            // Validate RAG Status - check both the string value and the converted lookup ID
+            if (string.IsNullOrWhiteSpace(ragStatusValue))
             {
-                ModelState.AddModelError(nameof(project.RagStatusLookupId), "The RAG Status field is required.");
+                ModelState.AddModelError(nameof(project.RagStatus), "The RAG Status field is required.");
+            }
+            else if (!project.RagStatusLookupId.HasValue)
+            {
+                ModelState.AddModelError(nameof(project.RagStatus), "The selected RAG Status is not valid.");
             }
             
             if (string.IsNullOrWhiteSpace(project.Status))
@@ -4450,7 +4596,50 @@ namespace Compass.Controllers
                     await UpdateProjectRelationshipsAsync(project);
                     await _context.SaveChangesAsync();
 
+                    // Link to business case if businessCaseId was provided
+                    var businessCaseIdValue = Request.Form["businessCaseId"].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(businessCaseIdValue) && int.TryParse(businessCaseIdValue, out int businessCaseId))
+                    {
+                        try
+                        {
+                            var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                            if (businessCase != null)
+                            {
+                                // Check if already linked
+                                var existingLink = await _context.BusinessCaseProjects
+                                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == project.Id);
+
+                                if (existingLink == null)
+                                {
+                                    var businessCaseProject = new BusinessCaseProject
+                                    {
+                                        BusinessCaseId = businessCaseId,
+                                        ProjectId = project.Id,
+                                        CreatedAt = DateTime.UtcNow
+                                    };
+
+                                    _context.BusinessCaseProjects.Add(businessCaseProject);
+                                    await _context.SaveChangesAsync();
+                                    _logger.LogInformation("Project {ProjectId} linked to business case {BusinessCaseId}", project.Id, businessCaseId);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to link project {ProjectId} to business case {BusinessCaseId}", project.Id, businessCaseIdValue);
+                            // Don't fail the project creation if linking fails
+                        }
+                    }
+
                     TempData["SuccessMessage"] = "Project created successfully!";
+                    
+                    // If created from business case, offer to return to business case
+                    if (!string.IsNullOrWhiteSpace(businessCaseIdValue) && int.TryParse(businessCaseIdValue, out int bcId))
+                    {
+                        TempData["BusinessCaseId"] = bcId;
+                        TempData["ShowBusinessCaseLink"] = true;
+                    }
+                    
                     return RedirectToAction(nameof(Details), new { id = project.Id });
                 }
                 catch (Exception ex)
@@ -4494,6 +4683,13 @@ namespace Compass.Controllers
                 .Where(dp => dp.IsActive)
                 .OrderBy(dp => dp.SortOrder)
                 .ThenBy(dp => dp.Name)
+                .ToListAsync();
+
+            // Get RAG statuses from admin settings (RagStatusLookups table)
+            ViewBag.RagStatuses = await _context.RagStatusLookups
+                .Where(r => r.IsActive)
+                .OrderBy(r => r.SortOrder)
+                .ThenBy(r => r.Name)
                 .ToListAsync();
 
             // Get objectives grouped by theme
