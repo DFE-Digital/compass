@@ -128,9 +128,9 @@
             <div class="col-xxl-10 col-xl-10 col-lg-10 col-md-10 col-sm-12 col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title mb-0">Delivery priorities</h3>
+                        <h3 class="card-title">Delivery priorities</h3>
                         <div class="card-tools">
-                            <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#deliveryPriorityModal" onclick="openCreateDeliveryPriorityModal()">
+                            <a href="#" id="createDeliveryPriorityLink" data-toggle="modal" data-target="#deliveryPriorityModal" style="color: #005ea5; text-decoration: none;">
                                 Create new
                             </a>
                         </div>
@@ -239,8 +239,9 @@
                 </button>
             </div>
             <form id="deliveryPriorityForm" method="post">
+                @Html.AntiForgeryToken()
                 <div class="modal-body">
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
 
                     <input type="hidden" id="deliveryPriorityId" name="Id" />
 
@@ -276,8 +277,9 @@
 
                     <div class="form-group">
                         <div class="custom-control custom-switch">
-                            <input type="checkbox" id="deliveryPriorityIsActive" name="IsActive" class="custom-control-input" checked />
+                            <input type="checkbox" id="deliveryPriorityIsActive" name="IsActive" value="true" class="custom-control-input" checked />
                             <label class="custom-control-label" for="deliveryPriorityIsActive">Active</label>
+                            <input type="hidden" name="IsActive" value="false" />
                         </div>
                         <small class="form-text text-muted">Inactive priorities will not be available to projects.</small>
                     </div>
@@ -304,21 +306,57 @@
             $('#deliveryPriorityCssClass').val('');
             $('#deliveryPrioritySortOrder').val('0');
             $('#deliveryPriorityIsActive').prop('checked', true);
+            // Remove hidden input when checkbox is checked (default state)
+            $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
+            // Update hidden field when checkbox changes
+            $('#deliveryPriorityIsActive').off('change').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
+                } else {
+                    if ($('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').length === 0) {
+                        $('<input>').attr({ type: 'hidden', name: 'IsActive', value: 'false' }).appendTo($('#deliveryPriorityIsActive').closest('.custom-control'));
+                    }
+                }
+            });
             $('#deliveryPriorityModal').modal('show');
         }
 
         function openEditDeliveryPriorityModal(id, name, summary, description, cssClass, sortOrder, isActive) {
             $('#deliveryPriorityModalLabel').text('Edit delivery priority');
-            $('#deliveryPriorityForm').attr('action', '@Url.Action("EditDeliveryPriority", "Admin")');
+            $('#deliveryPriorityForm').attr('action', '@Url.Action("EditDeliveryPriority", "Admin")?id=' + id);
             $('#deliveryPriorityId').val(id);
             $('#deliveryPriorityName').val(name);
             $('#deliveryPrioritySummary').val(summary || '');
             $('#deliveryPriorityDescription').val(description || '');
             $('#deliveryPriorityCssClass').val(cssClass || '');
             $('#deliveryPrioritySortOrder').val(sortOrder || '0');
-            $('#deliveryPriorityIsActive').prop('checked', isActive === 'true' || isActive === true);
+            var isChecked = isActive === 'true' || isActive === true || isActive === 'True';
+            $('#deliveryPriorityIsActive').prop('checked', isChecked);
+            // Remove or add hidden input based on checkbox state
+            if (isChecked) {
+                $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
+            } else {
+                if ($('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').length === 0) {
+                    $('<input>').attr({ type: 'hidden', name: 'IsActive', value: 'false' }).appendTo($('#deliveryPriorityIsActive').closest('.custom-control'));
+                }
+            }
+            // Update hidden field when checkbox changes
+            $('#deliveryPriorityIsActive').off('change').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
+                } else {
+                    if ($('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').length === 0) {
+                        $('<input>').attr({ type: 'hidden', name: 'IsActive', value: 'false' }).appendTo($('#deliveryPriorityIsActive').closest('.custom-control'));
+                    }
+                }
+            });
             $('#deliveryPriorityModal').modal('show');
         }
+
+        $(document).on('click', '#createDeliveryPriorityLink', function (e) {
+            e.preventDefault();
+            openCreateDeliveryPriorityModal();
+        });
 
         $(document).on('click', '.edit-delivery-priority', function (e) {
             e.preventDefault();
@@ -334,6 +372,19 @@
             );
         });
 
+        // Handle form submission - ensure IsActive value is correct
+        $('#deliveryPriorityForm').on('submit', function(e) {
+            // Remove hidden input if checkbox is checked
+            if ($('#deliveryPriorityIsActive').is(':checked')) {
+                $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
+            } else {
+                // Ensure hidden input exists with false value
+                if ($('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').length === 0) {
+                    $('<input>').attr({ type: 'hidden', name: 'IsActive', value: 'false' }).appendTo($('#deliveryPriorityIsActive').closest('.custom-control'));
+                }
+            }
+        });
+
         // Handle delete confirmation
         $(document).on('submit', '.delete-delivery-priority-form', function (e) {
             if (!confirm('Are you sure you want to delete this delivery priority? This action cannot be undone.')) {
@@ -345,6 +396,10 @@
         $('#deliveryPriorityModal').on('hidden.bs.modal', function () {
             $('#deliveryPriorityForm')[0].reset();
             $('.field-validation-valid').text('');
+            // Reset checkbox to checked (default)
+            $('#deliveryPriorityIsActive').prop('checked', true);
+            // Remove hidden input on reset
+            $('#deliveryPriorityForm input[type="hidden"][name="IsActive"]').remove();
         });
     </script>
 }
