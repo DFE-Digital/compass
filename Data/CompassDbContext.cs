@@ -69,6 +69,11 @@ public partial class CompassDbContext : DbContext
     public DbSet<ProductReturn> ProductReturns { get; set; }
     public DbSet<ProductMetricValue> ProductMetricValues { get; set; }
     
+    // Commission reporting
+    public DbSet<Commission> Commissions { get; set; }
+    public DbSet<CommissionSubmission> CommissionSubmissions { get; set; }
+    public DbSet<CommissionMetricValue> CommissionMetricValues { get; set; }
+    
     // Performance reporting management
     public DbSet<PerformanceReportingDueDateOverride> PerformanceReportingDueDateOverrides { get; set; }
     public DbSet<PerformanceReportingBusinessAreaConfig> PerformanceReportingBusinessAreaConfigs { get; set; }
@@ -724,6 +729,40 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProductMetricValue>()
             .HasIndex(mv => new { mv.ProductReturnId, mv.PerformanceMetricId })
+            .IsUnique();
+
+        // Configure Commission
+        modelBuilder.Entity<Commission>()
+            .HasIndex(c => c.IsActive);
+
+        modelBuilder.Entity<Commission>()
+            .HasMany(c => c.Submissions)
+            .WithOne(cs => cs.Commission)
+            .HasForeignKey(cs => cs.CommissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Configure CommissionSubmission
+        modelBuilder.Entity<CommissionSubmission>()
+            .HasIndex(cs => new { cs.CommissionId, cs.ProductDocumentId });
+
+        modelBuilder.Entity<CommissionSubmission>()
+            .HasIndex(cs => cs.FipsId);
+
+        modelBuilder.Entity<CommissionSubmission>()
+            .HasMany(cs => cs.MetricValues)
+            .WithOne(cmv => cmv.CommissionSubmission)
+            .HasForeignKey(cmv => cmv.CommissionSubmissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Configure CommissionMetricValue
+        modelBuilder.Entity<CommissionMetricValue>()
+            .HasOne(cmv => cmv.PerformanceMetric)
+            .WithMany()
+            .HasForeignKey(cmv => cmv.PerformanceMetricId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CommissionMetricValue>()
+            .HasIndex(cmv => new { cmv.CommissionSubmissionId, cmv.PerformanceMetricId })
             .IsUnique();
 
         // Configure PerformanceReportingDueDateOverride
