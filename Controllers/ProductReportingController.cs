@@ -311,6 +311,1023 @@ public class ProductReportingController : Controller
         
         return View("~/Views/ProductReporting/PerformanceMetrics/Index.cshtml", displayData);
     }
+
+    // GET: ProductReporting/Commission
+    public async Task<IActionResult> Commission(
+        string view = "mine", 
+        string search = "", 
+        string phase = "", 
+        string businessArea = "", 
+        string reportingStatus = "",
+        int? commissionId = null,
+        bool clearFilters = false)
+    {
+        // Get active commissions - order by due date (closes first)
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.DueDate)
+            .ToListAsync();
+
+        if (!activeCommissions.Any())
+        {
+            ViewBag.Message = "No active commissions are currently available.";
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/Index.cshtml", new List<CommissionSubmissionStatusViewModel>());
+        }
+
+        // If no commissionId provided, show commission selection page
+        if (!commissionId.HasValue)
+        {
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/Index.cshtml", new List<CommissionSubmissionStatusViewModel>());
+        }
+
+        // Handle clear filters
+        if (clearFilters)
+        {
+            return RedirectToAction("Commission", new { view = view, commissionId = commissionId });
+        }
+
+        // Get the current user's email
+        var userEmail = User.Identity?.Name;
+        
+        if (string.IsNullOrEmpty(userEmail))
+        {
+            _logger.LogWarning("Commission: No user email found for current user");
+            TempData["ErrorMessage"] = "Unable to identify user. Please ensure you are logged in.";
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/Index.cshtml", new List<CommissionSubmissionStatusViewModel>());
+        }
+
+        // Use selected commission
+        var selectedCommission = activeCommissions.FirstOrDefault(c => c.Id == commissionId.Value);
+
+        if (selectedCommission == null)
+        {
+            TempData["ErrorMessage"] = "Selected commission not found.";
+            ViewBag.ActiveCommissions = activeCommissions;
+            ViewBag.SelectedCommission = null;
+            return View("~/Views/ProductReporting/Commission/Index.cshtml", new List<CommissionSubmissionStatusViewModel>());
+        }
+
+        // Check if commission is open
+        var now = DateTime.UtcNow;
+        var isOpen = now >= selectedCommission.OpenDate && now <= selectedCommission.DueDate.AddDays(1);
+        var isPastDue = now > selectedCommission.DueDate;
+
+        // Fetch user's products - EXACTLY the same as PerformanceMetrics
+        var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
+        var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        
+        // Combine and deduplicate products (by FipsId) - EXACTLY the same as PerformanceMetrics
+        // Then exclude Decommissioned/Decommissioning Phase products
+        var userProducts = productsByContact
+            .Concat(productsByServiceOwner)
+            .GroupBy(p => p.FipsId)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .Where(p => string.IsNullOrEmpty(p.Phase) || 
+                       (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                        !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+            
+        _logger.LogInformation("Commission: Found {ContactCount} products by contact, {ServiceOwnerCount} by service owner, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
+            productsByContact.Count, productsByServiceOwner.Count, userProducts.Count, userEmail);
+
+        // Get all commission submissions for this commission
+        var allSubmissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == selectedCommission.Id)
+            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+        // Create view models for user's products
+        var userProductStatuses = new List<CommissionSubmissionStatusViewModel>();
+        foreach (var product in userProducts)
+        {
+            var submission = allSubmissions.GetValueOrDefault(product.DocumentId ?? "");
+            var vm = new CommissionSubmissionStatusViewModel
+            {
+                Product = product,
+                Commission = selectedCommission,
+                Submission = submission,
+                Status = submission?.Status ?? CommissionSubmissionStatus.NotStarted,
+                CompletedMetrics = submission?.MetricValues?.Count(mv => mv.IsComplete) ?? 0,
+                TotalMetrics = submission?.MetricValues?.Count ?? 0,
+                IsOpen = isOpen,
+                IsPastDue = isPastDue
+            };
+            userProductStatuses.Add(vm);
+        }
+
+        // For "All products" view, get all eligible products
+        List<CommissionSubmissionStatusViewModel> allProductStatuses = new List<CommissionSubmissionStatusViewModel>();
+        int allProductsCount = 0;
+        
+        if (view == "all")
+        {
+            var allProducts = await _productsApiService.GetAllProductsAsync();
+            var activeProducts = allProducts
+                .Where(p => p.State != null && 
+                           p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                           p.PublishedAt.HasValue &&
+                           (string.IsNullOrEmpty(p.Phase) || 
+                            (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                             !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+            
+            foreach (var product in activeProducts)
+            {
+                var submission = allSubmissions.GetValueOrDefault(product.DocumentId ?? "");
+                var vm = new CommissionSubmissionStatusViewModel
+                {
+                    Product = product,
+                    Commission = selectedCommission,
+                    Submission = submission,
+                    Status = submission?.Status ?? CommissionSubmissionStatus.NotStarted,
+                    CompletedMetrics = submission?.MetricValues?.Count(mv => mv.IsComplete) ?? 0,
+                    TotalMetrics = submission?.MetricValues?.Count ?? 0,
+                    IsOpen = isOpen,
+                    IsPastDue = isPastDue
+                };
+                allProductStatuses.Add(vm);
+            }
+            
+            allProductsCount = allProductStatuses.Count;
+        }
+
+        // Determine which data to show based on view
+        List<CommissionSubmissionStatusViewModel> displayData;
+        if (view == "mine" || string.IsNullOrEmpty(view))
+        {
+            displayData = userProductStatuses;
+        }
+        else if (view == "all")
+        {
+            displayData = allProductStatuses;
+        }
+        else
+        {
+            displayData = userProductStatuses;
+        }
+
+        // Apply filters
+        if (!string.IsNullOrEmpty(search))
+        {
+            displayData = displayData.Where(p => 
+                p.Product.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (p.Product.FipsId != null && p.Product.FipsId.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(p.Product.Phase) && p.Product.Phase.Contains(search, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(phase))
+        {
+            displayData = displayData.Where(p => 
+                !string.IsNullOrEmpty(p.Product.Phase) && 
+                p.Product.Phase.Equals(phase, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(businessArea))
+        {
+            displayData = displayData.Where(p => 
+                p.Product.CategoryValues != null &&
+                p.Product.CategoryValues.Any(cv => 
+                    cv.CategoryType != null &&
+                    cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase) &&
+                    cv.Name.Equals(businessArea, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(reportingStatus))
+        {
+            if (reportingStatus == "NotStarted")
+            {
+                displayData = displayData.Where(p => p.Status == CommissionSubmissionStatus.NotStarted).ToList();
+            }
+            else if (reportingStatus == "InProgress")
+            {
+                displayData = displayData.Where(p => p.Status == CommissionSubmissionStatus.InProgress).ToList();
+            }
+            else if (reportingStatus == "Submitted")
+            {
+                displayData = displayData.Where(p => p.Status == CommissionSubmissionStatus.Submitted).ToList();
+            }
+            else if (reportingStatus == "Late")
+            {
+                displayData = displayData.Where(p => p.Status == CommissionSubmissionStatus.Late).ToList();
+            }
+        }
+
+        // Calculate counts
+        var tasksCount = displayData.Count(p => 
+            p.Status == CommissionSubmissionStatus.NotStarted || 
+            p.Status == CommissionSubmissionStatus.InProgress);
+
+        var yourProductsCount = userProductStatuses.Count;
+
+        // Get unique values for filter dropdowns
+        var allProductsForFilters = view == "all" ? allProductStatuses : userProductStatuses;
+        var phases = allProductsForFilters
+            .Where(p => !string.IsNullOrEmpty(p.Product.Phase))
+            .Select(p => p.Product.Phase!)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
+        
+        var businessAreas = allProductsForFilters
+            .Where(p => p.Product.CategoryValues != null)
+            .SelectMany(p => p.Product.CategoryValues!)
+            .Where(cv => cv.CategoryType != null && 
+                        cv.CategoryType.Name.Equals("Business area", StringComparison.OrdinalIgnoreCase))
+            .Select(cv => cv.Name)
+            .Distinct()
+            .OrderBy(ba => ba)
+            .ToList();
+
+        ViewBag.CurrentView = view;
+        ViewBag.YourProductsCount = yourProductsCount;
+        ViewBag.AllProductsCount = allProductsCount;
+        ViewBag.TasksCount = tasksCount;
+        ViewBag.ActiveCommissions = activeCommissions;
+        ViewBag.SelectedCommission = selectedCommission;
+        ViewBag.IsOpen = isOpen;
+        ViewBag.IsPastDue = isPastDue;
+        
+        // Filter values
+        ViewBag.CurrentSearch = search;
+        ViewBag.CurrentPhase = phase;
+        ViewBag.CurrentBusinessArea = businessArea;
+        ViewBag.CurrentReportingStatus = reportingStatus;
+        ViewBag.Phases = phases;
+        ViewBag.BusinessAreas = businessAreas;
+        
+        return View("~/Views/ProductReporting/Commission/MyServices.cshtml", displayData);
+    }
+
+    // GET: ProductReporting/SubmitCommission/{documentId}/{commissionId}
+    public async Task<IActionResult> SubmitCommission(string documentId, int commissionId)
+    {
+        if (string.IsNullOrEmpty(documentId))
+        {
+            return NotFound();
+        }
+
+        // Get commission
+        var commission = await _context.Commissions.FindAsync(commissionId);
+        if (commission == null || !commission.IsActive)
+        {
+            TempData["ErrorMessage"] = "Commission not found or is not active.";
+            return RedirectToAction("Commission");
+        }
+
+        // Check if commission is open
+        var now = DateTime.UtcNow;
+        if (now < commission.OpenDate)
+        {
+            TempData["WarningMessage"] = $"This commission is not yet open. It will be available from {commission.OpenDate:dd MMM yyyy}.";
+            return RedirectToAction("Commission", new { commissionId = commissionId });
+        }
+
+        // Try to get product by DocumentId first, then FipsId for backwards compatibility
+        var products = await _productsApiService.GetProductsAsync();
+        var product = products?.FirstOrDefault(p => 
+            p.DocumentId == documentId || p.FipsId == documentId);
+        
+        if (product == null)
+        {
+            return NotFound();
+        }
+
+        // Use DocumentId for database operations (primary identifier)
+        var productDocumentId = product.DocumentId ?? documentId;
+
+        // Get or create commission submission
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+                .ThenInclude(cmv => cmv.PerformanceMetric)
+            .FirstOrDefaultAsync(cs => cs.CommissionId == commissionId && cs.ProductDocumentId == productDocumentId);
+
+        if (submission == null)
+        {
+            submission = new CommissionSubmission
+            {
+                CommissionId = commissionId,
+                ProductDocumentId = productDocumentId,
+                FipsId = product.FipsId,
+                ProductTitle = product.Title,
+                Status = CommissionSubmissionStatus.NotStarted,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.CommissionSubmissions.Add(submission);
+            await _context.SaveChangesAsync();
+        }
+
+        // Allow viewing submitted submissions - they can be unsubmitted if before due date
+
+        // Get all active performance metrics
+        var allMetrics = await _context.PerformanceMetrics
+            .Where(m => !m.IsDisabled)
+            .OrderBy(m => m.Identifier)
+            .ToListAsync();
+
+        // Filter by phase
+        var phaseFilteredMetrics = allMetrics.Where(m => 
+        {
+            if (string.IsNullOrEmpty(m.ApplicablePhases))
+                return true;
+            if (string.IsNullOrEmpty(product.Phase))
+                return true;
+            var applicablePhases = m.ApplicablePhases.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .ToList();
+            return applicablePhases.Contains(product.Phase, StringComparer.OrdinalIgnoreCase);
+        }).ToList();
+
+        // Filter by type
+        var productTypes = new List<string>();
+        if (product.CategoryValues != null)
+        {
+            productTypes = product.CategoryValues
+                .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(cv => cv.Name)
+                .ToList();
+        }
+
+        var typeFilteredMetrics = phaseFilteredMetrics.Where(m => 
+        {
+            if (string.IsNullOrEmpty(m.ApplicableTypes))
+                return true;
+            if (!productTypes.Any())
+                return true;
+            var applicableTypes = m.ApplicableTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .ToList();
+            return productTypes.Any(pt => applicableTypes.Contains(pt, StringComparer.OrdinalIgnoreCase));
+        }).ToList();
+
+        // Get existing metric values
+        var existingMetricValues = await _context.CommissionMetricValues
+            .Include(cmv => cmv.PerformanceMetric)
+            .Where(cmv => cmv.CommissionSubmissionId == submission.Id)
+            .ToListAsync();
+
+        // Filter by conditional dependencies
+        var metrics = typeFilteredMetrics.Where(m => 
+        {
+            if (!m.ConditionalOnMetricId.HasValue)
+                return true;
+            var parentMetricValue = existingMetricValues
+                .FirstOrDefault(mv => mv.PerformanceMetricId == m.ConditionalOnMetricId.Value);
+            return parentMetricValue != null && !string.IsNullOrWhiteSpace(parentMetricValue.Value);
+        }).ToList();
+
+        // Ensure we have a metric value entry for each valid metric
+        foreach (var metric in metrics)
+        {
+            if (!existingMetricValues.Any(mv => mv.PerformanceMetricId == metric.Id))
+            {
+                var newValue = new CommissionMetricValue
+                {
+                    CommissionSubmissionId = submission.Id,
+                    PerformanceMetricId = metric.Id,
+                    IsComplete = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.CommissionMetricValues.Add(newValue);
+                existingMetricValues.Add(newValue);
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Reload metric values with performance metrics
+        var metricValues = await _context.CommissionMetricValues
+            .Include(cmv => cmv.PerformanceMetric)
+            .Where(cmv => cmv.CommissionSubmissionId == submission.Id)
+            .ToListAsync();
+
+        // Check if commission is past due
+        var isPastDue = now > commission.DueDate;
+        // Read-only if past due date (regardless of submission status)
+        // If submitted but before due date, allow unsubmit to make it editable
+        var isReadOnly = isPastDue;
+
+        ViewBag.Product = product;
+        ViewBag.Commission = commission;
+        ViewBag.Submission = submission;
+        ViewBag.IsReadOnly = isReadOnly;
+        ViewBag.IsPastDue = isPastDue;
+        
+        return View("~/Views/ProductReporting/Commission/Submit.cshtml", metricValues.OrderBy(mv => mv.PerformanceMetric?.Identifier).ToList());
+    }
+
+    // POST: ProductReporting/SaveCommissionMetricValue
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveCommissionMetricValue(int id, string? value, bool isNotCaptured = false, string? notCapturedReason = null, string? reasonForDifference = null)
+    {
+        _logger.LogInformation("SaveCommissionMetricValue called - ID: {Id}, Value: '{Value}', IsNotCaptured: {IsNotCaptured}", 
+            id, value ?? "(null)", isNotCaptured);
+        
+        var metricValue = await _context.CommissionMetricValues
+            .Include(cmv => cmv.PerformanceMetric)
+            .Include(cmv => cmv.CommissionSubmission)
+                .ThenInclude(cs => cs.Commission)
+            .FirstOrDefaultAsync(cmv => cmv.Id == id);
+
+        if (metricValue == null)
+        {
+            return Json(new { success = false, message = "Metric value not found" });
+        }
+
+        // Check if submission is editable
+        if (metricValue.CommissionSubmission?.Status == CommissionSubmissionStatus.Submitted)
+        {
+            return Json(new { success = false, message = "This submission has been submitted and cannot be edited" });
+        }
+
+        var now = DateTime.UtcNow;
+        if (metricValue.CommissionSubmission?.Commission != null && now > metricValue.CommissionSubmission.Commission.DueDate)
+        {
+            return Json(new { success = false, message = "This commission is past due and cannot be edited" });
+        }
+
+        try
+        {
+            if (isNotCaptured)
+            {
+                metricValue.Value = string.Empty;
+                metricValue.IsComplete = true;
+                metricValue.IsNotCaptured = true;
+                metricValue.NotCapturedReason = notCapturedReason;
+            }
+            else
+            {
+                if (metricValue.PerformanceMetric != null && !string.IsNullOrWhiteSpace(value))
+                {
+                    var validationResult = ValidateMetricValue(value, metricValue.PerformanceMetric);
+                    if (!validationResult.IsValid)
+                    {
+                        return Json(new { success = false, message = validationResult.ErrorMessage });
+                    }
+                }
+
+                metricValue.Value = value;
+                metricValue.IsComplete = !string.IsNullOrWhiteSpace(value);
+                metricValue.IsNotCaptured = false;
+                metricValue.NotCapturedReason = null;
+            }
+
+            metricValue.ReasonForDifference = reasonForDifference;
+            metricValue.UpdatedAt = DateTime.UtcNow;
+
+            // Update submission status
+            if (metricValue.CommissionSubmission != null)
+            {
+                var allMetricValues = await _context.CommissionMetricValues
+                    .Where(cmv => cmv.CommissionSubmissionId == metricValue.CommissionSubmission.Id)
+                    .ToListAsync();
+
+                var completedCount = allMetricValues.Count(mv => mv.IsComplete);
+                var totalCount = allMetricValues.Count;
+
+                if (completedCount == totalCount && totalCount > 0)
+                {
+                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.InProgress;
+                }
+                else if (completedCount > 0)
+                {
+                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.InProgress;
+                }
+                else
+                {
+                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.NotStarted;
+                }
+
+                metricValue.CommissionSubmission.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving commission metric value {Id}", id);
+            return Json(new { success = false, message = "An error occurred while saving the value" });
+        }
+    }
+
+    // POST: ProductReporting/SubmitCommissionSubmission/{id}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitCommissionSubmission(int id)
+    {
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.Commission)
+            .Include(cs => cs.MetricValues)
+            .FirstOrDefaultAsync(cs => cs.Id == id);
+
+        if (submission == null)
+        {
+            return NotFound();
+        }
+
+        if (submission.Status == CommissionSubmissionStatus.Submitted)
+        {
+            TempData["ErrorMessage"] = "This submission has already been submitted.";
+            return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
+        }
+
+        var now = DateTime.UtcNow;
+        if (submission.Commission != null && now > submission.Commission.DueDate)
+        {
+            submission.Status = CommissionSubmissionStatus.Late;
+        }
+        else
+        {
+            submission.Status = CommissionSubmissionStatus.Submitted;
+        }
+
+        submission.SubmittedDate = now;
+        submission.SubmittedBy = User.Identity?.Name ?? "unknown";
+        submission.UpdatedAt = now;
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Commission submission completed successfully.";
+        return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
+    }
+
+    // POST: ProductReporting/UnsubmitCommissionSubmission
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UnsubmitCommissionSubmission(int id)
+    {
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.Commission)
+            .FirstOrDefaultAsync(cs => cs.Id == id);
+
+        if (submission == null)
+        {
+            TempData["ErrorMessage"] = "Submission not found.";
+            return RedirectToAction("Commission");
+        }
+
+        // Check if submission is actually submitted
+        if (submission.Status != CommissionSubmissionStatus.Submitted && submission.Status != CommissionSubmissionStatus.Late)
+        {
+            TempData["ErrorMessage"] = "This submission has not been submitted yet.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+
+        // Check if commission is past due - if so, cannot unsubmit
+        var now = DateTime.UtcNow;
+        if (submission.Commission != null && now > submission.Commission.DueDate)
+        {
+            TempData["ErrorMessage"] = "This submission cannot be unsubmitted because the commission due date has passed.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+
+        try
+        {
+            // Recalculate status based on current state
+            // If all metrics are complete, set to InProgress, otherwise NotStarted
+            var metricValues = await _context.CommissionMetricValues
+                .Where(mv => mv.CommissionSubmissionId == submission.Id)
+                .ToListAsync();
+            
+            var allComplete = metricValues.All(mv => mv.IsComplete);
+            submission.Status = allComplete ? CommissionSubmissionStatus.InProgress : CommissionSubmissionStatus.NotStarted;
+            submission.SubmittedDate = null;
+            submission.SubmittedBy = null;
+            submission.UpdatedAt = now;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Commission submission has been unsubmitted and is now available for editing.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error unsubmitting commission submission");
+            TempData["ErrorMessage"] = "An error occurred while unsubmitting the commission submission.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+    }
+
+    // GET: ProductReporting/CommissionReporting/{commissionId}
+    public async Task<IActionResult> CommissionReporting(int commissionId)
+    {
+        // Get commission
+        var commission = await _context.Commissions.FindAsync(commissionId);
+        if (commission == null || !commission.IsActive)
+        {
+            TempData["ErrorMessage"] = "Commission not found or is not active.";
+            return RedirectToAction("Commission");
+        }
+
+        // Get all products (only Active, only Published, exclude Decommissioned/Decommissioning Phase)
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var eligibleProducts = allProducts
+            .Where(p => p.State != null && 
+                       p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                       p.PublishedAt.HasValue &&
+                       (string.IsNullOrEmpty(p.Phase) || 
+                        (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                         !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        // Get all commission submissions for this commission
+        var allSubmissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == commissionId)
+            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+        // Calculate overall statistics
+        var totalProducts = eligibleProducts.Count;
+        var completedProducts = 0;
+        var inProgressProducts = 0;
+        var notStartedProducts = 0;
+        var lateProducts = 0;
+
+        // Group products by business area
+        var businessAreaGroups = new Dictionary<string, List<ProductDto>>();
+        
+        foreach (var product in eligibleProducts)
+        {
+            var businessArea = product.CategoryValues?
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                ?.Name ?? "Unassigned";
+
+            if (!businessAreaGroups.ContainsKey(businessArea))
+            {
+                businessAreaGroups[businessArea] = new List<ProductDto>();
+            }
+            businessAreaGroups[businessArea].Add(product);
+        }
+
+        // Calculate statistics for each product
+        var productStatuses = new Dictionary<string, CommissionSubmissionStatus>();
+        foreach (var product in eligibleProducts)
+        {
+            var documentId = product.DocumentId ?? "";
+            var submission = allSubmissions.GetValueOrDefault(documentId);
+            var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+            productStatuses[documentId] = status;
+
+            switch (status)
+            {
+                case CommissionSubmissionStatus.Submitted:
+                    completedProducts++;
+                    break;
+                case CommissionSubmissionStatus.InProgress:
+                    inProgressProducts++;
+                    break;
+                case CommissionSubmissionStatus.Late:
+                    lateProducts++;
+                    break;
+                case CommissionSubmissionStatus.NotStarted:
+                    notStartedProducts++;
+                    break;
+            }
+        }
+
+        // Calculate business area completions
+        var businessAreaCompletions = new List<CommissionBusinessAreaCompletion>();
+        foreach (var group in businessAreaGroups.OrderBy(g => g.Key))
+        {
+            var baProducts = group.Value;
+            var baTotal = baProducts.Count;
+            var baCompleted = 0;
+            var baInProgress = 0;
+            var baNotStarted = 0;
+            var baLate = 0;
+
+            foreach (var product in baProducts)
+            {
+                var documentId = product.DocumentId ?? "";
+                var status = productStatuses.GetValueOrDefault(documentId, CommissionSubmissionStatus.NotStarted);
+                
+                switch (status)
+                {
+                    case CommissionSubmissionStatus.Submitted:
+                        baCompleted++;
+                        break;
+                    case CommissionSubmissionStatus.InProgress:
+                        baInProgress++;
+                        break;
+                    case CommissionSubmissionStatus.Late:
+                        baLate++;
+                        break;
+                    case CommissionSubmissionStatus.NotStarted:
+                        baNotStarted++;
+                        break;
+                }
+            }
+
+            var baCompletionPercentage = baTotal > 0 ? (decimal)baCompleted / baTotal * 100 : 0;
+
+            businessAreaCompletions.Add(new CommissionBusinessAreaCompletion
+            {
+                BusinessAreaName = group.Key,
+                TotalProducts = baTotal,
+                CompletedProducts = baCompleted,
+                InProgressProducts = baInProgress,
+                NotStartedProducts = baNotStarted,
+                LateProducts = baLate,
+                CompletionPercentage = Math.Round(baCompletionPercentage, 1)
+            });
+        }
+
+        var overallCompletionPercentage = totalProducts > 0 ? (decimal)completedProducts / totalProducts * 100 : 0;
+
+        var viewModel = new CommissionReportingViewModel
+        {
+            Commission = commission,
+            TotalProducts = totalProducts,
+            CompletedProducts = completedProducts,
+            InProgressProducts = inProgressProducts,
+            NotStartedProducts = notStartedProducts,
+            LateProducts = lateProducts,
+            CompletionPercentage = Math.Round(overallCompletionPercentage, 1),
+            BusinessAreaCompletions = businessAreaCompletions
+        };
+
+        ViewBag.ActiveCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.StartDate)
+            .ToListAsync();
+
+        return View("~/Views/ProductReporting/Commission/Reporting.cshtml", viewModel);
+    }
+
+    // GET: ProductReporting/BusinessAreasIndex
+    public async Task<IActionResult> BusinessAreasIndex(int? commissionId = null)
+    {
+        // Get active commissions
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.StartDate)
+            .ToListAsync();
+
+        if (!activeCommissions.Any())
+        {
+            ViewBag.Message = "No active commissions are currently available.";
+            return View("~/Views/ProductReporting/Commission/BusinessAreasIndex.cshtml", new BusinessAreasViewModel
+            {
+                BusinessAreaCompletions = new List<BusinessAreaCompletion>()
+            });
+        }
+
+        // Use selected commission or default to most recent
+        var selectedCommission = commissionId.HasValue
+            ? activeCommissions.FirstOrDefault(c => c.Id == commissionId.Value)
+            : activeCommissions.FirstOrDefault();
+
+        if (selectedCommission == null)
+        {
+            TempData["ErrorMessage"] = "Selected commission not found.";
+            return RedirectToAction("BusinessAreasIndex");
+        }
+
+        // Get all products (only Active, only Published, exclude Decommissioned/Decommissioning Phase)
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var eligibleProducts = allProducts
+            .Where(p => p.State != null && 
+                       p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                       p.PublishedAt.HasValue &&
+                       (string.IsNullOrEmpty(p.Phase) || 
+                        (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                         !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        // Get all commission submissions for this commission
+        var allSubmissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == selectedCommission.Id)
+            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+        // Group products by business area
+        var businessAreaGroups = new Dictionary<string, List<ProductDto>>();
+        
+        foreach (var product in eligibleProducts)
+        {
+            var businessArea = product.CategoryValues?
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                ?.Name ?? "Unassigned";
+
+            if (!businessAreaGroups.ContainsKey(businessArea))
+            {
+                businessAreaGroups[businessArea] = new List<ProductDto>();
+            }
+            businessAreaGroups[businessArea].Add(product);
+        }
+
+        // Calculate statistics for each product
+        var productStatuses = new Dictionary<string, CommissionSubmissionStatus>();
+        foreach (var product in eligibleProducts)
+        {
+            var documentId = product.DocumentId ?? "";
+            var submission = allSubmissions.GetValueOrDefault(documentId);
+            var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+            productStatuses[documentId] = status;
+        }
+
+        // Calculate business area completions
+        var businessAreaCompletions = new List<BusinessAreaCompletion>();
+        foreach (var group in businessAreaGroups.OrderBy(g => g.Key))
+        {
+            var baProducts = group.Value;
+            var baTotal = baProducts.Count;
+            var baCompleted = 0;
+            var baInProgress = 0;
+            var baNotStarted = 0;
+            var baLate = 0;
+
+            foreach (var product in baProducts)
+            {
+                var documentId = product.DocumentId ?? "";
+                var status = productStatuses.GetValueOrDefault(documentId, CommissionSubmissionStatus.NotStarted);
+                
+                switch (status)
+                {
+                    case CommissionSubmissionStatus.Submitted:
+                        baCompleted++;
+                        break;
+                    case CommissionSubmissionStatus.InProgress:
+                        baInProgress++;
+                        break;
+                    case CommissionSubmissionStatus.Late:
+                        baLate++;
+                        break;
+                    case CommissionSubmissionStatus.NotStarted:
+                        baNotStarted++;
+                        break;
+                }
+            }
+
+            var baCompletionPercentage = baTotal > 0 ? (decimal)baCompleted / baTotal * 100 : 0;
+
+            businessAreaCompletions.Add(new BusinessAreaCompletion
+            {
+                BusinessAreaName = group.Key,
+                TotalProducts = baTotal,
+                CompletedProducts = baCompleted,
+                InProgressProducts = baInProgress,
+                NotStartedProducts = baNotStarted,
+                LateProducts = baLate,
+                CompletionPercentage = Math.Round(baCompletionPercentage, 1)
+            });
+        }
+
+        // Calculate overall statistics
+        var totalProducts = eligibleProducts.Count;
+        var completedProducts = businessAreaCompletions.Sum(ba => ba.CompletedProducts);
+        var overallCompletionPercentage = totalProducts > 0 ? (decimal)completedProducts / totalProducts * 100 : 0;
+
+        var viewModel = new BusinessAreasViewModel
+        {
+            Commission = selectedCommission,
+            TotalProducts = totalProducts,
+            CompletedProducts = completedProducts,
+            InProgressProducts = businessAreaCompletions.Sum(ba => ba.InProgressProducts),
+            NotStartedProducts = businessAreaCompletions.Sum(ba => ba.NotStartedProducts),
+            LateProducts = businessAreaCompletions.Sum(ba => ba.LateProducts),
+            CompletionPercentage = Math.Round(overallCompletionPercentage, 1),
+            BusinessAreaCompletions = businessAreaCompletions
+        };
+
+        ViewBag.ActiveCommissions = activeCommissions;
+        ViewBag.SelectedCommission = selectedCommission;
+
+        return View("~/Views/ProductReporting/Commission/BusinessAreasIndex.cshtml", viewModel);
+    }
+
+    // GET: ProductReporting/BusinessAreasDetails/{businessAreaName}
+    public async Task<IActionResult> BusinessAreasDetails(string businessAreaName, int? commissionId = null)
+    {
+        if (string.IsNullOrEmpty(businessAreaName))
+        {
+            TempData["ErrorMessage"] = "Business area name is required.";
+            return RedirectToAction("BusinessAreasIndex");
+        }
+
+        // Get active commissions
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.StartDate)
+            .ToListAsync();
+
+        if (!activeCommissions.Any())
+        {
+            TempData["ErrorMessage"] = "No active commissions are currently available.";
+            return RedirectToAction("BusinessAreasIndex");
+        }
+
+        // Use selected commission or default to most recent
+        var selectedCommission = commissionId.HasValue
+            ? activeCommissions.FirstOrDefault(c => c.Id == commissionId.Value)
+            : activeCommissions.FirstOrDefault();
+
+        if (selectedCommission == null)
+        {
+            TempData["ErrorMessage"] = "Selected commission not found.";
+            return RedirectToAction("BusinessAreasIndex");
+        }
+
+        // Get all products (only Active, only Published, exclude Decommissioned/Decommissioning Phase)
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var eligibleProducts = allProducts
+            .Where(p => p.State != null && 
+                       p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                       p.PublishedAt.HasValue &&
+                       (string.IsNullOrEmpty(p.Phase) || 
+                        (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                         !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        // Filter products by business area
+        var businessAreaProducts = eligibleProducts
+            .Where(p =>
+            {
+                var ba = p.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name ?? "Unassigned";
+                return ba.Equals(businessAreaName, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+        // Get all commission submissions for this commission
+        var allSubmissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == selectedCommission.Id)
+            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+        // Create product status view models
+        var productStatuses = new List<BusinessAreaProductStatus>();
+        foreach (var product in businessAreaProducts.OrderBy(p => p.Title))
+        {
+            var documentId = product.DocumentId ?? "";
+            var submission = allSubmissions.GetValueOrDefault(documentId);
+            var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+            var completedMetrics = submission?.MetricValues?.Count(mv => mv.IsComplete) ?? 0;
+            var totalMetrics = submission?.MetricValues?.Count ?? 0;
+
+            productStatuses.Add(new BusinessAreaProductStatus
+            {
+                Product = product,
+                Status = status,
+                CompletedMetrics = completedMetrics,
+                TotalMetrics = totalMetrics,
+                Submission = submission
+            });
+        }
+
+        // Calculate statistics
+        var totalProducts = productStatuses.Count;
+        var completedProducts = productStatuses.Count(p => p.Status == CommissionSubmissionStatus.Submitted);
+        var inProgressProducts = productStatuses.Count(p => p.Status == CommissionSubmissionStatus.InProgress);
+        var notStartedProducts = productStatuses.Count(p => p.Status == CommissionSubmissionStatus.NotStarted);
+        var lateProducts = productStatuses.Count(p => p.Status == CommissionSubmissionStatus.Late);
+        var completionPercentage = totalProducts > 0 ? (decimal)completedProducts / totalProducts * 100 : 0;
+
+        var viewModel = new BusinessAreaDetailsViewModel
+        {
+            BusinessAreaName = businessAreaName,
+            Commission = selectedCommission,
+            TotalProducts = totalProducts,
+            CompletedProducts = completedProducts,
+            InProgressProducts = inProgressProducts,
+            NotStartedProducts = notStartedProducts,
+            LateProducts = lateProducts,
+            CompletionPercentage = Math.Round(completionPercentage, 1),
+            ProductStatuses = productStatuses
+        };
+
+        ViewBag.ActiveCommissions = activeCommissions;
+        ViewBag.SelectedCommission = selectedCommission;
+
+        return View("~/Views/ProductReporting/Commission/BusinessAreasDetails.cshtml", viewModel);
+    }
     
     // GET: ProductReporting/ReportOtherProduct
     public async Task<IActionResult> ReportOtherProduct()
