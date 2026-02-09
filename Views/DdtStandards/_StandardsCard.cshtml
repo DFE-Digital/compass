@@ -43,20 +43,18 @@
     <div class="card-body p-0">
         @if (standards.Any())
         {
-            <div class="table-responsive">
-                <table id="@tableId" class="table table-hover text-nowrap sortable-table mb-0" style="width: 100%;">
+            <div class="table-responsive" style="overflow-x: auto;">
+                <table id="@tableId" class="table table-hover sortable-table mb-0" style="width: 100%;">
                     <thead>
                         <tr>
-                            <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 30%;">Title <i class="fas fa-sort sort-icon"></i></th>
+                            <th class="sortable" data-column="Title" tabindex="0" role="button" aria-label="Sort by Title" style="width: 40%;">Title <i class="fas fa-sort sort-icon"></i></th>
                             @if (showCreatedBy)
                             {
-                                <th class="sortable" data-column="CreatedBy" tabindex="0" role="button" aria-label="Sort by Created By" style="width: 12%;">Created by <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-column="CreatedBy" tabindex="0" role="button" aria-label="Sort by Created By" style="width: 15%;">Created by <i class="fas fa-sort sort-icon"></i></th>
                             }
                             <th class="sortable" data-column="Version" tabindex="0" role="button" aria-label="Sort by Version" style="width: 10%;">Version <i class="fas fa-sort sort-icon"></i></th>
-                            <th style="width: 14%;">Categories</th>
-                            <th style="width: 14%;">Owners</th>
-                            <th style="width: 14%;">Contacts</th>
-                            <th class="sortable" data-column="Updated" tabindex="0" role="button" aria-label="Sort by Updated" style="width: 10%;">Updated <i class="fas fa-sort sort-icon"></i></th>
+                            <th style="width: 20%;">Categories</th>
+                            <th style="width: 15%;">Owners</th>
                             @if (showActions && isStandardsManager)
                             {
                             <th style="width: 8%;" class="text-right">Actions</th>
@@ -71,11 +69,11 @@
                                     <strong>
                                         @if (standard.Stage == "Draft")
                                         {
-                                            <a href="@Url.Action("Create", "DdtStandards", new { id = standard.Id })">@standard.Title</a>
+                                            <a href="@Url.Action("Create", "DdtStandardsManagement", new { id = standard.Id })">@standard.Title</a>
                                         }
                                         else
                                         {
-                                            <a href="@Url.Action("Details", "DdtStandards", new { id = standard.Id })">@standard.Title</a>
+                                            <a href="@Url.Action("Details", "DdtStandardsView", new { id = standard.Id })">@standard.Title</a>
                                         }
                                     </strong>
                                     @if (!string.IsNullOrWhiteSpace(standard.Summary))
@@ -94,14 +92,7 @@
                                 <td>
                                     @if (standard.Categories.Any())
                                     {
-                                        @foreach (var cat in standard.Categories.Take(2))
-                                        {
-                                            <span class="badge badge-light">@cat.Category.Name</span>
-                                        }
-                                        @if (standard.Categories.Count > 2)
-                                        {
-                                            <span class="badge badge-light">+@(standard.Categories.Count - 2)</span>
-                                        }
+                                        <span>@string.Join(", ", standard.Categories.Select(c => c.Category.Name).Distinct())</span>
                                     }
                                     else
                                     {
@@ -124,26 +115,6 @@
                                     {
                                         <span class="text-muted">-</span>
                                     }
-                                </td>
-                                <td>
-                                    @if (standard.Contacts.Any())
-                                    {
-                                        @foreach (var contact in standard.Contacts.Take(2))
-                                        {
-                                            <div>@contact.User.Name</div>
-                                        }
-                                        @if (standard.Contacts.Count > 2)
-                                        {
-                                            <small class="text-muted">+@(standard.Contacts.Count - 2) more</small>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">-</span>
-                                    }
-                                </td>
-                                <td>
-                                    @standard.UpdatedAt.ToString("dd MMM yyyy")
                                 </td>
                                 @if (showActions && isStandardsManager)
                                 {
@@ -427,13 +398,7 @@
                     var aVal, bVal;
                     var colIndex = table.find('thead th[data-column="' + column + '"]').index();
                     
-                    if (column === 'Updated') {
-                        // Parse date format "dd MMM yyyy"
-                        var aDateText = $(a).find('td').eq(colIndex).text().trim();
-                        var bDateText = $(b).find('td').eq(colIndex).text().trim();
-                        aVal = parseDate(aDateText);
-                        bVal = parseDate(bDateText);
-                    } else if (column === 'Version') {
+                    if (column === 'Version') {
                         // Sort by semantic version
                         aVal = $(a).find('td').eq(colIndex).text().trim();
                         bVal = $(b).find('td').eq(colIndex).text().trim();
@@ -484,9 +449,9 @@
                 currentSort = { column: column, direction: direction };
             });
             
-            // Default sort by Updated (descending)
-            sortTable(table, 'Updated', 'desc', tableId);
-            currentSort = { column: 'Updated', direction: 'desc' };
+            // Default sort by Title (ascending)
+            sortTable(table, 'Title', 'asc', tableId);
+            currentSort = { column: 'Title', direction: 'asc' };
 
             @if (showActions && isStandardsManager)
             {
