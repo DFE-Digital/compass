@@ -32,6 +32,9 @@ public class ProductDto
     
     public string State { get; set; } = "New";
     
+    [JsonPropertyName("publishedAt")]
+    public DateTime? PublishedAt { get; set; }
+    
     [JsonPropertyName("category_values")]
     public List<CategoryValueDto>? CategoryValues { get; set; }
     

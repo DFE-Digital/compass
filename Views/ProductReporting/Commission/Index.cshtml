@@ -1,0 +1,149 @@
+@model List<Compass.Models.CommissionSubmissionStatusViewModel>
+@{
+    ViewData["Title"] = "Performance reporting";
+    var selectedCommission = ViewBag.SelectedCommission as Compass.Models.Commission;
+    var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Performance reporting</li>
+        </ol>
+    </nav>
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    // Only show nav links when a commission is selected
+    if (selectedCommission != null)
+    {
+        var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+        ViewBag.NavLinks = new[]
+        {
+            new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "mine") },
+            new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "all" || string.IsNullOrEmpty(ViewContext.RouteData.Values["view"]?.ToString())) },
+            new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = selectedCommission.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" }
+        };
+    }
+    else
+    {
+        ViewBag.NavLinks = new object[0];
+    }
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["WarningMessage"]
+            </div>
+        }
+
+        @if (selectedCommission == null)
+        {
+            <!-- Commission Selection View -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="card-title mb-0">
+                                <i class="fas fa-calendar-alt"></i> Select Commission Period
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if (!activeCommissions.Any())
+                            {
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> No active commissions are currently available.
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="lead mb-4">Choose a commission period to view and submit reports:</p>
+                                <div class="row">
+                                    @foreach (var comm in activeCommissions)
+                                    {
+                                        var commNow = DateTime.UtcNow;
+                                        var commIsOpen = commNow >= comm.OpenDate;
+                                        var commIsPastDue = commNow > comm.DueDate;
+                                        var statusBadge = commIsPastDue ? "badge-danger" : (commIsOpen ? "badge-success" : "badge-secondary");
+                                        var statusText = commIsPastDue ? "Past due" : (commIsOpen ? "Open" : "Not yet open");
+                                        
+                                        <div class="col-md-6 col-lg-4 mb-4">
+                                            <div class="card shadow h-100">
+                                                <div class="card-header bg-white">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <h5 class="card-title mb-0">@comm.Name</h5>
+                                                        <span class="badge @statusBadge">@statusText</span>
+                                                    </div>
+                                                </div>
+                                                <div class="card-body">
+                                                    @if (!string.IsNullOrEmpty(comm.Description))
+                                                    {
+                                                        <p class="text-muted small mb-3">@comm.Description</p>
+                                                    }
+                                                    <div class="mb-3">
+                                                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1">Data required for period</div>
+                                                        <div class="h6 mb-0">
+                                                            @comm.StartDate.ToString("d MMMM yyyy") to @comm.EndDate.ToString("d MMMM yyyy")
+                                                            @if (!string.IsNullOrEmpty(comm.Quarter))
+                                                            {
+                                                                <span class="badge badge-info ml-2">@comm.Quarter</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <div class="mb-0">
+                                                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1">Due date</div>
+                                                        <div class="h6 mb-0 @(commIsPastDue ? "text-danger" : "")">@comm.DueDate.ToString("d MMMM yyyy")</div>
+                                                    </div>
+                                                </div>
+                                                <div class="card-footer bg-white text-center">
+                                                    <a href="@Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = comm.Id })" class="btn btn-success btn-block text-white" style="color: white !important;">
+                                                        <i class="fas fa-arrow-right"></i> Select Commission
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<style nonce="@Context.Items["Nonce"]">
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+    }
+</style>

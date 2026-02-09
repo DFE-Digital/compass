@@ -579,7 +579,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -646,7 +646,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -726,7 +726,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -1704,7 +1704,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
