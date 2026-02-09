@@ -239,15 +239,27 @@
                                 <p>Work reporting</p>
                             </a>
                         </li>
-                        @{
+                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true))
+                        {
                             var operationalReportingActions = new[] { "PerformanceMetrics", "Index", "ProductHistory", "SubmitMetrics" };
                             var isOperationalReportingActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" && 
                                                                operationalReportingActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
+                            <li class="nav-item">
+                                <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(isOperationalReportingActive ? "active" : "")">
+                                    <i class="nav-icon fas fa-square-check" aria-hidden="true"></i>
+                                    <p>Operational reporting</p>
+                                </a>
+                            </li>
+                        }
+                        @{
+                            var commissionReportingActions = new[] { "Commission", "CommissionReporting", "SubmitCommission", "SubmitCommissionSubmission", "SaveCommissionMetricValue" };
+                            var isCommissionReportingActive = ViewContext.RouteData.Values["Controller"]?.ToString() == "ProductReporting" && 
+                                                              commissionReportingActions.Contains(ViewContext.RouteData.Values["Action"]?.ToString());
                         }
                         <li class="nav-item">
-                            <a href="@Url.Action("PerformanceMetrics", "ProductReporting")" class="nav-link @(isOperationalReportingActive ? "active" : "")">
-                                <i class="nav-icon fas fa-square-check" aria-hidden="true"></i>
-                                <p>Operational reporting</p>
+                            <a href="@Url.Action("Commission", "ProductReporting")" class="nav-link @(isCommissionReportingActive ? "active" : "")">
+                                <i class="nav-icon fas fa-file-invoice" aria-hidden="true"></i>
+                                <p>Performance reporting</p>
                             </a>
                         </li>
                         @{
@@ -256,71 +268,101 @@
                         }
                         @* Functional standards navigation moved to the header dropdown *@
 
-                        <!-- Skills and Learning Section -->
-                        @if (Configuration.GetValue<bool>("FeatureFlags:EnableSkillsAndLearning", false))
+                        <!-- Standards Section -->
+                        @{
+                            bool canDraftStandards = false;
+                            bool canManageStandards = false;
+                            bool canApproveStandards = false;
+                            bool canPublishStandards = false;
+                            try
+                            {
+                                if (currentUser != null && !string.IsNullOrEmpty(currentUserEmail))
+                                {
+                                    canDraftStandards = await Compass.Helpers.StandardsPermissionHelper.CanDraftStandardsAsync(PermissionService, User);
+                                    canManageStandards = await Compass.Helpers.StandardsPermissionHelper.CanManageStandardsAsync(PermissionService, User);
+                                    canApproveStandards = await Compass.Helpers.StandardsPermissionHelper.CanApproveStandardsAsync(PermissionService, User);
+                                    canPublishStandards = await Compass.Helpers.StandardsPermissionHelper.CanPublishStandardsAsync(PermissionService, User);
+                                }
+                            }
+                            catch
+                            {
+                                // Non-blocking: section will not be shown
+                            }
+                            
+                            // User has management permissions if they can manage, approve, or publish
+                            bool hasManagementPermissions = canManageStandards || canApproveStandards || canPublishStandards;
+                        }
+                        @{
+                            var isStandardsSectionActive = controllerName == "DdtStandards" || controllerName == "DdtStandardsView" || (controllerName == "DdtStandardsManagement" && (actionName == "Drafts" || actionName == "Create"));
+                            var isStandardsViewActive = controllerName == "DdtStandardsView" && actionName == "Published";
+                            var isStandardsDraftActive = controllerName == "DdtStandardsManagement" && (actionName == "Drafts" || actionName == "Create");
+                            
+                            var isStandardsManagementSectionActive = controllerName == "DdtStandardsManagement" && actionName != "Drafts" && actionName != "Create" || controllerName == "DdtStandards" && (actionName == "ApprovedProducts" || actionName == "Exceptions");
+                            var isStandardsManageActive = controllerName == "DdtStandardsManagement" && actionName == "Index";
+                            var isProductsActive = controllerName == "DdtStandards" && actionName == "ApprovedProducts";
+                            var isExceptionsActive = controllerName == "DdtStandards" && actionName == "Exceptions";
+                        }
+                        
+                        <!-- Standards Section (for all users) -->
+                        <li class="nav-item @(isStandardsSectionActive ? "menu-open" : "")">
+                            <a href="#" class="nav-link @(isStandardsSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isStandardsSectionActive ? "true" : "false")">
+                                <i class="nav-icon fas fa-book" aria-hidden="true"></i>
+                                <p>
+                                    Standards
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" role="list">
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Published", "DdtStandardsView")" class="nav-link @(isStandardsViewActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Standards</p>
+                                    </a>
+                                </li>
+                                @if (canDraftStandards)
+                                {
+                                <li class="nav-item">
+                                    <a href="@Url.Action("Drafts", "DdtStandardsManagement")" class="nav-link @(isStandardsDraftActive ? "active" : "")">
+                                        <i class="far fa-circle nav-icon" aria-hidden="true"></i>
+                                        <p>Draft a standard</p>
+                                    </a>
+                                </li>
+                                }
+                            </ul>
+                        </li>
+                        
+                        <!-- Standards Management Section (for users with management permissions) -->
+                        @if (hasManagementPermissions)
                         {
-                            var isSkillsAndLearningActive = controllerName == "SkillsAndLearning";
-                            var isSkillsAndLearningIndexActive = controllerName == "SkillsAndLearning" && actionName == "Index";
-                            var isBrowseCoursesActive = controllerName == "SkillsAndLearning" && actionName == "BrowseCourses";
-                            var isMyRequestsActive = controllerName == "SkillsAndLearning" && actionName == "MyRequests";
-                            var isAdminRequestsActive = controllerName == "SkillsAndLearning" && actionName == "AdminRequests";
-                            var isHOPDashboardActive = controllerName == "SkillsAndLearning" && actionName == "HOPDashboard";
-                            var isBudgetAndSpendingActive = controllerName == "SkillsAndLearning" && actionName == "BudgetAndSpending";
-                            var isReportingActive = controllerName == "SkillsAndLearning" && (actionName == "SpendAnalysis" || actionName == "Outcomes" || actionName == "ProfessionAnalytics");
-                            <li class="nav-item @(isSkillsAndLearningActive ? "menu-open" : "")">
-                                <a href="#" class="nav-link @(isSkillsAndLearningActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isSkillsAndLearningActive ? "true" : "false")">
-                                    <i class="nav-icon fas fa-graduation-cap" aria-hidden="true"></i>
+                            <li class="nav-item @(isStandardsManagementSectionActive ? "menu-open" : "")">
+                                <a href="#" class="nav-link @(isStandardsManagementSectionActive ? "active" : "")" aria-haspopup="true" aria-expanded="@(isStandardsManagementSectionActive ? "true" : "false")">
+                                    <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
                                     <p>
-                                        Skills and Learning
+                                        Standards management
                                         <i class="right fas fa-angle-left"></i>
                                     </p>
                                 </a>
                                 <ul class="nav nav-treeview" role="list">
                                     <li class="nav-item">
-                                        <a href="@Url.Action("Index", "SkillsAndLearning")" class="nav-link @(isSkillsAndLearningIndexActive ? "active" : "")">
+                                        <a href="@Url.Action("Index", "DdtStandardsManagement")" class="nav-link @(isStandardsManageActive ? "active" : "")">
                                             <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>My skills and learning</p>
+                                            <p>Manage standards</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="@Url.Action("BrowseCourses", "SkillsAndLearning")" class="nav-link @(isBrowseCoursesActive ? "active" : "")">
+                                        <a href="@Url.Action("ApprovedProducts", "DdtStandards")" class="nav-link @(isProductsActive ? "active" : "")">
                                             <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>Browse courses</p>
+                                            <p>Products</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="@Url.Action("MyRequests", "SkillsAndLearning")" class="nav-link @(isMyRequestsActive ? "active" : "")">
+                                        <a href="@Url.Action("Exceptions", "DdtStandards")" class="nav-link @(isExceptionsActive ? "active" : "")">
                                             <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                            <p>My requests</p>
+                                            <p>Exemptions</p>
                                         </a>
                                     </li>
-                                    @if (await PermissionService.IsInGroupAsync(currentUserEmail, "Learning and skills"))
-                                    {
-                                        <li class="nav-item">
-                                            <a href="@Url.Action("AdminRequests", "SkillsAndLearning")" class="nav-link @(isAdminRequestsActive ? "active" : "")">
-                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                                <p>Manage requests</p>
-                                            </a>
-                                        </li>
-                                    }
-                                    @if (await PermissionService.IsInGroupAsync(currentUserEmail, "HOP") || 
-                                         await PermissionService.IsInGroupAsync(currentUserEmail, "Central Operations Admin"))
-                                    {
-                                        <li class="nav-item">
-                                            <a href="@Url.Action("HOPDashboard", "SkillsAndLearning")" class="nav-link @(isHOPDashboardActive ? "active" : "")">
-                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                                <p>HOP dashboard</p>
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a href="@Url.Action("BudgetAndSpending", "SkillsAndLearning")" class="nav-link @(isBudgetAndSpendingActive ? "active" : "")">
-                                                <i class="far fa-circle nav-icon" aria-hidden="true"></i>
-                                                <p>Budget and spending</p>
-                                            </a>
-                                        </li>
-                                    }
-                                </ul>
-                            </li>
+                            </ul>
+                        </li>
                         }
 
                         <!-- Central Operations Section -->

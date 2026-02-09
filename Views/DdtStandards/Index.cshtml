@@ -43,17 +43,15 @@
     <div class="container-fluid">
         @{
             var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
-            ViewBag.BrandText = "Standards";
+            var currentView = Model.ActiveView ?? "in-review";
+            ViewBag.BrandText = "Manage Standards";
             var navLinks = new List<object>
             {
-                new { Text = "My standards", Action = "Index", Controller = "DdtStandards", Url = Url.Action("Index", "DdtStandards", new { view = "my" }), IsButton = false, IsActive = false },
-                new { Text = "All standards", Action = "Index", Controller = "DdtStandards", Url = Url.Action("Index", "DdtStandards", new { view = "published" }), IsButton = false, IsActive = currentAction == "Index" },
-                new { Text = "Updates", Action = "Updates", Controller = "DdtStandards", Url = Url.Action("Updates", "DdtStandards"), IsButton = false, IsActive = false }
+                new { Text = "For Approval", Action = "Index", Controller = "DdtStandardsManagement", Url = Url.Action("Index", "DdtStandardsManagement", new { view = "in-review" }), IsButton = false, IsActive = currentView == "in-review" },
+                new { Text = "Awaiting Publication", Action = "Index", Controller = "DdtStandardsManagement", Url = Url.Action("Index", "DdtStandardsManagement", new { view = "for-approval" }), IsButton = false, IsActive = currentView == "for-approval" },
+                new { Text = "Published", Action = "Index", Controller = "DdtStandardsManagement", Url = Url.Action("Index", "DdtStandardsManagement", new { view = "published" }), IsButton = false, IsActive = currentView == "published" },
+                new { Text = "Unpublished", Action = "Index", Controller = "DdtStandardsManagement", Url = Url.Action("Index", "DdtStandardsManagement", new { view = "unpublished" }), IsButton = false, IsActive = currentView == "unpublished" }
             };
-            if (isStandardsManager)
-            {
-                navLinks.Add(new { Text = "Management", Action = "Management", Controller = "DdtStandards", Url = Url.Action("ApprovedProducts", "DdtStandards"), IsButton = false, IsActive = false });
-            }
             ViewBag.NavLinks = navLinks;
         }
         @await Html.PartialAsync("_ModuleNavbar")
@@ -84,29 +82,29 @@
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
                             <a href="@Url.Action("Index", new { view = "drafts", search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
-                               class="list-group-item list-group-item-action @(Model.ActiveView == "drafts" ? "active" : "") d-flex justify-content-between align-items-center">
+                               class="list-group-item list-group-item-action @(Model.ActiveView == "drafts" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>Drafts</span>
-                                <span class="badge badge-secondary badge-pill">@(ViewBag.AllDraftsCount ?? 0)</span>
+                                <span class="badge @(Model.ActiveView == "drafts" ? "badge-light" : "badge-secondary") badge-pill">@(ViewBag.AllDraftsCount ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Index", new { view = "in-review", search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
-                               class="list-group-item list-group-item-action @(Model.ActiveView == "in-review" ? "active" : "") d-flex justify-content-between align-items-center">
+                               class="list-group-item list-group-item-action @(Model.ActiveView == "in-review" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>For Approval</span>
-                                <span class="badge badge-secondary badge-pill">@(ViewBag.AllInReviewCount ?? 0)</span>
+                                <span class="badge @(Model.ActiveView == "in-review" ? "badge-light" : "badge-secondary") badge-pill">@(ViewBag.AllInReviewCount ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Index", new { view = "for-approval", search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
-                               class="list-group-item list-group-item-action @(Model.ActiveView == "for-approval" ? "active" : "") d-flex justify-content-between align-items-center">
+                               class="list-group-item list-group-item-action @(Model.ActiveView == "for-approval" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>Awaiting Publication</span>
-                                <span class="badge badge-secondary badge-pill">@(ViewBag.AllForApprovalCount ?? 0)</span>
+                                <span class="badge @(Model.ActiveView == "for-approval" ? "badge-light" : "badge-secondary") badge-pill">@(ViewBag.AllForApprovalCount ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Index", new { view = "published", search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
-                               class="list-group-item list-group-item-action @(Model.ActiveView == "published" ? "active" : "") d-flex justify-content-between align-items-center">
+                               class="list-group-item list-group-item-action @(Model.ActiveView == "published" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>Published</span>
-                                <span class="badge badge-secondary badge-pill">@(ViewBag.AllPublishedCount ?? 0)</span>
+                                <span class="badge @(Model.ActiveView == "published" ? "badge-light" : "badge-secondary") badge-pill">@(ViewBag.AllPublishedCount ?? 0)</span>
                             </a>
                             <a href="@Url.Action("Index", new { view = "unpublished", search = Model.CurrentSearch, category = Model.CurrentCategory, creator = Model.CurrentCreator, owner = Model.CurrentOwner, contact = Model.CurrentContact, legalStandard = Model.CurrentLegalStandard })"
-                               class="list-group-item list-group-item-action @(Model.ActiveView == "unpublished" ? "active" : "") d-flex justify-content-between align-items-center">
+                               class="list-group-item list-group-item-action @(Model.ActiveView == "unpublished" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
                                 <span>Unpublished</span>
-                                <span class="badge badge-secondary badge-pill">@(ViewBag.AllUnpublishedCount ?? 0)</span>
+                                <span class="badge @(Model.ActiveView == "unpublished" ? "badge-light" : "badge-secondary") badge-pill">@(ViewBag.AllUnpublishedCount ?? 0)</span>
                             </a>
                         </div>
                     </div>
@@ -203,46 +201,46 @@
                 @if (Model.ActiveView == "drafts")
                 {
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "My drafts", Standards = Model.MyDrafts, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My drafts", Standards = Model.MyDrafts, ShowCreatedBy = false, ShowActions = false })
                     </div>
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "All drafts", Standards = Model.AllDrafts, ShowCreatedBy = true, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All drafts", Standards = Model.AllDrafts, ShowCreatedBy = true, ShowActions = false })
                     </div>
                 }
                 else if (Model.ActiveView == "in-review")
                 {
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "My For Approval", Standards = Model.MyInReview, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My For Approval", Standards = Model.MyInReview, ShowCreatedBy = false, ShowActions = false })
                     </div>
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "All For Approval", Standards = Model.AllInReview, ShowCreatedBy = true, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All For Approval", Standards = Model.AllInReview, ShowCreatedBy = true, ShowActions = false })
                     </div>
                 }
                 else if (Model.ActiveView == "for-approval")
                 {
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "My Awaiting Publication", Standards = Model.MyForApproval, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My Awaiting Publication", Standards = Model.MyForApproval, ShowCreatedBy = false, ShowActions = false })
                     </div>
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "All Awaiting Publication", Standards = Model.AllForApproval, ShowCreatedBy = true, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All Awaiting Publication", Standards = Model.AllForApproval, ShowCreatedBy = true, ShowActions = false })
                     </div>
                 }
                 else if (Model.ActiveView == "published")
                 {
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "My published", Standards = Model.MyPublished, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My published", Standards = Model.MyPublished, ShowCreatedBy = false, ShowActions = false })
                     </div>
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "All published", Standards = Model.AllPublished, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All published", Standards = Model.AllPublished, ShowCreatedBy = false, ShowActions = false })
                     </div>
                 }
                 else if (Model.ActiveView == "unpublished")
                 {
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "My unpublished", Standards = Model.MyUnpublished, ShowCreatedBy = false, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "My unpublished", Standards = Model.MyUnpublished, ShowCreatedBy = false, ShowActions = false })
                     </div>
                     <div class="mb-3">
-                        @await Html.PartialAsync("_StandardsCard", new { Title = "All unpublished", Standards = Model.AllUnpublished, ShowCreatedBy = true, ShowActions = false })
+                        @await Html.PartialAsync("~/Views/DdtStandards/_StandardsCard.cshtml", new { Title = "All unpublished", Standards = Model.AllUnpublished, ShowCreatedBy = true, ShowActions = false })
                     </div>
                 }
             </div>
@@ -250,14 +248,40 @@
     </div>
 </section>
 
-@if (Model.ActiveView == "drafts")
-{
+<!-- Create Standard Confirmation Modal -->
+<div class="modal fade" id="createStandardModal" tabindex="-1" role="dialog" aria-labelledby="createStandardModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createStandardModalLabel">Create new draft standard</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to start a new draft standard?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmCreateStandard">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
     <script nonce="@Context.Items["Nonce"]">
         $(document).ready(function() {
+            var createUrl = '';
+            
             $('#createStandardBtn').on('click', function(e) {
                 e.preventDefault();
-                var createUrl = $(this).attr('href');
-                if (confirm('Are you sure you want to start a new draft standard?')) {
+                createUrl = $(this).attr('href');
+                $('#createStandardModal').modal('show');
+            });
+            
+            $('#confirmCreateStandard').on('click', function() {
+                if (createUrl) {
                     window.location.href = createUrl;
                 }
             });
