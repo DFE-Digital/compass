@@ -33,6 +33,7 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<ProjectSuccess> RecentSuccesses { get; set; } = Array.Empty<ProjectSuccess>();
     public IReadOnlyCollection<(ProductDto Product, ReturnStatus Status, DateTime DueDate)> ProductsNeedingReturns { get; set; } = Array.Empty<(ProductDto, ReturnStatus, DateTime)>();
     public IReadOnlyCollection<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)> ProjectsNeedingMonthlyUpdates { get; set; } = Array.Empty<(Project, UpdateSubmissionStatus, DateTime)>();
+    public IReadOnlyCollection<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)> ProductsNeedingCommissionReporting { get; set; } = Array.Empty<(ProductDto, Commission, CommissionSubmissionStatus, DateTime)>();
     public IReadOnlyCollection<Project> OversightProjects { get; set; } = Array.Empty<Project>();
     public IReadOnlyCollection<UserBusinessAreaRoleAssignment> LeadershipAssignments { get; set; } = Array.Empty<UserBusinessAreaRoleAssignment>();
     public IReadOnlyCollection<string> LeadershipBusinessAreas { get; set; } = Array.Empty<string>();

@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace Compass.Controllers;
 
@@ -23,6 +24,7 @@ public class HomeController : Controller
     private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly CompassDbContext _context;
     private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
     public HomeController(
         ILogger<HomeController> logger, 
@@ -31,7 +33,8 @@ public class HomeController : Controller
         IReturnStatusService returnStatusService,
         IMonthlyUpdateService monthlyUpdateService,
         CompassDbContext context,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IConfiguration configuration)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
@@ -40,6 +43,7 @@ public class HomeController : Controller
         _monthlyUpdateService = monthlyUpdateService;
         _context = context;
         _environment = environment;
+        _configuration = configuration;
     }
 
     public async Task<IActionResult> Index(string? testRole = null, int? testUserId = null)
@@ -423,21 +427,26 @@ public class HomeController : Controller
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
 
         var productsNeedingReturns = new List<(ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
-        foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+        var enableMonthlyPerformanceReporting = _configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true);
+        
+        if (enableMonthlyPerformanceReporting)
         {
-            var productReturn = await _context.ProductReturns
-                .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
-                .FirstOrDefaultAsync();
-
-            var status = _returnStatusService.CalculateReturnStatus(
-                currentYear,
-                currentMonth,
-                productReturn?.SubmittedDate);
-
-            if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+            foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
-                var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
-                productsNeedingReturns.Add((product, status, dueDate));
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear,
+                    currentMonth,
+                    productReturn?.SubmittedDate);
+
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+                    productsNeedingReturns.Add((product, status, dueDate));
+                }
             }
         }
 
@@ -452,6 +461,62 @@ public class HomeController : Controller
             {
                 var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
                 projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
+            }
+        }
+
+        // Calculate products needing commission reporting
+        var productsNeedingCommissionReporting = new List<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)>();
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive && c.OpenDate <= now)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync();
+
+        foreach (var commission in activeCommissions)
+        {
+            // Check if commission is still open (not past due date, or past due but not submitted)
+            var isOpen = now >= commission.OpenDate;
+            var isPastDue = now > commission.DueDate;
+
+            // Get user's products for this commission
+            var userProductDocumentIds = myProducts
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId) && 
+                           p.State != null && 
+                           !p.State.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                           !p.State.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase) &&
+                           p.PublishedAt.HasValue)
+                .Select(p => p.DocumentId!)
+                .ToList();
+
+            if (!userProductDocumentIds.Any())
+                continue;
+
+            // Get existing submissions for user's products
+            var existingSubmissions = await _context.CommissionSubmissions
+                .Where(cs => cs.CommissionId == commission.Id && 
+                            userProductDocumentIds.Contains(cs.ProductDocumentId))
+                .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+            // Check each user product
+            foreach (var product in myProducts.Where(p => userProductDocumentIds.Contains(p.DocumentId ?? "")))
+            {
+                var documentId = product.DocumentId ?? "";
+                if (string.IsNullOrEmpty(documentId))
+                    continue;
+
+                var submission = existingSubmissions.GetValueOrDefault(documentId);
+                var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+
+                // Only include if not submitted and (open or past due)
+                if (status != CommissionSubmissionStatus.Submitted && (isOpen || isPastDue))
+                {
+                    var finalStatus = isPastDue && status != CommissionSubmissionStatus.Submitted
+                        ? CommissionSubmissionStatus.Late
+                        : status == CommissionSubmissionStatus.NotStarted && isOpen
+                        ? CommissionSubmissionStatus.NotStarted
+                        : status;
+
+                    productsNeedingCommissionReporting.Add((product, commission, finalStatus, commission.DueDate));
+                }
             }
         }
 
@@ -749,6 +814,7 @@ public class HomeController : Controller
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
             ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
+            ProductsNeedingCommissionReporting = productsNeedingCommissionReporting,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,
             HighestLeadershipRole = highestRole,

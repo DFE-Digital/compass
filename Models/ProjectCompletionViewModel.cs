@@ -4,7 +4,7 @@ public class ProjectCompletionViewModel
 {
     public List<ProjectCompletionItem> Projects { get; set; } = new();
     public double AverageCompletionPercentage { get; set; }
-    public List<BusinessAreaCompletion> BusinessAreaCompletions { get; set; } = new();
+    public List<FipsBusinessAreaCompletion> BusinessAreaCompletions { get; set; } = new();
     public int ZeroCompletionCount { get; set; }
     public int FullCompletionCount { get; set; }
     
