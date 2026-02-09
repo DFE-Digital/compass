@@ -10,7 +10,7 @@
     var hasProducts = Model.MyProducts.Any();
     var hasStandards = Model.MyDdtStandards.Any();
     var totalItems = Model.MyProjects.Count + Model.MyProducts.Count + Model.MyDdtStandards.Count;
-    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count + Model.ProjectsNeedingMonthlyUpdates.Count + Model.ProductsNeedingReturns.Count;
+    var taskCount = Model.OverdueMilestones.Count + Model.AssignedActions.Count + Model.HighPriorityIssues.Count + Model.ProjectsNeedingMonthlyUpdates.Count + Model.ProductsNeedingReturns.Count + Model.ProductsNeedingCommissionReporting.Count;
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -309,11 +309,12 @@
                 <button class="tab-button" data-tab="watching">Watching (@Model.WatchedProjects.Count)</button>
                 <button class="tab-button" data-tab="products">Products (@Model.MyProducts.Count)</button>
                 <button class="tab-button" data-tab="standards">DDT Standards (@Model.MyDdtStandards.Count)</button>
+                <button class="tab-button" data-tab="commission">Performance reporting (@Model.ProductsNeedingCommissionReporting.Count)</button>
             </div>
 
             <!-- Tasks Tab -->
             <div id="tab-tasks" class="tab-content active">
-                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any() && !Model.ProjectsNeedingMonthlyUpdates.Any() && !Model.ProductsNeedingReturns.Any())
+                @if (!Model.AssignedActions.Any() && !Model.OverdueMilestones.Any() && !Model.HighPriorityIssues.Any() && !Model.ProjectsNeedingMonthlyUpdates.Any() && !Model.ProductsNeedingReturns.Any() && !Model.ProductsNeedingCommissionReporting.Any())
                 {
                     <div class="empty-state">
                         <div class="empty-state-icon">✅</div>
@@ -417,6 +418,23 @@
                                 </div>
                             </a>
                         }
+
+                        @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                        {
+                            <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="work-item-card">
+                                <h4>Complete performance reporting</h4>
+                                <p class="work-item-project">@item.Product.Title</p>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge @(item.Status == CommissionSubmissionStatus.Late ? "badge-danger" : item.Status == CommissionSubmissionStatus.InProgress ? "badge-warning" : "badge-info")">Commission @(item.Status == CommissionSubmissionStatus.Late ? "late" : item.Status == CommissionSubmissionStatus.InProgress ? "in progress" : "due")</span>
+                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                                    </div>
+                                    <div class="work-item-meta-row">
+                                        <span class="text-muted">@item.Commission.Name</span>
+                                    </div>
+                                </div>
+                            </a>
+                        }
                     </div>
 
                     <!-- List View -->
@@ -484,6 +502,29 @@
                                         <td>Operational reporting</td>
                                         <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
                                         <td><span class="badge @(item.Status == ReturnStatus.Late ? "badge-danger" : "badge-warning")">@(item.Status == ReturnStatus.Late ? "Late" : "Due")</span></td>
+                                    </tr>
+                                }
+                                @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })">Complete performance reporting</a></td>
+                                        <td>@item.Product.Title</td>
+                                        <td>Performance reporting</td>
+                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
+                                        <td>
+                                            @switch (item.Status)
+                                            {
+                                                case CommissionSubmissionStatus.Late:
+                                                    <span class="badge badge-danger">Late</span>
+                                                    break;
+                                                case CommissionSubmissionStatus.InProgress:
+                                                    <span class="badge badge-warning">In progress</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge badge-info">Due</span>
+                                                    break;
+                                            }
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -937,6 +978,87 @@
                     {
                         <div class="text-center mt-3">
                             <a href="@Url.Action("Index", "DdtStandards")" class="btn btn-outline-primary">View all @Model.MyDdtStandards.Count standards →</a>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Performance Reporting Tab -->
+            <div id="tab-commission" class="tab-content">
+                @if (!Model.ProductsNeedingCommissionReporting.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <h3>No performance reporting tasks</h3>
+                        <p>You're all caught up! There are no outstanding performance reporting requirements.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Cards View -->
+                    <div class="work-items-grid active" data-view="cards">
+                        @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                        {
+                            <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })" class="work-item-card">
+                                <h4>Complete performance reporting</h4>
+                                <p class="work-item-project">@item.Product.Title</p>
+                                <div class="work-item-meta">
+                                    <div class="work-item-meta-row">
+                                        <span class="badge @(item.Status == CommissionSubmissionStatus.Late ? "badge-danger" : item.Status == CommissionSubmissionStatus.InProgress ? "badge-warning" : "badge-info")">Commission @(item.Status == CommissionSubmissionStatus.Late ? "late" : item.Status == CommissionSubmissionStatus.InProgress ? "in progress" : "due")</span>
+                                        <span class="text-muted">Due: @item.DueDate.ToString("dd MMMM yyyy")</span>
+                                    </div>
+                                    <div class="work-item-meta-row">
+                                        <span class="text-muted">@item.Commission.Name</span>
+                                    </div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+
+                    <!-- List View -->
+                    <div class="work-items-list" data-view="list">
+                        <table class="work-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Product</th>
+                                    <th>Commission</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.ProductsNeedingCommissionReporting.Take(10))
+                                {
+                                    <tr>
+                                        <td><a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = item.Commission.Id })">Complete performance reporting</a></td>
+                                        <td>@item.Product.Title</td>
+                                        <td>@item.Commission.Name</td>
+                                        <td>@item.DueDate.ToString("dd MMMM yyyy")</td>
+                                        <td>
+                                            @switch (item.Status)
+                                            {
+                                                case CommissionSubmissionStatus.Late:
+                                                    <span class="badge badge-danger">Late</span>
+                                                    break;
+                                                case CommissionSubmissionStatus.InProgress:
+                                                    <span class="badge badge-warning">In progress</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge badge-info">Due</span>
+                                                    break;
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.ProductsNeedingCommissionReporting.Count > 10)
+                    {
+                        <div class="text-center mt-3">
+                            <a href="@Url.Action("Commission", "ProductReporting")" class="btn btn-outline-primary">View all @Model.ProductsNeedingCommissionReporting.Count performance reporting tasks →</a>
                         </div>
                     }
                 }

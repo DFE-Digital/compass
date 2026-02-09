@@ -1,0 +1,248 @@
+@model Compass.Models.BusinessAreaDetailsViewModel
+@using Compass.Models
+@{
+    ViewData["Title"] = Model.BusinessAreaName + " - Business areas";
+    var selectedCommission = Model.Commission;
+    var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+}
+
+@await Html.PartialAsync("_DashboardStyles")
+
+@section Breadcrumbs {
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="BusinessAreas" asp-action="Index" asp-route-commissionId="@selectedCommission.Id" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Business areas</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@Model.BusinessAreaName</li>
+        </ol>
+    </nav>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        @if (selectedCommission != null)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4>@selectedCommission.Name</h4>
+                            @if (!string.IsNullOrEmpty(selectedCommission.Description))
+                            {
+                                <p class="text-muted">@selectedCommission.Description</p>
+                            }
+                            <p>
+                                <strong>Timeframe:</strong> @selectedCommission.StartDate.ToString("dd MMM yyyy") - @selectedCommission.EndDate.ToString("dd MMM yyyy")
+                                @if (!string.IsNullOrEmpty(selectedCommission.Quarter))
+                                {
+                                    <span class="badge badge-info ml-2">@selectedCommission.Quarter</span>
+                                }
+                            </p>
+                            <p>
+                                <strong>Open date:</strong> @selectedCommission.OpenDate.ToString("dd MMM yyyy")<br />
+                                <strong>Due date:</strong> @selectedCommission.DueDate.ToString("dd MMM yyyy")
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            @if (activeCommissions.Count > 1)
+                            {
+                                <label>Select commission:</label>
+                                <select class="form-control" onchange="window.location.href='@Url.Action("Details", "BusinessAreas", new { businessAreaName = Model.BusinessAreaName })' + '?commissionId=' + this.value">
+                                    @foreach (var comm in activeCommissions)
+                                    {
+                                        <option value="@comm.Id" selected="@(comm.Id == selectedCommission.Id)">@comm.Name</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Business Area Completion Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total products</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-box fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-success shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Completed</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.CompletedProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">In progress</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.InProgressProducts</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-spinner fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Completion</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.CompletionPercentage%</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Products - @Model.BusinessAreaName</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.ProductStatuses)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@item.Product.Title</strong><br />
+                                    <small class="text-muted">@item.Product.FipsId</small>
+                                </td>
+                                <td>
+                                    @switch (item.Status)
+                                    {
+                                        case CommissionSubmissionStatus.NotStarted:
+                                            <span class="badge badge-secondary">Not started</span>
+                                            break;
+                                        case CommissionSubmissionStatus.InProgress:
+                                            <span class="badge badge-warning">In progress</span>
+                                            break;
+                                        case CommissionSubmissionStatus.Submitted:
+                                            <span class="badge badge-success">Submitted</span>
+                                            break;
+                                        case CommissionSubmissionStatus.Late:
+                                            <span class="badge badge-danger">Late</span>
+                                            break;
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.TotalMetrics > 0)
+                                    {
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" role="progressbar" style="width: @((item.CompletedMetrics * 100) / item.TotalMetrics)%">
+                                                @item.CompletedMetrics / @item.TotalMetrics
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @{
+                                        var now = DateTime.UtcNow;
+                                        var isOpen = now >= selectedCommission.OpenDate;
+                                    }
+                                    @if (isOpen && item.Status != CommissionSubmissionStatus.Submitted)
+                                    {
+                                        <a href="@Url.Action("SubmitCommission", "ProductReporting", new { documentId = item.Product.DocumentId ?? item.Product.FipsId, commissionId = selectedCommission.Id })" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i> Complete
+                                        </a>
+                                    }
+                                    else if (item.Status == CommissionSubmissionStatus.Submitted)
+                                    {
+                                        <span class="text-muted">Submitted</span>
+                                    }
+                                    else if (!isOpen)
+                                    {
+                                        <span class="text-muted">Not yet open</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style nonce="@Context.Items["Nonce"]">
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
