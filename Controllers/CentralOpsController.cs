@@ -1770,6 +1770,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProblemStatements)
                 .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
             // Apply filters (same as ManageWork)
@@ -1812,9 +1813,31 @@ public class CentralOpsController : Controller
                 return RedirectToAction("ManageWork", new { search, businessArea, priority, rag, status });
             }
 
+            // Load ProblemStatements for all projects in batch
+            var projectIds = projects.Select(p => p.Id).ToList();
+            var problemStatements = await _context.ProjectProblemStatements
+                .Where(ps => projectIds.Contains(ps.ProjectId))
+                .AsNoTracking()
+                .ToListAsync();
+            
+            // Group problem statements by project ID
+            var problemStatementsByProject = problemStatements
+                .GroupBy(ps => ps.ProjectId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(ps => ps.UpdatedAt).ToList());
+
             // Load dependencies for each project
             foreach (var project in projects)
             {
+                // Load ProblemStatements if not already loaded
+                if (problemStatementsByProject.TryGetValue(project.Id, out var projectProblemStatements))
+                {
+                    project.ProblemStatements = projectProblemStatements;
+                }
+                else
+                {
+                    project.ProblemStatements = new List<ProjectProblemStatement>();
+                }
+
                 project.DependenciesAsSource = await _context.Dependencies
                     .Where(d => d.SourceEntityType == "Project" && d.SourceEntityId == project.Id)
                     .AsNoTracking()
@@ -1851,6 +1874,8 @@ public class CentralOpsController : Controller
             {
                 "Project Code",
                 "Title",
+                "Problem Statement",
+                "Aim",
                 "Business Area",
                 "Phase",
                 "Status",
@@ -1901,6 +1926,16 @@ public class CentralOpsController : Controller
 
                 worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
                 worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                
+                // Problem Statement (get the most recent one)
+                var problemStatement = project.ProblemStatements?
+                    .OrderByDescending(ps => ps.UpdatedAt)
+                    .FirstOrDefault();
+                worksheet.Cell(currentRow, col++).Value = problemStatement?.ProblemStatement ?? string.Empty;
+                
+                // Aim
+                worksheet.Cell(currentRow, col++).Value = project.Aim ?? string.Empty;
+                
                 worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
                 worksheet.Cell(currentRow, col++).Value = project.PhaseLookup?.Name ?? string.Empty;
                 worksheet.Cell(currentRow, col++).Value = project.Status ?? string.Empty;
@@ -2023,7 +2058,7 @@ public class CentralOpsController : Controller
             worksheet.Columns().AdjustToContents();
             
             // Wrap text for longer columns
-            var wrapColumns = new[] { "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
+            var wrapColumns = new[] { "Problem Statement", "Aim", "Strategic Alignment", "Team", "Milestones", "Dependencies In", "Dependencies Out", "Linked Products" };
             for (int i = 0; i < headers.Count; i++)
             {
                 if (wrapColumns.Contains(headers[i]))
@@ -4209,6 +4244,259 @@ public class CentralOpsController : Controller
             _logger.LogError(ex, "Error loading monthly summary v2 for {Year}-{Month}", year, month);
             TempData["ErrorMessage"] = "An error occurred while loading the monthly summary. Please try again.";
             return RedirectToAction(nameof(Dashboard));
+        }
+    }
+
+    // GET: CentralOps/ExportMonthlySummaryV2
+    public async Task<IActionResult> ExportMonthlySummaryV2(int? year, int? month, int? businessAreaId)
+    {
+        try
+        {
+            // Default to current month if not specified
+            var currentDate = DateTime.UtcNow;
+            var reportYear = year ?? currentDate.Year;
+            var reportMonth = month ?? currentDate.Month;
+            
+            // Calculate month boundaries
+            var monthStart = new DateTime(reportYear, reportMonth, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+            
+            // Get all active projects (exclude Cancelled and Completed) - same query as MonthlySummaryV2
+            var query = _context.Projects
+                .Include(p => p.PrimaryContactUser)
+                .Include(p => p.DeliveryPriority)
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.Milestones)
+                .Include(p => p.Risks)
+                .Include(p => p.Issues)
+                .Include(p => p.MonthlyUpdates)
+                    .ThenInclude(mu => mu.MonthlyUpdateNarratives)
+                .Include(p => p.RagStatusLookup)
+                .Include(p => p.ProblemStatements)
+                .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+            
+            // Filter by business area if specified
+            if (businessAreaId.HasValue)
+            {
+                query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+            }
+            
+            var allProjects = await query
+                .AsNoTracking()
+                .ToListAsync();
+            
+            // Order in memory to avoid null propagating operator in expression tree
+            allProjects = allProjects
+                .OrderBy(p => p.BusinessAreaLookup?.Name ?? "ZZZ")
+                .ThenBy(p => p.Title)
+                .ToList();
+
+            if (!allProjects.Any())
+            {
+                TempData["ErrorMessage"] = "No projects found to export.";
+                return RedirectToAction("MonthlySummaryV2", new { year = reportYear, month = reportMonth, businessAreaId });
+            }
+
+            // Load ProblemStatements for all projects in batch (AsNoTracking may not populate navigation properties)
+            var projectIds = allProjects.Select(p => p.Id).ToList();
+            var problemStatements = await _context.ProjectProblemStatements
+                .Where(ps => projectIds.Contains(ps.ProjectId))
+                .AsNoTracking()
+                .ToListAsync();
+            
+            // Group problem statements by project ID
+            var problemStatementsByProject = problemStatements
+                .GroupBy(ps => ps.ProjectId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(ps => ps.UpdatedAt).ToList());
+
+            // Assign ProblemStatements to each project
+            foreach (var project in allProjects)
+            {
+                if (problemStatementsByProject.TryGetValue(project.Id, out var projectProblemStatements))
+                {
+                    project.ProblemStatements = projectProblemStatements;
+                }
+                else
+                {
+                    project.ProblemStatements = new List<ProjectProblemStatement>();
+                }
+            }
+
+            // Load RAG history for the month to get submission data
+            var ragHistoryForMonth = await _context.ProjectRagHistories
+                .Where(rh => projectIds.Contains(rh.ProjectId) && 
+                             rh.ChangedAt >= monthStart && 
+                             rh.ChangedAt <= monthEnd)
+                .OrderByDescending(rh => rh.ChangedAt)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Group RAG history by project ID (get most recent for each project in the month)
+            var ragHistoryByProject = ragHistoryForMonth
+                .GroupBy(rh => rh.ProjectId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Create workbook
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add($"Monthly Summary {monthStart:MMMM yyyy}");
+
+            // Build headers
+            var headers = new List<string>
+            {
+                "Project Code",
+                "Title",
+                "Problem Statement",
+                "Aim",
+                "Business Area",
+                "Current RAG Status",
+                "RAG Status (Monthly Submission)",
+                "RAG Justification (Monthly Submission)",
+                "Path to Green (Monthly Submission)",
+                "Current Priority",
+                "Priority (Monthly Submission)",
+                "Monthly Update Status",
+                "Submitted Date",
+                "Narrative"
+            };
+
+            // Add headers to worksheet
+            for (int col = 0; col < headers.Count; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            // Get monthly update due date for status calculation
+            var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+
+            // Add data rows
+            int currentRow = 2;
+            foreach (var project in allProjects)
+            {
+                int col = 1;
+
+                worksheet.Cell(currentRow, col++).Value = $"DFE-DDT-{project.Id}";
+                worksheet.Cell(currentRow, col++).Value = project.Title ?? string.Empty;
+                
+                // Problem Statement (get the most recent one)
+                var problemStatement = project.ProblemStatements?
+                    .OrderByDescending(ps => ps.UpdatedAt)
+                    .FirstOrDefault();
+                worksheet.Cell(currentRow, col++).Value = problemStatement?.ProblemStatement ?? string.Empty;
+                
+                // Aim
+                worksheet.Cell(currentRow, col++).Value = project.Aim ?? string.Empty;
+                
+                worksheet.Cell(currentRow, col++).Value = project.BusinessAreaLookup?.Name ?? string.Empty;
+                
+                // Current RAG Status
+                var currentRagStatus = NormalizeRagStatus(project.RagStatusLookup?.Name ?? project.RagStatus);
+                worksheet.Cell(currentRow, col++).Value = currentRagStatus ?? "Not Set";
+                
+                // Get monthly update for this project and month
+                var monthlyUpdate = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+                
+                // Get RAG history entry for this month (if submitted via monthly update)
+                ProjectRagHistory? ragHistoryEntry = null;
+                if (ragHistoryByProject.TryGetValue(project.Id, out var ragHistory))
+                {
+                    ragHistoryEntry = ragHistory;
+                }
+
+                // RAG Status from monthly submission (from RAG history if available)
+                var submissionRagStatus = ragHistoryEntry?.RagStatus ?? currentRagStatus;
+                worksheet.Cell(currentRow, col++).Value = submissionRagStatus ?? "Not Set";
+
+                // RAG Justification from monthly submission
+                worksheet.Cell(currentRow, col++).Value = ragHistoryEntry?.Justification ?? project.RagJustification ?? string.Empty;
+
+                // Path to Green from monthly submission
+                worksheet.Cell(currentRow, col++).Value = ragHistoryEntry?.PathToGreen ?? project.PathToGreen ?? string.Empty;
+
+                // Current Priority
+                worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? "Not Set";
+
+                // Priority from monthly submission (same as current, as priority changes aren't tracked in monthly updates separately)
+                worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? "Not Set";
+
+                // Monthly Update Status
+                string updateStatus;
+                if (monthlyUpdate != null && monthlyUpdate.SubmittedAt.HasValue)
+                {
+                    updateStatus = "Submitted";
+                }
+                else if (currentDate > dueDate)
+                {
+                    updateStatus = "Late";
+                }
+                else if (monthlyUpdate != null && !monthlyUpdate.SubmittedAt.HasValue)
+                {
+                    updateStatus = "In Progress";
+                }
+                else
+                {
+                    updateStatus = "Not Started";
+                }
+                worksheet.Cell(currentRow, col++).Value = updateStatus;
+
+                // Submitted Date
+                if (monthlyUpdate?.SubmittedAt.HasValue == true)
+                {
+                    worksheet.Cell(currentRow, col++).Value = monthlyUpdate.SubmittedAt.Value;
+                    worksheet.Cell(currentRow, col - 1).Style.NumberFormat.Format = "dd/mm/yyyy hh:mm";
+                }
+                else
+                {
+                    worksheet.Cell(currentRow, col++).Value = string.Empty;
+                }
+
+                // Narrative (combine all narratives from monthly update)
+                var narrative = string.Empty;
+                if (monthlyUpdate != null)
+                {
+                    if (monthlyUpdate.MonthlyUpdateNarratives?.Any() == true)
+                    {
+                        narrative = string.Join(" | ", monthlyUpdate.MonthlyUpdateNarratives.Select(n => n.Narrative));
+                    }
+                    else if (!string.IsNullOrEmpty(monthlyUpdate.Narrative))
+                    {
+                        narrative = monthlyUpdate.Narrative;
+                    }
+                }
+                worksheet.Cell(currentRow, col++).Value = narrative;
+
+                currentRow++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            
+            // Wrap text for longer columns
+            var wrapColumns = new[] { "Problem Statement", "Aim", "RAG Justification (Monthly Submission)", "Path to Green (Monthly Submission)", "Narrative" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (wrapColumns.Contains(headers[i]))
+                {
+                    worksheet.Column(i + 1).Style.Alignment.WrapText = true;
+                }
+            }
+
+            worksheet.SheetView.FreezeRows(1);
+
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"monthly-summary-{reportYear}-{reportMonth:D2}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting monthly summary v2 to Excel for {Year}-{Month}", year, month);
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("MonthlySummaryV2", new { year, month, businessAreaId });
         }
     }
 
