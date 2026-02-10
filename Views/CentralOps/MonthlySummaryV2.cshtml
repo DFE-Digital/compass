@@ -32,6 +32,31 @@
     .text-gray-800 {
         color: #5a5c69 !important;
     }
+    
+    /* Heatmap accessibility styles */
+    #ragPriorityHeatmapView td[data-rag][data-priority] {
+        border: 1px solid #cecece;
+    }
+    
+    #ragPriorityHeatmapView td[data-rag][data-priority]:not([data-count="0"]) {
+        cursor: pointer;
+    }
+    
+    #ragPriorityHeatmapView td[data-rag][data-priority][data-count="0"] {
+        cursor: default;
+    }
+    
+    #ragPriorityHeatmapView td[data-rag][data-priority][tabindex="0"]:focus {
+        outline: 3px solid #ffdd00;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 2px #0b0c0c;
+        position: relative;
+        z-index: 1;
+    }
+    
+    #ragPriorityHeatmapView td[data-rag][data-priority][tabindex="0"]:hover {
+        box-shadow: inset 0 0 0 2px #d2e2f1;
+    }
 </style>
 
 @{
@@ -83,6 +108,8 @@
         Amber = ragDistribution.ContainsKey("Amber") ? ragDistribution["Amber"] : 0,
         AmberGreen = ragDistribution.ContainsKey("Amber-Green") ? ragDistribution["Amber-Green"] : 0,
         Green = ragDistribution.ContainsKey("Green") ? ragDistribution["Green"] : 0,
+        NotStarted = ragDistribution.ContainsKey("Not Started") ? ragDistribution["Not Started"] : 0,
+        OnHold = ragDistribution.ContainsKey("On Hold") ? ragDistribution["On Hold"] : 0,
         NotSet = ragDistribution.ContainsKey("Not Set") ? ragDistribution["Not Set"] : 0
     };
     
@@ -132,14 +159,9 @@
                     </div>
                     <div class="col-sm-6 text-right mt-3 mt-sm-0">
                         <a href="@Url.Action("ExportMonthlySummaryV2", "CentralOps", new { year = year, month = month, businessAreaId = businessAreaId })" 
-                           class="btn btn-success mr-2" 
+                           class="btn btn-success" 
                            style="font-weight: 500;">
                             <i class="fas fa-file-excel mr-2"></i>Export to Excel
-                        </a>
-                        <a href="@Url.Action("MonthlySummaryV2Pdf", "CentralOps", new { year = year, month = month, businessAreaId = businessAreaId })" 
-                           class="btn btn-primary" 
-                           style="font-weight: 500;">
-                            <i class="fas fa-file-pdf mr-2"></i>Download PDF Report
                         </a>
                     </div>
                 </div>
@@ -152,6 +174,12 @@
                 <h5 class="card-title mb-0" style="font-weight: 600;">
                     <i class="fas fa-filter mr-2"></i>Filters
                 </h5>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus" aria-hidden="true"></i>
+                        <span class="sr-only">Toggle filters</span>
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <form method="get" asp-controller="CentralOps" asp-action="MonthlySummaryV2">
@@ -242,6 +270,12 @@
         <div class="card mb-4 shadow-sm">
             <div class="card-header bg-white">
                 <h3 class="card-title mb-0">Summary for @monthName</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus" aria-hidden="true"></i>
+                        <span class="sr-only">Toggle summary</span>
+                    </button>
+                </div>
                 @if (ViewBag.NarrativeSummary != null)
                 {
                     var narrativeSummary = ViewBag.NarrativeSummary as string ?? "";
@@ -354,9 +388,15 @@
         <!-- Business Area Summary (shown when in business area view) -->
         @if (businessAreaId.HasValue)
         {
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4 shadow-sm collapsed-card">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Business Area Summary</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle business area summary</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     @if (businessAreaSummaries.Any())
@@ -421,12 +461,12 @@
                                             <td class="text-center"><span class="badge" style="background-color: #fd7e14;">@summary.AmberRedCount</span></td>
                                             <td class="text-center"><span class="badge" style="background-color: #ffeb3b; color: #000;">@summary.AmberGreenCount</span></td>
                                             <td class="text-center"><span class="badge badge-success">@summary.GreenCount</span></td>
-                                            <td class="text-center"><span class="badge badge-secondary">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
+                                            <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
                                             <!-- Priority columns -->
                                             <td class="text-center" style="border-left: 2px solid #dee2e6;"><span class="badge badge-danger">@summary.CriticalCount</span></td>
                                             <td class="text-center"><span class="badge badge-warning">@summary.HighCount</span></td>
-                                            <td class="text-center"><span class="badge badge-info">@summary.MediumCount</span></td>
-                                            <td class="text-center"><span class="badge badge-secondary">@summary.LowCount</span></td>
+                                            <td class="text-center"><span class="badge badge-info" style="color: #000;">@summary.MediumCount</span></td>
+                                            <td class="text-center"><span class="badge badge-success">@summary.LowCount</span></td>
                                             <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.CriticalCount - summary.HighCount - summary.MediumCount - summary.LowCount)</span></td>
                                         </tr>
                                     }
@@ -445,11 +485,15 @@
         <!-- Month-over-Month Trends -->
         @if (!string.IsNullOrEmpty(prevMonthName))
         {
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4 shadow-sm collapsed-card">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Month-over-Month Trends</h3>
                     <div class="card-tools">
-                        <small class="text-muted">Comparing @monthName to @prevMonthName</small>
+                        <small class="text-muted mr-3">Comparing @monthName to @prevMonthName</small>
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle month-over-month trends</span>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -578,12 +622,16 @@
         @if (flagshipProjects.Any())
         {
             <div class="card mb-4 shadow-sm">
-                <div class="card-header bg-white">
-                    <h3 class="card-title mb-0">Flagship Projects</h3>
-                    <div class="card-tools">
-                        <span class="badge badge-primary">@flagshipProjects.Count</span>
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Flagship Projects</h3>
+                        <div class="card-tools">
+                            <span class="badge badge-primary mr-2">@flagshipProjects.Count</span>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle flagship projects</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
@@ -621,10 +669,11 @@
                                         "Amber" => "badge-warning",
                                         "Amber-Green" => "badge",
                                         "Green" => "badge-success",
-                                        _ => "badge-secondary"
+                                        _ => "badge-light"
                                     };
                                     var ragBadgeStyle = currentRag switch {
                                         "Amber-Red" => "background-color: #fd7e14;",
+                                        "Amber" => "color: #000;",
                                         "Amber-Green" => "background-color: #ffeb3b; color: #000;",
                                         _ => ""
                                     };
@@ -633,8 +682,12 @@
                                         var p when p.Contains("critical") => "badge-danger",
                                         var p when p.Contains("high") => "badge-warning",
                                         var p when p.Contains("medium") => "badge-info",
-                                        var p when p.Contains("low") => "badge-secondary",
+                                        var p when p.Contains("low") => "badge-success",
                                         _ => "badge-light"
+                                    };
+                                    var priorityBadgeStyle = priorityName.ToLower() switch {
+                                        var p when p.Contains("medium") => "background-color: #ffc107; color: #000;",
+                                        _ => ""
                                     };
                                     <tr>
                                         <td>
@@ -649,7 +702,7 @@
                                             <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
                                         </td>
                                         <td>
-                                            <span class="badge @priorityBadgeClass">@priorityName</span>
+                                            <span class="badge @priorityBadgeClass" style="@priorityBadgeStyle">@priorityName</span>
                                         </td>
                                         <td>@project.Status</td>
                                         <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
@@ -665,9 +718,15 @@
         <!-- Resource Summary -->
         @if (totalFte > 0 || resourceByBusinessArea.Any())
         {
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4 shadow-sm collapsed-card">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Resource Summary</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle resource summary</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     @if (businessAreaId.HasValue)
@@ -780,18 +839,27 @@
 
         <!-- RAG and Priority Distribution Charts -->
         <div class="row mb-4">
-            <div class="col-lg-6">
+            <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">RAG Status Distribution</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle RAG status distribution</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div style="position: relative; height: 300px;">
-                            <canvas id="ragStatusChart"></canvas>
-                        </div>
-                        <div class="mt-3">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover mb-0">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="ragStatusChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
                                     <thead>
                                         <tr>
                                             <th>Status</th>
@@ -805,14 +873,16 @@
                                     </thead>
                                     <tbody>
                                         @{
-                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green + ragData.NotSet;
+                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green + ragData.NotStarted + ragData.OnHold + ragData.NotSet;
                                             var ragItems = new[] {
                                                 new { Label = "Red", Count = ragData.Red, Color = "#dc3545", Key = "Red" },
                                                 new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14", Key = "Amber-Red" },
                                                 new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107", Key = "Amber" },
                                                 new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b", Key = "Amber-Green" },
                                                 new { Label = "Green", Count = ragData.Green, Color = "#28a745", Key = "Green" },
-                                                new { Label = "Not Set", Count = ragData.NotSet, Color = "#6c757d", Key = "Not Set" }
+                                                new { Label = "Not Started", Count = ragData.NotStarted, Color = "#e9ecef", Key = "Not Started" },
+                                                new { Label = "On Hold", Count = ragData.OnHold, Color = "#e9ecef", Key = "On Hold" },
+                                                new { Label = "Not Set", Count = ragData.NotSet, Color = "#e9ecef", Key = "Not Set" }
                                             };
                                         }
                                         @foreach (var item in ragItems)
@@ -827,7 +897,7 @@
                                             <tr>
                                                 <td>
                                                     <a href="@linkUrl" style="text-decoration: none; color: inherit;">
-                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" || item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber" || item.Label == "Amber-Green" || item.Label == "Not Started" || item.Label == "On Hold" || item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
                                                     </a>
                                                 </td>
                                                 <td><a href="@linkUrl" style="text-decoration: none; color: inherit; font-weight: 600;">@item.Count</a></td>
@@ -849,22 +919,34 @@
                                     </tbody>
                                 </table>
                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6">
+        </div>
+        <div class="row mb-4">
+            <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">Priority Distribution</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle priority distribution</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div style="position: relative; height: 300px;">
-                            <canvas id="priorityChart"></canvas>
-                        </div>
-                        <div class="mt-3">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover mb-0">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="priorityChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
                                     <thead>
                                         <tr>
                                             <th>Priority</th>
@@ -883,7 +965,7 @@
                                                 new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545", Key = "Critical" },
                                                 new { Label = "High", Count = priorityData.High, Color = "#fd7e14", Key = "High" },
                                                 new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107", Key = "Medium" },
-                                                new { Label = "Low", Count = priorityData.Low, Color = "#6c757d", Key = "Low" },
+                                                new { Label = "Low", Count = priorityData.Low, Color = "#28a745", Key = "Low" },
                                                 new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef", Key = "Not Set" }
                                             };
                                         }
@@ -899,7 +981,7 @@
                                             <tr>
                                                 <td>
                                                     <a href="@linkUrl" style="text-decoration: none; color: inherit;">
-                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Medium" || item.Label == "Not Set" ? "#000" : "#fff"); cursor: pointer;">@item.Label</span>
                                                     </a>
                                                 </td>
                                                 <td><a href="@linkUrl" style="text-decoration: none; color: inherit; font-weight: 600;">@item.Count</a></td>
@@ -921,6 +1003,398 @@
                                     </tbody>
                                 </table>
                             </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Work by RAG Status and Priority -->
+        @{
+            var allProjects = ViewBag.AllProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+            
+            // Helper function to normalize RAG status
+            Func<string?, string> normalizeRagStatus = (ragStatus) => {
+                if (string.IsNullOrWhiteSpace(ragStatus)) return "Not Set";
+                var normalized = ragStatus.Trim();
+                if (normalized.Equals("Red", StringComparison.OrdinalIgnoreCase)) return "Red";
+                if (normalized.Equals("Amber-Red", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberRed", StringComparison.OrdinalIgnoreCase)) return "Amber-Red";
+                if (normalized.Equals("Amber", StringComparison.OrdinalIgnoreCase)) return "Amber";
+                if (normalized.Equals("Amber-Green", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberGreen", StringComparison.OrdinalIgnoreCase)) return "Amber-Green";
+                if (normalized.Equals("Green", StringComparison.OrdinalIgnoreCase)) return "Green";
+                if (normalized.Equals("Not Started", StringComparison.OrdinalIgnoreCase)) return "Not Started";
+                if (normalized.Equals("On Hold", StringComparison.OrdinalIgnoreCase) || normalized.Equals("OnHold", StringComparison.OrdinalIgnoreCase)) return "On Hold";
+                return normalized;
+            };
+            
+            // Helper function to get priority name
+            Func<Compass.Models.Project, string> getPriorityName = (project) => {
+                if (project.DeliveryPriority == null) return "Not Set";
+                var priority = project.DeliveryPriority.Name.ToLower();
+                if (priority.Contains("critical")) return "Critical";
+                if (priority.Contains("high")) return "High";
+                if (priority.Contains("medium")) return "Medium";
+                if (priority.Contains("low")) return "Low";
+                return "Not Set";
+            };
+            
+            // Prepare projects grouped by RAG and Priority (RAG primary, Priority secondary)
+            var ragPriorityOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green", "Not Started", "On Hold", "Not Set" };
+            var priorityOrder = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+            
+            var projectsByRagPriority = allProjects
+                .Select(p => new {
+                    Project = p,
+                    RagStatus = normalizeRagStatus(p.RagStatusLookup?.Name ?? p.RagStatus),
+                    Priority = getPriorityName(p)
+                })
+                .GroupBy(p => new { p.RagStatus, p.Priority })
+                .Select(g => new {
+                    RagStatus = g.Key.RagStatus,
+                    Priority = g.Key.Priority,
+                    Projects = g.Select(x => x.Project).OrderBy(p => p.Title).ToList(),
+                    Count = g.Count()
+                })
+                .OrderBy(x => {
+                    var ragIndex = Array.IndexOf(ragPriorityOrder, x.RagStatus);
+                    return ragIndex == -1 ? int.MaxValue : ragIndex;
+                })
+                .ThenBy(x => {
+                    var priorityIndex = Array.IndexOf(priorityOrder, x.Priority);
+                    return priorityIndex == -1 ? int.MaxValue : priorityIndex;
+                })
+                .ToList();
+        }
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h3 class="card-title mb-0">Work by RAG Status and Priority</h3>
+                        <div class="card-tools">
+                            <a href="#" id="toggleHeatmapView" class="text-primary mr-2" style="text-decoration: underline;">
+                                <i class="fas fa-th mr-1"></i><span id="viewToggleText">View heatmap</span>
+                            </a>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle work by RAG status and priority</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <!-- Table View -->
+                        <div id="ragPriorityTableView" class="table-responsive">
+                            <table class="table table-hover mb-0 sortable-table" id="ragPriorityTable">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-column="rag" style="cursor: pointer;">
+                                            RAG Status
+                                            <i class="fas fa-sort ml-1 text-muted" style="font-size: 0.75rem;"></i>
+                                        </th>
+                                        <th class="sortable" data-column="priority" style="cursor: pointer;">
+                                            Priority
+                                            <i class="fas fa-sort ml-1 text-muted" style="font-size: 0.75rem;"></i>
+                                        </th>
+                                        <th class="sortable text-center" data-column="count" style="cursor: pointer;">
+                                            Count
+                                            <i class="fas fa-sort ml-1 text-muted" style="font-size: 0.75rem;"></i>
+                                        </th>
+                                        <th>Projects</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        int rowIndex = 0;
+                                    }
+                                    @foreach (var group in projectsByRagPriority)
+                                    {
+                                        var expandId = $"expand_rag_priority_{rowIndex}";
+                                        <tr data-rag="@group.RagStatus" data-priority="@group.Priority" data-count="@group.Count">
+                                            <td>
+                                                @{
+                                                    var ragColor = group.RagStatus == "Red" ? "#dc3545" :
+                                                                  group.RagStatus == "Amber-Red" ? "#fd7e14" :
+                                                                  group.RagStatus == "Amber" ? "#ffc107" :
+                                                                  group.RagStatus == "Amber-Green" ? "#ffeb3b" :
+                                                                  group.RagStatus == "Green" ? "#28a745" : "#e9ecef";
+                                                    var ragTextColor = group.RagStatus == "Amber" || group.RagStatus == "Amber-Green" || group.RagStatus == "Not Started" || group.RagStatus == "On Hold" || group.RagStatus == "Not Set" ? "#000" : "#fff";
+                                                }
+                                                <span class="badge" style="background-color: @ragColor; color: @ragTextColor;">@group.RagStatus</span>
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var priorityColor = group.Priority == "Critical" ? "#dc3545" :
+                                                                       group.Priority == "High" ? "#fd7e14" :
+                                                                       group.Priority == "Medium" ? "#ffc107" :
+                                                                       group.Priority == "Low" ? "#28a745" : "#e9ecef";
+                                                    var priorityTextColor = group.Priority == "Medium" || group.Priority == "Not Set" ? "#000" : "#fff";
+                                                }
+                                                <span class="badge" style="background-color: @priorityColor; color: @priorityTextColor;">@group.Priority</span>
+                                            </td>
+                                            <td class="text-center"><strong>@group.Count</strong></td>
+                                            <td>
+                                                @if (group.Count > 0)
+                                                {
+                                                    <a href="#" class="expand-projects-link" data-expand-id="@expandId" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                        <i class="fas fa-chevron-right mr-1"></i>View @group.Count project@(group.Count == 1 ? "" : "s")
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        @if (group.Count > 0)
+                                        {
+                                            <tr class="project-detail-row" id="@expandId" style="display: none;">
+                                                <td colspan="4" style="background-color: #f8f9fa; padding: 1rem;">
+                                                    <div class="mb-2">
+                                                        <strong>Projects (@group.Count):</strong>
+                                                    </div>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-hover table-sm mb-0">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th style="min-width: 200px;">Title</th>
+                                                                    <th style="min-width: 100px;">Project Code</th>
+                                                                    <th style="min-width: 150px;">Business Area</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var project in group.Projects)
+                                                                {
+                                                                    <tr>
+                                                                        <td>
+                                                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                                                @project.Title
+                                                                            </a>
+                                                                        </td>
+                                                                        <td>
+                                                                            <small class="text-muted">DFE-DDT-@project.Id</small>
+                                                                        </td>
+                                                                        <td>
+                                                                            @(project.BusinessAreaLookup?.Name ?? "-")
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                        rowIndex++;
+                                    }
+                                    @if (!projectsByRagPriority.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted p-4">No projects found</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Heatmap View -->
+                        <div id="ragPriorityHeatmapView" style="display: none; padding: 1.5rem;">
+                            @functions {
+                                // Band: 0 neutral, 1 low (green), 2 medium (yellow), 3 high (orange), 4 very high (red)
+                                private int GetRiskBand(string rag, string priority)
+                                {
+                                    // Normalise
+                                    rag = (rag ?? "").Trim();
+                                    priority = (priority ?? "").Trim();
+
+                                    // Neutral/unknown RAGs
+                                    if (rag == "Not Started" || rag == "On Hold" || rag == "Not Set")
+                                        return 0;
+
+                                    if (rag == "Red") return 4;
+                                    if (rag == "Amber-Red") return 3;
+
+                                    if (rag == "Amber")
+                                    {
+                                        if (priority == "Critical" || priority == "High") return 3;
+                                        return 2;
+                                    }
+
+                                    if (rag == "Amber-Green")
+                                    {
+                                        if (priority == "Critical") return 3;
+                                        if (priority == "High") return 2;
+                                        return 1;
+                                    }
+
+                                    if (rag == "Green")
+                                    {
+                                        if (priority == "Critical" || priority == "High") return 2;
+                                        return 1;
+                                    }
+
+                                    // Fallback
+                                    return 0;
+                                }
+
+                                private (string bg, string fg) GetHeatTone(int band, double ratio, int count)
+                                {
+                                    // Base neutrals
+                                    if (band == 0) return ("#f3f3f3", "#0b0c0c");
+                                    if (count == 0) return ("#ffffff", "#484949");
+
+                                    // 3-step intensity
+                                    bool low = ratio <= 0.25;
+                                    bool mid = ratio <= 0.60;
+
+                                    // Band palettes (bg only)
+                                    if (band == 4) // red
+                                    {
+                                        var bg = low ? "#fcf5f5" : mid ? "#f4d7d7" : "#ca3535";
+                                        var fg = (bg == "#ca3535") ? "#ffffff" : "#0b0c0c";
+                                        return (bg, fg);
+                                    }
+                                    if (band == 3) // orange
+                                    {
+                                        var bg = low ? "#fef8f5" : mid ? "#fde4d7" : "#f47738";
+                                        var fg = (bg == "#f47738") ? "#ffffff" : "#0b0c0c";
+                                        return (bg, fg);
+                                    }
+                                    if (band == 2) // yellow
+                                    {
+                                        var bg = low ? "#fffdf2" : mid ? "#fff8cc" : "#ffdd00";
+                                        // Always dark text on yellow family
+                                        return (bg, "#0b0c0c");
+                                    }
+                                    // band == 1 green
+                                    {
+                                        var bg = low ? "#f3f8f6" : mid ? "#cfe4dc" : "#0f7a52";
+                                        var fg = (bg == "#0f7a52") ? "#ffffff" : "#0b0c0c";
+                                        return (bg, fg);
+                                    }
+                                }
+                            }
+                            @{
+                                var ragOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green", "Not Started", "On Hold", "Not Set" };
+                                var priorityOrderHeatmap = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+                                var maxCount = projectsByRagPriority.Any() ? projectsByRagPriority.Max(g => g.Count) : 0;
+                            }
+                            <div class="table-responsive">
+                                <table class="table table-bordered mb-0" style="table-layout: fixed;" role="table" aria-label="RAG status and priority heatmap">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" style="width: 120px; background-color: #f4f8fb; font-weight: 600; border: 2px solid #cecece;" rowspan="2">
+                                                <span aria-hidden="true">RAG</span>
+                                                <span class="sr-only">RAG Status</span>
+                                            </th>
+                                            <th scope="colgroup" colspan="@priorityOrderHeatmap.Length" style="background-color: #f4f8fb; font-weight: 600; text-align: center; border: 2px solid #cecece;">
+                                                <span aria-hidden="true">Priority</span>
+                                                <span class="sr-only">Priority Level</span>
+                                            </th>
+                                        </tr>
+                                        <tr>
+                                            @foreach (var priority in priorityOrderHeatmap)
+                                            {
+                                                <th scope="col" class="text-center" style="background-color: #f4f8fb; font-weight: 600; border: 2px solid #cecece;">
+                                                    @{
+                                                        var priorityColor = priority == "Critical" ? "#dc3545" :
+                                                                           priority == "High" ? "#fd7e14" :
+                                                                           priority == "Medium" ? "#ffc107" :
+                                                                           priority == "Low" ? "#28a745" : "#e9ecef";
+                                                        var priorityTextColor = priority == "Medium" || priority == "Not Set" ? "#000" : "#fff";
+                                                    }
+                                                    <span class="badge" style="background-color: @priorityColor; color: @priorityTextColor; min-width: 80px; display: inline-block;">@priority</span>
+                                                </th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var rag in ragOrder)
+                                        {
+                                            <tr>
+                                                <th scope="row" style="background-color: #f4f8fb; font-weight: 600; vertical-align: middle; border: 2px solid #cecece; padding: 0.75rem; overflow: hidden;">
+                                                    @{
+                                                        var ragColor = rag == "Red" ? "#dc3545" :
+                                                                      rag == "Amber-Red" ? "#fd7e14" :
+                                                                      rag == "Amber" ? "#ffc107" :
+                                                                      rag == "Amber-Green" ? "#ffeb3b" :
+                                                                      rag == "Green" ? "#28a745" : "#e9ecef";
+                                                        var ragTextColor = rag == "Amber" || rag == "Amber-Green" || rag == "Not Started" || rag == "On Hold" || rag == "Not Set" ? "#000" : "#fff";
+                                                    }
+                                                    <span class="badge" style="background-color: @ragColor; color: @ragTextColor; display: inline-block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@rag</span>
+                                                </th>
+                                                @foreach (var priority in priorityOrderHeatmap)
+                                                {
+                                                    var group = projectsByRagPriority.FirstOrDefault(g => g.RagStatus == rag && g.Priority == priority);
+                                                    var count = group?.Count ?? 0;
+                                                    
+                                                    // Calculate risk band and heat tone
+                                                    var band = GetRiskBand(rag, priority);
+                                                    var ratio = (maxCount > 0) ? (count * 1.0 / maxCount) : 0;
+                                                    var tone = GetHeatTone(band, ratio, count);
+                                                    var cellColor = tone.bg;
+                                                    var textColor = tone.fg;
+                                                    
+                                                    <td class="text-center" 
+                                                        style="background-color: @cellColor; color: @textColor; min-width: 100px; height: 80px; vertical-align: middle; border: 1px solid #cecece;" 
+                                                        data-rag="@rag" 
+                                                        data-priority="@priority" 
+                                                        data-count="@count"
+                                                        role="gridcell"
+                                                        tabindex="0"
+                                                        aria-label="@rag RAG status and @priority priority: @count project@(count == 1 ? "" : "s")"
+                                                        title="@rag RAG status and @priority priority: @count project@(count == 1 ? "" : "s")"
+                                                        @if (count > 0) { <text>data-projects='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(group?.Projects.Select(p => new { Id = p.Id, Title = p.Title, ProjectCode = p.ProjectCode ?? "", BusinessArea = p.BusinessAreaLookup?.Name ?? "-" }).ToList()))'</text> }>
+                                                        @if (count > 0)
+                                                        {
+                                                            <div style="font-size: 1.75rem; font-weight: bold; color: @textColor; line-height: 1.2;">
+                                                                @count
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span style="color: @textColor;" aria-label="No projects">–</span>
+                                                        }
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal for displaying projects in a heatmap cell -->
+                        <div class="modal fade" id="heatmapProjectsModal" tabindex="-1" role="dialog" aria-labelledby="heatmapProjectsModalLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="heatmapProjectsModalLabel">Projects</h5>
+                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p id="heatmapModalDescription" class="mb-3"></p>
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" id="heatmapProjectsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Project</th>
+                                                        <th>Business Area</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="heatmapProjectsTableBody">
+                                                    <!-- Projects will be populated here -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -933,6 +1407,12 @@
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">New Projects This Month</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle new projects this month</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         @if (newProjectsThisMonth.Any())
@@ -976,6 +1456,12 @@
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">Milestones Achieved</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle milestones achieved</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         @if (milestonesAchieved.Any())
@@ -1021,6 +1507,12 @@
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">Upcoming Milestones</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle upcoming milestones</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         @if (upcomingMilestones.Any())
@@ -1062,6 +1554,12 @@
                 <div class="card shadow-sm">
                     <div class="card-header bg-white">
                         <h3 class="card-title mb-0">Late Milestones</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                                <span class="sr-only">Toggle late milestones</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         @if (lateMilestones.Any())
@@ -1107,6 +1605,12 @@
             <div class="card mb-4 shadow-sm">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Active Projects - @selectedBusinessArea.Name</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-minus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle active projects</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     @if (businessAreaActiveProjects.Any())
@@ -1147,11 +1651,18 @@
                                             "Amber" => "badge-warning",
                                             "Amber-Green" => "badge",
                                             "Green" => "badge-success",
-                                            _ => "badge-secondary"
+                                            "Not Set" => "badge-light",
+                                            "Not started" => "badge-light",
+                                            "On hold" => "badge-light",
+                                            _ => "badge-light"
                                         };
                                         var ragBadgeStyle = currentRag switch {
                                             "Amber-Red" => "background-color: #fd7e14;",
+                                            "Amber" => "color: #000;",
                                             "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                            "Not Set" => "background-color: #e9ecef; color: #000;",
+                                            "Not started" => "background-color: #e9ecef; color: #000;",
+                                            "On hold" => "background-color: #e9ecef; color: #000;",
                                             _ => ""
                                         };
                                         var priorityName = project.DeliveryPriority?.Name ?? "Not Set";
@@ -1159,8 +1670,12 @@
                                             var p when p.Contains("critical") => "badge-danger",
                                             var p when p.Contains("high") => "badge-warning",
                                             var p when p.Contains("medium") => "badge-info",
-                                            var p when p.Contains("low") => "badge-secondary",
+                                            var p when p.Contains("low") => "badge-success",
                                             _ => "badge-light"
+                                        };
+                                        var priorityBadgeStyle = priorityName.ToLower() switch {
+                                            var p when p.Contains("medium") => "background-color: #ffc107; color: #000;",
+                                            _ => ""
                                         };
                                         var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
                                         var problemStatementText = latestProblemStatement?.ProblemStatement ?? "Not provided";
@@ -1190,7 +1705,7 @@
                                                 <span class="badge @ragBadgeClass" style="@ragBadgeStyle">@currentRag</span>
                                             </td>
                                             <td>
-                                                <span class="badge @priorityBadgeClass">@priorityName</span>
+                                                <span class="badge @priorityBadgeClass" style="@priorityBadgeStyle">@priorityName</span>
                                             </td>
                                             <td>@project.Status</td>
                                             <td>@(project.PrimaryContactUser?.Name ?? "-")</td>
@@ -1211,9 +1726,15 @@
         <!-- Business Area Summary (shown when NOT in business area view) -->
         @if (!businessAreaId.HasValue)
         {
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4 shadow-sm collapsed-card">
                 <div class="card-header bg-white">
                     <h3 class="card-title mb-0">Business Area Summary</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle business area summary</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     @if (businessAreaSummaries.Any())
@@ -1278,12 +1799,12 @@
                                             <td class="text-center"><span class="badge" style="background-color: #fd7e14;">@summary.AmberRedCount</span></td>
                                             <td class="text-center"><span class="badge" style="background-color: #ffeb3b; color: #000;">@summary.AmberGreenCount</span></td>
                                             <td class="text-center"><span class="badge badge-success">@summary.GreenCount</span></td>
-                                            <td class="text-center"><span class="badge badge-secondary">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
+                                            <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.RedCount - summary.AmberRedCount - summary.AmberGreenCount - summary.GreenCount)</span></td>
                                             <!-- Priority columns -->
                                             <td class="text-center" style="border-left: 2px solid #dee2e6;"><span class="badge badge-danger">@summary.CriticalCount</span></td>
                                             <td class="text-center"><span class="badge badge-warning">@summary.HighCount</span></td>
-                                            <td class="text-center"><span class="badge badge-info">@summary.MediumCount</span></td>
-                                            <td class="text-center"><span class="badge badge-secondary">@summary.LowCount</span></td>
+                                            <td class="text-center"><span class="badge badge-info" style="color: #000;">@summary.MediumCount</span></td>
+                                            <td class="text-center"><span class="badge badge-success">@summary.LowCount</span></td>
                                             <td class="text-center"><span class="badge badge-light">@(summary.TotalProjects - summary.CriticalCount - summary.HighCount - summary.MediumCount - summary.LowCount)</span></td>
                                         </tr>
                                     }
@@ -1301,20 +1822,46 @@
 
         <!-- Path to Green -->
         <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-white">
-                <h3 class="card-title mb-0">Projects with Path to Green</h3>
-            </div>
+                <div class="card-header bg-white">
+                    <h3 class="card-title mb-0">Projects with Path to Green</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-minus" aria-hidden="true"></i>
+                            <span class="sr-only">Toggle projects with path to green</span>
+                        </button>
+                    </div>
+                </div>
             <div class="card-body p-0">
                 @if (projectsWithPathToGreen.Any())
                 {
+                    <div class="p-3 border-bottom">
+                        <div class="form-group mb-0">
+                            <label class="mb-1 font-weight-bold">Filter by current RAG</label>
+                            <div class="d-flex flex-wrap" id="pathToGreenRagFilter">
+                                @{
+                                    var ragOptions = new[] { "Red", "Amber-Red", "Amber-Green", "Green", "Not Set" };
+                                    var defaultSelectedRags = new[] { "Red", "Amber-Red" };
+                                }
+                                @foreach (var rag in ragOptions)
+                                {
+                                    var filterId = $"pathToGreenRag_{rag.Replace(" ", "").Replace("-", "")}";
+                                    var isChecked = defaultSelectedRags.Contains(rag);
+                                    <div class="form-check mr-3 mb-1">
+                                        <input class="form-check-input path-to-green-rag-checkbox" type="checkbox" value="@rag" id="@filterId" @(isChecked ? "checked" : "")>
+                                        <label class="form-check-label" for="@filterId">@rag</label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" style="table-layout: fixed; width: 100%;">
                             <thead>
                                 <tr>
-                                    <th>Project</th>
+                                    <th style="width: 30%;">Project</th>
                                     <th>Business Area</th>
                                     <th>Current RAG</th>
-                                    <th>Path to Green</th>
+                                    <th style="width: 50%;">Path to Green</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1342,11 +1889,18 @@
                                         "Amber" => "badge-warning",
                                         "Amber-Green" => "badge",
                                         "Green" => "badge-success",
-                                        _ => "badge-secondary"
+                                        "Not Set" => "badge-light",
+                                        "Not started" => "badge-light",
+                                        "On hold" => "badge-light",
+                                        _ => "badge-light"
                                     };
                                     var ragBadgeStyle = currentRag switch {
                                         "Amber-Red" => "background-color: #fd7e14;",
+                                        "Amber" => "color: #000;",
                                         "Amber-Green" => "background-color: #ffeb3b; color: #000;",
+                                        "Not Set" => "background-color: #e9ecef; color: #000;",
+                                        "Not started" => "background-color: #e9ecef; color: #000;",
+                                        "On hold" => "background-color: #e9ecef; color: #000;",
                                         _ => ""
                                     };
                                     var latestProblemStatement = project.ProblemStatements?.OrderByDescending(ps => ps.CreatedAt).FirstOrDefault();
@@ -1355,9 +1909,9 @@
                                     var aimEncoded = aimText.Replace("\"", "&quot;").Replace("'", "&#39;");
                                     var problemStatementEncoded = problemStatementText.Replace("\"", "&quot;").Replace("'", "&#39;");
                                     var pathToGreenEncoded = (project.PathToGreen ?? "").Replace("\"", "&quot;").Replace("'", "&#39;");
-                                    <tr>
+                                    <tr class="path-to-green-row" data-current-rag="@currentRag">
                                         <td>
-                                            <a href="#" class="project-detail-link" 
+                                                <a href="#" class="project-detail-link" 
                                                data-project-id="@project.Id" 
                                                data-project-title="@project.Title" 
                                                data-project-code="DFE-DDT-@project.Id"
@@ -1662,13 +2216,14 @@
                 problemStatement = decodeHtml(problemStatement);
                 
                 // Determine RAG badge class
-                var ragBadgeClass = 'badge-secondary';
+                var ragBadgeClass = 'badge-light';
                 var ragBadgeStyle = '';
                 if (ragStatus === 'Red') ragBadgeClass = 'badge-danger';
                 else if (ragStatus === 'Amber-Red') { ragBadgeClass = 'badge'; ragBadgeStyle = 'background-color: #fd7e14;'; }
-                else if (ragStatus === 'Amber') ragBadgeClass = 'badge-warning';
+                else if (ragStatus === 'Amber') { ragBadgeClass = 'badge-warning'; ragBadgeStyle = 'color: #000;'; }
                 else if (ragStatus === 'Amber-Green') { ragBadgeClass = 'badge'; ragBadgeStyle = 'background-color: #ffeb3b; color: #000;'; }
                 else if (ragStatus === 'Green') ragBadgeClass = 'badge-success';
+                else if (ragStatus === 'Not Set' || ragStatus === 'Not started' || ragStatus === 'On hold') { ragBadgeClass = 'badge-light'; ragBadgeStyle = 'background-color: #e9ecef; color: #000;'; }
                 
                 $('#projectModalTitle').text(projectTitle);
                 $('#projectModalName').text(projectTitle);
@@ -1697,6 +2252,221 @@
                 
                 $('#projectModal').modal('show');
             });
+            
+            // Path to Green - filter by current RAG
+            function applyPathToGreenRagFilter() {
+                var selectedRags = [];
+                $('.path-to-green-rag-checkbox:checked').each(function () {
+                    selectedRags.push($(this).val());
+                });
+                
+                // If nothing selected, show nothing (explicit filter)
+                $('.path-to-green-row').each(function () {
+                    var rowRag = $(this).data('current-rag');
+                    if (selectedRags.length === 0) {
+                        $(this).hide();
+                    } else if (selectedRags.indexOf(rowRag) !== -1) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            }
+            
+            $(document).on('change', '.path-to-green-rag-checkbox', function () {
+                applyPathToGreenRagFilter();
+            });
+            
+            // Apply initial filter on page load (all selected)
+            applyPathToGreenRagFilter();
+            
+            // Toggle between table and heatmap view for RAG/Priority
+            $('#toggleHeatmapView').on('click', function(e) {
+                e.preventDefault();
+                var $tableView = $('#ragPriorityTableView');
+                var $heatmapView = $('#ragPriorityHeatmapView');
+                var $toggleText = $('#viewToggleText');
+                
+                if ($tableView.is(':visible')) {
+                    $tableView.hide();
+                    $heatmapView.show();
+                    $toggleText.text('View table');
+                    $(this).find('i').removeClass('fa-th').addClass('fa-list');
+                } else {
+                    $tableView.show();
+                    $heatmapView.hide();
+                    $toggleText.text('View heatmap');
+                    $(this).find('i').removeClass('fa-list').addClass('fa-th');
+                }
+            });
+            
+            // Make RAG/Priority table sortable
+            function initializeRagPriorityTableSorting() {
+                var $table = $('#ragPriorityTable');
+                var currentSort = { column: null, direction: 'asc' };
+                
+                $table.find('.sortable').on('click', function() {
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+                    
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+                    
+                    sortRagPriorityTable($table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                    
+                    // Update sort icons
+                    $table.find('.sortable i').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                    var $icon = $(this).find('i');
+                    $icon.removeClass('fa-sort');
+                    if (direction === 'asc') {
+                        $icon.addClass('fa-sort-up');
+                    } else {
+                        $icon.addClass('fa-sort-down');
+                    }
+                });
+            }
+            
+            function sortRagPriorityTable($table, column, direction) {
+                var tbody = $table.find('tbody');
+                var rows = tbody.find('tr').toArray();
+                
+                rows.sort(function(a, b) {
+                    var aVal, bVal;
+                    
+                    if (column === 'count') {
+                        aVal = parseInt($(a).data('count') || 0);
+                        bVal = parseInt($(b).data('count') || 0);
+                    } else if (column === 'rag') {
+                        var ragOrder = ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green', 'Not Started', 'On Hold', 'Not Set'];
+                        var aRag = $(a).data('rag') || '';
+                        var bRag = $(b).data('rag') || '';
+                        aVal = ragOrder.indexOf(aRag);
+                        bVal = ragOrder.indexOf(bRag);
+                    } else if (column === 'priority') {
+                        var priorityOrder = ['Critical', 'High', 'Medium', 'Low', 'Not Set'];
+                        var aPriority = $(a).data('priority') || '';
+                        var bPriority = $(b).data('priority') || '';
+                        aVal = priorityOrder.indexOf(aPriority);
+                        bVal = priorityOrder.indexOf(bPriority);
+                    } else {
+                        aVal = $(a).find('td').eq($table.find('th[data-column="' + column + '"]').index()).text().trim().toLowerCase();
+                        bVal = $(b).find('td').eq($table.find('th[data-column="' + column + '"]').index()).text().trim().toLowerCase();
+                    }
+                    
+                    if (direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                });
+                
+                tbody.empty();
+                rows.forEach(function(row) {
+                    tbody.append(row);
+                });
+            }
+            
+            // Initialize sorting
+            initializeRagPriorityTableSorting();
+            
+            // Expand/collapse projects in RAG/Priority table
+            $(document).on('click', '.expand-projects-link', function(e) {
+                e.preventDefault();
+                var $link = $(this);
+                var expandId = $link.data('expand-id');
+                var $detailRow = $('#' + expandId);
+                var $row = $link.closest('tr');
+                var count = parseInt($row.data('count') || 0);
+                
+                if ($detailRow.is(':visible')) {
+                    $detailRow.slideUp();
+                    $link.html('<i class="fas fa-chevron-right mr-1"></i>View ' + count + ' project' + (count === 1 ? '' : 's'));
+                } else {
+                    $detailRow.slideDown();
+                    $link.html('<i class="fas fa-chevron-down mr-1"></i>Hide projects');
+                }
+            });
+            
+            // Heatmap cell click handler - show modal with projects
+            $(document).on('click', '#ragPriorityHeatmapView td[data-rag][data-priority]', function() {
+                var $cell = $(this);
+                var rag = $cell.data('rag');
+                var priority = $cell.data('priority');
+                var count = $cell.data('count');
+                
+                // Get projects data from data-projects attribute (jQuery .data() lowercases, so we need to use attr and parse)
+                var projectsJson = $cell.attr('data-projects');
+                var projectsData = [];
+                
+                if (projectsJson) {
+                    try {
+                        projectsData = JSON.parse(projectsJson);
+                    } catch (e) {
+                        console.error('Error parsing projects JSON:', e);
+                    }
+                }
+                
+                if (count > 0 && projectsData && projectsData.length > 0) {
+                    // Update modal title and description
+                    $('#heatmapProjectsModalLabel').text('Projects: ' + rag + ' RAG / ' + priority + ' Priority');
+                    $('#heatmapModalDescription').text('Showing ' + count + ' project' + (count === 1 ? '' : 's') + ' with ' + rag + ' RAG status and ' + priority + ' priority.');
+                    
+                    // Clear and populate table
+                    var $tbody = $('#heatmapProjectsTableBody');
+                    $tbody.empty();
+                    
+                    projectsData.forEach(function(project) {
+                        // Handle both camelCase (from jQuery .data()) and PascalCase (from JSON)
+                        var projectId = project.Id || project.id;
+                        var projectTitle = project.Title || project.title || '';
+                        var projectCode = project.ProjectCode || project.projectCode || '';
+                        var businessArea = project.BusinessArea || project.businessArea || '-';
+                        
+                        var projectUrl = '@Url.Action("Details", "Project", new { id = "__ID__" })'.replace('__ID__', projectId);
+                        var displayCode = projectCode ? projectCode : ('DFE-DDT-' + projectId);
+                        var row = '<tr>' +
+                            '<td><a href="' + projectUrl + '" style="color: #005ea5; text-decoration: none; font-weight: 600;">' + 
+                            escapeHtml(projectTitle) + '</a><br /><small class="text-muted">' + displayCode + '</small></td>' +
+                            '<td>' + escapeHtml(businessArea) + '</td>' +
+                            '<td><a href="' + projectUrl + '" class="btn btn-sm btn-primary">View Details</a></td>' +
+                            '</tr>';
+                        $tbody.append(row);
+                    });
+                    
+                    // Show modal
+                    $('#heatmapProjectsModal').modal('show');
+                } else if (count === 0) {
+                    // Show message for empty cells
+                    $('#heatmapProjectsModalLabel').text('Projects: ' + rag + ' RAG / ' + priority + ' Priority');
+                    $('#heatmapModalDescription').text('No projects found with ' + rag + ' RAG status and ' + priority + ' priority.');
+                    var $tbody = $('#heatmapProjectsTableBody');
+                    $tbody.empty();
+                    $tbody.append('<tr><td colspan="3" class="text-center text-muted p-4">No projects in this category</td></tr>');
+                    $('#heatmapProjectsModal').modal('show');
+                }
+            });
+            
+            // Handle keyboard navigation for heatmap cells
+            $(document).on('keydown', '#ragPriorityHeatmapView td[data-rag][data-priority]', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    $(this).click();
+                }
+            });
+            
+            // Helper function to escape HTML
+            function escapeHtml(text) {
+                var map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text ? text.replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
+            }
             
             // Business area resource link click handler
             $(document).on('click', '.business-area-resource-link', function(e) {
@@ -1784,16 +2554,18 @@
                 new Chart(ragCtx.getContext('2d'), {
                     type: 'doughnut',
                     data: {
-                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green', 'Not Set'],
+                        labels: ['Red', 'Amber-Red', 'Amber', 'Amber-Green', 'Green', 'Not Started', 'On Hold', 'Not Set'],
                         datasets: [{
-                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green, @ragData.NotSet],
+                            data: [@ragData.Red, @ragData.AmberRed, @ragData.Amber, @ragData.AmberGreen, @ragData.Green, @ragData.NotStarted, @ragData.OnHold, @ragData.NotSet],
                             backgroundColor: [
                                 '#dc3545',
                                 '#fd7e14',
                                 '#ffc107',
                                 '#ffeb3b',
                                 '#28a745',
-                                '#6c757d'
+                                '#e9ecef',
+                                '#e9ecef',
+                                '#e9ecef'
                             ],
                             borderWidth: 3,
                             borderColor: '#fff'
