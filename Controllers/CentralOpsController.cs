@@ -3741,10 +3741,21 @@ public class CentralOpsController : Controller
     {
         try
         {
-            // Default to current month if not specified
+            // Determine current reporting period using 10-day rule
             var currentDate = DateTime.UtcNow;
-            var reportYear = year ?? currentDate.Year;
-            var reportMonth = month ?? currentDate.Month;
+            var currentYear = currentDate.Year;
+            var currentMonth = currentDate.Month;
+            
+            var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
+            var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+            
+            // Apply 10-day rule: if within 10 days of current period due date, use current period
+            var defaultReportYear = daysUntilCurrentPeriodDueDate <= 10 ? currentYear : (currentMonth == 1 ? currentYear - 1 : currentYear);
+            var defaultReportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+            
+            // Use provided year/month if specified, otherwise use determined period
+            var reportYear = year ?? defaultReportYear;
+            var reportMonth = month ?? defaultReportMonth;
             
             // Calculate month boundaries
             var monthStart = new DateTime(reportYear, reportMonth, 1);
