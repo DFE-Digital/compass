@@ -1,5 +1,6 @@
 @model List<Compass.Models.CommissionSubmissionStatusViewModel>
 @using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = "Performance reporting";
     var currentView = ViewBag.CurrentView as string ?? "mine";
@@ -9,6 +10,7 @@
     var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
     var isOpen = ViewBag.IsOpen as bool? ?? false;
     var isPastDue = ViewBag.IsPastDue as bool? ?? false;
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -211,19 +213,29 @@
                     <!-- My Services Section -->
                     @if (Model != null && Model.Any())
                     {
-                        <div class="card mb-4">
+        <div class="card mb-4">
                             <div class="card-header">
                                 <h3 class="card-title">My services</h3>
                             </div>
                             <div class="card-body table-responsive p-0">
-                                <table class="table table-hover">
+                                <table class="table table-hover sortable-table" id="commissionAllServicesTable">
                                     <thead>
                                         <tr>
-                                            <th>Product</th>
-                                            <th>Business area</th>
-                                            <th>Phase</th>
-                                            <th>Type</th>
-                                            <th>Status</th>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by product">
+                                                Product <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by business area">
+                                                Business area <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by phase">
+                                                Phase <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by type">
+                                                Type <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by status">
+                                                Status <i class="fas fa-sort sort-icon"></i>
+                                            </th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -237,15 +249,23 @@
                                                 .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
                                                 .Select(cv => cv.Name)
                                                 .ToList() ?? new List<string>();
-                                            var serviceOwnerName = item.Product.ServiceOwners?.FirstOrDefault()?.DisplayName ?? item.Product.ServiceOwners?.FirstOrDefault()?.EmailAddress;
-                                            <tr>
+                                            <tr data-product="@item.Product.Title.ToLowerInvariant()"
+                                                data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-phase="@(item.Product.Phase ?? string.Empty).ToLowerInvariant()"
+                                                data-types="@string.Join("||", types.Select(t => t.ToLowerInvariant()))"
+                                                data-status="@item.Status.ToString().ToLowerInvariant()">
                                                 <td>
                                                     <strong>@item.Product.Title</strong><br />
                                                     <small class="text-muted">
-                                                        @item.Product.FipsId
-                                                        @if (!string.IsNullOrEmpty(serviceOwnerName))
+                                                        @if (!string.IsNullOrEmpty(item.Product.DocumentId))
                                                         {
-                                                            <text><br />Service Owner: @serviceOwnerName</text>
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.DocumentId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.FipsId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
                                                         }
                                                     </small>
                                                 </td>
@@ -344,14 +364,24 @@
                                 </h3>
                             </div>
                             <div class="card-body table-responsive p-0">
-                                <table class="table table-hover">
+                                <table class="table table-hover sortable-table" id="commissionAllServicesTable">
                                     <thead>
                                         <tr>
-                                            <th>Product</th>
-                                            <th>Business area</th>
-                                            <th>Phase</th>
-                                            <th>Type</th>
-                                            <th>Status</th>
+                                            <th class="sortable" data-column="Product" tabindex="0" role="button" aria-label="Sort by Product" style="cursor: pointer;">
+                                                Product <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="BusinessArea" tabindex="0" role="button" aria-label="Sort by Business Area" style="cursor: pointer;">
+                                                Business area <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Phase" tabindex="0" role="button" aria-label="Sort by Phase" style="cursor: pointer;">
+                                                Phase <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Type" tabindex="0" role="button" aria-label="Sort by Type" style="cursor: pointer;">
+                                                Type <i class="fas fa-sort sort-icon"></i>
+                                            </th>
+                                            <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status" style="cursor: pointer;">
+                                                Status <i class="fas fa-sort sort-icon"></i>
+                                            </th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -365,15 +395,27 @@
                                                 .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
                                                 .Select(cv => cv.Name)
                                                 .ToList() ?? new List<string>();
-                                            var serviceOwnerName = item.Product.ServiceOwners?.FirstOrDefault()?.DisplayName ?? item.Product.ServiceOwners?.FirstOrDefault()?.EmailAddress;
-                                            <tr>
+                                            var statusText = item.Status == CommissionSubmissionStatus.NotStarted ? "NotStarted" :
+                                                             item.Status == CommissionSubmissionStatus.InProgress ? "InProgress" :
+                                                             item.Status == CommissionSubmissionStatus.Submitted ? "Submitted" :
+                                                             item.Status == CommissionSubmissionStatus.Late ? "Late" : "";
+                                            <tr data-product-title="@item.Product.Title.ToLowerInvariant()"
+                                                data-business-area="@businessArea.ToLowerInvariant()"
+                                                data-phase="@((item.Product.Phase ?? "-").ToLowerInvariant())"
+                                                data-type="@(string.Join(", ", types).ToLowerInvariant())"
+                                                data-status="@statusText.ToLowerInvariant()">
                                                 <td>
                                                     <strong>@item.Product.Title</strong><br />
                                                     <small class="text-muted">
-                                                        @item.Product.FipsId
-                                                        @if (!string.IsNullOrEmpty(serviceOwnerName))
+                                                        @if (!string.IsNullOrEmpty(item.Product.DocumentId))
                                                         {
-                                                            <text><br />Service Owner: @serviceOwnerName</text>
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.DocumentId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                        }
+                                                        else if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                                        {
+                                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.FipsId}";
+                                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
                                                         }
                                                     </small>
                                                 </td>
@@ -447,11 +489,11 @@
                     }
                     else
                     {
-                        <div class="card mb-4">
-                            <div class="card-body text-center py-5">
-                                <p class="text-muted mb-0">No products found.</p>
-                            </div>
-                        </div>
+        <div class="card mb-4">
+            <div class="card-body text-center py-5">
+                <p class="text-muted mb-0">No products found.</p>
+            </div>
+        </div>
                     }
                 }
             </div>
@@ -479,3 +521,115 @@
         color: #dddfeb !important;
     }
 </style>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function () {
+            var table = $('#commissionAllServicesTable');
+            if (table.length) {
+                initializeSortableCommissionTable(table);
+                initializeTableFiltering();
+            }
+
+            function initializeTableFiltering() {
+                // Filter table based on form inputs
+                function filterTable() {
+                    var searchTerm = ($('input[name="search"]').val() || '').toString().toLowerCase();
+                    var phaseFilter = ($('#phase').val() || '').toString().toLowerCase();
+                    var businessAreaFilter = ($('#businessArea').val() || '').toString().toLowerCase();
+                    var reportingStatusFilter = ($('#reportingStatus').val() || '').toString().toLowerCase();
+
+                    var visibleCount = 0;
+
+                    $('#commissionAllServicesTable tbody tr').each(function () {
+                        var $row = $(this);
+                        var productTitle = ($row.data('product-title') || '').toString();
+                        var businessArea = ($row.data('business-area') || '').toString();
+                        var phase = ($row.data('phase') || '').toString();
+                        var type = ($row.data('type') || '').toString();
+                        var status = ($row.data('status') || '').toString();
+
+                        var matchesSearch = !searchTerm || productTitle.includes(searchTerm) || type.includes(searchTerm);
+                        var matchesPhase = !phaseFilter || phase === phaseFilter.toLowerCase();
+                        var matchesBusinessArea = !businessAreaFilter || businessArea === businessAreaFilter.toLowerCase();
+                        var matchesStatus = !reportingStatusFilter || status === reportingStatusFilter.toLowerCase();
+
+                        if (matchesSearch && matchesPhase && matchesBusinessArea && matchesStatus) {
+                            $row.show();
+                            visibleCount++;
+                        } else {
+                            $row.hide();
+                        }
+                    });
+                }
+
+                // Apply filters on input change
+                $('input[name="search"], #phase, #businessArea, #reportingStatus').on('input change', function () {
+                    filterTable();
+                });
+
+                // Initial filter on page load
+                filterTable();
+            }
+
+            function initializeSortableCommissionTable(table) {
+                var currentSort = { column: null, direction: 'asc' };
+
+                table.find('.sortable').on('click keypress', function (e) {
+                    if (e.type === 'keypress' && e.which !== 13 && e.which !== 32) {
+                        return;
+                    }
+
+                    var column = $(this).data('column');
+                    var direction = 'asc';
+
+                    if (currentSort.column === column && currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    }
+
+                    sortTable(table, column, direction);
+                    currentSort = { column: column, direction: direction };
+                });
+
+                function sortTable(table, column, direction) {
+                    var tbody = table.find('tbody');
+                    var rows = tbody.find('tr').toArray();
+
+                    rows.sort(function (a, b) {
+                        var aVal, bVal;
+
+                        if (column === 'Product') {
+                            aVal = $(a).find('td').eq(0).find('strong').text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).find('strong').text().trim().toLowerCase();
+                        } else if (column === 'BusinessArea') {
+                            aVal = $(a).find('td').eq(1).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(1).text().trim().toLowerCase();
+                        } else if (column === 'Phase') {
+                            aVal = $(a).find('td').eq(2).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(2).text().trim().toLowerCase();
+                        } else if (column === 'Type') {
+                            aVal = $(a).find('td').eq(3).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(3).text().trim().toLowerCase();
+                        } else if (column === 'Status') {
+                            aVal = $(a).find('td').eq(4).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(4).text().trim().toLowerCase();
+                        } else {
+                            aVal = $(a).find('td').eq(0).text().trim().toLowerCase();
+                            bVal = $(b).find('td').eq(0).text().trim().toLowerCase();
+                        }
+
+                        if (direction === 'asc') {
+                            return aVal.localeCompare(bVal);
+                        } else {
+                            return bVal.localeCompare(aVal);
+                        }
+                    });
+
+                    $.each(rows, function (index, row) {
+                        tbody.append(row);
+                    });
+                }
+            }
+        });
+    </script>
+}

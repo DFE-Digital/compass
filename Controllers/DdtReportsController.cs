@@ -964,6 +964,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -998,16 +999,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -1060,6 +1062,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -1094,16 +1097,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -1252,6 +1256,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -1286,16 +1291,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -2802,6 +2808,7 @@ public class DdtReportsController : Controller
         var sroContacts = new List<string>();
         var iaoContacts = new List<string>();
         var deliveryManagerContacts = new List<string>();
+        var serviceOwnerContacts = new List<string>();
         var contactDetails = new List<string>();
 
         if (product.ProductContacts != null)
@@ -2868,6 +2875,26 @@ public class DdtReportsController : Controller
             _logger.LogInformation("Product {FipsId} has no product contacts", product.FipsId);
         }
 
+        // Extract Service Owner from product.ServiceOwners
+        if (product.ServiceOwners != null && product.ServiceOwners.Any())
+        {
+            foreach (var serviceOwner in product.ServiceOwners)
+            {
+                if (serviceOwner == null) continue;
+                
+                var displayName = !string.IsNullOrWhiteSpace(serviceOwner.DisplayName)
+                    ? serviceOwner.DisplayName
+                    : (!string.IsNullOrWhiteSpace(serviceOwner.FirstName) || !string.IsNullOrWhiteSpace(serviceOwner.LastName))
+                        ? $"{serviceOwner.FirstName} {serviceOwner.LastName}".Trim()
+                        : serviceOwner.EmailAddress;
+                
+                if (!string.IsNullOrWhiteSpace(displayName))
+                {
+                    AddContactIfMissing(serviceOwnerContacts, displayName);
+                }
+            }
+        }
+
         var userGroupsCount = userGroupNames.Count;
 
         var completedCriteria = 0;
@@ -2882,6 +2909,7 @@ public class DdtReportsController : Controller
         return new ProductCompletionItem
         {
             FipsId = product.FipsId ?? string.Empty,
+            DocumentId = product.DocumentId ?? string.Empty,
             ProductTitle = product.Title,
             BusinessArea = businessAreaName,
             PhaseName = phaseName,
@@ -2889,9 +2917,11 @@ public class DdtReportsController : Controller
             SeniorResponsibleOfficer = sroContacts.Count > 0 ? string.Join(", ", sroContacts) : null,
             InformationAssetOwner = iaoContacts.Count > 0 ? string.Join(", ", iaoContacts) : null,
             DeliveryManager = deliveryManagerContacts.Count > 0 ? string.Join(", ", deliveryManagerContacts) : null,
+            ServiceOwner = serviceOwnerContacts.Count > 0 ? string.Join(", ", serviceOwnerContacts) : null,
             SeniorResponsibleOfficerContacts = new List<string>(sroContacts),
             InformationAssetOwnerContacts = new List<string>(iaoContacts),
             DeliveryManagerContacts = new List<string>(deliveryManagerContacts),
+            ServiceOwnerContacts = new List<string>(serviceOwnerContacts),
             ContactDetails = contactDetails,
             UserGroupNames = userGroupNames,
             UserGroupCategoryValueIds = userGroupIds,

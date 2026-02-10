@@ -1,9 +1,11 @@
 @model Compass.Models.BusinessAreaDetailsViewModel
 @using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = Model.BusinessAreaName + " - Business areas";
     var selectedCommission = Model.Commission;
     var activeCommissions = ViewBag.ActiveCommissions as List<Compass.Models.Commission> ?? new List<Compass.Models.Commission>();
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -220,7 +222,16 @@
                                 <td>
                                     <strong>@item.Product.Title</strong><br />
                                     <small class="text-muted">
-                                        @item.Product.FipsId
+                                        @if (!string.IsNullOrEmpty(item.Product.DocumentId))
+                                        {
+                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.DocumentId}";
+                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                        }
+                                        else if (!string.IsNullOrEmpty(item.Product.FipsId))
+                                        {
+                                            var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{item.Product.FipsId}";
+                                            <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                        }
                                         @if (!string.IsNullOrEmpty(serviceOwnerName))
                                         {
                                             <text><br />Service Owner: @serviceOwnerName</text>
