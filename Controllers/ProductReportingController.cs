@@ -384,6 +384,8 @@ public class ProductReportingController : Controller
         
         // Combine and deduplicate products (by FipsId) - EXACTLY the same as PerformanceMetrics
         // Then exclude Decommissioned/Decommissioning Phase products
+        // Also exclude products where the only Type is "Data" from performance reporting,
+        // but keep products that have "Data" alongside another Type.
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
             .GroupBy(p => p.FipsId)
@@ -392,6 +394,30 @@ public class ProductReportingController : Controller
             .Where(p => string.IsNullOrEmpty(p.Phase) || 
                        (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
                         !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase)))
+            .Where(p =>
+            {
+                var types = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+                
+                // If no types, include the product
+                if (!types.Any())
+                    return true;
+                
+                // If only "Data" type (even if multiple entries), exclude it
+                if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                
+                // If all types are "Data", exclude it
+                if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)))
+                    return false;
+                
+                // If has "Data" plus other types, include it
+                return true;
+            })
             .ToList();
             
         _logger.LogInformation("Commission: Found {ContactCount} products by contact, {ServiceOwnerCount} by service owner, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
@@ -436,6 +462,32 @@ public class ProductReportingController : Controller
                            (string.IsNullOrEmpty(p.Phase) || 
                             (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
                              !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+                // Exclude products where the only Type is "Data" from performance reporting,
+                // but keep products that have "Data" alongside another Type.
+                .Where(p =>
+                {
+                    var types = p.CategoryValues?
+                        .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                        .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList() ?? new List<string>();
+                    
+                    // If no types, include the product
+                    if (!types.Any())
+                        return true;
+                    
+                    // If only "Data" type (even if multiple entries), exclude it
+                    if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    
+                    // If all types are "Data", exclude it
+                    if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)))
+                        return false;
+                    
+                    // If has "Data" plus other types, include it
+                    return true;
+                })
                 .ToList();
             
             foreach (var product in activeProducts)
@@ -1263,6 +1315,32 @@ public class ProductReportingController : Controller
                        (string.IsNullOrEmpty(p.Phase) || 
                         (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
                          !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            // Exclude products where the only Type is "Data" from performance reporting,
+            // but keep products that have "Data" alongside another Type.
+            .Where(p =>
+            {
+                var types = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name?.Trim() ?? string.Empty)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+                
+                // If no types, include the product
+                if (!types.Any())
+                    return true;
+                
+                // If only "Data" type (even if multiple entries), exclude it
+                if (types.Count == 1 && types[0].Trim().Equals("Data", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                
+                // If all types are "Data", exclude it
+                if (types.All(t => t.Trim().Equals("Data", StringComparison.OrdinalIgnoreCase)))
+                    return false;
+                
+                // If has "Data" plus other types, include it
+                return true;
+            })
             .ToList();
 
         // Filter products by business area
