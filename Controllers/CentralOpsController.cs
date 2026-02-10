@@ -16,6 +16,25 @@ using QuestPDF.Infrastructure;
 
 namespace Compass.Controllers;
 
+public class CommissionProductMetricViewModel
+{
+    public ProductDto Product { get; set; } = new();
+    public PerformanceMetric Metric { get; set; } = new();
+    public CommissionMetricValue? MetricValue { get; set; }
+    public CommissionSubmission? Submission { get; set; }
+}
+
+public class BusinessAreaCommissionCompletion
+{
+    public string BusinessArea { get; set; } = string.Empty;
+    public int TotalProducts { get; set; }
+    public int CompletedProducts { get; set; }
+    public int InProgressProducts { get; set; }
+    public int NotStartedProducts { get; set; }
+    public int LateProducts { get; set; }
+    public decimal CompletionPercentage { get; set; }
+}
+
 public class PrioritySummaryItem
 {
     public string Priority { get; set; } = string.Empty;
@@ -3705,6 +3724,7 @@ public class CentralOpsController : Controller
             ViewBag.HighPriorityIssues = highPriorityIssues;
             ViewBag.PortfolioSummary = portfolioSummary;
             ViewBag.MonthlyUpdateStats = monthlyUpdateStats;
+            ViewBag.AllProjects = allProjects;
             
             return View();
         }
@@ -4215,6 +4235,7 @@ public class CentralOpsController : Controller
             ViewBag.TotalMspFte = totalMspFte;
             ViewBag.TotalFte = totalFte;
             ViewBag.ResourceByBusinessArea = resourceByBusinessArea;
+            ViewBag.AllProjects = allProjects;
             
             // Generate narrative summary
             var selectedBusinessAreaName = businessAreaId.HasValue 
@@ -5587,6 +5608,171 @@ public class CentralOpsController : Controller
 
     // GET: CentralOps/AccessDenied
     // This action should NOT require authorization - it's for showing the access denied message
+    // GET: CentralOps/PerformanceReporting
+    public async Task<IActionResult> PerformanceReporting(int? commissionId = null)
+    {
+        // Get all active commissions
+        var commissions = await _context.Commissions
+            .Where(c => c.IsActive)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync();
+
+        if (!commissionId.HasValue)
+        {
+            // Show commission selection
+            return View("~/Views/CentralOps/PerformanceReporting/Index.cshtml", commissions);
+        }
+
+        // Get selected commission
+        var commission = await _context.Commissions
+            .FirstOrDefaultAsync(c => c.Id == commissionId.Value);
+
+        if (commission == null)
+        {
+            TempData["ErrorMessage"] = "Commission not found.";
+            return View("~/Views/CentralOps/PerformanceReporting/Index.cshtml", commissions);
+        }
+
+        // Get all products that should be in this commission
+        var allProducts = await _productsApiService.GetAllProductsAsync();
+        var eligibleProducts = allProducts
+            .Where(p => p.State != null &&
+                        p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                        p.PublishedAt.HasValue &&
+                        (string.IsNullOrEmpty(p.Phase) ||
+                         (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                          !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+            // Exclude products where the only Type is "Data" from performance reporting,
+            // but keep products that have "Data" alongside another Type.
+            .Where(p =>
+            {
+                var types = p.CategoryValues?
+                    .Where(cv => cv.CategoryType?.Name?.Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(cv => cv.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .ToList() ?? new List<string>();
+
+                if (!types.Any())
+                {
+                    // No Type categories – include in reporting
+                    return true;
+                }
+
+                var nonDataTypes = types
+                    .Where(t => !t.Equals("Data", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                // Include if there is any non-"Data" type; exclude if all types are "Data"
+                return nonDataTypes.Any();
+            })
+            .ToList();
+
+        // Get all submissions for this commission
+        var submissions = await _context.CommissionSubmissions
+            .Include(cs => cs.MetricValues)
+                .ThenInclude(mv => mv.PerformanceMetric)
+            .Where(cs => cs.CommissionId == commissionId.Value)
+            .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+        // Get all performance metrics
+        var allMetrics = await _context.PerformanceMetrics
+            .Where(pm => !pm.IsDisabled)
+            .OrderBy(pm => pm.Identifier)
+            .ToListAsync();
+
+        // Build product-metric data
+        var productMetricData = new List<CommissionProductMetricViewModel>();
+        
+        foreach (var product in eligibleProducts.OrderBy(p => p.Title))
+        {
+            var documentId = product.DocumentId ?? "";
+            var submission = submissions.GetValueOrDefault(documentId);
+            
+            foreach (var metric in allMetrics)
+            {
+                var metricValue = submission?.MetricValues?.FirstOrDefault(mv => mv.PerformanceMetricId == metric.Id);
+                
+                productMetricData.Add(new CommissionProductMetricViewModel
+                {
+                    Product = product,
+                    Metric = metric,
+                    MetricValue = metricValue,
+                    Submission = submission
+                });
+            }
+        }
+
+        // Calculate business area completion
+        var businessAreaCompletions = new List<BusinessAreaCommissionCompletion>();
+        
+        var productsByBusinessArea = eligibleProducts
+            .GroupBy(p =>
+            {
+                var businessArea = p.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name ?? "Unassigned";
+                return businessArea;
+            })
+            .ToList();
+
+        foreach (var group in productsByBusinessArea)
+        {
+            var businessArea = group.Key;
+            var products = group.ToList();
+            var totalProducts = products.Count;
+            
+            var completedProducts = products.Count(p =>
+            {
+                var docId = p.DocumentId ?? "";
+                var sub = submissions.GetValueOrDefault(docId);
+                return sub?.Status == CommissionSubmissionStatus.Submitted || sub?.Status == CommissionSubmissionStatus.Late;
+            });
+            
+            var inProgressProducts = products.Count(p =>
+            {
+                var docId = p.DocumentId ?? "";
+                var sub = submissions.GetValueOrDefault(docId);
+                return sub?.Status == CommissionSubmissionStatus.InProgress;
+            });
+            
+            var notStartedProducts = products.Count(p =>
+            {
+                var docId = p.DocumentId ?? "";
+                var sub = submissions.GetValueOrDefault(docId);
+                return sub?.Status == CommissionSubmissionStatus.NotStarted || sub == null;
+            });
+            
+            var lateProducts = products.Count(p =>
+            {
+                var docId = p.DocumentId ?? "";
+                var sub = submissions.GetValueOrDefault(docId);
+                return sub?.Status == CommissionSubmissionStatus.Late;
+            });
+
+            var completionPercentage = totalProducts > 0 ? (decimal)completedProducts / totalProducts * 100 : 0;
+
+            businessAreaCompletions.Add(new BusinessAreaCommissionCompletion
+            {
+                BusinessArea = businessArea,
+                TotalProducts = totalProducts,
+                CompletedProducts = completedProducts,
+                InProgressProducts = inProgressProducts,
+                NotStartedProducts = notStartedProducts,
+                LateProducts = lateProducts,
+                CompletionPercentage = Math.Round(completionPercentage, 1)
+            });
+        }
+
+        businessAreaCompletions = businessAreaCompletions.OrderByDescending(ba => ba.CompletionPercentage).ToList();
+
+        ViewBag.Commission = commission;
+        ViewBag.ProductMetricData = productMetricData;
+        ViewBag.BusinessAreaCompletions = businessAreaCompletions;
+        ViewBag.AllCommissions = commissions;
+
+        return View("~/Views/CentralOps/PerformanceReporting/Details.cshtml", commission);
+    }
+
     [AllowAnonymous]
     public IActionResult AccessDenied()
     {
