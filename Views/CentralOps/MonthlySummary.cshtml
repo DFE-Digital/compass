@@ -35,6 +35,74 @@
         Low = portfolioSummary?.LowPriorityProjects ?? 0,
         NotSet = portfolioSummary?.PriorityNotSetProjects ?? 0
     };
+    
+    // Get all projects for RAG/Priority table and Business Area Summary
+    var allProjects = ViewBag.AllProjects as List<Compass.Models.Project> ?? new List<Compass.Models.Project>();
+    
+    // Helper function to normalize RAG status (matching controller logic)
+    Func<string?, string> normalizeRagStatus = (ragStatus) => {
+        if (string.IsNullOrWhiteSpace(ragStatus)) return "Not Set";
+        var normalized = ragStatus.Trim();
+        if (normalized.Equals("Red", StringComparison.OrdinalIgnoreCase)) return "Red";
+        if (normalized.Equals("Amber-Red", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberRed", StringComparison.OrdinalIgnoreCase)) return "Amber-Red";
+        if (normalized.Equals("Amber", StringComparison.OrdinalIgnoreCase)) return "Amber";
+        if (normalized.Equals("Amber-Green", StringComparison.OrdinalIgnoreCase) || normalized.Equals("AmberGreen", StringComparison.OrdinalIgnoreCase)) return "Amber-Green";
+        if (normalized.Equals("Green", StringComparison.OrdinalIgnoreCase)) return "Green";
+        return normalized;
+    };
+    
+    // Helper function to get priority name
+    Func<Compass.Models.Project, string> getPriorityName = (project) => {
+        if (project.DeliveryPriority == null) return "Not Set";
+        var priority = project.DeliveryPriority.Name.ToLower();
+        if (priority.Contains("critical")) return "Critical";
+        if (priority.Contains("high")) return "High";
+        if (priority.Contains("medium")) return "Medium";
+        if (priority.Contains("low")) return "Low";
+        return "Not Set";
+    };
+    
+    // Prepare projects grouped by RAG and Priority (RAG primary, Priority secondary)
+    var ragPriorityOrder = new[] { "Red", "Amber-Red", "Amber", "Amber-Green", "Green", "Not Set" };
+    var priorityOrder = new[] { "Critical", "High", "Medium", "Low", "Not Set" };
+    
+    var projectsByRagPriority = allProjects
+        .Select(p => new {
+            Project = p,
+            RagStatus = normalizeRagStatus(p.RagStatus),
+            Priority = getPriorityName(p)
+        })
+        .GroupBy(p => new { p.RagStatus, p.Priority })
+        .Select(g => new {
+            RagStatus = g.Key.RagStatus,
+            Priority = g.Key.Priority,
+            Projects = g.Select(x => x.Project).OrderBy(p => p.Title).ToList(),
+            Count = g.Count()
+        })
+        .OrderBy(x => Array.IndexOf(ragPriorityOrder, x.RagStatus))
+        .ThenBy(x => Array.IndexOf(priorityOrder, x.Priority))
+        .ToList();
+    
+    // Prepare Business Area Summary
+    var businessAreaSummary = allProjects
+        .GroupBy(p => p.BusinessAreaLookup)
+        .Select(g => new {
+            BusinessAreaName = g.Key?.Name ?? "Not Set",
+            BusinessAreaId = g.Key?.Id,
+            TotalProjects = g.Count(),
+            RedCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Red"),
+            AmberRedCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber-Red"),
+            AmberCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber"),
+            AmberGreenCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Amber-Green"),
+            GreenCount = g.Count(p => normalizeRagStatus(p.RagStatus) == "Green"),
+            CriticalCount = g.Count(p => getPriorityName(p) == "Critical"),
+            HighCount = g.Count(p => getPriorityName(p) == "High"),
+            MediumCount = g.Count(p => getPriorityName(p) == "Medium"),
+            LowCount = g.Count(p => getPriorityName(p) == "Low"),
+            Projects = g.ToList()
+        })
+        .OrderBy(ba => ba.BusinessAreaName)
+        .ToList();
 }
 
 @await Html.PartialAsync("_DashboardStyles")
@@ -171,111 +239,358 @@
 
         <!-- Portfolio Distribution Charts -->
         <div class="row mb-4">
-            <div class="col-lg-6">
+            <div class="col-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title mb-0">RAG Status Distribution</h3>
                     </div>
                     <div class="card-body">
-                        <div style="position: relative; height: 300px;">
-                            <canvas id="ragStatusChart"></canvas>
-                        </div>
-                        <div class="mt-3">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Status</th>
-                                            <th>Count</th>
-                                            <th>Percentage</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @{
-                                            var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green;
-                                            var ragItems = new[] {
-                                                new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
-                                                new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
-                                                new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
-                                                new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
-                                                new { Label = "Green", Count = ragData.Green, Color = "#28a745" }
-                                            };
-                                        }
-                                        @foreach (var item in ragItems)
-                                        {
-                                            var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="ragStatusChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
                                             <tr>
-                                                <td>
-                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" ? "#000" : "#fff");">@item.Label</span>
-                                                </td>
-                                                <td>@item.Count</td>
-                                                <td>@percentage%</td>
+                                                <th>Status</th>
+                                                <th>Count</th>
+                                                <th>Percentage</th>
                                             </tr>
-                                        }
-                                        <tr style="font-weight: bold; background-color: #f4f8fb;">
-                                            <td>Total</td>
-                                            <td>@ragTotal</td>
-                                            <td>100.0%</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            @{
+                                                var ragTotal = ragData.Red + ragData.AmberRed + ragData.Amber + ragData.AmberGreen + ragData.Green;
+                                                var ragItems = new[] {
+                                                    new { Label = "Red", Count = ragData.Red, Color = "#dc3545" },
+                                                    new { Label = "Amber-Red", Count = ragData.AmberRed, Color = "#fd7e14" },
+                                                    new { Label = "Amber", Count = ragData.Amber, Color = "#ffc107" },
+                                                    new { Label = "Amber-Green", Count = ragData.AmberGreen, Color = "#ffeb3b" },
+                                                    new { Label = "Green", Count = ragData.Green, Color = "#28a745" }
+                                                };
+                                            }
+                                            @foreach (var item in ragItems)
+                                            {
+                                                var percentage = ragTotal > 0 ? ((item.Count * 100.0) / ragTotal).ToString("F1") : "0.0";
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Amber-Green" ? "#000" : "#fff");">@item.Label</span>
+                                                    </td>
+                                                    <td>@item.Count</td>
+                                                    <td>@percentage%</td>
+                                                </tr>
+                                            }
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@ragTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6">
+        </div>
+        <div class="row mb-4">
+            <div class="col-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title mb-0">Priority Distribution</h3>
                     </div>
                     <div class="card-body">
-                        <div style="position: relative; height: 300px;">
-                            <canvas id="priorityChart"></canvas>
-                        </div>
-                        <div class="mt-3">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Priority</th>
-                                            <th>Count</th>
-                                            <th>Percentage</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @{
-                                            var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
-                                            var priorityItems = new[] {
-                                                new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
-                                                new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
-                                                new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
-                                                new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
-                                                new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
-                                            };
-                                        }
-                                        @foreach (var item in priorityItems)
-                                        {
-                                            var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="priorityChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
                                             <tr>
-                                                <td>
-                                                    <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
-                                                </td>
-                                                <td>@item.Count</td>
-                                                <td>@percentage%</td>
+                                                <th>Priority</th>
+                                                <th>Count</th>
+                                                <th>Percentage</th>
                                             </tr>
-                                        }
-                                        <tr style="font-weight: bold; background-color: #f4f8fb;">
-                                            <td>Total</td>
-                                            <td>@priorityTotal</td>
-                                            <td>100.0%</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            @{
+                                                var priorityTotal = priorityData.Critical + priorityData.High + priorityData.Medium + priorityData.Low + priorityData.NotSet;
+                                                var priorityItems = new[] {
+                                                    new { Label = "Critical", Count = priorityData.Critical, Color = "#dc3545" },
+                                                    new { Label = "High", Count = priorityData.High, Color = "#fd7e14" },
+                                                    new { Label = "Medium", Count = priorityData.Medium, Color = "#ffc107" },
+                                                    new { Label = "Low", Count = priorityData.Low, Color = "#6c757d" },
+                                                    new { Label = "Not Set", Count = priorityData.NotSet, Color = "#e9ecef" }
+                                                };
+                                            }
+                                            @foreach (var item in priorityItems)
+                                            {
+                                                var percentage = priorityTotal > 0 ? ((item.Count * 100.0) / priorityTotal).ToString("F1") : "0.0";
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge" style="background-color: @item.Color; color: @(item.Label == "Not Set" ? "#000" : "#fff");">@item.Label</span>
+                                                    </td>
+                                                    <td>@item.Count</td>
+                                                    <td>@percentage%</td>
+                                                </tr>
+                                            }
+                                            <tr style="font-weight: bold; background-color: #f4f8fb;">
+                                                <td>Total</td>
+                                                <td>@priorityTotal</td>
+                                                <td>100.0%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Work by RAG Status and Priority -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Work by RAG Status and Priority</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>RAG Status</th>
+                                <th>Priority</th>
+                                <th class="text-center">Count</th>
+                                <th>Projects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var group in projectsByRagPriority)
+                            {
+                                <tr>
+                                    <td>
+                                        @{
+                                            var ragColor = group.RagStatus == "Red" ? "#dc3545" :
+                                                          group.RagStatus == "Amber-Red" ? "#fd7e14" :
+                                                          group.RagStatus == "Amber" ? "#ffc107" :
+                                                          group.RagStatus == "Amber-Green" ? "#ffeb3b" :
+                                                          group.RagStatus == "Green" ? "#28a745" : "#6c757d";
+                                            var ragTextColor = group.RagStatus == "Amber-Green" ? "#000" : "#fff";
+                                        }
+                                        <span class="badge" style="background-color: @ragColor; color: @ragTextColor;">@group.RagStatus</span>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var priorityColor = group.Priority == "Critical" ? "#dc3545" :
+                                                               group.Priority == "High" ? "#fd7e14" :
+                                                               group.Priority == "Medium" ? "#ffc107" :
+                                                               group.Priority == "Low" ? "#6c757d" : "#e9ecef";
+                                            var priorityTextColor = group.Priority == "Not Set" ? "#000" : "#fff";
+                                        }
+                                        <span class="badge" style="background-color: @priorityColor; color: @priorityTextColor;">@group.Priority</span>
+                                    </td>
+                                    <td class="text-center"><strong>@group.Count</strong></td>
+                                    <td>
+                                        @{
+                                            var displayedProjects = group.Projects.Take(5).ToList();
+                                        }
+                                        @for (int i = 0; i < displayedProjects.Count; i++)
+                                        {
+                                            var project = displayedProjects[i];
+                                            <a asp-controller="Project" asp-action="Details" asp-route-id="@project.Id" style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                @project.Title
+                                            </a>
+                                            <small class="text-muted">(DFE-DDT-@project.Id)</small>
+                                            @if (i < displayedProjects.Count - 1)
+                                            {
+                                                <span class="text-muted">, </span>
+                                            }
+                                        }
+                                        @if (group.Projects.Count > 5)
+                                        {
+                                            <span class="text-muted">, and @(group.Projects.Count - 5) more</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (!projectsByRagPriority.Any())
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted p-4">No projects found</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Summary -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Business Area Summary</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-lte-toggle="card-collapse">
+                        <i data-lte-icon="expand" class="bi bi-plus-lg"></i>
+                        <i data-lte-icon="collapse" class="bi bi-dash-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (businessAreaSummary.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Business Area</th>
+                                    <th class="text-center">Total Projects</th>
+                                    <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">RAG Status</th>
+                                    <th colspan="5" class="text-center" style="border-bottom: 2px solid #dee2e6;">Priority</th>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <th></th>
+                                    <th class="text-center" style="border-left: 2px solid #dee2e6;">Red</th>
+                                    <th class="text-center">Amber-Red</th>
+                                    <th class="text-center">Amber</th>
+                                    <th class="text-center">Amber-Green</th>
+                                    <th class="text-center">Green</th>
+                                    <th class="text-center" style="border-left: 2px solid #dee2e6;">Critical</th>
+                                    <th class="text-center">High</th>
+                                    <th class="text-center">Medium</th>
+                                    <th class="text-center">Low</th>
+                                    <th class="text-center">Not Set</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var area in businessAreaSummary)
+                                {
+                                    <tr>
+                                        <td><strong>@area.BusinessAreaName</strong></td>
+                                        <td class="text-center"><strong>@area.TotalProjects</strong></td>
+                                        <td class="text-center" style="border-left: 2px solid #dee2e6;">
+                                            @if (area.RedCount > 0)
+                                            {
+                                                <span class="badge badge-danger">@area.RedCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberRedCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #fd7e14; color: #fff;">@area.AmberRedCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberCount > 0)
+                                            {
+                                                <span class="badge badge-warning">@area.AmberCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.AmberGreenCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #ffeb3b; color: #000;">@area.AmberGreenCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.GreenCount > 0)
+                                            {
+                                                <span class="badge badge-success">@area.GreenCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center" style="border-left: 2px solid #dee2e6;">
+                                            @if (area.CriticalCount > 0)
+                                            {
+                                                <span class="badge badge-danger">@area.CriticalCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.HighCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #fd7e14; color: #fff;">@area.HighCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.MediumCount > 0)
+                                            {
+                                                <span class="badge badge-warning">@area.MediumCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (area.LowCount > 0)
+                                            {
+                                                <span class="badge badge-secondary">@area.LowCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @{
+                                                var notSetCount = area.TotalProjects - area.CriticalCount - area.HighCount - area.MediumCount - area.LowCount;
+                                            }
+                                            @if (notSetCount > 0)
+                                            {
+                                                <span class="badge" style="background-color: #e9ecef; color: #000;">@notSetCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">No business area data available</div>
+                }
             </div>
         </div>
 
