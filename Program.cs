@@ -613,18 +613,22 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
     const string superAdminGroupName = "Super admin";
     const string centralOpsAdminGroupName = "Central Operations Admin";
 
-    // Check if already seeded
-    var centralOpsGroup = await context.Groups
-        .FirstOrDefaultAsync(g => g.Name == centralOpsAdminGroupName);
+    // Check if initial seeding has been done (check for Super admin group)
+    var superAdminGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == superAdminGroupName);
     
-    if (centralOpsGroup != null)
+    var needsInitialSeeding = superAdminGroup == null;
+    
+    if (needsInitialSeeding)
     {
-        return; // Already seeded
+        Console.WriteLine("Seeding RBAC initial data...");
+    }
+    else
+    {
+        Console.WriteLine("Checking for additional RBAC groups...");
     }
 
-    Console.WriteLine("Seeding RBAC initial data...");
-
-    // Create or get super admin user
+    // Get or create super admin user
     var superAdmin = await context.Users
         .FirstOrDefaultAsync(u => u.Email.ToLower() == superAdminEmail.ToLower());
 
@@ -643,21 +647,24 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine($"✓ Created super admin user: {superAdminEmail}");
     }
 
-    // Create Super admin group
-    var superAdminGroup = new Compass.Models.Group
+    // Create Super admin group (if it doesn't exist)
+    if (superAdminGroup == null)
     {
-        Name = superAdminGroupName,
-        Description = "Super administrator group with full system access including API management",
-        IsActive = true,
-        IsSystemGroup = true,
-        CreatedAt = DateTime.UtcNow,
-        UpdatedAt = DateTime.UtcNow,
-        CreatedBy = "System",
-        UpdatedBy = "System"
-    };
-    context.Groups.Add(superAdminGroup);
-    await context.SaveChangesAsync();
-    Console.WriteLine($"✓ Created group: {superAdminGroupName}");
+        superAdminGroup = new Compass.Models.Group
+        {
+            Name = superAdminGroupName,
+            Description = "Super administrator group with full system access including API management",
+            IsActive = true,
+            IsSystemGroup = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedBy = "System"
+        };
+        context.Groups.Add(superAdminGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created group: {superAdminGroupName}");
+    }
 
     // Assign super admin user to Super admin group
     var superAdminUserGroup = await context.UserGroups
@@ -677,21 +684,27 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine($"✓ Assigned super admin to {superAdminGroupName} group");
     }
 
-    // Create Central Operations Admin group
-    centralOpsGroup = new Compass.Models.Group
+    // Create Central Operations Admin group (if it doesn't exist)
+    var centralOpsGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == centralOpsAdminGroupName);
+    
+    if (centralOpsGroup == null)
     {
-        Name = centralOpsAdminGroupName,
-        Description = "Default administrative group with full access to all features",
-        IsActive = true,
-        IsSystemGroup = true,
-        CreatedAt = DateTime.UtcNow,
-        UpdatedAt = DateTime.UtcNow,
-        CreatedBy = "System",
-        UpdatedBy = "System"
-    };
-    context.Groups.Add(centralOpsGroup);
-    await context.SaveChangesAsync();
-    Console.WriteLine($"✓ Created group: {centralOpsAdminGroupName}");
+        centralOpsGroup = new Compass.Models.Group
+        {
+            Name = centralOpsAdminGroupName,
+            Description = "Default administrative group with full access to all features",
+            IsActive = true,
+            IsSystemGroup = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedBy = "System"
+        };
+        context.Groups.Add(centralOpsGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created group: {centralOpsAdminGroupName}");
+    }
 
     // Create default features if they don't exist
     var defaultFeatures = new[]
@@ -705,8 +718,7 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         new { Code = "accessibility", Name = "Accessibility", Description = "Accessibility management functionality" },
         new { Code = "surveys", Name = "Surveys", Description = "Survey management functionality" },
         new { Code = "enterprise_reporting", Name = "Enterprise Reporting", Description = "Enterprise reporting functionality" },
-        new { Code = "group_management", Name = "Group Management", Description = "Group and permission management functionality" },
-        new { Code = "skills_and_learning", Name = "Skills and Learning", Description = "Skills and Learning (L&D) module for training management" }
+        new { Code = "group_management", Name = "Group Management", Description = "Group and permission management functionality" }
     };
 
     foreach (var featureData in defaultFeatures)
@@ -756,17 +768,189 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
 
     await context.SaveChangesAsync();
 
-    // Assign super admin to Central Operations Admin group
-    var userGroup = new Compass.Models.UserGroup
+    // Assign super admin to Central Operations Admin group (if not already assigned)
+    var existingUserGroup = await context.UserGroups
+        .FirstOrDefaultAsync(ug => ug.UserId == superAdmin.Id && ug.GroupId == centralOpsGroup.Id);
+    
+    if (existingUserGroup == null)
     {
-        UserId = superAdmin.Id,
-        GroupId = centralOpsGroup.Id,
-        AssignedAt = DateTime.UtcNow,
-        AssignedBy = "System"
-    };
-    context.UserGroups.Add(userGroup);
+        var userGroup = new Compass.Models.UserGroup
+        {
+            UserId = superAdmin.Id,
+            GroupId = centralOpsGroup.Id,
+            AssignedAt = DateTime.UtcNow,
+            AssignedBy = "System"
+        };
+        context.UserGroups.Add(userGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Assigned super admin to {centralOpsAdminGroupName} group");
+    }
+
+    // Create Standards feature
+    var standardsFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == "ddt_standards");
+
+    if (standardsFeature == null)
+    {
+        standardsFeature = new Compass.Models.Feature
+        {
+            Name = "DDT Standards",
+            Code = "ddt_standards",
+            Description = "DDT Standards management functionality",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(standardsFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created feature: DDT Standards");
+    }
+
+    // Grant all permissions to Central Operations Admin group for standards feature
+    foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
+    {
+        var exists = await context.GroupFeaturePermissions
+            .AnyAsync(gfp => gfp.GroupId == centralOpsGroup.Id && 
+                            gfp.FeatureId == standardsFeature.Id && 
+                            gfp.Permission == permission);
+        
+        if (!exists)
+        {
+            var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = centralOpsGroup.Id,
+                FeatureId = standardsFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            };
+            context.GroupFeaturePermissions.Add(groupFeaturePermission);
+        }
+    }
+
+    // Create Standards role groups
+    var standardOwnerGroupName = "Standard Owners";
+    var standardApproverGroupName = "Standard Approvers";
+    var standardPublisherGroupName = "Standard Publishers";
+
+    // Standard Owners - can draft and submit standards
+    var standardOwnerGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == standardOwnerGroupName);
+    
+    if (standardOwnerGroup == null)
+    {
+        standardOwnerGroup = new Compass.Models.Group
+        {
+            Name = standardOwnerGroupName,
+            Description = "Users who can draft and submit standards for review",
+            IsActive = true,
+            IsSystemGroup = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedBy = "System"
+        };
+        context.Groups.Add(standardOwnerGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created group: {standardOwnerGroupName}");
+
+        // Grant Create and View permissions to Standard Owners
+        var ownerPermissions = new[] { Compass.Models.PermissionType.View, Compass.Models.PermissionType.Create };
+        foreach (var permission in ownerPermissions)
+        {
+            var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = standardOwnerGroup.Id,
+                FeatureId = standardsFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            };
+            context.GroupFeaturePermissions.Add(groupFeaturePermission);
+        }
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Granted permissions to {standardOwnerGroupName}");
+    }
+
+    // Standard Approvers - can approve/reject standards
+    var standardApproverGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == standardApproverGroupName);
+    
+    if (standardApproverGroup == null)
+    {
+        standardApproverGroup = new Compass.Models.Group
+        {
+            Name = standardApproverGroupName,
+            Description = "Users who can approve or reject standards submitted for review",
+            IsActive = true,
+            IsSystemGroup = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedBy = "System"
+        };
+        context.Groups.Add(standardApproverGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created group: {standardApproverGroupName}");
+
+        // Grant View and Update permissions to Standard Approvers
+        var approverPermissions = new[] { Compass.Models.PermissionType.View, Compass.Models.PermissionType.Update };
+        foreach (var permission in approverPermissions)
+        {
+            var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = standardApproverGroup.Id,
+                FeatureId = standardsFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            };
+            context.GroupFeaturePermissions.Add(groupFeaturePermission);
+        }
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Granted permissions to {standardApproverGroupName}");
+    }
+
+    // Standard Publishers - can publish approved standards
+    var standardPublisherGroup = await context.Groups
+        .FirstOrDefaultAsync(g => g.Name == standardPublisherGroupName);
+    
+    if (standardPublisherGroup == null)
+    {
+        standardPublisherGroup = new Compass.Models.Group
+        {
+            Name = standardPublisherGroupName,
+            Description = "Users who can publish approved standards",
+            IsActive = true,
+            IsSystemGroup = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = "System",
+            UpdatedBy = "System"
+        };
+        context.Groups.Add(standardPublisherGroup);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Created group: {standardPublisherGroupName}");
+
+        // Grant View and Update permissions to Standard Publishers
+        var publisherPermissions = new[] { Compass.Models.PermissionType.View, Compass.Models.PermissionType.Update };
+        foreach (var permission in publisherPermissions)
+        {
+            var groupFeaturePermission = new Compass.Models.GroupFeaturePermission
+            {
+                GroupId = standardPublisherGroup.Id,
+                FeatureId = standardsFeature.Id,
+                Permission = permission,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "System"
+            };
+            context.GroupFeaturePermissions.Add(groupFeaturePermission);
+        }
+        await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Granted permissions to {standardPublisherGroupName}");
+    }
+
     await context.SaveChangesAsync();
-    Console.WriteLine($"✓ Assigned super admin to {centralOpsAdminGroupName} group");
     Console.WriteLine("✓ RBAC initial data seeding completed");
 }
 

@@ -696,7 +696,9 @@ public class AdminController : Controller
             .AsQueryable();
         if (!string.IsNullOrWhiteSpace(fipsId))
         {
-            query = query.Where(r => r.SurveyInstance!.Service!.FipsId == fipsId);
+            query = query.Where(r => r.SurveyInstance != null && 
+                                     r.SurveyInstance.Service != null && 
+                                     r.SurveyInstance.Service.FipsId == fipsId);
         }
         if (from.HasValue)
         {
@@ -2792,6 +2794,36 @@ public class AdminController : Controller
         return RedirectToAction(nameof(BusinessAreas));
     }
 
+    // GET: api/Admin/BusinessAreas
+    [HttpGet]
+    [Route("api/Admin/BusinessAreas")]
+    public async Task<IActionResult> GetBusinessAreasApi()
+    {
+        try
+        {
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => new
+                {
+                    id = ba.Id,
+                    name = ba.Name,
+                    description = ba.Description,
+                    sortOrder = ba.SortOrder,
+                    isActive = ba.IsActive
+                })
+                .ToListAsync();
+
+            return Json(businessAreas);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching business areas for API");
+            return StatusCode(500, new { error = "An error occurred while fetching business areas." });
+        }
+    }
+
     // GET: api/Admin/BusinessAreas/PreviewSync
     [HttpGet]
     [Route("api/Admin/BusinessAreas/PreviewSync")]
@@ -3495,6 +3527,175 @@ public class AdminController : Controller
     }
 
     // ========================================
+    // SETTINGS - Business Case Statuses
+    // ========================================
+
+    // GET: Admin/BusinessCaseStatuses
+    public async Task<IActionResult> BusinessCaseStatuses()
+    {
+        var statuses = await _context.BusinessCaseStatusLookups
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+        
+        return View("~/Views/Admin/Settings/BusinessCaseStatuses.cshtml", statuses);
+    }
+
+    // POST: Admin/CreateBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateBusinessCaseStatus([Bind("Name,Description,SortOrder,IsActive,CssClass")] BusinessCaseStatusLookup status)
+    {
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                // Check if name already exists
+                if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == status.Name))
+                {
+                    TempData["ErrorMessage"] = "A business case status with this name already exists.";
+                }
+                else
+                {
+                    status.CreatedAt = DateTime.UtcNow;
+                    status.UpdatedAt = DateTime.UtcNow;
+                    _context.Add(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been created successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating business case status");
+                TempData["ErrorMessage"] = "An error occurred while creating the business case status. Please try again.";
+            }
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/EditBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditBusinessCaseStatus(int id, string name, string? description, int sortOrder, bool isActive = false, string? cssClass = null)
+    {
+        _logger.LogInformation("EditBusinessCaseStatus POST called - ID: {Id}, Name: {Name}, Description: {Description}, SortOrder: {SortOrder}, IsActive: {IsActive}, CssClass: {CssClass}", 
+            id, name, description, sortOrder, isActive, cssClass);
+        
+        // Also check form values directly if model binding failed
+        var formId = Request.Form["id"].ToString();
+        var formName = Request.Form["name"].ToString();
+        var formDescription = Request.Form["description"].ToString();
+        var formSortOrder = Request.Form["sortOrder"].ToString();
+        var formIsActive = Request.Form["isActive"].ToString();
+        var formCssClass = Request.Form["cssClass"].ToString();
+        
+        _logger.LogInformation("Form values - id: {FormId}, name: {FormName}, description: {FormDescription}, sortOrder: {FormSortOrder}, isActive: {FormIsActive}, cssClass: {FormCssClass}", 
+            formId, formName, formDescription, formSortOrder, formIsActive, formCssClass);
+        
+        try
+        {
+            // Use form values if model binding didn't work
+            if (id == 0 && !string.IsNullOrEmpty(formId) && int.TryParse(formId, out int parsedId))
+            {
+                id = parsedId;
+            }
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formName))
+            {
+                name = formName;
+            }
+            if (string.IsNullOrEmpty(description) && !string.IsNullOrEmpty(formDescription))
+            {
+                description = formDescription;
+            }
+            if (sortOrder == 0 && !string.IsNullOrEmpty(formSortOrder) && int.TryParse(formSortOrder, out int parsedSortOrder))
+            {
+                sortOrder = parsedSortOrder;
+            }
+            if (!string.IsNullOrEmpty(formIsActive))
+            {
+                isActive = formIsActive == "true" || formIsActive.Contains("true");
+            }
+            if (string.IsNullOrEmpty(cssClass) && !string.IsNullOrEmpty(formCssClass))
+            {
+                cssClass = formCssClass;
+            }
+            
+            var existingStatus = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (existingStatus == null)
+            {
+                _logger.LogWarning("Business case status not found with ID: {Id}", id);
+                TempData["ErrorMessage"] = "Business case status not found.";
+                return RedirectToAction(nameof(BusinessCaseStatuses));
+            }
+
+            // Check if name already exists for a different record
+            if (await _context.BusinessCaseStatusLookups.AnyAsync(s => s.Name == name && s.Id != id))
+            {
+                TempData["ErrorMessage"] = "A business case status with this name already exists.";
+            }
+            else
+            {
+                _logger.LogInformation("Updating business case status {Id} - Name: {Name}, IsActive: {IsActive}, CssClass: {CssClass}", id, name, isActive, cssClass);
+                
+                existingStatus.Name = name;
+                existingStatus.Description = description;
+                existingStatus.SortOrder = sortOrder;
+                existingStatus.IsActive = isActive;
+                existingStatus.CssClass = cssClass;
+                existingStatus.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = $"Business case status '{name}' has been updated successfully.";
+                _logger.LogInformation("Business case status {Id} updated successfully", id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating business case status {StatusId}", id);
+            TempData["ErrorMessage"] = "An error occurred while updating the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // POST: Admin/DeleteBusinessCaseStatus
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteBusinessCaseStatus(int id)
+    {
+        try
+        {
+            var status = await _context.BusinessCaseStatusLookups.FindAsync(id);
+            if (status != null)
+            {
+                // Check if any business cases are using this status
+                var businessCaseCount = await _context.BusinessCases.CountAsync(bc => bc.StatusLookupId == status.Id);
+                if (businessCaseCount > 0)
+                {
+                    TempData["ErrorMessage"] = $"Cannot delete business case status '{status.Name}' as it is being used by {businessCaseCount} business case(s).";
+                }
+                else
+                {
+                    _context.BusinessCaseStatusLookups.Remove(status);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"Business case status '{status.Name}' has been deleted successfully.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting business case status");
+            TempData["ErrorMessage"] = "An error occurred while deleting the business case status. Please try again.";
+        }
+
+        return RedirectToAction(nameof(BusinessCaseStatuses));
+    }
+
+    // ========================================
     // SETTINGS - Activity Types
     // ========================================
 
@@ -3623,132 +3824,18 @@ public class AdminController : Controller
     }
 
     // ========================================
-    // SETTINGS - Directorates
+    // SETTINGS - Directorates (Redirected to Divisions)
     // ========================================
 
     // GET: Admin/Directorates
-    public async Task<IActionResult> Directorates()
+    // Directorates are now managed through Divisions
+    public IActionResult Directorates()
     {
-        var directorates = await _context.DirectorateLookups
-            .OrderBy(d => d.SortOrder)
-            .ThenBy(d => d.Name)
-            .ToListAsync();
-        
-        return View("~/Views/Admin/Settings/Directorates.cshtml", directorates);
+        return RedirectToAction("Index", "DivisionBusinessAreaUser", new { area = "" });
     }
 
-    // POST: Admin/CreateDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateDirectorate([Bind("Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
-    {
-        if (ModelState.IsValid)
-        {
-            try
-            {
-                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name))
-                {
-                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
-                }
-                else
-                {
-                    directorate.CreatedAt = DateTime.UtcNow;
-                    directorate.UpdatedAt = DateTime.UtcNow;
-                    _context.Add(directorate);
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been created successfully.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating directorate");
-                TempData["ErrorMessage"] = "An error occurred while creating the directorate. Please try again.";
-            }
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
-
-    // POST: Admin/EditDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditDirectorate(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
-    {
-        if (id != directorate.Id)
-        {
-            return NotFound();
-        }
-
-        if (ModelState.IsValid)
-        {
-            try
-            {
-                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name && d.Id != id))
-                {
-                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
-                }
-                else
-                {
-                    var existing = await _context.DirectorateLookups.FindAsync(id);
-                    if (existing == null)
-                    {
-                        return NotFound();
-                    }
-
-                    existing.Name = directorate.Name;
-                    existing.Description = directorate.Description;
-                    existing.SortOrder = directorate.SortOrder;
-                    existing.IsActive = directorate.IsActive;
-                    existing.UpdatedAt = DateTime.UtcNow;
-
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been updated successfully.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating directorate");
-                TempData["ErrorMessage"] = "An error occurred while updating the directorate. Please try again.";
-            }
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
-
-    // POST: Admin/DeleteDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteDirectorate(int id)
-    {
-        try
-        {
-            var directorate = await _context.DirectorateLookups.FindAsync(id);
-            if (directorate != null)
-            {
-                var projectCount = await _context.ProjectDirectorates.CountAsync(pd => pd.DirectorateLookupId == id);
-                if (projectCount > 0)
-                {
-                    TempData["ErrorMessage"] = $"Cannot delete directorate '{directorate.Name}' as it is being used by {projectCount} project(s).";
-                }
-                else
-                {
-                    _context.DirectorateLookups.Remove(directorate);
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been deleted successfully.";
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting directorate");
-            TempData["ErrorMessage"] = "An error occurred while deleting the directorate. Please try again.";
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
+    // Note: Directorates are now managed through Divisions
+    // Create, Edit, and Delete operations should be done through /Admin/DivisionBusinessAreaUser
 
     // ========================================
     // SETTINGS - Risk Appetite
@@ -5284,8 +5371,8 @@ public class AdminController : Controller
         var hops = await _context.HOPS
             .Include(h => h.User)
             .Include(h => h.DdatProfession)
-            .OrderBy(h => h.DdatProfession.Name)
-            .ThenBy(h => h.User.Name)
+            .OrderBy(h => h.DdatProfession != null ? h.DdatProfession.Name : string.Empty)
+            .ThenBy(h => h.User != null ? h.User.Name : string.Empty)
             .ToListAsync();
 
         ViewBag.Professions = await _context.DdatProfessions

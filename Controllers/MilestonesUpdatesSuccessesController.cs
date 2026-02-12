@@ -43,7 +43,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.ProjectContacts)
             .Include(p => p.StatusUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Risks)
             .Include(p => p.Actions)
             .Include(p => p.Issues)
@@ -97,7 +97,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.ProjectContacts)
             .Include(p => p.StatusUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Risks)
             .Include(p => p.Actions)
             .Include(p => p.Issues)
@@ -138,10 +138,13 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
+            .Include(p => p.RagStatusLookup)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
             .Include(p => p.ProjectContacts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -159,8 +162,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
             .ToListAsync();
 
-        var hasDigitalDirectorate = project.Directorates?.Any(d => d.DirectorateLookup != null && 
-            d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+        var hasDigitalDirectorate = project.Directorates?.Any(d => d.Division != null && 
+            d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
         // Check if update already exists
         var existingUpdate = await _context.ProjectMonthlyUpdates
@@ -180,6 +183,13 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         // Check if current user can submit (must be SRO, Service Owner, or Primary Contact)
         var canSubmit = await CanUserSubmitMonthlyUpdate(project);
+
+        // Get RAG statuses from admin settings (RagStatusLookups table)
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
 
         ViewBag.ProjectId = project.Id;
         ViewBag.ProjectTitle = project.Title;
@@ -212,11 +222,13 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
             .Include(p => p.ProjectContacts)
             .Include(p => p.WeeklySuccessUpdates)
@@ -242,8 +254,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
             .ToListAsync();
 
-        var hasDigitalDirectorate = project.Directorates?.Any(d => d.DirectorateLookup != null && 
-            d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+        var hasDigitalDirectorate = project.Directorates?.Any(d => d.Division != null && 
+            d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
         var update = await _context.ProjectMonthlyUpdates
             .Include(u => u.MonthlyUpdateNarratives)
@@ -345,7 +357,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             // Return view with error
             var projectForView = await _context.Projects
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectContacts)
                 .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -367,8 +379,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 return NotFound();
             }
             
-            var hasDigitalDirectorate = projectForView.Directorates?.Any(d => d.DirectorateLookup != null && 
-                d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+            var hasDigitalDirectorate = projectForView.Directorates?.Any(d => d.Division != null && 
+                d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
             ViewBag.ProjectId = projectForView.Id;
             ViewBag.ProjectTitle = projectForView.Title;
@@ -495,7 +507,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             Title = project.Title,
             ProjectCode = project.ProjectCode,
             Status = project.Status ?? string.Empty,
-            RagStatus = project.RagStatus,
+            RagStatus = project.RagStatusLookup?.Name,
             Phase = project.Phase,
             BusinessArea = project.BusinessArea,
             StartDate = project.StartDate,
@@ -824,6 +836,19 @@ public class MilestonesUpdatesSuccessesController : Controller
             return true;
         }
 
+        // Check if user is PMO Contact
+        if (currentUser != null && project.PmoContacts?.Any(pc => pc.UserId == currentUser.Id) == true)
+        {
+            return true;
+        }
+
+        // Check PMO Contacts by email
+        if (project.PmoContacts?.Any(pc => 
+            pc.User != null && pc.User.Email?.ToLower() == userEmail.ToLower()) == true)
+        {
+            return true;
+        }
+
         return false;
     }
 
@@ -841,6 +866,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.RagHistory)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -853,7 +880,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         // Check if user can submit
         if (!await CanUserSubmitMonthlyUpdate(project))
         {
-            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, Primary Contacts, and Central Operations admins can submit.";
+            TempData["ErrorMessage"] = "You do not have permission to submit monthly updates. Only SROs, Service Owners, Primary Contacts, PMO Contacts, and Central Operations admins can submit.";
             // Determine redirect action based on whether update exists
             var existingUpdateForRedirect = await _context.ProjectMonthlyUpdates
                 .FirstOrDefaultAsync(u => u.ProjectId == projectId.Value && u.Year == year.Value && u.Month == month.Value);
@@ -875,19 +902,21 @@ public class MilestonesUpdatesSuccessesController : Controller
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        var oldRagStatus = project.RagStatus;
+        var oldRagStatus = project.RagStatusLookup?.Name ?? project.RagStatus;
         var ragChanged = oldRagStatus != ragStatus;
         var isNotGreen = ragStatus != "Green";
+        // If both current RAG and selected RAG are Green, don't require justification or path to green
+        var bothGreen = !string.IsNullOrWhiteSpace(oldRagStatus) && oldRagStatus == "Green" && ragStatus == "Green";
 
-        // Validate justification if RAG changed or not green
-        if ((ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
+        // Validate justification if RAG changed or not green, but not if both current and selected are Green
+        if (!bothGreen && (ragChanged || isNotGreen) && string.IsNullOrWhiteSpace(ragJustification))
         {
             TempData["ErrorMessage"] = "RAG justification is required when RAG status has changed or is not Green.";
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 
-        // Validate path to green if not green
-        if (isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
+        // Validate path to green if not green, but not if both current and selected are Green
+        if (!bothGreen && isNotGreen && string.IsNullOrWhiteSpace(pathToGreen))
         {
             TempData["ErrorMessage"] = "Path to Green is required when RAG status is not Green.";
             return RedirectToAction(redirectAction, new { projectId = projectId.Value, year = year.Value, month = month.Value });
@@ -1006,6 +1035,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 .ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
+            .Include(p => p.PmoContacts)
+                .ThenInclude(pc => pc.User)
             .Include(p => p.PrimaryContactUser)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
 
@@ -1017,7 +1048,7 @@ public class MilestonesUpdatesSuccessesController : Controller
         // Check if user can submit/unsubmit
         if (!await CanUserSubmitMonthlyUpdate(project))
         {
-            TempData["ErrorMessage"] = "You do not have permission to unsubmit monthly updates. Only SROs, Service Owners, and Primary Contacts can unsubmit.";
+            TempData["ErrorMessage"] = "You do not have permission to unsubmit monthly updates. Only SROs, Service Owners, Primary Contacts, and PMO Contacts can unsubmit.";
             return RedirectToAction("CreateUpdate", new { projectId = projectId.Value, year = year.Value, month = month.Value });
         }
 

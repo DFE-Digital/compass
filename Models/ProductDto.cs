@@ -32,6 +32,9 @@ public class ProductDto
     
     public string State { get; set; } = "New";
     
+    [JsonPropertyName("publishedAt")]
+    public DateTime? PublishedAt { get; set; }
+    
     [JsonPropertyName("category_values")]
     public List<CategoryValueDto>? CategoryValues { get; set; }
     
@@ -49,6 +52,9 @@ public class ProductDto
     
     [JsonPropertyName("Information_asset_owner")]
     public List<EntraUserDto>? InformationAssetOwners { get; set; }
+
+    [JsonPropertyName("reporting_user")]
+    public List<EntraUserDto>? ReportingUsers { get; set; }
     
     [JsonPropertyName("senior_responsible_officer")]
     public List<EntraUserDto>? SeniorResponsibleOfficers { get; set; }
@@ -71,6 +77,9 @@ public class ProductDto
     
     [System.Text.Json.Serialization.JsonIgnore]
     public EntraUserDto? InformationAssetOwner => InformationAssetOwners?.FirstOrDefault();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EntraUserDto? ReportingUser => ReportingUsers?.FirstOrDefault();
     
     [System.Text.Json.Serialization.JsonIgnore]
     public EntraUserDto? SeniorResponsibleOfficer => SeniorResponsibleOfficers?.FirstOrDefault();

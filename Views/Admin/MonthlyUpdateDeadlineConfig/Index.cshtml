@@ -1,0 +1,227 @@
+@model List<Compass.Models.MonthlyUpdateDeadlineConfig>
+@{
+    ViewData["Title"] = "Monthly update deadline configuration";
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="Admin" asp-action="Index" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Administration</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">Monthly update deadline configuration</li>
+        </ol>
+    </nav>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Monthly update deadline configuration</h1>
+                <p class="text-muted mb-0">Configure when monthly project updates are due</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>How it works:</strong> Monthly updates are due on the Nth working day of the following month. For example, if a configuration sets the deadline to the 5th working day, then updates for January 2026 would be due on the 5th working day of February 2026. Working days exclude weekends and UK bank holidays. Updates become available for submission a specified number of days before the end of the month (commission days). If no configuration applies to a period, the defaults are the 5th working day deadline and 6 commission days.
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Configurations</h3>
+                <div class="card-tools">
+                    <a asp-action="Create" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus mr-2"></i>Create configuration
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Working day deadline</th>
+                                    <th>Commission days</th>
+                                    <th>Effective period</th>
+                                    <th>Status</th>
+                                    <th>Default</th>
+                                    <th>Notes</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var config in Model)
+                                {
+                                    var isCurrentlyEffective = config.IsActive && 
+                                        config.EffectiveFrom <= DateTime.UtcNow && 
+                                        (config.EffectiveUntil == null || config.EffectiveUntil >= DateTime.UtcNow);
+                                    
+                                    <tr>
+                                        <td><strong>@config.Name</strong></td>
+                                        <td>
+                                            <span class="badge badge-info">@config.WorkingDayDeadline</span>
+                                            <small class="text-muted d-block">@(config.WorkingDayDeadline == 1 ? "1st" : config.WorkingDayDeadline == 2 ? "2nd" : config.WorkingDayDeadline == 3 ? "3rd" : config.WorkingDayDeadline + "th") working day</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-secondary">@config.CommissionDaysBeforeMonthEnd</span>
+                                            <small class="text-muted d-block">days before month end</small>
+                                        </td>
+                                        <td>
+                                            <strong>From:</strong> @config.EffectiveFrom.ToString("MMMM yyyy")<br/>
+                                            <strong>Until:</strong> @(config.EffectiveUntil?.ToString("MMMM yyyy") ?? "Indefinite")
+                                        </td>
+                                        <td>
+                                            @if (config.IsActive)
+                                            {
+                                                if (isCurrentlyEffective)
+                                                {
+                                                    <span class="badge badge-success">Active & Effective</span>
+                                                }
+                                                else if (config.EffectiveFrom > DateTime.UtcNow)
+                                                {
+                                                    <span class="badge badge-info">Active (Future)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Active (Expired)</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-secondary">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (config.IsDefault)
+                                            {
+                                                <span class="badge badge-primary">Default</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(config.Notes))
+                                            {
+                                                <small class="text-muted" title="@config.Notes">
+                                                    @(config.Notes.Length > 50 ? config.Notes.Substring(0, 50) + "..." : config.Notes)
+                                                </small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@config.CreatedBy</small><br/>
+                                            <small class="text-muted">@config.CreatedAt.ToString("dd MMM yyyy")</small>
+                                        </td>
+                                        <td>
+                                            <a asp-action="Edit" asp-route-id="@config.Id" class="btn btn-sm btn-primary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                    data-toggle="modal" 
+                                                    data-target="#confirmDeleteModal"
+                                                    data-id="@config.Id"
+                                                    data-name="@config.Name">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No configurations found. <a asp-action="Create">Create the first configuration</a>.</p>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger">
+                <h5 class="modal-title">Confirm deletion</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Are you sure you want to delete the configuration '<strong><span id="modalName"></span></strong>'?</p>
+                <p class="text-danger mt-2"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <form asp-action="Delete" method="post" id="deleteForm" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="deleteId" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt mr-2"></i>Delete configuration
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('#confirmDeleteModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var id = button.data('id');
+                var name = button.data('name');
+                
+                var modal = $(this);
+                modal.find('#modalName').text(name);
+                modal.find('#deleteId').val(id);
+                
+                // Update form action
+                var form = modal.find('#deleteForm');
+                form.attr('action', '@Url.Action("Delete")/' + id);
+            });
+        });
+    </script>
+}

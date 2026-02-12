@@ -24,5 +24,9 @@ public class BusinessAreaLookup
 
     [Required]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation properties
+    public ICollection<DivisionBusinessArea> DivisionBusinessAreas { get; set; } = new List<DivisionBusinessArea>();
+    public ICollection<BusinessAreaUser> BusinessAreaUsers { get; set; } = new List<BusinessAreaUser>();
 }
 

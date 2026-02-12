@@ -444,7 +444,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                userProjectsQuery = userProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -517,7 +517,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -572,7 +572,7 @@ namespace Compass.Controllers
             // Apply RAG Status filter
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                query = query.Where(p => p.RagStatus == ragStatus);
+                query = query.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
 
             // Apply Business Area filter
@@ -740,7 +740,7 @@ namespace Compass.Controllers
             }
             if (!string.IsNullOrEmpty(ragStatus))
             {
-                statusCountQuery = statusCountQuery.Where(p => p.RagStatus == ragStatus);
+                statusCountQuery = statusCountQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
             }
             if (!string.IsNullOrEmpty(businessArea))
             {
@@ -813,7 +813,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -831,7 +831,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    userProjectsQuery = userProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                    userProjectsQuery = userProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -981,7 +981,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1012,7 +1012,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1145,7 +1145,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -1163,7 +1163,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatus == ragStatus);
+                    watchedProjectsQuery = watchedProjectsQuery.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -1309,7 +1309,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1340,7 +1340,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1452,7 +1452,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -1470,7 +1470,7 @@ namespace Compass.Controllers
                 }
                 if (!string.IsNullOrEmpty(ragStatus))
                 {
-                    query = query.Where(p => p.RagStatus == ragStatus);
+                    query = query.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == ragStatus);
                 }
                 if (!string.IsNullOrEmpty(businessArea))
                 {
@@ -1616,7 +1616,7 @@ namespace Compass.Controllers
                     worksheet.Cell(currentRow, col++).Value = project.ActivityTypeLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.RiskAppetiteLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.DeliveryPriority?.Name ?? string.Empty;
-                    worksheet.Cell(currentRow, col++).Value = project.RagStatus ?? string.Empty;
+                    worksheet.Cell(currentRow, col++).Value = project.RagStatusLookup?.Name ?? string.Empty;
                     worksheet.Cell(currentRow, col++).Value = project.IsSubjectToSpendControl.HasValue 
                         ? (project.IsSubjectToSpendControl.Value ? "Yes" : "No") 
                         : string.Empty;
@@ -1647,7 +1647,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1823,7 +1823,7 @@ namespace Compass.Controllers
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -1971,7 +1971,7 @@ namespace Compass.Controllers
                 .ThenBy(ra => ra.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -2034,6 +2034,25 @@ namespace Compass.Controllers
             if (tab == "milestones")
             {
                 return RedirectToAction("Milestones", "MilestonesUpdatesSuccesses", new { projectId = id });
+            }
+            
+            // Load business cases linked to this project
+            var businessCaseProjects = await _context.BusinessCaseProjects
+                .Include(bcp => bcp.BusinessCase)
+                .Where(bcp => bcp.ProjectId == id)
+                .ToListAsync();
+            
+            ViewBag.BusinessCaseCount = businessCaseProjects.Count;
+            ViewBag.BusinessCaseProjects = businessCaseProjects;
+            
+            // Load all business cases for linking (if needed)
+            if (tab == "businesscase")
+            {
+                var allBusinessCases = await _context.BusinessCases
+                    .OrderBy(bc => bc.BusinessCaseId)
+                    .Select(bc => new { bc.Id, bc.BusinessCaseId, bc.Title })
+                    .ToListAsync();
+                ViewBag.AllBusinessCases = allBusinessCases;
             }
             
             ViewBag.CurrentTab = tab;
@@ -2452,6 +2471,90 @@ namespace Compass.Controllers
             }
 
             return RedirectToAction(nameof(Details), new { id = projectId, tab = "products" });
+        }
+
+        // POST: Project/LinkBusinessCase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LinkBusinessCase(int projectId, int businessCaseId)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(projectId);
+                if (project == null)
+                {
+                    TempData["ErrorMessage"] = "Work item not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                if (businessCase == null)
+                {
+                    TempData["ErrorMessage"] = "Business case not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                // Check if already linked
+                var existingLink = await _context.BusinessCaseProjects
+                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == projectId);
+
+                if (existingLink != null)
+                {
+                    TempData["ErrorMessage"] = "This business case is already linked to the work item.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCaseProject = new BusinessCaseProject
+                {
+                    BusinessCaseId = businessCaseId,
+                    ProjectId = projectId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.BusinessCaseProjects.Add(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Business case '{businessCase.BusinessCaseId}' linked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking business case to project");
+                TempData["ErrorMessage"] = "An error occurred while linking the business case.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+        }
+
+        // POST: Project/UnlinkBusinessCase
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UnlinkBusinessCase(int projectId, int businessCaseProjectId)
+        {
+            try
+            {
+                var businessCaseProject = await _context.BusinessCaseProjects
+                    .Include(bcp => bcp.BusinessCase)
+                    .FirstOrDefaultAsync(bcp => bcp.Id == businessCaseProjectId && bcp.ProjectId == projectId);
+
+                if (businessCaseProject == null)
+                {
+                    TempData["ErrorMessage"] = "Link not found.";
+                    return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
+                }
+
+                var businessCaseId = businessCaseProject.BusinessCase?.BusinessCaseId ?? "Unknown";
+                _context.BusinessCaseProjects.Remove(businessCaseProject);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = $"Business case '{businessCaseId}' unlinked successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unlinking business case from project");
+                TempData["ErrorMessage"] = "An error occurred while unlinking the business case.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = projectId, tab = "businesscase" });
         }
 
         // GET: Project/CreateProduct
@@ -3097,8 +3200,22 @@ namespace Compass.Controllers
         }
 
         // GET: Project/Create
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create(int? businessCaseId = null)
     {
+        // Store businessCaseId in ViewBag if provided and pre-populate fields
+        if (businessCaseId.HasValue)
+        {
+            ViewBag.BusinessCaseId = businessCaseId.Value;
+            var businessCase = await _context.BusinessCases.FindAsync(businessCaseId.Value);
+            if (businessCase != null)
+            {
+                ViewBag.BusinessCaseTitle = businessCase.Title;
+                ViewBag.BusinessCaseIdDisplay = businessCase.BusinessCaseId;
+                ViewBag.BusinessCaseDescription = businessCase.Description;
+                ViewBag.BusinessCaseBusinessArea = businessCase.BusinessArea;
+            }
+        }
+
         ViewBag.Missions = await _context.Missions
             .Where(m => !m.IsDeleted)
             .OrderBy(m => m.Title)
@@ -3174,6 +3291,13 @@ namespace Compass.Controllers
             .ThenBy(ra => ra.Name)
             .ToListAsync();
 
+        // Get RAG statuses from admin settings (RagStatusLookups table)
+        ViewBag.RagStatuses = await _context.RagStatusLookups
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Name)
+            .ToListAsync();
+
         // Get business area lookups for Budget Owner
         ViewBag.BudgetOwnerBusinessAreas = await _context.BusinessAreaLookups
             .Where(ba => ba.IsActive)
@@ -3201,7 +3325,7 @@ namespace Compass.Controllers
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -3225,7 +3349,7 @@ namespace Compass.Controllers
                 .ThenBy(at => at.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -3250,7 +3374,7 @@ namespace Compass.Controllers
         // POST: Project/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,BusinessArea,HistoricBuRTId,Aim,Phase,IsMultiDepartmentProject,OtherDepartments,BusinessCaseApproval,ActivityTypeLookupId,RiskAppetiteLookupId,ServiceUsers,IsInternal,IsExternal,DiscoveryStartDatePlanned,DiscoveryStartDateActual,DiscoveryEndDatePlanned,DiscoveryEndDateActual,AlphaStartDatePlanned,AlphaStartDateActual,AlphaEndDatePlanned,AlphaEndDateActual,PrivateBetaStartDatePlanned,PrivateBetaStartDateActual,PrivateBetaEndDatePlanned,PrivateBetaEndDateActual,PublicBetaStartDatePlanned,PublicBetaStartDateActual,PublicBetaEndDatePlanned,PublicBetaEndDateActual")] Project project)
         {
             if (id != project.Id)
             {
@@ -3378,7 +3502,7 @@ namespace Compass.Controllers
                 .OrderBy(at => at.SortOrder)
                 .ThenBy(at => at.Name)
                 .ToListAsync();
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -3504,7 +3628,7 @@ namespace Compass.Controllers
                 .ToList();
 
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -3512,7 +3636,7 @@ namespace Compass.Controllers
                 }
 
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DirectorateLookupId)
+                    .Select(d => d.DivisionId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -3521,7 +3645,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            DirectorateLookupId = directorateId,
+                            DivisionId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -4240,6 +4364,23 @@ namespace Compass.Controllers
                 _logger.LogInformation("  {Key}: {Value}", key, Request.Form[key]);
             }
             
+            // Convert RAG Status string to RagStatusLookupId before validation
+            var ragStatusValue = Request.Form[nameof(project.RagStatus)].ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(ragStatusValue))
+            {
+                var ragStatusLookup = await _context.RagStatusLookups
+                    .FirstOrDefaultAsync(r => r.Name == ragStatusValue && r.IsActive);
+                project.RagStatusLookupId = ragStatusLookup?.Id;
+                if (ragStatusLookup == null)
+                {
+                    _logger.LogWarning("RAG Status lookup not found for: {RagStatusName}", ragStatusValue);
+                }
+                else
+                {
+                    _logger.LogInformation("RAG Status mapped: {RagStatusName} -> {RagStatusLookupId}", ragStatusValue, ragStatusLookup.Id);
+                }
+            }
+            
             // Additional server-side validation for required fields
             if (string.IsNullOrWhiteSpace(project.Aim))
             {
@@ -4251,9 +4392,14 @@ namespace Compass.Controllers
                 ModelState.AddModelError(nameof(project.StartDate), "The Start Date field is required.");
             }
             
-            if (string.IsNullOrWhiteSpace(project.RagStatus))
+            // Validate RAG Status - check both the string value and the converted lookup ID
+            if (string.IsNullOrWhiteSpace(ragStatusValue))
             {
                 ModelState.AddModelError(nameof(project.RagStatus), "The RAG Status field is required.");
+            }
+            else if (!project.RagStatusLookupId.HasValue)
+            {
+                ModelState.AddModelError(nameof(project.RagStatus), "The selected RAG Status is not valid.");
             }
             
             if (string.IsNullOrWhiteSpace(project.Status))
@@ -4450,7 +4596,50 @@ namespace Compass.Controllers
                     await UpdateProjectRelationshipsAsync(project);
                     await _context.SaveChangesAsync();
 
+                    // Link to business case if businessCaseId was provided
+                    var businessCaseIdValue = Request.Form["businessCaseId"].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(businessCaseIdValue) && int.TryParse(businessCaseIdValue, out int businessCaseId))
+                    {
+                        try
+                        {
+                            var businessCase = await _context.BusinessCases.FindAsync(businessCaseId);
+                            if (businessCase != null)
+                            {
+                                // Check if already linked
+                                var existingLink = await _context.BusinessCaseProjects
+                                    .FirstOrDefaultAsync(bcp => bcp.BusinessCaseId == businessCaseId && bcp.ProjectId == project.Id);
+
+                                if (existingLink == null)
+                                {
+                                    var businessCaseProject = new BusinessCaseProject
+                                    {
+                                        BusinessCaseId = businessCaseId,
+                                        ProjectId = project.Id,
+                                        CreatedAt = DateTime.UtcNow
+                                    };
+
+                                    _context.BusinessCaseProjects.Add(businessCaseProject);
+                                    await _context.SaveChangesAsync();
+                                    _logger.LogInformation("Project {ProjectId} linked to business case {BusinessCaseId}", project.Id, businessCaseId);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to link project {ProjectId} to business case {BusinessCaseId}", project.Id, businessCaseIdValue);
+                            // Don't fail the project creation if linking fails
+                        }
+                    }
+
                     TempData["SuccessMessage"] = "Project created successfully!";
+                    
+                    // If created from business case, offer to return to business case
+                    if (!string.IsNullOrWhiteSpace(businessCaseIdValue) && int.TryParse(businessCaseIdValue, out int bcId))
+                    {
+                        TempData["BusinessCaseId"] = bcId;
+                        TempData["ShowBusinessCaseLink"] = true;
+                    }
+                    
                     return RedirectToAction(nameof(Details), new { id = project.Id });
                 }
                 catch (Exception ex)
@@ -4494,6 +4683,13 @@ namespace Compass.Controllers
                 .Where(dp => dp.IsActive)
                 .OrderBy(dp => dp.SortOrder)
                 .ThenBy(dp => dp.Name)
+                .ToListAsync();
+
+            // Get RAG statuses from admin settings (RagStatusLookups table)
+            ViewBag.RagStatuses = await _context.RagStatusLookups
+                .Where(r => r.IsActive)
+                .OrderBy(r => r.SortOrder)
+                .ThenBy(r => r.Name)
                 .ToListAsync();
 
             // Get objectives grouped by theme
@@ -4781,7 +4977,7 @@ namespace Compass.Controllers
                     var ragHistory = new ProjectRagHistory
                     {
                         ProjectId = projectId,
-                        RagStatus = project.RagStatus,
+                        RagStatus = project.RagStatusLookup?.Name ?? project.RagStatus,
                         Justification = project.RagJustification,
                         PathToGreen = pathToGreen, // Record new path to green
                         ChangedAt = DateTime.UtcNow,
@@ -6288,6 +6484,35 @@ namespace Compass.Controllers
             return RedirectToAction(nameof(Details), new { id = id, tab = "overview" });
         }
 
+        // POST: Project/UpdateBusinessCaseApproval
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBusinessCaseApproval(int id, string? businessCaseApproval)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null || project.IsDeleted)
+                {
+                    TempData["ErrorMessage"] = "Project not found.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                project.BusinessCaseApproval = string.IsNullOrWhiteSpace(businessCaseApproval) ? null : businessCaseApproval.Trim();
+                project.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Business case approval updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating business case approval");
+                TempData["ErrorMessage"] = "An error occurred while updating the business case approval.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = id, tab = "contactsandgovernance" });
+        }
+
         // POST: Project/UpdatePhase
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -6884,7 +7109,7 @@ namespace Compass.Controllers
 
                 // Remove existing directorates not in the selection
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -6893,7 +7118,7 @@ namespace Compass.Controllers
 
                 // Add new directorates
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DirectorateLookupId)
+                    .Select(d => d.DivisionId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -6902,7 +7127,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            DirectorateLookupId = directorateId,
+                            DivisionId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -12634,7 +12859,7 @@ namespace Compass.Controllers
             Title = project.Title,
             ProjectCode = project.ProjectCode,
             Status = project.Status ?? string.Empty,
-            RagStatus = project.RagStatus,
+            RagStatus = project.RagStatusLookup?.Name,
             Phase = project.Phase,
             BusinessArea = project.BusinessArea,
             StartDate = project.StartDate,

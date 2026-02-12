@@ -429,14 +429,14 @@
 
                             <div class="form-group" id="ragJustificationGroup">
                                 <label for="ragJustification">RAG Justification <span class="text-danger" id="ragJustificationRequired" style="display: none;">*</span></label>
-                                <textarea id="ragJustification" name="ragJustification" class="form-control" rows="3" placeholder="Provide justification for the RAG status...">@currentRagJustification</textarea>
-                                <small class="form-text text-muted">Required if RAG status has changed or is not Green</small>
+                                <textarea id="ragJustification" name="ragJustification" class="form-control" rows="3" placeholder="Provide justification for the RAG status..." maxlength="1000">@currentRagJustification</textarea>
+                                <small class="form-text text-muted">Required if RAG status has changed or is not Green (max 1000 characters)</small>
                             </div>
 
                             <div class="form-group" id="pathToGreenGroup" style="display: none;">
                                 <label for="pathToGreen">Path to Green <span class="text-danger">*</span></label>
-                                <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status...">@currentPathToGreen</textarea>
-                                <small class="form-text text-muted">Required when RAG status is not Green</small>
+                                <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status..." maxlength="1000">@currentPathToGreen</textarea>
+                                <small class="form-text text-muted">Required when RAG status is not Green (max 1000 characters)</small>
                             </div>
                         </div>
                     </div>
@@ -639,6 +639,8 @@
                 var selectedRag = $(this).val();
                 var ragChanged = selectedRag !== originalRagStatus;
                 var isNotGreen = selectedRag !== '' && selectedRag !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && selectedRag === 'Green';
                 
                 // Clear justification if RAG status changed
                 if (ragChanged) {
@@ -654,8 +656,8 @@
                     $('#pathToGreen').prop('required', false);
                 }
                 
-                // Require justification if RAG changed or not green
-                if (ragChanged || isNotGreen) {
+                // Require justification if RAG changed or not green, but not if both current and selected are Green
+                if (!bothGreen && (ragChanged || isNotGreen)) {
                     $('#ragJustification').prop('required', true);
                     $('#ragJustificationRequired').show();
                 } else {
@@ -674,6 +676,8 @@
                 var pathToGreen = $('#pathToGreen').val().trim();
                 var ragChanged = ragStatus !== originalRagStatus;
                 var isNotGreen = ragStatus !== '' && ragStatus !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && ragStatus === 'Green';
                 var isNilReturn = $('#nilReturnCheckbox').is(':checked');
                 var hasNarratives = @(hasNarratives ? "true" : "false");
                 
@@ -687,11 +691,13 @@
                     errors.push('RAG status is required');
                 }
                 
-                if ((ragChanged || isNotGreen) && !ragJustification) {
+                // Don't require justification if both current and selected RAG are Green
+                if (!bothGreen && (ragChanged || isNotGreen) && !ragJustification) {
                     errors.push('RAG justification is required when RAG status has changed or is not Green');
                 }
                 
-                if (isNotGreen && !pathToGreen) {
+                // Don't require path to green if both current and selected RAG are Green
+                if (!bothGreen && isNotGreen && !pathToGreen) {
                     errors.push('Path to Green is required when RAG status is not Green');
                 }
                 

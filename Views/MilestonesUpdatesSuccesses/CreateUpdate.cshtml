@@ -173,9 +173,10 @@
                     var isWithinCloseDate = DateTime.UtcNow <= closeDate;
                     var canSubmitOrUnsubmit = canSubmit && isWithinCloseDate;
                     var project = ViewBag.Project as Compass.Models.Project;
-                    var currentRagStatus = project?.RagStatus ?? "";
+                    var currentRagStatus = project?.RagStatusLookup?.Name ?? project?.RagStatus ?? "";
                     var currentRagJustification = project?.RagJustification ?? "";
                     var currentPathToGreen = project?.PathToGreen ?? "";
+                    var ragStatuses = ViewBag.RagStatuses as List<Compass.Models.RagStatusLookup> ?? new List<Compass.Models.RagStatusLookup>();
                 }
 
                 <!-- Monthly Update Form -->
@@ -412,14 +413,23 @@
                             <div class="mb-2">
                                 @if (!string.IsNullOrEmpty(currentRagStatus))
                                 {
-                                    var ragClass = currentRagStatus.Trim().Replace(" / ", "-").Replace("/", "-") switch {
-                                        "Red" => "badge badge-red",
-                                        "Amber-Red" => "badge badge-amber-red",
-                                        "Amber" => "badge badge-amber",
-                                        "Amber-Green" => "badge badge-amber-green",
-                                        "Green" => "badge badge-green",
-                                        _ => "badge badge-secondary"
-                                    };
+                                    var currentRagLookup = project?.RagStatusLookup;
+                                    string ragClass;
+                                    if (currentRagLookup != null && !string.IsNullOrEmpty(currentRagLookup.CssClass))
+                                    {
+                                        ragClass = currentRagLookup.CssClass;
+                                    }
+                                    else
+                                    {
+                                        ragClass = currentRagStatus.Trim().Replace(" / ", "-").Replace("/", "-") switch {
+                                            "Red" => "badge badge-red",
+                                            "Amber-Red" => "badge badge-amber-red",
+                                            "Amber" => "badge badge-amber",
+                                            "Amber-Green" => "badge badge-amber-green",
+                                            "Green" => "badge badge-green",
+                                            _ => "badge badge-secondary"
+                                        };
+                                    }
                                     <span class="@ragClass" style="font-size: 1rem;">@currentRagStatus</span>
                                 }
                                 else
@@ -433,45 +443,16 @@
                             <label for="ragStatusSelect">RAG Status <span class="text-danger">*</span></label>
                             <select id="ragStatusSelect" name="ragStatus" class="form-control" required>
                                 <option value="">Select RAG status</option>
-                                @if (currentRagStatus == "Green")
+                                @foreach (var ragStatus in ragStatuses)
                                 {
-                                    <option value="Green" selected>Green</option>
-                                }
-                                else
-                                {
-                                    <option value="Green">Green</option>
-                                }
-                                @if (currentRagStatus == "Amber-Green")
-                                {
-                                    <option value="Amber-Green" selected>Amber-Green</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber-Green">Amber-Green</option>
-                                }
-                                @if (currentRagStatus == "Amber")
-                                {
-                                    <option value="Amber" selected>Amber</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber">Amber</option>
-                                }
-                                @if (currentRagStatus == "Amber-Red")
-                                {
-                                    <option value="Amber-Red" selected>Amber-Red</option>
-                                }
-                                else
-                                {
-                                    <option value="Amber-Red">Amber-Red</option>
-                                }
-                                @if (currentRagStatus == "Red")
-                                {
-                                    <option value="Red" selected>Red</option>
-                                }
-                                else
-                                {
-                                    <option value="Red">Red</option>
+                                    @if (currentRagStatus == ragStatus.Name)
+                                    {
+                                        <option value="@ragStatus.Name" selected>@ragStatus.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@ragStatus.Name">@ragStatus.Name</option>
+                                    }
                                 }
                             </select>
                             <small class="form-text text-muted">Confirm or update the RAG status for this reporting period</small>
@@ -479,14 +460,14 @@
 
                         <div class="form-group" id="ragJustificationGroup">
                             <label for="ragJustification">RAG Justification <span class="text-danger" id="ragJustificationRequired" style="display: none;">*</span></label>
-                            <textarea id="ragJustification" name="ragJustification" class="form-control" rows="3" placeholder="Provide justification for the RAG status...">@currentRagJustification</textarea>
-                            <small class="form-text text-muted">Required if RAG status has changed or is not Green</small>
+                            <textarea id="ragJustification" name="ragJustification" class="form-control" rows="3" placeholder="Provide justification for the RAG status..." maxlength="1000">@currentRagJustification</textarea>
+                            <small class="form-text text-muted">Required if RAG status has changed or is not Green (max 1000 characters)</small>
                         </div>
 
                         <div class="form-group" id="pathToGreenGroup" style="display: none;">
                             <label for="pathToGreen">Path to Green <span class="text-danger">*</span></label>
-                            <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status...">@currentPathToGreen</textarea>
-                            <small class="form-text text-muted">Required when RAG status is not Green</small>
+                            <textarea id="pathToGreen" name="pathToGreen" class="form-control" rows="3" placeholder="Describe the path to achieving Green RAG status..." maxlength="1000">@currentPathToGreen</textarea>
+                            <small class="form-text text-muted">Required when RAG status is not Green (max 1000 characters)</small>
                         </div>
                     </div>
                 </div>
@@ -570,6 +551,8 @@
                 var selectedRag = $(this).val();
                 var ragChanged = selectedRag !== originalRagStatus;
                 var isNotGreen = selectedRag !== '' && selectedRag !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && selectedRag === 'Green';
                 
                 // Clear justification if RAG status changed
                 if (ragChanged) {
@@ -585,8 +568,8 @@
                     $('#pathToGreen').prop('required', false);
                 }
                 
-                // Require justification if RAG changed or not green
-                if (ragChanged || isNotGreen) {
+                // Require justification if RAG changed or not green, but not if both current and selected are Green
+                if (!bothGreen && (ragChanged || isNotGreen)) {
                     $('#ragJustification').prop('required', true);
                     $('#ragJustificationRequired').show();
                 } else {
@@ -605,6 +588,8 @@
                 var pathToGreen = $('#pathToGreen').val().trim();
                 var ragChanged = ragStatus !== originalRagStatus;
                 var isNotGreen = ragStatus !== '' && ragStatus !== 'Green';
+                // If both current RAG and selected RAG are Green, don't require justification or path to green
+                var bothGreen = originalRagStatus && originalRagStatus === 'Green' && ragStatus === 'Green';
                 var isNilReturn = $('#nilReturnCheckbox').is(':checked');
                 var hasNarratives = @(hasNarratives ? "true" : "false");
                 
@@ -618,11 +603,13 @@
                     errors.push('RAG status is required');
                 }
                 
-                if ((ragChanged || isNotGreen) && !ragJustification) {
+                // Don't require justification if both current and selected RAG are Green
+                if (!bothGreen && (ragChanged || isNotGreen) && !ragJustification) {
                     errors.push('RAG justification is required when RAG status has changed or is not Green');
                 }
                 
-                if (isNotGreen && !pathToGreen) {
+                // Don't require path to green if both current and selected RAG are Green
+                if (!bothGreen && isNotGreen && !pathToGreen) {
                     errors.push('Path to Green is required when RAG status is not Green');
                 }
                 
