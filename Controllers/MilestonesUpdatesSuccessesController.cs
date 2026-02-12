@@ -43,7 +43,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.ProjectContacts)
             .Include(p => p.StatusUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Risks)
             .Include(p => p.Actions)
             .Include(p => p.Issues)
@@ -97,7 +97,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.ProjectContacts)
             .Include(p => p.StatusUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Risks)
             .Include(p => p.Actions)
             .Include(p => p.Issues)
@@ -144,7 +144,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.RagHistory)
             .Include(p => p.RagStatusLookup)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
             .Include(p => p.ProjectContacts)
             .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -162,8 +162,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
             .ToListAsync();
 
-        var hasDigitalDirectorate = project.Directorates?.Any(d => d.DirectorateLookup != null && 
-            d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+        var hasDigitalDirectorate = project.Directorates?.Any(d => d.Division != null && 
+            d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
         // Check if update already exists
         var existingUpdate = await _context.ProjectMonthlyUpdates
@@ -228,7 +228,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Include(p => p.RagHistory)
             .Include(p => p.MonthlyUpdates)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.Milestones)
             .Include(p => p.ProjectContacts)
             .Include(p => p.WeeklySuccessUpdates)
@@ -254,8 +254,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             .Where(d => d.TargetEntityType == "Project" && d.TargetEntityId == project.Id)
             .ToListAsync();
 
-        var hasDigitalDirectorate = project.Directorates?.Any(d => d.DirectorateLookup != null && 
-            d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+        var hasDigitalDirectorate = project.Directorates?.Any(d => d.Division != null && 
+            d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
         var update = await _context.ProjectMonthlyUpdates
             .Include(u => u.MonthlyUpdateNarratives)
@@ -357,7 +357,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             // Return view with error
             var projectForView = await _context.Projects
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectContacts)
                 .FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
@@ -379,8 +379,8 @@ public class MilestonesUpdatesSuccessesController : Controller
                 return NotFound();
             }
             
-            var hasDigitalDirectorate = projectForView.Directorates?.Any(d => d.DirectorateLookup != null && 
-                d.DirectorateLookup.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
+            var hasDigitalDirectorate = projectForView.Directorates?.Any(d => d.Division != null && 
+                d.Division.Name.Contains("Digital", StringComparison.OrdinalIgnoreCase)) == true;
 
             ViewBag.ProjectId = projectForView.Id;
             ViewBag.ProjectTitle = projectForView.Title;

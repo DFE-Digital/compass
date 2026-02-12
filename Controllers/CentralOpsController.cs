@@ -1666,7 +1666,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.BusinessAreaLookup)
                 .Include(p => p.ActivityTypeLookup)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Milestones)
@@ -1722,7 +1722,7 @@ public class CentralOpsController : Controller
                 .OrderBy(dp => dp)
                 .ToListAsync();
 
-            var directorates = await _context.DirectorateLookups
+            var directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
@@ -1780,7 +1780,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.ProjectProducts)
                 .Include(p => p.ProjectContacts)
                     .ThenInclude(pc => pc.User)
@@ -2008,7 +2008,7 @@ public class CentralOpsController : Controller
 
                 // Directorates
                 var directorates = project.Directorates?
-                    .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                    .Select(d => d.Division?.Name ?? string.Empty)
                     .Where(d => !string.IsNullOrEmpty(d))
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -2142,7 +2142,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.ProjectProducts)
                 .Include(p => p.ProjectContacts)
                     .ThenInclude(pc => pc.User)
@@ -2338,7 +2338,7 @@ public class CentralOpsController : Controller
 
                 // Directorates
                 var directorates = project.Directorates?
-                    .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                    .Select(d => d.Division?.Name ?? string.Empty)
                     .Where(d => !string.IsNullOrEmpty(d))
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -2491,7 +2491,7 @@ public class CentralOpsController : Controller
             .Include(p => p.ServiceOwners)
                 .ThenInclude(so => so.User)
             .Include(p => p.Directorates)
-                .ThenInclude(d => d.DirectorateLookup)
+                .ThenInclude(d => d.Division)
             .Include(p => p.PmoContacts)
                 .ThenInclude(pc => pc.User)
             .Include(p => p.ProjectObjectives)
@@ -3388,7 +3388,7 @@ public class CentralOpsController : Controller
                 .Include(p => p.SeniorResponsibleOfficers)
                     .ThenInclude(sro => sro.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Where(p => request.ProjectIds.Contains(p.Id) && !p.IsDeleted)
                 .ToListAsync();
 
@@ -3546,7 +3546,7 @@ public class CentralOpsController : Controller
                     {
                         // Get existing directorate IDs
                         var existingDirectorateIds = project.Directorates
-                            .Select(d => d.DirectorateLookupId)
+                            .Select(d => d.DivisionId)
                             .ToList();
 
                         // Add new directorates
@@ -3557,7 +3557,7 @@ public class CentralOpsController : Controller
                                 var newDirectorate = new ProjectDirectorate
                                 {
                                     ProjectId = project.Id,
-                                    DirectorateLookupId = directorateId,
+                                    DivisionId = directorateId,
                                     CreatedAt = DateTime.UtcNow
                                 };
                                 _context.ProjectDirectorates.Add(newDirectorate);
@@ -5620,7 +5620,7 @@ public class CentralOpsController : Controller
     // GET: CentralOps/AccessDenied
     // This action should NOT require authorization - it's for showing the access denied message
     // GET: CentralOps/PerformanceReporting
-    public async Task<IActionResult> PerformanceReporting(int? commissionId = null)
+    public async Task<IActionResult> PerformanceReporting(int? commissionId = null, string businessArea = null)
     {
         // Get all active commissions
         var commissions = await _context.Commissions
@@ -5691,10 +5691,48 @@ public class CentralOpsController : Controller
             .OrderBy(pm => pm.Identifier)
             .ToListAsync();
 
-        // Build product-metric data
+        // Calculate business area completion from ALL eligible products (before filtering)
+        // This ensures all business areas are always visible in the completion table
+        var businessAreaCompletions = new List<BusinessAreaCommissionCompletion>();
+        
+        var productsByBusinessArea = eligibleProducts
+            .GroupBy(p =>
+            {
+                var businessArea = p.CategoryValues?
+                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                    ?.Name ?? "Unassigned";
+                return businessArea;
+            })
+            .ToList();
+
+        // Get unique business areas for filter dropdown (from eligible products before filtering)
+        var allBusinessAreas = eligibleProducts
+            .Select(p => p.CategoryValues?
+                .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                ?.Name ?? "Unassigned")
+            .Distinct()
+            .OrderBy(ba => ba)
+            .ToList();
+
+        // Filter products by business area if selected (for the products table only)
+        var filteredProducts = eligibleProducts;
+        if (!string.IsNullOrEmpty(businessArea) && businessArea != "all")
+        {
+            filteredProducts = eligibleProducts
+                .Where(p =>
+                {
+                    var productBusinessArea = p.CategoryValues?
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
+                        ?.Name ?? "Unassigned";
+                    return productBusinessArea.Equals(businessArea, StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+        }
+
+        // Build product-metric data from filtered products
         var productMetricData = new List<CommissionProductMetricViewModel>();
         
-        foreach (var product in eligibleProducts.OrderBy(p => p.Title))
+        foreach (var product in filteredProducts.OrderBy(p => p.Title))
         {
             var documentId = product.DocumentId ?? "";
             var submission = submissions.GetValueOrDefault(documentId);
@@ -5713,22 +5751,9 @@ public class CentralOpsController : Controller
             }
         }
 
-        // Calculate business area completion
-        var businessAreaCompletions = new List<BusinessAreaCommissionCompletion>();
-        
-        var productsByBusinessArea = eligibleProducts
-            .GroupBy(p =>
-            {
-                var businessArea = p.CategoryValues?
-                    .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Business area", StringComparison.OrdinalIgnoreCase) == true)
-                    ?.Name ?? "Unassigned";
-                return businessArea;
-            })
-            .ToList();
-
         foreach (var group in productsByBusinessArea)
         {
-            var businessArea = group.Key;
+            var businessAreaName = group.Key;
             var products = group.ToList();
             var totalProducts = products.Count;
             
@@ -5764,7 +5789,7 @@ public class CentralOpsController : Controller
 
             businessAreaCompletions.Add(new BusinessAreaCommissionCompletion
             {
-                BusinessArea = businessArea,
+                BusinessArea = businessAreaName,
                 TotalProducts = totalProducts,
                 CompletedProducts = completedProducts,
                 InProgressProducts = inProgressProducts,
@@ -5780,6 +5805,8 @@ public class CentralOpsController : Controller
         ViewBag.ProductMetricData = productMetricData;
         ViewBag.BusinessAreaCompletions = businessAreaCompletions;
         ViewBag.AllCommissions = commissions;
+        ViewBag.BusinessAreas = allBusinessAreas;
+        ViewBag.SelectedBusinessArea = businessArea;
 
         return View("~/Views/CentralOps/PerformanceReporting/Details.cshtml", commission);
     }

@@ -705,7 +705,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -770,7 +770,7 @@ public class DdtReportsController : Controller
                 .OrderBy(ba => ba.Name)
                 .ToListAsync();
             
-            ViewBag.DirectorateLookups = await _context.DirectorateLookups
+            ViewBag.DirectorateLookups = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
@@ -872,14 +872,14 @@ public class DdtReportsController : Controller
             .ToList() ?? new List<int>();
 
         var directorateNames = project.Directorates?
-            .Where(d => d.DirectorateLookup != null)
-            .Select(d => d.DirectorateLookup.Name ?? "")
+            .Where(d => d.Division != null)
+            .Select(d => d.Division.Name ?? "")
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToList() ?? new List<string>();
         
         var directorateLookupIds = project.Directorates?
-            .Where(d => d.DirectorateLookup != null)
-            .Select(d => d.DirectorateLookup.Id)
+            .Where(d => d.Division != null)
+            .Select(d => d.Division.Id)
             .ToList() ?? new List<int>();
 
         var budgetOwnerNames = project.BudgetOwners?
@@ -3347,7 +3347,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3462,7 +3462,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3605,7 +3605,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3694,7 +3694,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3776,7 +3776,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3859,7 +3859,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3924,7 +3924,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4090,7 +4090,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4166,7 +4166,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4274,7 +4274,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4384,7 +4384,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4492,7 +4492,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4514,16 +4514,16 @@ public class DdtReportsController : Controller
             string? directorateName = null;
             if (directorateLookupId.HasValue)
             {
-                var directorate = await _context.DirectorateLookups.FindAsync(directorateLookupId.Value);
-                if (directorate != null && directorate.IsActive)
+                var division = await _context.Divisions.FindAsync(directorateLookupId.Value);
+                if (division != null && division.IsActive)
                 {
                     project.Directorates.Add(new ProjectDirectorate
                     {
                         ProjectId = project.Id,
-                        DirectorateLookupId = directorateLookupId.Value,
+                        DivisionId = directorateLookupId.Value,
                         CreatedAt = DateTime.UtcNow
                     });
-                    directorateName = directorate.Name;
+                    directorateName = division.Name;
                 }
             }
 
