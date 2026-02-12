@@ -297,11 +297,17 @@
         }[match]));
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('[data-user-picker]').forEach(el => {
+    function initializePickers() {
+        document.querySelectorAll('[data-user-picker]:not([data-picker-initialized])').forEach(el => {
             pickers.push(new UserPicker(el));
+            el.setAttribute('data-picker-initialized', 'true');
         });
-    });
+    }
+
+    document.addEventListener('DOMContentLoaded', initializePickers);
+
+    // Expose initialization function for modals and dynamic content
+    window.initializeUserPickers = initializePickers;
 })();
 
 

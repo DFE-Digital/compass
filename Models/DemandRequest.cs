@@ -168,6 +168,9 @@ public class DemandRequest
 
     public DateTime? ConvertedToProjectAt { get; set; }
 
+    // Business Case Link
+    public int? BusinessCaseId { get; set; }
+
     // Status and Workflow
     [Required]
     [StringLength(50)]
@@ -224,6 +227,7 @@ public class DemandRequest
     public ICollection<DemandRequestSectionCompletion> SectionCompletions { get; set; } = new List<DemandRequestSectionCompletion>();
     public TriageMeeting? TriageMeeting { get; set; }
     public Project? ConvertedProject { get; set; }
+    public BusinessCase? BusinessCase { get; set; }
 }
 
 /// <summary>

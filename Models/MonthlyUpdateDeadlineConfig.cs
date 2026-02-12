@@ -28,6 +28,13 @@ public class MonthlyUpdateDeadlineConfig
     public int WorkingDayDeadline { get; set; } = 5;
 
     /// <summary>
+    /// Number of days before the end of the month when updates become available for submission (default: 6)
+    /// </summary>
+    [Required]
+    [Range(1, 30)]
+    public int CommissionDaysBeforeMonthEnd { get; set; } = 6;
+
+    /// <summary>
     /// Start date for when this configuration applies
     /// </summary>
     [Required]

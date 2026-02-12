@@ -46,8 +46,13 @@ public class EntitiesController : ControllerBase
 
     private async Task<List<object>> SearchProjects(string searchTerm)
     {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return new List<object>();
+        }
+
         var projects = await _context.Projects
-            .Where(p => !p.IsDeleted && 
+            .Where(p => !p.IsDeleted &&
                    ((p.Title != null && p.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
                     (p.ProjectCode != null && p.ProjectCode.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))))
             .OrderBy(p => p.Title)

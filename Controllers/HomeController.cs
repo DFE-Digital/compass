@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace Compass.Controllers;
 
@@ -23,6 +24,7 @@ public class HomeController : Controller
     private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly CompassDbContext _context;
     private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
     public HomeController(
         ILogger<HomeController> logger, 
@@ -31,7 +33,8 @@ public class HomeController : Controller
         IReturnStatusService returnStatusService,
         IMonthlyUpdateService monthlyUpdateService,
         CompassDbContext context,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IConfiguration configuration)
     {
         _logger = logger;
         _cmsApiService = cmsApiService;
@@ -40,6 +43,7 @@ public class HomeController : Controller
         _monthlyUpdateService = monthlyUpdateService;
         _context = context;
         _environment = environment;
+        _configuration = configuration;
     }
 
     public async Task<IActionResult> Index(string? testRole = null, int? testUserId = null)
@@ -378,13 +382,17 @@ public class HomeController : Controller
             .OrderBy(p => p.Title)
             .ToListAsync();
 
-        // Fetch user's products - both from product_contacts and service_owner (same approach as ProductReportingController)
+        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user (same approach as ProductReportingController)
         var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Combine and deduplicate products (by FipsId)
         var myProducts = productsByContact
             .Concat(productsByServiceOwner)
+            .Concat(productsByProductManager)
+            .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
             .Select(g => g.First())
@@ -401,8 +409,8 @@ public class HomeController : Controller
         var highPriorityIssues = allActiveIssues.Where(i => i.Severity == "high" || i.Severity == "critical").ToList();
         var openIssues = allActiveIssues.Where(i => i.Status != "resolved" && i.Status != "closed").ToList();
 
-        var redProjects = myProjects.Where(p => p.RagStatus == "Red").ToList();
-        var amberRedProjects = myProjects.Where(p => p.RagStatus == "Amber-Red").ToList();
+        var redProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Red").ToList();
+        var amberRedProjects = myProjects.Where(p => p.RagStatusLookup != null && p.RagStatusLookup.Name == "Amber-Red").ToList();
         var atRiskProjects = redProjects.Concat(amberRedProjects).ToList();
 
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
@@ -423,21 +431,26 @@ public class HomeController : Controller
         var currentMonth = now.Month == 1 ? 12 : now.Month - 1;
 
         var productsNeedingReturns = new List<(ProductDto Product, ReturnStatus Status, DateTime DueDate)>();
-        foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
+        var enableMonthlyPerformanceReporting = _configuration.GetValue<bool>("FeatureFlags:EnableMonthlyPerformanceReporting", true);
+        
+        if (enableMonthlyPerformanceReporting)
         {
-            var productReturn = await _context.ProductReturns
-                .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
-                .FirstOrDefaultAsync();
-
-            var status = _returnStatusService.CalculateReturnStatus(
-                currentYear,
-                currentMonth,
-                productReturn?.SubmittedDate);
-
-            if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+            foreach (var product in myProducts.Where(p => !string.IsNullOrEmpty(p.FipsId)))
             {
-                var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
-                productsNeedingReturns.Add((product, status, dueDate));
+                var productReturn = await _context.ProductReturns
+                    .Where(pr => pr.FipsId == product.FipsId && pr.Year == currentYear && pr.Month == currentMonth)
+                    .FirstOrDefaultAsync();
+
+                var status = _returnStatusService.CalculateReturnStatus(
+                    currentYear,
+                    currentMonth,
+                    productReturn?.SubmittedDate);
+
+                if (status == ReturnStatus.Due || status == ReturnStatus.Late)
+                {
+                    var dueDate = _returnStatusService.GetReturnDueDate(currentYear, currentMonth);
+                    productsNeedingReturns.Add((product, status, dueDate));
+                }
             }
         }
 
@@ -452,6 +465,62 @@ public class HomeController : Controller
             {
                 var dueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(currentYear, currentMonth);
                 projectsNeedingMonthlyUpdates.Add((project, updateStatus, dueDate));
+            }
+        }
+
+        // Calculate products needing commission reporting
+        var productsNeedingCommissionReporting = new List<(ProductDto Product, Commission Commission, CommissionSubmissionStatus Status, DateTime DueDate)>();
+        var activeCommissions = await _context.Commissions
+            .Where(c => c.IsActive && c.OpenDate <= now)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync();
+
+        foreach (var commission in activeCommissions)
+        {
+            // Check if commission is still open (not past due date, or past due but not submitted)
+            var isOpen = now >= commission.OpenDate;
+            var isPastDue = now > commission.DueDate;
+
+            // Get user's products for this commission
+            var userProductDocumentIds = myProducts
+                .Where(p => !string.IsNullOrEmpty(p.DocumentId) && 
+                           p.State != null && 
+                           !p.State.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                           !p.State.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase) &&
+                           p.PublishedAt.HasValue)
+                .Select(p => p.DocumentId!)
+                .ToList();
+
+            if (!userProductDocumentIds.Any())
+                continue;
+
+            // Get existing submissions for user's products
+            var existingSubmissions = await _context.CommissionSubmissions
+                .Where(cs => cs.CommissionId == commission.Id && 
+                            userProductDocumentIds.Contains(cs.ProductDocumentId))
+                .ToDictionaryAsync(cs => cs.ProductDocumentId, cs => cs);
+
+            // Check each user product
+            foreach (var product in myProducts.Where(p => userProductDocumentIds.Contains(p.DocumentId ?? "")))
+            {
+                var documentId = product.DocumentId ?? "";
+                if (string.IsNullOrEmpty(documentId))
+                    continue;
+
+                var submission = existingSubmissions.GetValueOrDefault(documentId);
+                var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
+
+                // Only include if not submitted and (open or past due)
+                if (status != CommissionSubmissionStatus.Submitted && (isOpen || isPastDue))
+                {
+                    var finalStatus = isPastDue && status != CommissionSubmissionStatus.Submitted
+                        ? CommissionSubmissionStatus.Late
+                        : status == CommissionSubmissionStatus.NotStarted && isOpen
+                        ? CommissionSubmissionStatus.NotStarted
+                        : status;
+
+                    productsNeedingCommissionReporting.Add((product, commission, finalStatus, commission.DueDate));
+                }
             }
         }
 
@@ -599,8 +668,8 @@ public class HomeController : Controller
                     .ToList();
 
                 enterpriseAtRiskProjects = allProjects
-                    .Where(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                                (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
                 enterpriseMetrics = new EnterpriseLeadershipMetrics
@@ -749,6 +818,7 @@ public class HomeController : Controller
             RecentSuccesses = recentSuccesses,
             ProductsNeedingReturns = productsNeedingReturns,
             ProjectsNeedingMonthlyUpdates = projectsNeedingMonthlyUpdates,
+            ProductsNeedingCommissionReporting = productsNeedingCommissionReporting,
             LeadershipAssignments = leadershipAssignments,
             LeadershipBusinessAreas = leadershipBusinessAreas,
             HighestLeadershipRole = highestRole,
@@ -796,8 +866,8 @@ public class HomeController : Controller
             .Count();
 
         var atRiskProjects = oversightProjects
-            .Count(p => string.Equals(p.RagStatus, "Red", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.RagStatus, "Amber-Red", StringComparison.OrdinalIgnoreCase));
+            .Count(p => (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Red", StringComparison.OrdinalIgnoreCase)) ||
+                        (p.RagStatusLookup != null && string.Equals(p.RagStatusLookup.Name, "Amber-Red", StringComparison.OrdinalIgnoreCase)));
 
         return new DashboardMetrics
         {
@@ -991,7 +1061,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "info",
                 LinkLabel = "Book review",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1006,7 +1076,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "primary",
                 LinkLabel = "Assessment guidance",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1021,7 +1091,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "warning",
                 LinkLabel = "Operational readiness checklist",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1036,7 +1106,7 @@ public class HomeController : Controller
                 FrequencyBadge = "Lifecycle",
                 Tone = "success",
                 LinkLabel = "Book assessment",
-                LinkUrl = Url.Action("Roadmap", "Home") ?? "#"
+                LinkUrl = "#"
             });
         }
 
@@ -1087,7 +1157,7 @@ public class HomeController : Controller
                 Title = "Book service assessment",
                 Description = "Secure a DDaT assessment slot for your service.",
                 Icon = "fas fa-clipboard",
-                Url = Url.Action("Roadmap", "Home") ?? "#"
+                Url = "#"
             },
             new()
             {
@@ -1242,11 +1312,6 @@ public class HomeController : Controller
     }
 
     public IActionResult Error()
-    {
-        return View();
-    }
-
-    public IActionResult Roadmap()
     {
         return View();
     }

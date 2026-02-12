@@ -19,6 +19,7 @@ public class DdtReportsController : Controller
     private readonly IReturnStatusService _returnStatusService;
     private readonly IUserDirectoryService _userDirectoryService;
     private readonly INotificationRuleService _notificationRuleService;
+    private readonly ICmsApiService _cmsApiService;
     private static readonly string[] UserGroupCategoryTypeNames =
     {
         "User group", "User Group", "User groups", "User Groups",
@@ -31,7 +32,7 @@ public class DdtReportsController : Controller
     private static readonly string[] DeliveryManagerRoleKeywords =
         { "delivery manager", "delivery_manager", "delivery-manager", "delivery lead", "delivery_lead", "delivery owner", "delivery_owner", "dm" };
 
-    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService, INotificationRuleService notificationRuleService)
+    public DdtReportsController(CompassDbContext context, ILogger<DdtReportsController> logger, IProductsApiService productsApiService, IReturnStatusService returnStatusService, IUserDirectoryService userDirectoryService, INotificationRuleService notificationRuleService, ICmsApiService cmsApiService)
     {
         _context = context;
         _logger = logger;
@@ -39,6 +40,7 @@ public class DdtReportsController : Controller
         _returnStatusService = returnStatusService;
         _userDirectoryService = userDirectoryService;
         _notificationRuleService = notificationRuleService;
+        _cmsApiService = cmsApiService;
     }
 
     // GET: DdtReports/Index - Landing page
@@ -577,7 +579,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -644,7 +646,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -703,7 +705,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -724,7 +726,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -768,7 +770,7 @@ public class DdtReportsController : Controller
                 .OrderBy(ba => ba.Name)
                 .ToListAsync();
             
-            ViewBag.DirectorateLookups = await _context.DirectorateLookups
+            ViewBag.DirectorateLookups = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
@@ -870,14 +872,14 @@ public class DdtReportsController : Controller
             .ToList() ?? new List<int>();
 
         var directorateNames = project.Directorates?
-            .Where(d => d.DirectorateLookup != null)
-            .Select(d => d.DirectorateLookup.Name ?? "")
+            .Where(d => d.Division != null)
+            .Select(d => d.Division.Name ?? "")
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToList() ?? new List<string>();
         
         var directorateLookupIds = project.Directorates?
-            .Where(d => d.DirectorateLookup != null)
-            .Select(d => d.DirectorateLookup.Id)
+            .Where(d => d.Division != null)
+            .Select(d => d.Division.Id)
             .ToList() ?? new List<int>();
 
         var budgetOwnerNames = project.BudgetOwners?
@@ -962,6 +964,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -996,16 +999,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -1058,6 +1062,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -1092,16 +1097,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -1250,6 +1256,7 @@ public class DdtReportsController : Controller
                 "Contacts count",
                 "Contacts",
                 "Senior responsible officer",
+                "Service owner",
                 "Information asset owner",
                 "Delivery manager",
                 "Product URL",
@@ -1284,16 +1291,17 @@ public class DdtReportsController : Controller
                     ? string.Join(Environment.NewLine, item.ContactDetails)
                     : string.Empty;
                 worksheet.Cell(currentRow, 10).Value = item.SeniorResponsibleOfficer ?? string.Empty;
-                worksheet.Cell(currentRow, 11).Value = item.InformationAssetOwner ?? string.Empty;
-                worksheet.Cell(currentRow, 12).Value = item.DeliveryManager ?? string.Empty;
-                worksheet.Cell(currentRow, 13).Value = item.ProductUrl ?? string.Empty;
-                worksheet.Cell(currentRow, 14).Value = item.HasProductUrl ? "Yes" : "No";
-                worksheet.Cell(currentRow, 15).Value = item.UserGroupNames.Any()
+                worksheet.Cell(currentRow, 11).Value = item.ServiceOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 12).Value = item.InformationAssetOwner ?? string.Empty;
+                worksheet.Cell(currentRow, 13).Value = item.DeliveryManager ?? string.Empty;
+                worksheet.Cell(currentRow, 14).Value = item.ProductUrl ?? string.Empty;
+                worksheet.Cell(currentRow, 15).Value = item.HasProductUrl ? "Yes" : "No";
+                worksheet.Cell(currentRow, 16).Value = item.UserGroupNames.Any()
                     ? string.Join(", ", item.UserGroupNames)
                     : string.Empty;
-                worksheet.Cell(currentRow, 16).Value = item.UserGroupsCount;
-                worksheet.Cell(currentRow, 17).Value = item.CompletionPercentage / 100.0;
-                worksheet.Cell(currentRow, 17).Style.NumberFormat.Format = "0.0%";
+                worksheet.Cell(currentRow, 17).Value = item.UserGroupsCount;
+                worksheet.Cell(currentRow, 18).Value = item.CompletionPercentage / 100.0;
+                worksheet.Cell(currentRow, 18).Style.NumberFormat.Format = "0.0%";
 
                 currentRow++;
             }
@@ -1539,6 +1547,152 @@ public class DdtReportsController : Controller
         }
     }
 
+    // GET: DdtReports/SearchTerms
+    public async Task<IActionResult> SearchTerms(int page = 1, int pageSize = 25)
+    {
+        try
+        {
+            // Validate pagination parameters
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 25;
+            if (pageSize > 100) pageSize = 100;
+
+            // Fetch all search terms from CMS (we need all for distinct calculation)
+            var endpoint = "search-terms?sort=timestamp:desc&pagination[pageSize]=1000";
+            var response = await _cmsApiService.GetAsync<ApiCollectionResponse<SearchTerm>>(endpoint);
+            
+            var allSearchTerms = response?.Data ?? new List<SearchTerm>();
+            
+            // Group by search term (case insensitive) and count occurrences
+            var distinctSearchTerms = allSearchTerms
+                .GroupBy(st => st.SearchTermText, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new DistinctSearchTerm
+                {
+                    SearchTerm = g.First().SearchTermText, // Use first occurrence's casing
+                    Count = g.Count(),
+                    AverageResultCount = g.Average(x => x.ResultCount)
+                })
+                .OrderByDescending(dst => dst.Count)
+                .ThenBy(dst => dst.SearchTerm)
+                .ToList();
+
+            // Paginate the search terms
+            var totalCount = allSearchTerms.Count;
+            var paginatedSearchTerms = allSearchTerms
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            var viewModel = new SearchTermsViewModel
+            {
+                SearchTerms = paginatedSearchTerms,
+                DistinctSearchTerms = distinctSearchTerms,
+                TotalSearchTerms = totalCount,
+                DistinctSearchTermsCount = distinctSearchTerms.Count,
+                PageNumber = page,
+                PageSize = pageSize
+            };
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading search terms");
+            TempData["ErrorMessage"] = "An error occurred while loading search terms. Please try again.";
+            return View(new SearchTermsViewModel());
+        }
+    }
+
+    // GET: DdtReports/ExportSearchTerms
+    public async Task<IActionResult> ExportSearchTerms()
+    {
+        try
+        {
+            // Fetch all search terms from CMS
+            var endpoint = "search-terms?sort=timestamp:desc&pagination[pageSize]=1000";
+            var response = await _cmsApiService.GetAsync<ApiCollectionResponse<SearchTerm>>(endpoint);
+            
+            var allSearchTerms = response?.Data ?? new List<SearchTerm>();
+            
+            if (!allSearchTerms.Any())
+            {
+                TempData["ErrorMessage"] = "No search terms found to export.";
+                return RedirectToAction("SearchTerms");
+            }
+            
+            // Group by search term (case insensitive) and combine all results
+            var groupedSearchTerms = allSearchTerms
+                .GroupBy(st => st.SearchTermText, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new
+                {
+                    SearchTerm = g.First().SearchTermText, // Use first occurrence's casing
+                    AllResults = g.SelectMany(st => st.Results ?? new List<SearchTermResult>())
+                        .DistinctBy(r => r.DocumentId) // Remove duplicate results by DocumentId
+                        .ToList(),
+                    TotalSearches = g.Count(),
+                    TotalResultCount = g.Sum(x => x.ResultCount)
+                })
+                .OrderByDescending(x => x.TotalSearches)
+                .ThenBy(x => x.SearchTerm)
+                .ToList();
+            
+            // Create workbook
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("All Search Terms");
+            
+            // Headers
+            var headers = new[] { "Search Term", "Times Searched", "Total Results", "All Results" };
+            for (int col = 0; col < headers.Length; col++)
+            {
+                var cell = worksheet.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f5");
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+            
+            // Add data rows
+            int currentRow = 2;
+            foreach (var item in groupedSearchTerms)
+            {
+                int col = 1;
+                
+                worksheet.Cell(currentRow, col++).Value = item.SearchTerm;
+                worksheet.Cell(currentRow, col++).Value = item.TotalSearches;
+                worksheet.Cell(currentRow, col++).Value = item.TotalResultCount;
+                
+                // Combine all results into a single cell
+                var resultsText = item.AllResults.Any()
+                    ? string.Join(Environment.NewLine, item.AllResults.Select(r => $"{r.Title} ({r.DocumentId})"))
+                    : "No results";
+                
+                worksheet.Cell(currentRow, col++).Value = resultsText;
+                worksheet.Cell(currentRow, col).Style.Alignment.WrapText = true;
+                
+                currentRow++;
+            }
+            
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+            // Make the results column wider and wrap text
+            worksheet.Column(4).Width = 50;
+            worksheet.Column(4).Style.Alignment.WrapText = true;
+            worksheet.SheetView.FreezeRows(1);
+            
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var fileName = $"all-search-terms-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting search terms to Excel");
+            TempData["ErrorMessage"] = "An error occurred while exporting the data. Please try again.";
+            return RedirectToAction("SearchTerms");
+        }
+    }
+
     // GET: DdtReports/AllCmsData
     public async Task<IActionResult> AllCmsData()
     {
@@ -1556,7 +1710,7 @@ public class DdtReportsController : Controller
 
             var businessAreaCompletions = completionItems
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Unassigned" : p.BusinessArea)
-                .Select(g => new BusinessAreaCompletion
+                .Select(g => new FipsBusinessAreaCompletion
                 {
                     BusinessArea = g.Key,
                     ProductCount = g.Count(),
@@ -2654,6 +2808,7 @@ public class DdtReportsController : Controller
         var sroContacts = new List<string>();
         var iaoContacts = new List<string>();
         var deliveryManagerContacts = new List<string>();
+        var serviceOwnerContacts = new List<string>();
         var contactDetails = new List<string>();
 
         if (product.ProductContacts != null)
@@ -2720,6 +2875,26 @@ public class DdtReportsController : Controller
             _logger.LogInformation("Product {FipsId} has no product contacts", product.FipsId);
         }
 
+        // Extract Service Owner from product.ServiceOwners
+        if (product.ServiceOwners != null && product.ServiceOwners.Any())
+        {
+            foreach (var serviceOwner in product.ServiceOwners)
+            {
+                if (serviceOwner == null) continue;
+                
+                var displayName = !string.IsNullOrWhiteSpace(serviceOwner.DisplayName)
+                    ? serviceOwner.DisplayName
+                    : (!string.IsNullOrWhiteSpace(serviceOwner.FirstName) || !string.IsNullOrWhiteSpace(serviceOwner.LastName))
+                        ? $"{serviceOwner.FirstName} {serviceOwner.LastName}".Trim()
+                        : serviceOwner.EmailAddress;
+                
+                if (!string.IsNullOrWhiteSpace(displayName))
+                {
+                    AddContactIfMissing(serviceOwnerContacts, displayName);
+                }
+            }
+        }
+
         var userGroupsCount = userGroupNames.Count;
 
         var completedCriteria = 0;
@@ -2734,6 +2909,7 @@ public class DdtReportsController : Controller
         return new ProductCompletionItem
         {
             FipsId = product.FipsId ?? string.Empty,
+            DocumentId = product.DocumentId ?? string.Empty,
             ProductTitle = product.Title,
             BusinessArea = businessAreaName,
             PhaseName = phaseName,
@@ -2741,9 +2917,11 @@ public class DdtReportsController : Controller
             SeniorResponsibleOfficer = sroContacts.Count > 0 ? string.Join(", ", sroContacts) : null,
             InformationAssetOwner = iaoContacts.Count > 0 ? string.Join(", ", iaoContacts) : null,
             DeliveryManager = deliveryManagerContacts.Count > 0 ? string.Join(", ", deliveryManagerContacts) : null,
+            ServiceOwner = serviceOwnerContacts.Count > 0 ? string.Join(", ", serviceOwnerContacts) : null,
             SeniorResponsibleOfficerContacts = new List<string>(sroContacts),
             InformationAssetOwnerContacts = new List<string>(iaoContacts),
             DeliveryManagerContacts = new List<string>(deliveryManagerContacts),
+            ServiceOwnerContacts = new List<string>(serviceOwnerContacts),
             ContactDetails = contactDetails,
             UserGroupNames = userGroupNames,
             UserGroupCategoryValueIds = userGroupIds,
@@ -3169,7 +3347,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3284,7 +3462,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3427,7 +3605,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3516,7 +3694,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3598,7 +3776,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3681,7 +3859,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3746,7 +3924,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3912,7 +4090,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -3988,7 +4166,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4096,7 +4274,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4206,7 +4384,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4314,7 +4492,7 @@ public class DdtReportsController : Controller
                 .Include(p => p.PmoContacts)
                     .ThenInclude(pmo => pmo.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.DeliveryPriority)
@@ -4336,16 +4514,16 @@ public class DdtReportsController : Controller
             string? directorateName = null;
             if (directorateLookupId.HasValue)
             {
-                var directorate = await _context.DirectorateLookups.FindAsync(directorateLookupId.Value);
-                if (directorate != null && directorate.IsActive)
+                var division = await _context.Divisions.FindAsync(directorateLookupId.Value);
+                if (division != null && division.IsActive)
                 {
                     project.Directorates.Add(new ProjectDirectorate
                     {
                         ProjectId = project.Id,
-                        DirectorateLookupId = directorateLookupId.Value,
+                        DivisionId = directorateLookupId.Value,
                         CreatedAt = DateTime.UtcNow
                     });
-                    directorateName = directorate.Name;
+                    directorateName = division.Name;
                 }
             }
 

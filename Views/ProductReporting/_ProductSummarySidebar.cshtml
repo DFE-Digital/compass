@@ -2,10 +2,9 @@
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
-    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://find-products-services-test.azurewebsites.net/";
-    var productDocumentId = Model?.DocumentId ?? Model?.FipsId;
-    var fipsProductUrl = !string.IsNullOrWhiteSpace(productDocumentId) 
-        ? $"{fipsBaseUrl.TrimEnd('/')}/product?ref={Uri.EscapeDataString(productDocumentId)}" 
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+    var fipsProductUrl = !string.IsNullOrWhiteSpace(Model?.FipsId) 
+        ? $"{fipsBaseUrl.TrimEnd('/')}/product/{Model.FipsId}" 
         : null;
 }
 
@@ -19,8 +18,6 @@
 }
 else
 {
-    var primaryContact = Model.ProductContacts?.FirstOrDefault(pc => !string.IsNullOrWhiteSpace(pc.ContactEmail) || !string.IsNullOrWhiteSpace(pc.ContactName) || pc.UsersPermissionsUser != null);
-
     <div class="card project-summary-card mb-4">
         <div class="card-header">
             <h3 class="card-title mb-0">Product overview</h3>
@@ -45,22 +42,6 @@ else
                     <li class="list-group-item">
                         <small class="text-muted d-block">Phase</small>
                         <span>@Model.Phase</span>
-                    </li>
-                }
-                @if (primaryContact != null)
-                {
-                    var contactName = primaryContact.ContactName ?? primaryContact.LegacyName ?? primaryContact.UsersPermissionsUser?.Username ?? "Not set";
-                    var contactEmail = primaryContact.ContactEmail ?? primaryContact.UsersPermissionsUser?.Email;
-                    <li class="list-group-item">
-                        <small class="text-muted d-block">Primary contact</small>
-                        @if (!string.IsNullOrWhiteSpace(contactEmail))
-                        {
-                            <a href="mailto:@contactEmail" class="font-weight-semibold">@contactName</a>
-                        }
-                        else
-                        {
-                            <span class="font-weight-semibold">@contactName</span>
-                        }
                     </li>
                 }
             </ul>

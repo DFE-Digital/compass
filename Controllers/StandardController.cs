@@ -236,8 +236,11 @@ namespace Compass.Controllers
                     
                     foreach (var subCategory in standard.SubCategories.Where(sc => sc.Category != null))
                     {
-                        _logger.LogInformation("Sub-category {Id} ({Title}) belongs to category {CategoryId} ({CategoryTitle})", 
-                            subCategory.Id, subCategory.Title, subCategory.Category.Id, subCategory.Category.Title);
+                        if (subCategory.Category != null)
+                        {
+                            _logger.LogInformation("Sub-category {Id} ({Title}) belongs to category {CategoryId} ({CategoryTitle})", 
+                                subCategory.Id, subCategory.Title, subCategory.Category.Id, subCategory.Category.Title);
+                        }
                     }
                 }
 
