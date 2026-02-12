@@ -197,6 +197,12 @@ public partial class CompassDbContext : DbContext
     // Project Lookups
     public DbSet<BusinessAreaLookup> BusinessAreaLookups { get; set; }
     public DbSet<PhaseLookup> PhaseLookups { get; set; }
+    
+    // Division and Business Area Management
+    public DbSet<Division> Divisions { get; set; }
+    public DbSet<DivisionBusinessArea> DivisionBusinessAreas { get; set; }
+    public DbSet<BusinessAreaUser> BusinessAreaUsers { get; set; }
+    public DbSet<DivisionUser> DivisionUsers { get; set; }
     public DbSet<DeliveryPriority> DeliveryPriorities { get; set; }
     public DbSet<KpiCategory> KpiCategories { get; set; }
     public DbSet<ActivityTypeLookup> ActivityTypeLookups { get; set; }
@@ -1877,16 +1883,16 @@ public partial class CompassDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ProjectDirectorate>()
-            .HasOne(pd => pd.DirectorateLookup)
+            .HasOne(pd => pd.Division)
             .WithMany()
-            .HasForeignKey(pd => pd.DirectorateLookupId)
+            .HasForeignKey(pd => pd.DivisionId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<ProjectDirectorate>()
             .HasIndex(pd => pd.ProjectId);
 
         modelBuilder.Entity<ProjectDirectorate>()
-            .HasIndex(pd => new { pd.ProjectId, pd.DirectorateLookupId })
+            .HasIndex(pd => new { pd.ProjectId, pd.DivisionId })
             .IsUnique();
 
         // ProjectBudgetOwner configuration

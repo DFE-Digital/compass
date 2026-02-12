@@ -2794,6 +2794,36 @@ public class AdminController : Controller
         return RedirectToAction(nameof(BusinessAreas));
     }
 
+    // GET: api/Admin/BusinessAreas
+    [HttpGet]
+    [Route("api/Admin/BusinessAreas")]
+    public async Task<IActionResult> GetBusinessAreasApi()
+    {
+        try
+        {
+            var businessAreas = await _context.BusinessAreaLookups
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .Select(ba => new
+                {
+                    id = ba.Id,
+                    name = ba.Name,
+                    description = ba.Description,
+                    sortOrder = ba.SortOrder,
+                    isActive = ba.IsActive
+                })
+                .ToListAsync();
+
+            return Json(businessAreas);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching business areas for API");
+            return StatusCode(500, new { error = "An error occurred while fetching business areas." });
+        }
+    }
+
     // GET: api/Admin/BusinessAreas/PreviewSync
     [HttpGet]
     [Route("api/Admin/BusinessAreas/PreviewSync")]
@@ -3794,132 +3824,18 @@ public class AdminController : Controller
     }
 
     // ========================================
-    // SETTINGS - Directorates
+    // SETTINGS - Directorates (Redirected to Divisions)
     // ========================================
 
     // GET: Admin/Directorates
-    public async Task<IActionResult> Directorates()
+    // Directorates are now managed through Divisions
+    public IActionResult Directorates()
     {
-        var directorates = await _context.DirectorateLookups
-            .OrderBy(d => d.SortOrder)
-            .ThenBy(d => d.Name)
-            .ToListAsync();
-        
-        return View("~/Views/Admin/Settings/Directorates.cshtml", directorates);
+        return RedirectToAction("Index", "DivisionBusinessAreaUser", new { area = "" });
     }
 
-    // POST: Admin/CreateDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateDirectorate([Bind("Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
-    {
-        if (ModelState.IsValid)
-        {
-            try
-            {
-                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name))
-                {
-                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
-                }
-                else
-                {
-                    directorate.CreatedAt = DateTime.UtcNow;
-                    directorate.UpdatedAt = DateTime.UtcNow;
-                    _context.Add(directorate);
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been created successfully.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating directorate");
-                TempData["ErrorMessage"] = "An error occurred while creating the directorate. Please try again.";
-            }
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
-
-    // POST: Admin/EditDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditDirectorate(int id, [Bind("Id,Name,Description,SortOrder,IsActive")] DirectorateLookup directorate)
-    {
-        if (id != directorate.Id)
-        {
-            return NotFound();
-        }
-
-        if (ModelState.IsValid)
-        {
-            try
-            {
-                if (await _context.DirectorateLookups.AnyAsync(d => d.Name == directorate.Name && d.Id != id))
-                {
-                    TempData["ErrorMessage"] = "A directorate with this name already exists.";
-                }
-                else
-                {
-                    var existing = await _context.DirectorateLookups.FindAsync(id);
-                    if (existing == null)
-                    {
-                        return NotFound();
-                    }
-
-                    existing.Name = directorate.Name;
-                    existing.Description = directorate.Description;
-                    existing.SortOrder = directorate.SortOrder;
-                    existing.IsActive = directorate.IsActive;
-                    existing.UpdatedAt = DateTime.UtcNow;
-
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been updated successfully.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating directorate");
-                TempData["ErrorMessage"] = "An error occurred while updating the directorate. Please try again.";
-            }
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
-
-    // POST: Admin/DeleteDirectorate
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteDirectorate(int id)
-    {
-        try
-        {
-            var directorate = await _context.DirectorateLookups.FindAsync(id);
-            if (directorate != null)
-            {
-                var projectCount = await _context.ProjectDirectorates.CountAsync(pd => pd.DirectorateLookupId == id);
-                if (projectCount > 0)
-                {
-                    TempData["ErrorMessage"] = $"Cannot delete directorate '{directorate.Name}' as it is being used by {projectCount} project(s).";
-                }
-                else
-                {
-                    _context.DirectorateLookups.Remove(directorate);
-                    await _context.SaveChangesAsync();
-                    
-                    TempData["SuccessMessage"] = $"Directorate '{directorate.Name}' has been deleted successfully.";
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting directorate");
-            TempData["ErrorMessage"] = "An error occurred while deleting the directorate. Please try again.";
-        }
-
-        return RedirectToAction(nameof(Directorates));
-    }
+    // Note: Directorates are now managed through Divisions
+    // Create, Edit, and Delete operations should be done through /Admin/DivisionBusinessAreaUser
 
     // ========================================
     // SETTINGS - Risk Appetite

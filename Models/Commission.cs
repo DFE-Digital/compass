@@ -104,6 +104,13 @@ public class CommissionSubmission
     
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Optional comments or notes regarding the metrics, such as how they were calculated,
+    /// or whether timescales are in hours, days, weeks, etc.
+    /// </summary>
+    [StringLength(2000)]
+    public string? Comments { get; set; }
+
     // Navigation properties
     [ForeignKey("CommissionId")]
     public Commission? Commission { get; set; }
