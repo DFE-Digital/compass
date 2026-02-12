@@ -55,13 +55,17 @@ public class ProductReportingController : Controller
         // Get the current user's email
         var userEmail = User.Identity?.Name;
         
-        // Fetch user's products - both from product_contacts and service_owner
+        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user
         var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Combine and deduplicate products (by FipsId)
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
+            .Concat(productsByProductManager)
+            .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
             .Select(g => g.First())
@@ -378,16 +382,20 @@ public class ProductReportingController : Controller
         var isOpen = now >= selectedCommission.OpenDate && now <= selectedCommission.DueDate.AddDays(1);
         var isPastDue = now > selectedCommission.DueDate;
 
-        // Fetch user's products - EXACTLY the same as PerformanceMetrics
+        // Fetch user's products - from product_contacts, service_owner, product_manager, and reporting_user
         var productsByContact = await _productsApiService.GetProductsAsync(userEmail);
         var productsByServiceOwner = await _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var productsByProductManager = await _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var productsByReportingUser = await _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
-        // Combine and deduplicate products (by FipsId) - EXACTLY the same as PerformanceMetrics
+        // Combine and deduplicate products (by FipsId)
         // Then exclude Decommissioned/Decommissioning Phase products
         // Also exclude products where the only Type is "Data" from performance reporting,
         // but keep products that have "Data" alongside another Type.
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
+            .Concat(productsByProductManager)
+            .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
             .Select(g => g.First())
@@ -420,8 +428,8 @@ public class ProductReportingController : Controller
             })
             .ToList();
             
-        _logger.LogInformation("Commission: Found {ContactCount} products by contact, {ServiceOwnerCount} by service owner, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
-            productsByContact.Count, productsByServiceOwner.Count, userProducts.Count, userEmail);
+        _logger.LogInformation("Commission: Found {ContactCount} products by contact, {ServiceOwnerCount} by service owner, {ProductManagerCount} by product manager, {ReportingUserCount} by reporting user, {TotalCount} total unique (after Phase filter) for user {UserEmail}", 
+            productsByContact.Count, productsByServiceOwner.Count, productsByProductManager.Count, productsByReportingUser.Count, userProducts.Count, userEmail);
 
         // Get all commission submissions for this commission
         var allSubmissions = await _context.CommissionSubmissions
@@ -879,7 +887,7 @@ public class ProductReportingController : Controller
     // POST: ProductReporting/SubmitCommissionSubmission/{id}
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SubmitCommissionSubmission(int id)
+    public async Task<IActionResult> SubmitCommissionSubmission(int id, string? comments)
     {
         var submission = await _context.CommissionSubmissions
             .Include(cs => cs.Commission)
@@ -910,6 +918,7 @@ public class ProductReportingController : Controller
         submission.SubmittedDate = now;
         submission.SubmittedBy = User.Identity?.Name ?? "unknown";
         submission.UpdatedAt = now;
+        submission.Comments = !string.IsNullOrWhiteSpace(comments) ? comments.Trim() : null;
 
         await _context.SaveChangesAsync();
 
@@ -979,6 +988,66 @@ public class ProductReportingController : Controller
         {
             _logger.LogError(ex, "Error unsubmitting commission submission");
             TempData["ErrorMessage"] = "An error occurred while unsubmitting the commission submission.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+    }
+
+    // POST: ProductReporting/UpdateCommissionComments
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateCommissionComments(int id, string? comments)
+    {
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.Commission)
+            .FirstOrDefaultAsync(cs => cs.Id == id);
+
+        if (submission == null)
+        {
+            TempData["ErrorMessage"] = "Submission not found.";
+            return RedirectToAction("Commission");
+        }
+
+        // Check if submission is submitted
+        if (submission.Status != CommissionSubmissionStatus.Submitted && submission.Status != CommissionSubmissionStatus.Late)
+        {
+            TempData["ErrorMessage"] = "Comments can only be updated for submitted commissions.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+
+        // Check if commission is past due - if so, cannot edit
+        var now = DateTime.UtcNow;
+        if (submission.Commission != null && now > submission.Commission.DueDate)
+        {
+            TempData["ErrorMessage"] = "Comments cannot be updated because the commission due date has passed.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+
+        try
+        {
+            submission.Comments = !string.IsNullOrWhiteSpace(comments) ? comments.Trim() : null;
+            submission.UpdatedAt = now;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Comments have been updated successfully.";
+            return RedirectToAction("SubmitCommission", new { 
+                documentId = submission.ProductDocumentId, 
+                commissionId = submission.CommissionId 
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating commission comments");
+            TempData["ErrorMessage"] = "An error occurred while updating the comments.";
             return RedirectToAction("SubmitCommission", new { 
                 documentId = submission.ProductDocumentId, 
                 commissionId = submission.CommissionId 
@@ -2292,15 +2361,21 @@ public class ProductReportingController : Controller
         // Fetch user's products in parallel (these are API calls, not DB queries)
         var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var userProductsByProductManagerTask = _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var userProductsByReportingUserTask = _productsApiService.GetProductsByReportingUserAsync(userEmail);
         
         // Wait for API calls to complete (these don't use DbContext)
         await Task.WhenAll(
             userProductsByContactTask,
-            userProductsByServiceOwnerTask);
+            userProductsByServiceOwnerTask,
+            userProductsByProductManagerTask,
+            userProductsByReportingUserTask);
         
         // Get results from API calls
         var productsByContact = await userProductsByContactTask;
         var productsByServiceOwner = await userProductsByServiceOwnerTask;
+        var productsByProductManager = await userProductsByProductManagerTask;
+        var productsByReportingUser = await userProductsByReportingUserTask;
         
         // Execute database queries sequentially to avoid DbContext concurrency issues
         // LoadEligibilityCacheAsync makes database queries, so it must complete before other DB queries
@@ -2329,6 +2404,8 @@ public class ProductReportingController : Controller
         // Combine and deduplicate user's products
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
+            .Concat(productsByProductManager)
+            .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
             .Select(g => g.First())
@@ -2428,17 +2505,23 @@ public class ProductReportingController : Controller
         // Fetch user's products in parallel (these are API calls, not DB queries)
         var userProductsByContactTask = _productsApiService.GetProductsAsync(userEmail);
         var userProductsByServiceOwnerTask = _productsApiService.GetProductsByServiceOwnerAsync(userEmail);
+        var userProductsByProductManagerTask = _productsApiService.GetProductsByProductManagerAsync(userEmail);
+        var userProductsByReportingUserTask = _productsApiService.GetProductsByReportingUserAsync(userEmail);
         var eligibilityCacheTask = _eligibilityService.LoadEligibilityCacheAsync();
         
         // Wait for API calls to complete
         await Task.WhenAll(
             userProductsByContactTask,
             userProductsByServiceOwnerTask,
+            userProductsByProductManagerTask,
+            userProductsByReportingUserTask,
             eligibilityCacheTask);
         
         // Get results from API calls
         var productsByContact = await userProductsByContactTask;
         var productsByServiceOwner = await userProductsByServiceOwnerTask;
+        var productsByProductManager = await userProductsByProductManagerTask;
+        var productsByReportingUser = await userProductsByReportingUserTask;
         var eligibilityCache = await eligibilityCacheTask;
         
         // Execute database queries sequentially to avoid DbContext concurrency issues
@@ -2452,6 +2535,8 @@ public class ProductReportingController : Controller
         // Combine and deduplicate user's products
         var userProducts = productsByContact
             .Concat(productsByServiceOwner)
+            .Concat(productsByProductManager)
+            .Concat(productsByReportingUser)
             .GroupBy(p => p.FipsId)
             .Where(g => !string.IsNullOrEmpty(g.Key))
             .Select(g => g.First())

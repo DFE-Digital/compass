@@ -12,6 +12,18 @@ namespace Compass.Controllers;
 [RequireDesignOpsAdmin]
 public class DesignOpsController : Controller
 {
+    private static readonly string[] EditableProductRoleFields =
+    {
+        "service_owner",
+        "product_manager",
+        "delivery_manager",
+        "Information_asset_owner",
+        "reporting_user",
+        "senior_responsible_officer",
+        "service_designs",
+        "user_researchers"
+    };
+
     private readonly ILogger<DesignOpsController> _logger;
     private readonly CompassDbContext _context;
     private readonly IProductsApiService _productsApiService;
@@ -535,6 +547,178 @@ public class DesignOpsController : Controller
     {
         ViewData["Title"] = "Access Denied";
         return View();
+    }
+
+    // GET: DesignOps/FipsRoleManagement
+    public async Task<IActionResult> FipsRoleManagement(string search = "", string state = "")
+    {
+        try
+        {
+            ViewData["Title"] = "FIPS role management";
+
+            var allProducts = await _productsApiService.GetAllProductsAsync();
+            var fipsProducts = allProducts
+                // Match ProductReporting Commission "all services" eligibility rules
+                .Where(p => p.State != null &&
+                            p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                            p.PublishedAt.HasValue &&
+                            (string.IsNullOrEmpty(p.Phase) ||
+                             (!p.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
+                              !p.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase))))
+                .Where(IsNotDataOnlyTypeProduct)
+                .Where(p => !string.IsNullOrWhiteSpace(p.FipsId))
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var trimmedSearch = search.Trim();
+                fipsProducts = fipsProducts
+                    .Where(p =>
+                        (!string.IsNullOrWhiteSpace(p.FipsId) && p.FipsId.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(p.Title) && p.Title.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(state))
+            {
+                fipsProducts = fipsProducts
+                    .Where(p => string.Equals(p.State, state, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var orderedProducts = fipsProducts
+                .OrderBy(p => p.Title)
+                .ThenBy(p => p.FipsId)
+                .ToList();
+
+            ViewBag.CurrentSearch = search;
+            ViewBag.CurrentState = state;
+            ViewBag.AvailableStates = allProducts
+                .Select(p => p.State)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s)
+                .ToList();
+
+            return View(orderedProducts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FIPS role management view");
+            TempData["ErrorMessage"] = "An error occurred while loading FIPS role management. Please try again.";
+            return View(new List<ProductDto>());
+        }
+    }
+
+    // POST: DesignOps/UpdateFipsRole
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateFipsRole(
+        string fipsId,
+        string roleFieldName,
+        string roleDisplayName,
+        string? entraUserObjectId,
+        string? entraUserEmail,
+        string? entraUserName,
+        string? returnUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(fipsId))
+        {
+            TempData["ErrorMessage"] = "A FIPS ID is required.";
+            return RedirectToFipsRoleManagement(returnUrl);
+        }
+
+        if (!EditableProductRoleFields.Contains(roleFieldName, StringComparer.Ordinal))
+        {
+            TempData["ErrorMessage"] = "Invalid role field.";
+            return RedirectToFipsRoleManagement(returnUrl);
+        }
+
+        if (string.IsNullOrWhiteSpace(entraUserEmail) || string.IsNullOrWhiteSpace(entraUserObjectId))
+        {
+            TempData["ErrorMessage"] = "Please select a user from Entra search results before saving.";
+            return RedirectToFipsRoleManagement(returnUrl);
+        }
+
+        try
+        {
+            var entraUser = await _productsApiService.GetOrCreateEntraUserAsync(
+                entraUserEmail.Trim(),
+                entraUserObjectId.Trim(),
+                string.IsNullOrWhiteSpace(entraUserName) ? entraUserEmail.Trim() : entraUserName.Trim());
+
+            if (entraUser == null)
+            {
+                TempData["ErrorMessage"] = "Failed to create or fetch the selected Entra user.";
+                return RedirectToFipsRoleManagement(returnUrl);
+            }
+
+            bool success;
+            if (string.Equals(roleFieldName, "service_owner", StringComparison.Ordinal))
+            {
+                success = await _productsApiService.UpdateProductServiceOwnerAsync(fipsId.Trim(), entraUser.Id);
+            }
+            else
+            {
+                success = await _productsApiService.UpdateProductRoleAsync(fipsId.Trim(), roleFieldName, entraUser.Id);
+            }
+
+            if (success)
+            {
+                var displayValue = !string.IsNullOrWhiteSpace(entraUser.DisplayName)
+                    ? entraUser.DisplayName
+                    : entraUser.EmailAddress ?? "Unknown user";
+                TempData["SuccessMessage"] = $"{roleDisplayName} updated for {fipsId.Trim()} to {displayValue}.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = $"Unable to update {roleDisplayName} for {fipsId.Trim()}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+            TempData["ErrorMessage"] = "An unexpected error occurred while updating the role.";
+        }
+
+        return RedirectToFipsRoleManagement(returnUrl);
+    }
+
+    private IActionResult RedirectToFipsRoleManagement(string? returnUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl);
+        }
+
+        return RedirectToAction(nameof(FipsRoleManagement));
+    }
+
+    private static bool IsNotDataOnlyTypeProduct(ProductDto product)
+    {
+        var types = product.CategoryValues?
+            .Where(cv => cv.CategoryType?.Name?.Trim().Equals("Type", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(cv => cv.Name?.Trim() ?? string.Empty)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+
+        if (!types.Any())
+        {
+            return true;
+        }
+
+        if (types.Count == 1 && types[0].Equals("Data", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (types.All(t => t.Equals("Data", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        return true;
     }
 }
 

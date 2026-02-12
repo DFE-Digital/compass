@@ -42,6 +42,49 @@ public class ProductsApiService : IProductsApiService
         UserGroupCategoryTypeNames.Any(name => 
             name.Equals(categoryTypeName, StringComparison.OrdinalIgnoreCase));
 
+    private async Task<(string? DocumentId, string? FipsId)> GetProductDocumentRefByFipsIdAsync(string fipsId)
+    {
+        if (string.IsNullOrWhiteSpace(fipsId))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            var queryParams = new[]
+            {
+                "filters[fips_id][$eq]=" + Uri.EscapeDataString(fipsId),
+                "fields[0]=id",
+                "fields[1]=documentId",
+                "fields[2]=fips_id",
+                "pagination[page]=1",
+                "pagination[pageSize]=1"
+            };
+
+            var url = "products?" + string.Join("&", queryParams);
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to fetch lightweight product reference for {FipsId}. Status: {StatusCode}, Error: {Error}",
+                    fipsId, response.StatusCode, errorContent);
+                return (null, null);
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+            var product = apiResponse?.Data?.FirstOrDefault();
+
+            return (product?.DocumentId, product?.FipsId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching lightweight product reference for {FipsId}", fipsId);
+            return (null, null);
+        }
+    }
+
     public async Task<List<ProductDto>> GetProductsAsync(string? userEmail = null)
     {
         var cacheKey = string.IsNullOrEmpty(userEmail) 
@@ -82,7 +125,28 @@ public class ProductsApiService : IProductsApiService
                     "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
                     "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
-                    "populate[service_owner][fields][1]=displayName"
+                    "populate[service_owner][fields][1]=displayName",
+                    "populate[product_manager][fields][0]=id",
+                    "populate[product_manager][fields][1]=emailAddress",
+                    "populate[product_manager][fields][2]=displayName",
+                    "populate[delivery_manager][fields][0]=id",
+                    "populate[delivery_manager][fields][1]=emailAddress",
+                    "populate[delivery_manager][fields][2]=displayName",
+                    "populate[Information_asset_owner][fields][0]=id",
+                    "populate[Information_asset_owner][fields][1]=emailAddress",
+                    "populate[Information_asset_owner][fields][2]=displayName",
+                    "populate[reporting_user][fields][0]=id",
+                    "populate[reporting_user][fields][1]=emailAddress",
+                    "populate[reporting_user][fields][2]=displayName",
+                    "populate[senior_responsible_officer][fields][0]=id",
+                    "populate[senior_responsible_officer][fields][1]=emailAddress",
+                    "populate[senior_responsible_officer][fields][2]=displayName",
+                    "populate[service_designs][fields][0]=id",
+                    "populate[service_designs][fields][1]=emailAddress",
+                    "populate[service_designs][fields][2]=displayName",
+                    "populate[user_researchers][fields][0]=id",
+                    "populate[user_researchers][fields][1]=emailAddress",
+                    "populate[user_researchers][fields][2]=displayName"
                 };
 
                 // If userEmail is provided, filter products by product contact's user email at the CMS level
@@ -154,8 +218,8 @@ public class ProductsApiService : IProductsApiService
                 }
             }
 
-            // Cache for 5 minutes
-            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
+            // Cache for 1 minute (reduced from 5 minutes to ensure contact/role updates appear quickly)
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(1));
 
             return allProducts;
         }
@@ -210,7 +274,28 @@ public class ProductsApiService : IProductsApiService
                     "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
                     "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
-                    "populate[service_owner][fields][1]=displayName"
+                    "populate[service_owner][fields][1]=displayName",
+                    "populate[product_manager][fields][0]=id",
+                    "populate[product_manager][fields][1]=emailAddress",
+                    "populate[product_manager][fields][2]=displayName",
+                    "populate[delivery_manager][fields][0]=id",
+                    "populate[delivery_manager][fields][1]=emailAddress",
+                    "populate[delivery_manager][fields][2]=displayName",
+                    "populate[Information_asset_owner][fields][0]=id",
+                    "populate[Information_asset_owner][fields][1]=emailAddress",
+                    "populate[Information_asset_owner][fields][2]=displayName",
+                    "populate[reporting_user][fields][0]=id",
+                    "populate[reporting_user][fields][1]=emailAddress",
+                    "populate[reporting_user][fields][2]=displayName",
+                    "populate[senior_responsible_officer][fields][0]=id",
+                    "populate[senior_responsible_officer][fields][1]=emailAddress",
+                    "populate[senior_responsible_officer][fields][2]=displayName",
+                    "populate[service_designs][fields][0]=id",
+                    "populate[service_designs][fields][1]=emailAddress",
+                    "populate[service_designs][fields][2]=displayName",
+                    "populate[user_researchers][fields][0]=id",
+                    "populate[user_researchers][fields][1]=emailAddress",
+                    "populate[user_researchers][fields][2]=displayName"
                 };
 
                 var queryString = string.Join("&", queryParams);
@@ -273,14 +358,294 @@ public class ProductsApiService : IProductsApiService
                 }
             }
 
-            // Cache for 5 minutes
-            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
+            // Cache for 1 minute (reduced from 5 minutes to ensure role updates appear quickly)
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(1));
 
             return allProducts;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching products by service owner from CMS for user {UserEmail}", userEmail);
+            return new List<ProductDto>();
+        }
+    }
+
+    public async Task<List<ProductDto>> GetProductsByProductManagerAsync(string? userEmail)
+    {
+        if (string.IsNullOrEmpty(userEmail))
+        {
+            return new List<ProductDto>();
+        }
+
+        var cacheKey = $"products_by_product_manager_{userEmail}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<ProductDto>? cachedProducts))
+        {
+            return cachedProducts ?? new List<ProductDto>();
+        }
+
+        try
+        {
+            var allProducts = new List<ProductDto>();
+            var currentPage = 1;
+            var pageSize = 100;
+            var hasMorePages = true;
+            int? totalCount = null;
+
+            while (hasMorePages)
+            {
+                var queryParams = new List<string>
+                {
+                    "sort=title:asc",
+                    "filters[state][$eq]=Active",
+                    $"filters[product_manager][emailAddress][$eqi]={Uri.EscapeDataString(userEmail)}",
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "fields[0]=id",
+                    "fields[1]=title",
+                    "fields[2]=fips_id",
+                    "fields[3]=product_url",
+                    "fields[4]=publishedAt",
+                    "populate[category_values][fields][0]=name",
+                    "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts][fields][0]=id",
+                    "populate[product_contacts][fields][1]=role",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=id",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
+                    "populate[service_owner][fields][0]=emailAddress",
+                    "populate[service_owner][fields][1]=displayName",
+                    "populate[product_manager][fields][0]=id",
+                    "populate[product_manager][fields][1]=emailAddress",
+                    "populate[product_manager][fields][2]=displayName",
+                    "populate[delivery_manager][fields][0]=id",
+                    "populate[delivery_manager][fields][1]=emailAddress",
+                    "populate[delivery_manager][fields][2]=displayName",
+                    "populate[Information_asset_owner][fields][0]=id",
+                    "populate[Information_asset_owner][fields][1]=emailAddress",
+                    "populate[Information_asset_owner][fields][2]=displayName",
+                    "populate[reporting_user][fields][0]=id",
+                    "populate[reporting_user][fields][1]=emailAddress",
+                    "populate[reporting_user][fields][2]=displayName",
+                    "populate[senior_responsible_officer][fields][0]=id",
+                    "populate[senior_responsible_officer][fields][1]=emailAddress",
+                    "populate[senior_responsible_officer][fields][2]=displayName",
+                    "populate[service_designs][fields][0]=id",
+                    "populate[service_designs][fields][1]=emailAddress",
+                    "populate[service_designs][fields][2]=displayName",
+                    "populate[user_researchers][fields][0]=id",
+                    "populate[user_researchers][fields][1]=emailAddress",
+                    "populate[user_researchers][fields][2]=displayName"
+                };
+
+                var queryString = string.Join("&", queryParams);
+                var url = $"products?{queryString}";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch products by product manager from CMS (page {currentPage}). Status: {response.StatusCode}, Error: {errorContent}");
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+                
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allProducts.AddRange(apiResponse.Data);
+                    
+                    if (!totalCount.HasValue && apiResponse.Meta?.Pagination != null)
+                    {
+                        totalCount = apiResponse.Meta.Pagination.Total;
+                        _logger.LogInformation("Fetching {Total} Active products by product manager from CMS across {PageCount} pages", 
+                            totalCount, apiResponse.Meta.Pagination.PageCount);
+                    }
+                    
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
+            }
+            
+            _logger.LogInformation("Successfully fetched {Count} Active products by product manager from CMS (Total available: {Total}) for user {UserEmail}", 
+                allProducts.Count, totalCount ?? allProducts.Count, userEmail);
+
+            // Extract phase from category_values
+            foreach (var product in allProducts)
+            {
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null)
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
+            }
+
+            // Cache for 1 minute (reduced from 5 minutes to ensure role updates appear quickly)
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(1));
+
+            return allProducts;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching products by product manager from CMS for user {UserEmail}", userEmail);
+            return new List<ProductDto>();
+        }
+    }
+
+    public async Task<List<ProductDto>> GetProductsByReportingUserAsync(string? userEmail)
+    {
+        if (string.IsNullOrEmpty(userEmail))
+        {
+            return new List<ProductDto>();
+        }
+
+        var cacheKey = $"products_by_reporting_user_{userEmail}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<ProductDto>? cachedProducts))
+        {
+            return cachedProducts ?? new List<ProductDto>();
+        }
+
+        try
+        {
+            var allProducts = new List<ProductDto>();
+            var currentPage = 1;
+            var pageSize = 100;
+            var hasMorePages = true;
+            int? totalCount = null;
+
+            while (hasMorePages)
+            {
+                var queryParams = new List<string>
+                {
+                    "sort=title:asc",
+                    "filters[state][$eq]=Active",
+                    $"filters[reporting_user][emailAddress][$eqi]={Uri.EscapeDataString(userEmail)}",
+                    $"pagination[page]={currentPage}",
+                    $"pagination[pageSize]={pageSize}",
+                    "fields[0]=id",
+                    "fields[1]=title",
+                    "fields[2]=fips_id",
+                    "fields[3]=product_url",
+                    "fields[4]=publishedAt",
+                    "populate[category_values][fields][0]=name",
+                    "populate[category_values][populate][category_type][fields][0]=name",
+                    "populate[product_contacts][fields][0]=id",
+                    "populate[product_contacts][fields][1]=role",
+                    "populate[product_contacts][populate][users_permissions_user][fields][0]=id",
+                    "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
+                    "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
+                    "populate[service_owner][fields][0]=emailAddress",
+                    "populate[service_owner][fields][1]=displayName",
+                    "populate[product_manager][fields][0]=id",
+                    "populate[product_manager][fields][1]=emailAddress",
+                    "populate[product_manager][fields][2]=displayName",
+                    "populate[delivery_manager][fields][0]=id",
+                    "populate[delivery_manager][fields][1]=emailAddress",
+                    "populate[delivery_manager][fields][2]=displayName",
+                    "populate[Information_asset_owner][fields][0]=id",
+                    "populate[Information_asset_owner][fields][1]=emailAddress",
+                    "populate[Information_asset_owner][fields][2]=displayName",
+                    "populate[reporting_user][fields][0]=id",
+                    "populate[reporting_user][fields][1]=emailAddress",
+                    "populate[reporting_user][fields][2]=displayName",
+                    "populate[senior_responsible_officer][fields][0]=id",
+                    "populate[senior_responsible_officer][fields][1]=emailAddress",
+                    "populate[senior_responsible_officer][fields][2]=displayName",
+                    "populate[service_designs][fields][0]=id",
+                    "populate[service_designs][fields][1]=emailAddress",
+                    "populate[service_designs][fields][2]=displayName",
+                    "populate[user_researchers][fields][0]=id",
+                    "populate[user_researchers][fields][1]=emailAddress",
+                    "populate[user_researchers][fields][2]=displayName"
+                };
+
+                var queryString = string.Join("&", queryParams);
+                var url = $"products?{queryString}";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch products by reporting user from CMS (page {currentPage}). Status: {response.StatusCode}, Error: {errorContent}");
+                    break;
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiCollectionResponse<ProductDto>>(content, _jsonOptions);
+                
+                if (apiResponse?.Data != null && apiResponse.Data.Any())
+                {
+                    allProducts.AddRange(apiResponse.Data);
+                    
+                    if (!totalCount.HasValue && apiResponse.Meta?.Pagination != null)
+                    {
+                        totalCount = apiResponse.Meta.Pagination.Total;
+                        _logger.LogInformation("Fetching {Total} Active products by reporting user from CMS across {PageCount} pages", 
+                            totalCount, apiResponse.Meta.Pagination.PageCount);
+                    }
+                    
+                    if (apiResponse.Meta?.Pagination != null)
+                    {
+                        hasMorePages = currentPage < apiResponse.Meta.Pagination.PageCount;
+                        currentPage++;
+                    }
+                    else
+                    {
+                        hasMorePages = false;
+                    }
+                }
+                else
+                {
+                    hasMorePages = false;
+                }
+            }
+            
+            _logger.LogInformation("Successfully fetched {Count} Active products by reporting user from CMS (Total available: {Total}) for user {UserEmail}", 
+                allProducts.Count, totalCount ?? allProducts.Count, userEmail);
+
+            // Extract phase from category_values
+            foreach (var product in allProducts)
+            {
+                if (product.CategoryValues != null)
+                {
+                    var phaseCategory = product.CategoryValues
+                        .FirstOrDefault(cv => cv.CategoryType?.Name?.Equals("Phase", StringComparison.OrdinalIgnoreCase) == true);
+                    
+                    if (phaseCategory != null)
+                    {
+                        product.Phase = phaseCategory.Name;
+                    }
+                }
+            }
+
+            // Cache for 1 minute (reduced from 5 minutes to ensure role updates appear quickly)
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(1));
+
+            return allProducts;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching products by reporting user from CMS for user {UserEmail}", userEmail);
             return new List<ProductDto>();
         }
     }
@@ -327,7 +692,28 @@ public class ProductsApiService : IProductsApiService
                     "populate[product_contacts][populate][users_permissions_user][fields][1]=display_name",
                     "populate[product_contacts][populate][users_permissions_user][fields][2]=username",
                     "populate[service_owner][fields][0]=emailAddress",
-                    "populate[service_owner][fields][1]=displayName"
+                    "populate[service_owner][fields][1]=displayName",
+                    "populate[product_manager][fields][0]=id",
+                    "populate[product_manager][fields][1]=emailAddress",
+                    "populate[product_manager][fields][2]=displayName",
+                    "populate[delivery_manager][fields][0]=id",
+                    "populate[delivery_manager][fields][1]=emailAddress",
+                    "populate[delivery_manager][fields][2]=displayName",
+                    "populate[Information_asset_owner][fields][0]=id",
+                    "populate[Information_asset_owner][fields][1]=emailAddress",
+                    "populate[Information_asset_owner][fields][2]=displayName",
+                    "populate[reporting_user][fields][0]=id",
+                    "populate[reporting_user][fields][1]=emailAddress",
+                    "populate[reporting_user][fields][2]=displayName",
+                    "populate[senior_responsible_officer][fields][0]=id",
+                    "populate[senior_responsible_officer][fields][1]=emailAddress",
+                    "populate[senior_responsible_officer][fields][2]=displayName",
+                    "populate[service_designs][fields][0]=id",
+                    "populate[service_designs][fields][1]=emailAddress",
+                    "populate[service_designs][fields][2]=displayName",
+                    "populate[user_researchers][fields][0]=id",
+                    "populate[user_researchers][fields][1]=emailAddress",
+                    "populate[user_researchers][fields][2]=displayName"
                 };
 
                 var queryString = string.Join("&", queryParams);
@@ -408,8 +794,8 @@ public class ProductsApiService : IProductsApiService
                 allProducts = filteredProducts;
             }
 
-            // Cache for 5 minutes
-            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(5));
+            // Cache for 1 minute (reduced from 5 minutes to ensure contact/role updates appear quickly)
+            _cache.Set(cacheKey, allProducts, TimeSpan.FromMinutes(1));
 
             return allProducts;
         }
@@ -1736,8 +2122,8 @@ public class ProductsApiService : IProductsApiService
     {
         try
         {
-            var product = await GetProductByFipsIdAsync(fipsId);
-            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            var productRef = await GetProductDocumentRefByFipsIdAsync(fipsId);
+            if (string.IsNullOrEmpty(productRef.DocumentId))
             {
                 _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
                 return false;
@@ -1749,7 +2135,7 @@ public class ProductsApiService : IProductsApiService
             {
                 data = new
                 {
-                    fips_id = product.FipsId,
+                    fips_id = productRef.FipsId ?? fipsId,
                     service_owner = new[] { entraUserId }
                 }
             };
@@ -1774,14 +2160,17 @@ public class ProductsApiService : IProductsApiService
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
             }
 
-            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            var response = await httpClient.PutAsync($"products/{productRef.DocumentId}", content);
 
             if (response.IsSuccessStatusCode)
             {
                 _cache.Remove($"product_{fipsId}");
                 _cache.Remove("products_list_all");
                 _cache.Remove("products_list_all_states");
-                _logger.LogInformation("Successfully updated product service owner for {FipsId}", fipsId);
+                // Note: User-specific product caches (products_by_service_owner_{email}, etc.) 
+                // cannot be cleared by pattern with IMemoryCache. Cache time reduced to 1 minute
+                // to ensure updates appear quickly. Consider implementing cache key tracking for future.
+                _logger.LogInformation("Successfully updated product service owner for {FipsId}. User-specific product caches will refresh within 1 minute.", fipsId);
                 return true;
             }
             else
@@ -1803,8 +2192,8 @@ public class ProductsApiService : IProductsApiService
     {
         try
         {
-            var product = await GetProductByFipsIdAsync(fipsId);
-            if (product == null || string.IsNullOrEmpty(product.DocumentId))
+            var productRef = await GetProductDocumentRefByFipsIdAsync(fipsId);
+            if (string.IsNullOrEmpty(productRef.DocumentId))
             {
                 _logger.LogError("Product {FipsId} not found or missing documentId", fipsId);
                 return false;
@@ -1815,7 +2204,7 @@ public class ProductsApiService : IProductsApiService
             // Use reflection to create an anonymous object with the role field name
             var updateData = new Dictionary<string, object>
             {
-                ["fips_id"] = product.FipsId!
+                ["fips_id"] = productRef.FipsId ?? fipsId
             };
             updateData[roleFieldName] = new[] { entraUserId };
 
@@ -1842,14 +2231,17 @@ public class ProductsApiService : IProductsApiService
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", writeApiKey);
             }
 
-            var response = await httpClient.PutAsync($"products/{product.DocumentId}", content);
+            var response = await httpClient.PutAsync($"products/{productRef.DocumentId}", content);
 
             if (response.IsSuccessStatusCode)
             {
                 _cache.Remove($"product_{fipsId}");
                 _cache.Remove("products_list_all");
                 _cache.Remove("products_list_all_states");
-                _logger.LogInformation("Successfully updated product role {RoleFieldName} for {FipsId}", roleFieldName, fipsId);
+                // Note: User-specific product caches (products_by_service_owner_{email}, etc.) 
+                // cannot be cleared by pattern with IMemoryCache. Cache time reduced to 1 minute
+                // to ensure updates appear quickly. Consider implementing cache key tracking for future.
+                _logger.LogInformation("Successfully updated product role {RoleFieldName} for {FipsId}. User-specific product caches will refresh within 1 minute.", roleFieldName, fipsId);
                 return true;
             }
             else
