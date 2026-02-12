@@ -44,6 +44,10 @@ public class User
 
     // Navigation properties for role-based access control
     public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
+    
+    // Navigation properties for division and business area management
+    public ICollection<BusinessAreaUser> BusinessAreaUsers { get; set; } = new List<BusinessAreaUser>();
+    public ICollection<DivisionUser> DivisionUsers { get; set; } = new List<DivisionUser>();
 }
 
 public enum UserRole
