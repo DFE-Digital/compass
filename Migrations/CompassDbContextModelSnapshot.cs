@@ -1285,6 +1285,35 @@ namespace Compass.Migrations
                     b.ToTable("BusinessAreaLookups");
                 });
 
+            modelBuilder.Entity("Compass.Models.BusinessAreaUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("BusinessAreaUsers");
+                });
+
             modelBuilder.Entity("Compass.Models.BusinessCase", b =>
                 {
                     b.Property<int>("Id")
@@ -1752,6 +1781,10 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("CommissionId")
                         .HasColumnType("int");
@@ -3981,6 +4014,98 @@ namespace Compass.Migrations
                         .IsUnique();
 
                     b.ToTable("DirectorateLookups");
+                });
+
+            modelBuilder.Entity("Compass.Models.Division", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Divisions");
+                });
+
+            modelBuilder.Entity("Compass.Models.DivisionBusinessArea", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DivisionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("DivisionId");
+
+                    b.ToTable("DivisionBusinessAreas");
+                });
+
+            modelBuilder.Entity("Compass.Models.DivisionUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DivisionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DivisionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DivisionUsers");
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseMetric", b =>
@@ -7400,7 +7525,7 @@ namespace Compass.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("DirectorateLookupId")
+                    b.Property<int>("DivisionId")
                         .HasColumnType("int");
 
                     b.Property<int>("ProjectId")
@@ -7408,11 +7533,11 @@ namespace Compass.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DirectorateLookupId");
+                    b.HasIndex("DivisionId");
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("ProjectId", "DirectorateLookupId")
+                    b.HasIndex("ProjectId", "DivisionId")
                         .IsUnique();
 
                     b.ToTable("ProjectDirectorates");
@@ -11062,6 +11187,25 @@ namespace Compass.Migrations
                         .HasForeignKey("DdtStandardId");
                 });
 
+            modelBuilder.Entity("Compass.Models.BusinessAreaUser", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany("BusinessAreaUsers")
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany("BusinessAreaUsers")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Compass.Models.BusinessCase", b =>
                 {
                     b.HasOne("Compass.Models.BusinessCaseStatusLookup", "StatusLookup")
@@ -11738,6 +11882,44 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("DemandRequest");
+                });
+
+            modelBuilder.Entity("Compass.Models.DivisionBusinessArea", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany("DivisionBusinessAreas")
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Division", "Division")
+                        .WithMany("DivisionBusinessAreas")
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("Division");
+                });
+
+            modelBuilder.Entity("Compass.Models.DivisionUser", b =>
+                {
+                    b.HasOne("Compass.Models.Division", "Division")
+                        .WithMany("DivisionUsers")
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany("DivisionUsers")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Division");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseMetricValue", b =>
@@ -12480,9 +12662,9 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.ProjectDirectorate", b =>
                 {
-                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                    b.HasOne("Compass.Models.Division", "Division")
                         .WithMany()
-                        .HasForeignKey("DirectorateLookupId")
+                        .HasForeignKey("DivisionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -12492,7 +12674,7 @@ namespace Compass.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("DirectorateLookup");
+                    b.Navigation("Division");
 
                     b.Navigation("Project");
                 });
@@ -13463,6 +13645,13 @@ namespace Compass.Migrations
                     b.Navigation("RequestLogs");
                 });
 
+            modelBuilder.Entity("Compass.Models.BusinessAreaLookup", b =>
+                {
+                    b.Navigation("BusinessAreaUsers");
+
+                    b.Navigation("DivisionBusinessAreas");
+                });
+
             modelBuilder.Entity("Compass.Models.BusinessCase", b =>
                 {
                     b.Navigation("BusinessCaseProducts");
@@ -13568,6 +13757,13 @@ namespace Compass.Migrations
                     b.Navigation("RiskTypeLinks");
 
                     b.Navigation("SectionCompletions");
+                });
+
+            modelBuilder.Entity("Compass.Models.Division", b =>
+                {
+                    b.Navigation("DivisionBusinessAreas");
+
+                    b.Navigation("DivisionUsers");
                 });
 
             modelBuilder.Entity("Compass.Models.EnterpriseReturn", b =>
@@ -13887,6 +14083,10 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.User", b =>
                 {
+                    b.Navigation("BusinessAreaUsers");
+
+                    b.Navigation("DivisionUsers");
+
                     b.Navigation("UserGroups");
                 });
 
