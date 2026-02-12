@@ -27,9 +27,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get all DDT Standards with optional filtering
+    /// Read-only endpoint - no authentication required for published standards
     /// </summary>
     [HttpGet]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetStandards(
         [FromQuery] string? search = null,
         [FromQuery] string? stage = null,
@@ -42,6 +43,7 @@ public class DdtStandardsController : ControllerBase
         if (pageSize > 100) pageSize = 100;
         if (page < 1) page = 1;
 
+        // For public API, only return published standards by default unless status is explicitly specified
         var query = _context.DdtStandards
             .Include(s => s.CreatorUser)
             .Include(s => s.Owners).ThenInclude(o => o.User)
@@ -52,6 +54,12 @@ public class DdtStandardsController : ControllerBase
             .Include(s => s.ValidationRules)
             .Where(s => !s.IsDeleted)
             .AsQueryable();
+
+        // If no stage specified, default to published only for public API
+        if (string.IsNullOrWhiteSpace(stage) && !published.HasValue)
+        {
+            query = query.Where(s => s.IsPublished && s.Stage == "Published");
+        }
 
         // Apply filters
         if (!string.IsNullOrWhiteSpace(search))
@@ -164,9 +172,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get DDT Standards by stage with optional filtering
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("by-stage")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetStandardsByStage(
         [FromQuery] string stage,
         [FromQuery] string? search = null,
@@ -351,9 +360,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get a single DDT Standard by ID
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("{id}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetStandard(int id)
     {
         var standard = await _context.DdtStandards
@@ -385,9 +395,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get a DDT Standard by UUID
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("uuid/{uuid}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetStandardByUuid(string uuid)
     {
         var standard = await _context.DdtStandards
@@ -417,9 +428,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get a published DDT Standard by ID (only returns published versions)
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("by-id/{id}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPublishedStandardById(int id)
     {
         var standard = await _context.DdtStandards
@@ -452,9 +464,10 @@ public class DdtStandardsController : ControllerBase
     /// <summary>
     /// Get a published DDT Standard by Legacy ID (only returns published versions)
     /// If multiple published standards exist with the same Legacy ID, returns the latest version
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("by-legacy-id/{legacyId}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPublishedStandardByLegacyId(string legacyId)
     {
         var standards = await _context.DdtStandards
@@ -491,9 +504,10 @@ public class DdtStandardsController : ControllerBase
     /// <summary>
     /// Get a published DDT Standard by Slug (only returns published versions)
     /// If multiple published standards exist with the same slug, returns the latest version
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("by-slug/{slug}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPublishedStandardBySlug(string slug)
     {
         var standards = await _context.DdtStandards
@@ -653,9 +667,11 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Create a new DDT Standard
+    /// NOTE: This endpoint is disabled - standards must be created through the management interface
     /// </summary>
     [HttpPost]
     [RequireApiPermission("DdtStandards", "create")]
+    [Obsolete("Use the management interface to create standards")]
     public async Task<IActionResult> CreateStandard([FromBody] DdtStandardCreateDto dto)
     {
         if (!ModelState.IsValid)
@@ -820,9 +836,11 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Update a DDT Standard
+    /// NOTE: This endpoint is disabled - standards must be updated through the management interface
     /// </summary>
     [HttpPut("{id}")]
     [RequireApiPermission("DdtStandards", "update")]
+    [Obsolete("Use the management interface to update standards")]
     public async Task<IActionResult> UpdateStandard(int id, [FromBody] DdtStandardUpdateDto dto)
     {
         var standard = await _context.DdtStandards
@@ -965,9 +983,11 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Delete (soft delete) a DDT Standard
+    /// NOTE: This endpoint is disabled - standards must be deleted through the management interface
     /// </summary>
     [HttpDelete("{id}")]
     [RequireApiPermission("DdtStandards", "delete")]
+    [Obsolete("Use the management interface to delete standards")]
     public async Task<IActionResult> DeleteStandard(int id)
     {
         var standard = await _context.DdtStandards.FindAsync(id);
@@ -992,9 +1012,10 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get validation rules for a standard
+    /// Read-only endpoint - no authentication required
     /// </summary>
     [HttpGet("{id}/validation-rules")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetValidationRules(int id)
     {
         var standard = await _context.DdtStandards
@@ -1038,9 +1059,11 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Submit a standard for review
+    /// NOTE: This endpoint is disabled - standards must be submitted through the management interface
     /// </summary>
     [HttpPost("{id}/SubmitForReview")]
     [RequireApiPermission("DdtStandards", "update")]
+    [Obsolete("Use the management interface to submit standards")]
     public async Task<IActionResult> SubmitForReview(int id)
     {
         var standard = await _context.DdtStandards
@@ -1082,10 +1105,10 @@ public class DdtStandardsController : ControllerBase
                                       standard.ParentStandard != null &&
                                       !standard.Version.Contains("-resubmit");
 
-        if (shouldIncrementVersion)
+        if (shouldIncrementVersion && standard.ParentStandard != null)
         {
             var parentStandard = standard.ParentStandard;
-            var versionParts = parentStandard.Version.Split('.');
+            var versionParts = (parentStandard.Version ?? string.Empty).Split('.');
             
             if (versionParts.Length == 3 && 
                 int.TryParse(versionParts[0], out var major) &&
@@ -1182,34 +1205,71 @@ public class DdtStandardsController : ControllerBase
     }
 
     /// <summary>
-    /// Get all published DDT Standards (convenience endpoint)
-    /// This endpoint is equivalent to /api/v1/DdtStandards/by-stage?stage=published
-    /// Public endpoint - no authentication required
+    /// Get DDT Standards by status (Draft, Published, Unpublished)
+    /// Read-only endpoint - no authentication required for Published/Unpublished
+    /// Draft status requires authentication
     /// </summary>
-    [HttpGet]
-    [Route("/api/DdtStandards/Published")]
+    [HttpGet("by-status/{status}")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetPublishedStandards(
+    public async Task<IActionResult> GetStandardsByStatus(
+        string status,
         [FromQuery] string? search = null,
         [FromQuery] string? category = null,
-        [FromQuery] int? creatorId = null,
-        [FromQuery] int? ownerId = null,
-        [FromQuery] int? contactId = null,
-        [FromQuery] bool? legalStandard = null,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50)
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? fields = null)
     {
-        // Use the by-stage endpoint logic for consistency
-        return await GetStandardsByStage("Published", search, category, creatorId, ownerId, contactId, legalStandard, page, pageSize);
+        // Normalize status
+        var statusMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "draft", "Draft" },
+            { "published", "Published" },
+            { "unpublished", "Unpublished" }
+        };
+
+        if (!statusMap.TryGetValue(status, out var normalizedStatus))
+        {
+            return BadRequest(new
+            {
+                error = new
+                {
+                    code = "INVALID_STATUS",
+                    message = $"Invalid status. Valid statuses are: Draft, Published, Unpublished"
+                }
+            });
+        }
+
+        // Draft requires authentication - check if user is authenticated
+        if (normalizedStatus == "Draft")
+        {
+            if (!User.Identity?.IsAuthenticated ?? true)
+            {
+                return Unauthorized(new
+                {
+                    error = new
+                    {
+                        code = "UNAUTHORIZED",
+                        message = "Authentication required to access Draft standards"
+                    }
+                });
+            }
+        }
+
+        // Use the by-stage endpoint logic
+        return await GetStandardsByStage(normalizedStatus, search, category, null, null, null, null, page, pageSize);
     }
+
+    // Removed /api/DdtStandards/Published route - API routes should only return JSON
+    // Use /DdtStandards/Published for HTML view (handled by DdtStandardsViewController)
+    // Use /api/v1/DdtStandards/by-stage?stage=Published for JSON API access
 
     /// <summary>
     /// Get a published DDT Standard by ID
-    /// Only returns published standards - requires bearer token authentication
+    /// Only returns published standards - read-only endpoint, no authentication required
     /// </summary>
     [HttpGet]
     [Route("/api/DdtStandards/{id:int}")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPublishedStandardByIdPublic(int id)
     {
         var standard = await _context.DdtStandards
@@ -1242,10 +1302,13 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get all exemptions (exceptions) for DDT Standards
+    /// Read-only endpoint - no authentication required
+    /// Only returns JSON for API requests (Accept: application/json)
+    /// HTML requests should use /DdtStandards/Exceptions
     /// </summary>
     [HttpGet]
     [Route("/api/DdtStandards/Exceptions")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetExemptions(
         [FromQuery] int? standardId = null,
         [FromQuery] string? status = null,
@@ -1253,6 +1316,13 @@ public class DdtStandardsController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
+        // If the request wants HTML, redirect to the regular controller
+        var acceptHeader = Request.Headers["Accept"].ToString();
+        if (acceptHeader.Contains("text/html", StringComparison.OrdinalIgnoreCase) && 
+            !acceptHeader.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            return Redirect("/DdtStandards/Exceptions");
+        }
         if (pageSize > 100) pageSize = 100;
         if (page < 1) page = 1;
 
@@ -1345,16 +1415,26 @@ public class DdtStandardsController : ControllerBase
 
     /// <summary>
     /// Get all approved products for DDT Standards
+    /// Read-only endpoint - no authentication required
+    /// Only returns JSON for API requests (Accept: application/json)
+    /// HTML requests should use /DdtStandards/ApprovedProducts
     /// </summary>
     [HttpGet]
     [Route("/api/DdtStandards/ApprovedProducts")]
-    [RequireApiPermission("DdtStandards", "read")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetApprovedProducts(
         [FromQuery] string? search = null,
         [FromQuery] string? approvalStatus = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
+        // If the request wants HTML, redirect to the regular controller
+        var acceptHeader = Request.Headers["Accept"].ToString();
+        if (acceptHeader.Contains("text/html", StringComparison.OrdinalIgnoreCase) && 
+            !acceptHeader.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            return Redirect("/DdtStandards/ApprovedProducts");
+        }
         if (pageSize > 100) pageSize = 100;
         if (page < 1) page = 1;
 

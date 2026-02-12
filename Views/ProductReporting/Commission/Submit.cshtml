@@ -1,0 +1,677 @@
+@model List<Compass.Models.CommissionMetricValue>
+@{
+    ViewData["Title"] = "Submit commission";
+    var product = ViewBag.Product as Compass.Models.ProductDto;
+    var commission = ViewBag.Commission as Compass.Models.Commission;
+    var submission = ViewBag.Submission as Compass.Models.CommissionSubmission;
+    var isReadOnly = ViewBag.IsReadOnly as bool? ?? false;
+    var isPastDue = ViewBag.IsPastDue as bool? ?? false;
+}
+
+@{
+    ViewBag.BrandText = "Performance reporting";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
+    ViewBag.NavLinks = new[]
+    {
+        new { Text = "My services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "mine", commissionId = commission?.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "mine") },
+        new { Text = "All services", Action = "Commission", Controller = "ProductReporting", Url = Url.Action("Commission", "ProductReporting", new { view = "all", commissionId = commission?.Id }), IsButton = false, IsActive = currentAction == "Commission" && (ViewContext.RouteData.Values["view"]?.ToString() == "all" || string.IsNullOrEmpty(ViewContext.RouteData.Values["view"]?.ToString())) },
+        new { Text = "Business areas", Action = "BusinessAreasIndex", Controller = "ProductReporting", Url = Url.Action("BusinessAreasIndex", "ProductReporting", new { commissionId = commission?.Id }), IsButton = false, IsActive = currentAction == "BusinessAreasIndex" || currentAction == "BusinessAreasDetails" }
+    };
+}
+
+@section Breadcrumbs {
+    <style>
+        .breadcrumb a:hover {
+            color: #003078 !important;
+            text-decoration: underline !important;
+        }
+    </style>
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb mb-0 pl-4" style="background-color: #f4f8fb; padding: 0.75rem 1rem; border-radius: 0.375rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <li class="breadcrumb-item">
+                <a href="/" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@commission?.Id" style="color: #005ea5; text-decoration: none; font-weight: 500; transition: color 0.2s ease;">Performance reporting</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page" style="color: #0b0c0c; font-weight: 600;">@product?.Title</li>
+        </ol>
+    </nav>
+}
+
+<style nonce="@Context.Items["Nonce"]">
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
+
+<section class="content">
+    <div class="container-fluid">
+        @await Html.PartialAsync("_ModuleNavbar")
+  
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["SuccessMessage"]
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["WarningMessage"]
+            </div>
+        }
+
+        @if (commission != null)
+        {
+            var now = DateTime.UtcNow;
+            var isCommissionPastDue = now > commission.DueDate;
+            var dueDateBorderClass = isCommissionPastDue ? "border-left-danger" : "border-left-warning";
+            var dueDateTextClass = isCommissionPastDue ? "text-danger" : "text-warning";
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <div class="row align-items-center">
+                                <div class="col-md-12">
+                                    <h3 class="card-title mb-0">@commission.Name</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(commission.Description))
+                            {
+                                <p class="text-muted mb-3">@commission.Description</p>
+                            }
+                            <div class="row">
+                                <!-- Commission Period Card -->
+                                <div class="col-md-6 mb-3 mb-md-0">
+                                    <div class="card border-left-info shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Data required for period</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                                        @commission.StartDate.ToString("d MMMM yyyy")<br />
+                                                        <small class="text-muted">to</small><br />
+                                                        @commission.EndDate.ToString("d MMMM yyyy")
+                                                        @if (!string.IsNullOrEmpty(commission.Quarter))
+                                                        {
+                                                            <span class="badge badge-info ml-2">@commission.Quarter</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Due Date Card -->
+                                <div class="col-md-6">
+                                    <div class="card @dueDateBorderClass shadow h-100">
+                                        <div class="card-body">
+                                            <div class="row no-gutters align-items-center">
+                                                <div class="col mr-2">
+                                                    <div class="text-xs font-weight-bold @dueDateTextClass text-uppercase mb-1">Due date</div>
+                                                    <div class="h6 mb-0 font-weight-bold text-gray-800">@commission.DueDate.ToString("d MMMM yyyy")</div>
+                                                    @if (isCommissionPastDue)
+                                                    {
+                                                        <small class="text-danger">Past due</small>
+                                                    }
+                                                </div>
+                                                <div class="col-auto">
+                                                    <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <aside class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12 mb-4">
+                <partial name="_ProductSummarySidebar" model="product" />
+            </aside>
+            <div class="col-xxl-10 col-xl-10 col-lg-9 col-md-8 col-sm-12 col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h3 class="card-title mb-0">Commission metrics</h3>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                @if (submission?.Status == CommissionSubmissionStatus.Submitted || submission?.Status == CommissionSubmissionStatus.Late)
+                                {
+                                    <span class="badge badge-success">
+                                        <i class="fas fa-check-circle"></i> Submitted
+                                    </span>
+                                }
+                                else if (submission?.Status == CommissionSubmissionStatus.InProgress)
+                                {
+                                    <span class="badge badge-warning">
+                                        <i class="fas fa-clock"></i> In Progress
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">
+                                        <i class="fas fa-edit"></i> Not Started
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var metricValue in Model)
+                                {
+                                    <tr id="row-@metricValue.Id">
+                                        <td>
+                                            <a href="#" class="edit-metric-link @(isReadOnly ? "read-only-link" : "")" style="color: inherit; text-decoration: none; cursor: pointer;"
+                                               data-id="@metricValue.Id" 
+                                               data-identifier="@metricValue.PerformanceMetric?.Identifier"
+                                               data-title="@metricValue.PerformanceMetric?.Title"
+                                               data-value="@metricValue.Value"
+                                               data-is-not-captured="@metricValue.IsNotCaptured.ToString().ToLower()"
+                                               data-not-captured-reason="@metricValue.NotCapturedReason"
+                                               data-type="@((int)(metricValue.PerformanceMetric?.ValueType ?? Compass.Models.ValueType.Text))"
+                                               data-rules="@metricValue.PerformanceMetric?.ValidationRules"
+                                               data-hint="@metricValue.PerformanceMetric?.HintText"
+                                               data-read-only="@isReadOnly.ToString().ToLower()">
+                                                <strong style="color: #005ea5;">@metricValue.PerformanceMetric?.Title</strong>
+                                            </a>
+                                            <br />
+                                            <small class="text-muted">@metricValue.PerformanceMetric?.Description</small>
+                                        </td>
+                                        <td>
+                                            <span id="display-@metricValue.Id">
+                                                @if (metricValue.IsNotCaptured)
+                                                {
+                                                    <span class="text-muted">Not captured</span>
+                                                }
+                                                else if (!string.IsNullOrEmpty(metricValue.Value))
+                                                {
+                                                    @metricValue.Value
+                                                }
+                                                else if (metricValue.IsComplete && string.IsNullOrEmpty(metricValue.Value))
+                                                {
+                                                    <span class="text-muted">Unreported</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not entered</span>
+                                                }
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (metricValue.IsComplete)
+                                            {
+                                                <span class="badge badge-success">Complete</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-secondary">Pending</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (submission?.Status == CommissionSubmissionStatus.Submitted || submission?.Status == CommissionSubmissionStatus.Late)
+                    {
+                        <div class="card-body border-top">
+                            <h5 class="mb-2">Comments or notes</h5>
+                            @if (isPastDue)
+                            {
+                                @if (!string.IsNullOrWhiteSpace(submission?.Comments))
+                                {
+                                    <div class="alert alert-info mb-0">
+                                        <p class="mb-0" style="white-space: pre-wrap;">@submission.Comments</p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted mb-0">No comments provided.</p>
+                                }
+                            }
+                            else
+                            {
+                                <form asp-action="UpdateCommissionComments" method="post" class="update-comments-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@submission?.Id" />
+                                    <div class="form-group mb-3">
+                                        <textarea 
+                                            class="form-control" 
+                                            id="comments" 
+                                            name="comments" 
+                                            rows="4" 
+                                            placeholder="Any comments or notes regarding any of your metrics, such as how it was calculated, or whether the timescales are in hours, days, weeks. This will help us improve the reporting and give feedback to DSIT.">@submission?.Comments</textarea>
+                                        <small class="form-text text-muted">
+                                            Optional: Provide any additional context about your metrics that would be helpful for review.
+                                        </small>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-save"></i> Update comments
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                        <div class="card-footer">
+                            @if (isPastDue)
+                            {
+                                <div class="alert alert-warning mb-0">
+                                    <i class="fas fa-lock"></i> This submission has been locked because the commission due date has passed. It cannot be edited or unsubmitted.
+                                </div>
+                            }
+                            else
+                            {
+                                <form asp-action="UnsubmitCommissionSubmission" method="post" class="unsubmit-commission-form" style="display: inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@submission?.Id" />
+                                    <button type="submit" class="btn btn-warning" onclick="return confirm('Are you sure you want to unsubmit this commission? You will be able to make changes and resubmit.');">
+                                        <i class="fas fa-undo"></i> Unsubmit
+                                    </button>
+                                </form>
+                                <span class="text-muted ml-3">
+                                    <i class="fas fa-check-circle text-success"></i> Submitted on @submission?.SubmittedDate?.ToString("dd MMM yyyy HH:mm")
+                                </span>
+                            }
+                            <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@commission?.Id" class="btn btn-default ml-2">
+                                Back to commission
+                            </a>
+                        </div>
+                    }
+                    else if (!isReadOnly && Model.All(m => m.IsComplete))
+                    {
+                        <div class="card-footer">
+                            <form asp-action="SubmitCommissionSubmission" method="post" class="submit-commission-form">
+                                <input type="hidden" name="id" value="@submission?.Id" />
+                                <div class="form-group mb-3">
+                                    <label for="comments" class="form-label">
+                                        <strong>Comments or notes</strong>
+                                    </label>
+                                    <textarea 
+                                        class="form-control" 
+                                        id="comments" 
+                                        name="comments" 
+                                        rows="4" 
+                                        placeholder="Any comments or notes regarding any of your metrics, such as how it was calculated, or whether the timescales are in hours, days, weeks. This will help us improve the reporting and give feedback to DSIT.">@submission?.Comments</textarea>
+                                    <small class="form-text text-muted">
+                                        Optional: Provide any additional context about your metrics that would be helpful for review.
+                                    </small>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    Submit commission
+                                </button>
+                                <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@commission?.Id" class="btn btn-primary">
+                                    Back to commission
+                                </a>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-footer">
+                            <a asp-controller="ProductReporting" asp-action="Commission" asp-route-commissionId="@commission?.Id" class="btn btn-default">
+                                Back to commission
+                            </a>
+                            @if (!isReadOnly)
+                            {
+                                <span class="text-muted ml-3">
+                                    Complete all metrics to enable submission
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted ml-3">
+                                    <i class="fas fa-lock"></i> This submission is locked because the commission due date has passed.
+                                </span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@Html.AntiForgeryToken()
+
+<!-- Edit Modal - Simplified version, can reuse PerformanceMetrics modal JavaScript -->
+<div class="modal fade" id="editModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">Edit metric value</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="readOnlyNotice" class="alert alert-info" style="display: none;">
+                    <strong>View only:</strong> This commission submission cannot be edited.
+                </div>
+                <div class="form-group">
+                    <label id="modalTitle"></label>
+                    <input type="text" class="form-control" id="modalValue" />
+                    <small class="form-text text-muted" id="modalHelp"></small>
+                    <div id="modalError" class="text-danger d-none"></div>
+                </div>
+                <div class="form-group" id="nullCheckboxContainer" style="display: none;">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="metricNotCaptured" />
+                        <label class="custom-control-label" for="metricNotCaptured">Metric not captured</label>
+                    </div>
+                </div>
+                <div class="form-group" id="notCapturedReasonContainer" style="display: none;">
+                    <label>Reason for not capturing</label>
+                    <textarea class="form-control" id="notCapturedReason" rows="3"></textarea>
+                    <div id="notCapturedReasonError" class="text-danger d-none"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveMetricBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            var currentMetricId = null;
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            $('.edit-metric-link').click(function(e) {
+                e.preventDefault();
+                currentMetricId = $(this).data('id');
+                var title = $(this).data('title');
+                var value = $(this).data('value') || '';
+                var isNotCaptured = $(this).data('is-not-captured') === true || $(this).data('is-not-captured') === 'true';
+                var notCapturedReason = $(this).data('not-captured-reason') || '';
+                var isReadOnly = $(this).data('read-only') === true || $(this).data('read-only') === 'true';
+                var type = $(this).data('type') || 0;
+                var rulesJson = $(this).data('rules');
+                var hint = $(this).data('hint') || '';
+
+                // Parse validation rules
+                var rules = null;
+                if (rulesJson) {
+                    try {
+                        rules = typeof rulesJson === 'string' ? JSON.parse(rulesJson) : rulesJson;
+                    } catch (e) {
+                        console.log('Could not parse validation rules');
+                    }
+                }
+
+                $('#modalTitle').text(title);
+                $('#modalValue').val(value);
+                $('#modalError').text('').addClass('d-none');
+                $('#notCapturedReasonError').text('').addClass('d-none');
+                
+                if (isReadOnly) {
+                    $('#readOnlyNotice').show();
+                    $('#saveMetricBtn').hide();
+                    $('#modalValue').prop('disabled', true);
+                    $('#metricNotCaptured').prop('disabled', true);
+                    $('#notCapturedReason').prop('disabled', true);
+                } else {
+                    $('#readOnlyNotice').hide();
+                    $('#saveMetricBtn').show();
+                    $('#modalValue').prop('disabled', false);
+                    $('#metricNotCaptured').prop('disabled', false);
+                    $('#notCapturedReason').prop('disabled', false);
+                }
+
+                // Set up input type and attributes based on value type
+                if (type === 1) { // Number
+                    $('#modalValue').attr('type', 'number').attr('step', '1');
+                    if (rules && rules.minimumValue !== undefined) {
+                        $('#modalValue').attr('min', rules.minimumValue);
+                    }
+                    if (rules && rules.maximumValue !== undefined) {
+                        $('#modalValue').attr('max', rules.maximumValue);
+                    }
+                } else if (type === 2) { // Decimal
+                    $('#modalValue').attr('type', 'number').attr('step', '0.01');
+                    if (rules && rules.minimumValue !== undefined) {
+                        $('#modalValue').attr('min', rules.minimumValue);
+                    }
+                    if (rules && rules.maximumValue !== undefined) {
+                        $('#modalValue').attr('max', rules.maximumValue);
+                    }
+                } else if (type === 3) { // Percentage
+                    $('#modalValue').attr('type', 'number').attr('step', '0.01').attr('min', '0').attr('max', '100');
+                    if (rules && rules.minimumValue !== undefined) {
+                        $('#modalValue').attr('min', rules.minimumValue);
+                    }
+                    if (rules && rules.maximumValue !== undefined) {
+                        $('#modalValue').attr('max', rules.maximumValue);
+                    }
+                } else {
+                    $('#modalValue').attr('type', 'text');
+                }
+
+                // Show/hide "not captured" checkbox based on allowNull rule
+                if (rules && rules.allowNull === true) {
+                    $('#nullCheckboxContainer').show();
+                    $('#metricNotCaptured').prop('checked', isNotCaptured);
+                    if (isNotCaptured) {
+                        $('#notCapturedReasonContainer').show();
+                        $('#notCapturedReason').val(notCapturedReason);
+                    } else {
+                        $('#notCapturedReasonContainer').hide();
+                        $('#notCapturedReason').val('');
+                    }
+                } else {
+                    $('#nullCheckboxContainer').hide();
+                    $('#notCapturedReasonContainer').hide();
+                    $('#metricNotCaptured').prop('checked', false);
+                    $('#notCapturedReason').val('');
+                }
+
+                // Handle checkbox change
+                $('#metricNotCaptured').off('change').on('change', function() {
+                    if ($(this).is(':checked')) {
+                        $('#notCapturedReasonContainer').show();
+                        $('#modalValue').prop('disabled', true);
+                    } else {
+                        $('#notCapturedReasonContainer').hide();
+                        $('#notCapturedReason').val('').removeClass('is-invalid');
+                        $('#notCapturedReasonError').text('').addClass('d-none');
+                        $('#modalValue').prop('disabled', false);
+                    }
+                });
+
+                $('#modalHelp').text(hint || 'Enter value');
+                $('#editModal').modal('show');
+            });
+
+            $('#saveMetricBtn').click(function() {
+                if (!currentMetricId) return;
+
+                var isNotCaptured = $('#metricNotCaptured').is(':checked');
+                var value = isNotCaptured ? '' : $('#modalValue').val().trim();
+                
+                // Get validation rules
+                var rulesJson = $('.edit-metric-link[data-id="' + currentMetricId + '"]').data('rules');
+                var rules = null;
+                if (rulesJson) {
+                    try {
+                        rules = typeof rulesJson === 'string' ? JSON.parse(rulesJson) : rulesJson;
+                    } catch (e) {
+                        console.log('Could not parse validation rules');
+                    }
+                }
+                
+                var valueType = $('.edit-metric-link[data-id="' + currentMetricId + '"]').data('type') || 0;
+
+                // If "not captured" checkbox is checked, validate the reason
+                if (isNotCaptured) {
+                    var notCapturedReason = $('#notCapturedReason').val().trim();
+                    if (!notCapturedReason) {
+                        $('#notCapturedReason').addClass('is-invalid');
+                        $('#notCapturedReasonError').text('Please provide a reason for not capturing this metric').removeClass('d-none').addClass('d-block');
+                        return;
+                    } else {
+                        $('#notCapturedReason').removeClass('is-invalid');
+                        $('#notCapturedReasonError').text('').addClass('d-none').removeClass('d-block');
+                    }
+                    
+                    // Skip value validation for not captured metrics
+                } else {
+                    // Client-side validation
+                    var validationError = validateValue(value, valueType, rules);
+                    if (validationError) {
+                        $('#modalValue').addClass('is-invalid');
+                        $('#modalError').text(validationError).removeClass('d-none').addClass('d-block');
+                        return;
+                    } else {
+                        $('#modalValue').removeClass('is-invalid');
+                        $('#modalError').text('').addClass('d-none');
+                    }
+                }
+
+                var notCapturedReason = $('#notCapturedReason').val().trim();
+
+                $.ajax({
+                    url: '@Url.Action("SaveCommissionMetricValue", "ProductReporting")',
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': token
+                    },
+                    data: {
+                        id: currentMetricId,
+                        value: value,
+                        isNotCaptured: isNotCaptured,
+                        notCapturedReason: notCapturedReason
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            $('#modalError').text(response.message || 'Error saving value').removeClass('d-none').addClass('d-block');
+                        }
+                    },
+                    error: function() {
+                        $('#modalError').text('An error occurred while saving').removeClass('d-none').addClass('d-block');
+                    }
+                });
+            });
+            
+            // Validation function
+            function validateValue(value, valueType, rules) {
+                // Check if empty
+                var isEmpty = !value || value.trim() === '';
+                
+                // Check required - but ignore if allowNull is true
+                if (rules && rules.required && isEmpty && !rules.allowNull) {
+                    return 'This field is required';
+                }
+                
+                // If empty and not required (or allowNull is true), it's valid
+                if (isEmpty) {
+                    return null;
+                }
+                
+                // Validate by type
+                if (valueType == 1) { // Number
+                    if (!/^-?\d+$/.test(value)) {
+                        return 'Value must be a whole number';
+                    }
+                    var numValue = parseInt(value);
+                    if (rules && rules.minimumValue !== undefined && numValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && numValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                } else if (valueType == 2) { // Decimal
+                    if (!/^-?\d*\.?\d+$/.test(value)) {
+                        return 'Value must be a decimal number';
+                    }
+                    var decValue = parseFloat(value);
+                    if (rules && rules.minimumValue !== undefined && decValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && decValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                    if (rules && rules.decimalPlaces !== undefined) {
+                        var decimalPart = value.split('.')[1];
+                        if (decimalPart && decimalPart.length > rules.decimalPlaces) {
+                            return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+                        }
+                    }
+                } else if (valueType == 3) { // Percentage
+                    if (!/^\d*\.?\d+$/.test(value)) {
+                        return 'Value must be a valid percentage';
+                    }
+                    var percValue = parseFloat(value);
+                    if (percValue < 0 || percValue > 100) {
+                        return 'Percentage must be between 0 and 100';
+                    }
+                    if (rules && rules.minimumValue !== undefined && percValue < rules.minimumValue) {
+                        return 'Value must be at least ' + rules.minimumValue;
+                    }
+                    if (rules && rules.maximumValue !== undefined && percValue > rules.maximumValue) {
+                        return 'Value must be at most ' + rules.maximumValue;
+                    }
+                    if (rules && rules.decimalPlaces !== undefined) {
+                        var decimalPart = value.split('.')[1];
+                        if (decimalPart && decimalPart.length > rules.decimalPlaces) {
+                            return 'Value must have at most ' + rules.decimalPlaces + ' decimal places';
+                        }
+                    }
+                }
+                
+                return null;
+            }
+        });
+    </script>
+}

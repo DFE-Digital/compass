@@ -1,0 +1,406 @@
+@model Compass.Models.Commission
+@using Compass.Models
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "Performance reporting - " + Model.Name;
+    var productMetricData = ViewBag.ProductMetricData as List<Compass.Controllers.CommissionProductMetricViewModel> ?? new List<Compass.Controllers.CommissionProductMetricViewModel>();
+    var businessAreaCompletions = ViewBag.BusinessAreaCompletions as List<Compass.Controllers.BusinessAreaCommissionCompletion> ?? new List<Compass.Controllers.BusinessAreaCommissionCompletion>();
+    var allCommissions = ViewBag.AllCommissions as List<Commission> ?? new List<Commission>();
+    var fipsBaseUrl = Configuration["fipsProduct:baseUrl"] ?? "https://fips.education.gov.uk";
+    
+    // Get unique products and metrics
+    var products = productMetricData.Select(pmd => pmd.Product).Distinct().OrderBy(p => p.Title).ToList();
+    var metrics = productMetricData.Select(pmd => pmd.Metric).Distinct().OrderBy(m => m.Identifier).ToList();
+}
+
+@await Html.PartialAsync("_CentralOpsNavigation")
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .metric-cell {
+        text-align: center;
+        min-width: 100px;
+    }
+    .metric-value {
+        cursor: pointer;
+    }
+    .metric-value:hover {
+        background-color: #f8f9fa;
+    }
+    .metric-info-link:hover {
+        text-decoration: underline;
+    }
+    .metric-info-link:hover .fa-info-circle {
+        opacity: 1 !important;
+    }
+</style>
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @TempData["ErrorMessage"]
+            </div>
+        }
+
+        <!-- Commission Header -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h3 class="card-title mb-0">@Model.Name</h3>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <a href="@Url.Action("PerformanceReporting", "CentralOps")" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-arrow-left"></i> Back to commissions
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(Model.Description))
+                        {
+                            <p class="text-muted mb-3">@Model.Description</p>
+                        }
+                        <div class="row">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <div class="card border-left-info shadow h-100">
+                                    <div class="card-body">
+                                        <div class="row no-gutters align-items-center">
+                                            <div class="col mr-2">
+                                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Data required for period</div>
+                                                <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                                    @Model.StartDate.ToString("d MMMM yyyy")<br />
+                                                    <small class="text-muted">to</small><br />
+                                                    @Model.EndDate.ToString("d MMMM yyyy")
+                                                    @if (!string.IsNullOrEmpty(Model.Quarter))
+                                                    {
+                                                        <span class="badge badge-info ml-2">@Model.Quarter</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="col-auto">
+                                                <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                @{
+                                    var now = DateTime.UtcNow;
+                                    var isPastDue = now > Model.DueDate;
+                                    var dueDateBorderClass = isPastDue ? "border-left-danger" : "border-left-warning";
+                                    var dueDateTextClass = isPastDue ? "text-danger" : "text-warning";
+                                }
+                                <div class="card @dueDateBorderClass shadow h-100">
+                                    <div class="card-body">
+                                        <div class="row no-gutters align-items-center">
+                                            <div class="col mr-2">
+                                                <div class="text-xs font-weight-bold @dueDateTextClass text-uppercase mb-1">Due date</div>
+                                                <div class="h6 mb-0 font-weight-bold text-gray-800">@Model.DueDate.ToString("d MMMM yyyy")</div>
+                                                @if (isPastDue)
+                                                {
+                                                    <small class="text-danger">Past due</small>
+                                                }
+                                            </div>
+                                            <div class="col-auto">
+                                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Area Completion Table -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Completion by business area</h3>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Business area</th>
+                                    <th class="text-center">Total products</th>
+                                    <th class="text-center">Completed</th>
+                                    <th class="text-center">In progress</th>
+                                    <th class="text-center">Not started</th>
+                                    <th class="text-center">Late</th>
+                                    <th class="text-center">Completion %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var selectedBusinessArea = ViewBag.SelectedBusinessArea as string;
+                                }
+                                @foreach (var ba in businessAreaCompletions)
+                                {
+                                    var isSelected = selectedBusinessArea == ba.BusinessArea;
+                                    var rowClass = isSelected ? "table-active" : "";
+                                    <tr class="@rowClass">
+                                        <td>
+                                            @if (isSelected)
+                                            {
+                                                <strong>@ba.BusinessArea</strong>
+                                                <a href="@Url.Action("PerformanceReporting", "CentralOps", new { commissionId = Model.Id })" 
+                                                   class="btn btn-sm btn-link ml-2" 
+                                                   title="Clear filter">
+                                                    <i class="fas fa-times"></i>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Url.Action("PerformanceReporting", "CentralOps", new { commissionId = Model.Id, businessArea = ba.BusinessArea })" 
+                                                   style="color: #005ea5; text-decoration: none; font-weight: 600;">
+                                                    <strong>@ba.BusinessArea</strong>
+                                                </a>
+                                            }
+                                        </td>
+                                        <td class="text-center">@ba.TotalProducts</td>
+                                        <td class="text-center">
+                                            <span class="badge badge-success">@ba.CompletedProducts</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-warning">@ba.InProgressProducts</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-secondary">@ba.NotStartedProducts</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-danger">@ba.LateProducts</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <strong>@ba.CompletionPercentage.ToString("F1")%</strong>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products and Metrics Table -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            Products and metrics
+                            @{
+                                var selectedBusinessAreaForHeader = ViewBag.SelectedBusinessArea as string;
+                            }
+                            @if (!string.IsNullOrEmpty(selectedBusinessAreaForHeader))
+                            {
+                                <small class="text-muted">(Filtered by: <strong>@selectedBusinessAreaForHeader</strong>)</small>
+                            }
+                        </h3>
+                    </div>
+                    <div class="card-body table-responsive p-0" style="max-height: 800px; overflow-y: auto;">
+                        <table class="table table-bordered table-hover table-sm" style="font-size: 0.875rem;">
+                            <thead style="position: sticky; top: 0; background-color: #fff; z-index: 10;">
+                                <tr>
+                                    <th style="position: sticky; left: 0; background-color: #fff; z-index: 11; min-width: 200px;">Product</th>
+                                    @foreach (var metric in metrics)
+                                    {
+                                        <th class="metric-cell" style="min-width: 120px;">
+                                            <a href="#" class="metric-info-link" 
+                                               data-metric-id="@metric.Id"
+                                               data-identifier="@metric.Identifier"
+                                               data-title="@metric.Title"
+                                               data-description="@metric.Description"
+                                               data-hint="@metric.HintText"
+                                               data-value-type="@metric.ValueType"
+                                               data-validation-rules="@metric.ValidationRules"
+                                               style="color: inherit; text-decoration: none; cursor: pointer;"
+                                               title="Click for metric details">
+                                                <strong>@metric.Identifier</strong>
+                                                <i class="fas fa-info-circle ml-1" style="font-size: 0.875rem; opacity: 0.7;" title="Click to view metric details"></i>
+                                            </a>
+                                        </th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in products)
+                                {
+                                    <tr>
+                                        <td style="position: sticky; left: 0; background-color: #fff; z-index: 10;">
+                                            <strong>@product.Title</strong><br />
+                                            <small class="text-muted">
+                                                @if (!string.IsNullOrEmpty(product.DocumentId))
+                                                {
+                                                    var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{product.DocumentId}";
+                                                    <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                }
+                                                else if (!string.IsNullOrEmpty(product.FipsId))
+                                                {
+                                                    var fipsProductUrl = $"{fipsBaseUrl.TrimEnd('/')}/product/{product.FipsId}";
+                                                    <a href="@fipsProductUrl" target="_blank" rel="noopener noreferrer">View on FIPS</a>
+                                                }
+                                            </small>
+                                        </td>
+                                        @foreach (var metric in metrics)
+                                        {
+                                            var metricData = productMetricData.FirstOrDefault(pmd => 
+                                                pmd.Product.DocumentId == product.DocumentId && 
+                                                pmd.Metric.Id == metric.Id);
+                                            var metricValue = metricData?.MetricValue;
+                                            var submission = metricData?.Submission;
+                                            
+                                            <td class="metric-cell">
+                                                @if (metricValue != null)
+                                                {
+                                                    if (metricValue.IsNotCaptured)
+                                                    {
+                                                        <span class="text-muted" title="Not captured: @metricValue.NotCapturedReason">-</span>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(metricValue.Value))
+                                                    {
+                                                        <span class="metric-value" 
+                                                              data-metric-id="@metric.Id"
+                                                              data-product-title="@product.Title"
+                                                              data-value="@metricValue.Value"
+                                                              title="Click for details">
+                                                            @metricValue.Value
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Metric Details Modal -->
+<div class="modal fade" id="metricDetailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="metricDetailsModalTitle">Metric details</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Identifier</dt>
+                    <dd class="col-sm-9" id="modalIdentifier"></dd>
+                    
+                    <dt class="col-sm-3">Title</dt>
+                    <dd class="col-sm-9" id="modalTitle"></dd>
+                    
+                    <dt class="col-sm-3">Description</dt>
+                    <dd class="col-sm-9" id="modalDescription"></dd>
+                    
+                    <dt class="col-sm-3">Hint text</dt>
+                    <dd class="col-sm-9" id="modalHint"></dd>
+                    
+                    <dt class="col-sm-3">Value type</dt>
+                    <dd class="col-sm-9" id="modalValueType"></dd>
+                    
+                    <dt class="col-sm-3">Validation rules</dt>
+                    <dd class="col-sm-9" id="modalValidationRules"></dd>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@Context.Items["Nonce"]">
+        $(document).ready(function() {
+            $('.metric-info-link').click(function(e) {
+                e.preventDefault();
+                var metricId = $(this).data('metric-id');
+                var identifier = $(this).data('identifier');
+                var title = $(this).data('title');
+                var description = $(this).data('description') || 'No description available';
+                var hint = $(this).data('hint') || 'No hint text available';
+                var valueType = $(this).data('value-type');
+                var validationRules = $(this).data('validation-rules');
+                
+                // Parse value type
+                var valueTypeNames = ['Text', 'Number', 'Decimal', 'Percentage'];
+                var valueTypeName = valueTypeNames[valueType] || 'Unknown';
+                
+                // Parse validation rules if JSON
+                var validationRulesText = 'No validation rules';
+                if (validationRules) {
+                    try {
+                        var rules = typeof validationRules === 'string' ? JSON.parse(validationRules) : validationRules;
+                        var rulesParts = [];
+                        if (rules.required) rulesParts.push('Required');
+                        if (rules.allowNull) rulesParts.push('Allows null');
+                        if (rules.minimumValue !== undefined) rulesParts.push('Min: ' + rules.minimumValue);
+                        if (rules.maximumValue !== undefined) rulesParts.push('Max: ' + rules.maximumValue);
+                        if (rules.decimalPlaces !== undefined) rulesParts.push('Decimal places: ' + rules.decimalPlaces);
+                        validationRulesText = rulesParts.length > 0 ? rulesParts.join(', ') : 'No validation rules';
+                    } catch (e) {
+                        validationRulesText = validationRules;
+                    }
+                }
+                
+                $('#modalIdentifier').text(identifier);
+                $('#modalTitle').text(title);
+                $('#modalDescription').text(description);
+                $('#modalHint').text(hint);
+                $('#modalValueType').text(valueTypeName);
+                $('#modalValidationRules').text(validationRulesText);
+                
+                $('#metricDetailsModal').modal('show');
+            });
+        });
+    </script>
+}

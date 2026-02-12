@@ -6,11 +6,16 @@
     var priority = ViewBag.Priority as string;
     var rag = ViewBag.Rag as string;
     var status = ViewBag.Status as string;
+    var currentStatus = ViewBag.CurrentStatus as string ?? "Active";
     var totalCount = ViewBag.TotalCount as int? ?? 0;
     var businessAreas = ViewBag.BusinessAreas as List<string> ?? new List<string>();
     var priorities = ViewBag.Priorities as string[] ?? new string[0];
     var rags = ViewBag.Rags as string[] ?? new string[0];
     var statuses = ViewBag.Statuses as string[] ?? new string[0];
+    var statusActiveCount = ViewBag.StatusActiveCount as int? ?? 0;
+    var statusPausedCount = ViewBag.StatusPausedCount as int? ?? 0;
+    var statusCompletedCount = ViewBag.StatusCompletedCount as int? ?? 0;
+    var statusCancelledCount = ViewBag.StatusCancelledCount as int? ?? 0;
 }
 @Html.AntiForgeryToken()
 
@@ -78,6 +83,57 @@
         <div class="row">
             <!-- Left Column: Filters -->
             <div class="col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-12 col-12">
+                <!-- Project Status Navigation -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Project status</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Active"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Active" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Active</span>
+                                <span class="badge @(currentStatus == "Active" ? "badge-light" : "badge-secondary") badge-pill">@statusActiveCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Paused"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Paused" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Paused</span>
+                                <span class="badge @(currentStatus == "Paused" ? "badge-light" : "badge-secondary") badge-pill">@statusPausedCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Completed"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Completed" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Completed</span>
+                                <span class="badge @(currentStatus == "Completed" ? "badge-light" : "badge-secondary") badge-pill">@statusCompletedCount</span>
+                            </a>
+                            <a href="@Url.Action("ManageWork", new { 
+                                search = search, 
+                                rag = rag, 
+                                businessArea = businessArea, 
+                                priority = priority,
+                                status = "Cancelled"
+                            })" class="list-group-item list-group-item-action @(currentStatus == "Cancelled" ? "active" : "")" style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                <span>Cancelled</span>
+                                <span class="badge @(currentStatus == "Cancelled" ? "badge-light" : "badge-secondary") badge-pill">@statusCancelledCount</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">
@@ -298,7 +354,7 @@
                                         <label for="bulkDirectorates">Directorates (multiple selection)</label>
                                         <select class="form-control form-control-sm" id="bulkDirectorates" multiple size="5">
                                             @{
-                                                var directorateLookups = ViewBag.Directorates as List<Compass.Models.DirectorateLookup> ?? new List<Compass.Models.DirectorateLookup>();
+                                                var directorateLookups = ViewBag.Directorates as List<Compass.Models.Division> ?? new List<Compass.Models.Division>();
                                             }
                                             @foreach (var dir in directorateLookups)
                                             {
@@ -468,7 +524,7 @@
                                                 @if (item.Directorates != null && item.Directorates.Any())
                                                 {
                                                     <div>
-                                                        @foreach (var directorate in item.Directorates.Select(d => d.DirectorateLookup?.Name).Where(n => !string.IsNullOrEmpty(n)))
+                                                        @foreach (var directorate in item.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)))
                                                         {
                                                             <span class="badge badge-secondary mb-1 d-inline-block">@directorate</span>
                                                         }

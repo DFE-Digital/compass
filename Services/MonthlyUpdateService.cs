@@ -55,15 +55,28 @@ public class MonthlyUpdateService : IMonthlyUpdateService
         var now = DateTime.UtcNow;
         var updateDueDate = GetMonthlyUpdateDueDate(year, month);
         var periodEndDate = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+        
+        // Get the commission days from configuration (default: 6)
+        var config = _context.MonthlyUpdateDeadlineConfigs
+            .Where(c => c.IsActive && 
+                       c.EffectiveFrom <= new DateTime(year, month, 1) &&
+                       (c.EffectiveUntil == null || c.EffectiveUntil >= new DateTime(year, month, 1)))
+            .OrderByDescending(c => c.EffectiveFrom)
+            .FirstOrDefault();
+        
+        var commissionDays = config?.CommissionDaysBeforeMonthEnd ?? 6;
+        
+        // Updates become available for submission N days before the end of the month
+        var commissionDate = periodEndDate.AddDays(-commissionDays);
 
-        // If we haven't reached the end of the reporting period yet
-        if (now < periodEndDate)
+        // If we haven't reached the commission date, it's upcoming
+        if (now.Date < commissionDate.Date)
         {
             return UpdateSubmissionStatus.Upcoming;
         }
 
-        // If we're past the end of the period but before the due date
-        if (now >= periodEndDate && now <= updateDueDate.AddDays(1).AddTicks(-1))
+        // If we're on or past the commission date but before the due date
+        if (now <= updateDueDate.AddDays(1).AddTicks(-1))
         {
             return UpdateSubmissionStatus.Due;
         }
