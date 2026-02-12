@@ -813,7 +813,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -1012,7 +1012,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1145,7 +1145,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -1340,7 +1340,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1452,7 +1452,7 @@ namespace Compass.Controllers
                     .Include(p => p.ServiceOwners)
                         .ThenInclude(so => so.User)
                     .Include(p => p.Directorates)
-                        .ThenInclude(d => d.DirectorateLookup)
+                        .ThenInclude(d => d.Division)
                     .Include(p => p.ProjectProducts)
                     .Include(p => p.ProjectContacts)
                         .ThenInclude(pc => pc.User)
@@ -1647,7 +1647,7 @@ namespace Compass.Controllers
 
                     // Directorates
                     var directorates = project.Directorates?
-                        .Select(d => d.DirectorateLookup?.Name ?? string.Empty)
+                        .Select(d => d.Division?.Name ?? string.Empty)
                         .Where(d => !string.IsNullOrEmpty(d))
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
@@ -1823,7 +1823,7 @@ namespace Compass.Controllers
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -1971,7 +1971,7 @@ namespace Compass.Controllers
                 .ThenBy(ra => ra.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -3325,7 +3325,7 @@ namespace Compass.Controllers
                 .Include(p => p.ServiceOwners)
                     .ThenInclude(so => so.User)
                 .Include(p => p.Directorates)
-                    .ThenInclude(d => d.DirectorateLookup)
+                    .ThenInclude(d => d.Division)
                 .Include(p => p.BudgetOwners)
                     .ThenInclude(bo => bo.BusinessAreaLookup)
                 .Include(p => p.PmoContacts)
@@ -3349,7 +3349,7 @@ namespace Compass.Controllers
                 .ThenBy(at => at.Name)
                 .ToListAsync();
 
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -3502,7 +3502,7 @@ namespace Compass.Controllers
                 .OrderBy(at => at.SortOrder)
                 .ThenBy(at => at.Name)
                 .ToListAsync();
-            ViewBag.Directorates = await _context.DirectorateLookups
+            ViewBag.Directorates = await _context.Divisions
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.SortOrder)
                 .ThenBy(d => d.Name)
@@ -3628,7 +3628,7 @@ namespace Compass.Controllers
                 .ToList();
 
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -3636,7 +3636,7 @@ namespace Compass.Controllers
                 }
 
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DirectorateLookupId)
+                    .Select(d => d.DivisionId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -3645,7 +3645,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            DirectorateLookupId = directorateId,
+                            DivisionId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
@@ -7109,7 +7109,7 @@ namespace Compass.Controllers
 
                 // Remove existing directorates not in the selection
                 var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DirectorateLookupId))
+                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
                     .ToList();
                 foreach (var directorate in directoratesToRemove)
                 {
@@ -7118,7 +7118,7 @@ namespace Compass.Controllers
 
                 // Add new directorates
                 var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DirectorateLookupId)
+                    .Select(d => d.DivisionId)
                     .ToList();
                 foreach (var directorateId in selectedDirectorateIds)
                 {
@@ -7127,7 +7127,7 @@ namespace Compass.Controllers
                         project.Directorates.Add(new ProjectDirectorate
                         {
                             ProjectId = project.Id,
-                            DirectorateLookupId = directorateId,
+                            DivisionId = directorateId,
                             CreatedAt = DateTime.UtcNow
                         });
                     }
