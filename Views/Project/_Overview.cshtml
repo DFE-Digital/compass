@@ -44,11 +44,31 @@
             </div>
             <div class="col-md-6">
                 @{
-                    var ragCardClass = GetRagCardClass(Model.RagStatus);
-                    var ragStatusDisplay = !string.IsNullOrEmpty(Model.RagStatus) ? FormatRagStatusText(Model.RagStatus) : "Not set";
+                    var ragStatusForCard = Model.RagStatusLookup?.Name ?? Model.RagStatus;
+                    var ragCardClass = GetRagCardClass(ragStatusForCard);
+                    var ragStatusDisplay = Model.RagStatusLookup != null 
+                        ? Model.RagStatusLookup.Name 
+                        : (!string.IsNullOrEmpty(Model.RagStatus) ? FormatRagStatusText(Model.RagStatus) : "Not set");
                     var ragSupportingTextClass = !string.IsNullOrEmpty(ragCardClass) && ragCardClass.Contains("amber", StringComparison.OrdinalIgnoreCase)
                         ? "rag-card__support--dark"
                         : "rag-card__support--light";
+                    
+                    // Get description from RagStatusLookup if available, otherwise try to find it from ViewBag
+                    string? ragDescription = null;
+                    if (Model.RagStatusLookup != null && !string.IsNullOrEmpty(Model.RagStatusLookup.Description))
+                    {
+                        ragDescription = Model.RagStatusLookup.Description;
+                    }
+                    else if (!string.IsNullOrEmpty(Model.RagStatus) && ViewBag.RagStatuses != null)
+                    {
+                        var ragStatuses = ViewBag.RagStatuses as List<Compass.Models.RagStatusLookup> ?? new List<Compass.Models.RagStatusLookup>();
+                        var normalizedRagStatus = FormatRagStatusText(Model.RagStatus);
+                        var matchingRagStatus = ragStatuses.FirstOrDefault(r => r.Name.Equals(normalizedRagStatus, StringComparison.OrdinalIgnoreCase));
+                        if (matchingRagStatus != null && !string.IsNullOrEmpty(matchingRagStatus.Description))
+                        {
+                            ragDescription = matchingRagStatus.Description;
+                        }
+                    }
                 }
                 <div class="card rag-card @ragCardClass h-100 mb-4" role="group" aria-labelledby="ragStatusHeading">
                     <div class="card-body">
@@ -56,6 +76,10 @@
                             <div>
                                 <p class="card-label text-uppercase mb-1" id="ragStatusHeading">RAG status</p>
                                 <h3 class="card-value mb-0">@ragStatusDisplay</h3>
+                                @if (!string.IsNullOrEmpty(ragDescription))
+                                {
+                                    <p class="rag-card__support @ragSupportingTextClass mt-2 mb-0">@ragDescription</p>
+                                }
                             </div>
                             <a asp-action="Details"
                                asp-route-id="@Model.Id"
@@ -557,11 +581,11 @@
                             <td class="summary-value">
                                 @if (Model.Directorates?.Any() == true)
                                 {
-                                @foreach (var directorate in Model.Directorates.OrderBy(d => d.DirectorateLookup != null ? d.DirectorateLookup.Name : "").Take(2))
+                                @foreach (var directorate in Model.Directorates.OrderBy(d => d.Division != null ? d.Division.Name : "").Take(2))
                                 {
-                                    @if (directorate.DirectorateLookup != null)
+                                    @if (directorate.Division != null)
                                     {
-                                        <div>@directorate.DirectorateLookup.Name</div>
+                                        <div>@directorate.Division.Name</div>
                                     }
                                 }
                                     @if (Model.Directorates.Count > 2)
@@ -1453,7 +1477,7 @@
                             {
                                 @foreach (var directorate in ViewBag.Directorates)
                                 {
-                                    var isSelected = Model.Directorates?.Any(d => d.DirectorateLookupId == directorate.Id) == true;
+                                    var isSelected = Model.Directorates?.Any(d => d.DivisionId == directorate.Id) == true;
                                     <div class="form-check">
                                         <input type="checkbox" class="form-check-input" 
                                                name="selectedDirectorateIds" value="@directorate.Id" 
