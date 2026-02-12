@@ -582,18 +582,18 @@ public class ProjectImportService : IProjectImportService
             {
                 // Check if relationship already exists in database
                 var existsInDb = await _context.ProjectDirectorates
-                    .AnyAsync(pd => pd.ProjectId == project.Id && pd.DirectorateLookupId == directorate.Id, cancellationToken);
+                    .AnyAsync(pd => pd.ProjectId == project.Id && pd.DivisionId == directorate.Id, cancellationToken);
 
                 // Also check if it's already being added in this transaction (change tracker)
                 var existsInContext = _context.ChangeTracker.Entries<ProjectDirectorate>()
-                    .Any(e => e.Entity.ProjectId == project.Id && e.Entity.DirectorateLookupId == directorate.Id && e.State == Microsoft.EntityFrameworkCore.EntityState.Added);
+                    .Any(e => e.Entity.ProjectId == project.Id && e.Entity.DivisionId == directorate.Id && e.State == Microsoft.EntityFrameworkCore.EntityState.Added);
 
                 if (!existsInDb && !existsInContext)
                 {
                     _context.ProjectDirectorates.Add(new ProjectDirectorate
                     {
                         ProjectId = project.Id,
-                        DirectorateLookupId = directorate.Id,
+                        DivisionId = directorate.Id,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
@@ -642,7 +642,7 @@ public class ProjectImportService : IProjectImportService
         }
     }
 
-    private async Task<DirectorateLookup?> FindDirectorateAsync(string searchValue, CancellationToken cancellationToken)
+    private async Task<Division?> FindDirectorateAsync(string searchValue, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(searchValue))
         {
@@ -651,8 +651,8 @@ public class ProjectImportService : IProjectImportService
 
         var normalizedSearch = searchValue.Trim();
 
-        // Get all active directorates
-        var allDirectorates = await _context.DirectorateLookups
+        // Get all active divisions (directorates are now divisions)
+        var allDirectorates = await _context.Divisions
             .Where(d => d.IsActive)
             .ToListAsync(cancellationToken);
 
