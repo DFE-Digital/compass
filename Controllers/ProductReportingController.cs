@@ -135,19 +135,8 @@ public class ProductReportingController : Controller
             }
         }
         
-        // Calculate upcoming reporting dates (3 months in advance)
-        // Exclude periods that are in the period exclusions list
-        var upcomingReportingDates = new List<(int Year, int Month, DateTime DueDate, string PeriodName)>();
-        
-        // Start from current reporting period and go forward 3 months
-        for (int i = 0; i <= 3; i++)
-        {
-            var futureMonth = currentMonth + i;
-            var futureYear = currentYear;
-            
-            allProductsCount = allProductStatuses.Count;
-        }
         // Note: allProductsCount will be 0 when not on "all" view - badge will show 0 or be hidden
+        allProductsCount = allProductStatuses.Count;
         
         // Determine which data to show based on view
         List<ProductReturnStatusViewModel> displayData;
@@ -526,132 +515,6 @@ public class ProductReportingController : Controller
                 allProductStatuses.Add(vm);
             }
 
-            metricValue.ReasonForDifference = reasonForDifference;
-            metricValue.UpdatedAt = DateTime.UtcNow;
-
-            // Update submission status
-            if (metricValue.CommissionSubmission != null)
-            {
-                var allMetricValues = await _context.CommissionMetricValues
-                    .Where(cmv => cmv.CommissionSubmissionId == metricValue.CommissionSubmission.Id)
-                    .ToListAsync();
-
-                var completedCount = allMetricValues.Count(mv => mv.IsComplete);
-                var totalCount = allMetricValues.Count;
-
-                if (completedCount == totalCount && totalCount > 0)
-                {
-                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.InProgress;
-                }
-                else if (completedCount > 0)
-                {
-                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.InProgress;
-                }
-                else
-                {
-                    metricValue.CommissionSubmission.Status = CommissionSubmissionStatus.NotStarted;
-                }
-
-                metricValue.CommissionSubmission.UpdatedAt = DateTime.UtcNow;
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error saving commission metric value {Id}", id);
-            return Json(new { success = false, message = "An error occurred while saving the value" });
-        }
-    }
-
-    // POST: ProductReporting/SubmitCommissionSubmission/{id}
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SubmitCommissionSubmission(int id, string? comments)
-    {
-        var submission = await _context.CommissionSubmissions
-            .Include(cs => cs.Commission)
-            .Include(cs => cs.MetricValues)
-            .FirstOrDefaultAsync(cs => cs.Id == id);
-
-        if (submission == null)
-        {
-            return NotFound();
-        }
-
-        if (submission.Status == CommissionSubmissionStatus.Submitted)
-        {
-            TempData["ErrorMessage"] = "This submission has already been submitted.";
-            return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
-        }
-
-        var now = DateTime.UtcNow;
-        if (submission.Commission != null && now > submission.Commission.DueDate)
-        {
-            submission.Status = CommissionSubmissionStatus.Late;
-        }
-        else
-        {
-            submission.Status = CommissionSubmissionStatus.Submitted;
-        }
-
-        submission.SubmittedDate = now;
-        submission.SubmittedBy = User.Identity?.Name ?? "unknown";
-        submission.UpdatedAt = now;
-        submission.Comments = !string.IsNullOrWhiteSpace(comments) ? comments.Trim() : null;
-
-        await _context.SaveChangesAsync();
-
-        TempData["SuccessMessage"] = "Commission submission completed successfully.";
-        return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
-    }
-
-    // POST: ProductReporting/UnsubmitCommissionSubmission
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UnsubmitCommissionSubmission(int id)
-    {
-        var submission = await _context.CommissionSubmissions
-            .Include(cs => cs.Commission)
-            .FirstOrDefaultAsync(cs => cs.Id == id);
-
-        if (submission == null)
-        {
-            TempData["ErrorMessage"] = "Submission not found.";
-            return RedirectToAction("Commission");
-        }
-
-        // Check if submission is actually submitted
-        if (submission.Status != CommissionSubmissionStatus.Submitted && submission.Status != CommissionSubmissionStatus.Late)
-        {
-            TempData["ErrorMessage"] = "This submission has not been submitted yet.";
-            return RedirectToAction("SubmitCommission", new { 
-                documentId = submission.ProductDocumentId, 
-                commissionId = submission.CommissionId 
-            });
-        }
-
-        // Check if commission is past due - if so, cannot unsubmit
-        var now = DateTime.UtcNow;
-        if (submission.Commission != null && now > submission.Commission.DueDate)
-        {
-            TempData["ErrorMessage"] = "This submission cannot be unsubmitted because the commission due date has passed.";
-            return RedirectToAction("SubmitCommission", new { 
-                documentId = submission.ProductDocumentId, 
-                commissionId = submission.CommissionId 
-            });
-        }
-
-        try
-        {
-            // Recalculate status based on current state
-            // If all metrics are complete, set to InProgress, otherwise NotStarted
-            var metricValues = await _context.CommissionMetricValues
-                .Where(mv => mv.CommissionSubmissionId == submission.Id)
-                .ToListAsync();
-            
             allProductsCount = allProductStatuses.Count;
         }
 
@@ -763,6 +626,48 @@ public class ProductReportingController : Controller
         ViewBag.BusinessAreas = businessAreas;
         
         return View("~/Views/ProductReporting/Commission/MyServices.cshtml", displayData);
+    }
+
+    // POST: ProductReporting/SubmitCommissionSubmission/{id}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitCommissionSubmission(int id, string? comments)
+    {
+        var submission = await _context.CommissionSubmissions
+            .Include(cs => cs.Commission)
+            .Include(cs => cs.MetricValues)
+            .FirstOrDefaultAsync(cs => cs.Id == id);
+
+        if (submission == null)
+        {
+            return NotFound();
+        }
+
+        if (submission.Status == CommissionSubmissionStatus.Submitted)
+        {
+            TempData["ErrorMessage"] = "This submission has already been submitted.";
+            return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
+        }
+
+        var now = DateTime.UtcNow;
+        if (submission.Commission != null && now > submission.Commission.DueDate)
+        {
+            submission.Status = CommissionSubmissionStatus.Late;
+        }
+        else
+        {
+            submission.Status = CommissionSubmissionStatus.Submitted;
+        }
+
+        submission.SubmittedDate = now;
+        submission.SubmittedBy = User.Identity?.Name ?? "unknown";
+        submission.UpdatedAt = now;
+        submission.Comments = !string.IsNullOrWhiteSpace(comments) ? comments.Trim() : null;
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = "Commission submission completed successfully.";
+        return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
     }
 
     // GET: ProductReporting/SubmitCommission/{documentId}/{commissionId}
@@ -1019,48 +924,6 @@ public class ProductReportingController : Controller
             _logger.LogError(ex, "Error saving commission metric value {Id}", id);
             return Json(new { success = false, message = "An error occurred while saving the value" });
         }
-    }
-
-    // POST: ProductReporting/SubmitCommissionSubmission/{id}
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SubmitCommissionSubmission(int id, string? comments)
-    {
-        var submission = await _context.CommissionSubmissions
-            .Include(cs => cs.Commission)
-            .Include(cs => cs.MetricValues)
-            .FirstOrDefaultAsync(cs => cs.Id == id);
-
-        if (submission == null)
-        {
-            return NotFound();
-        }
-
-        if (submission.Status == CommissionSubmissionStatus.Submitted)
-        {
-            TempData["ErrorMessage"] = "This submission has already been submitted.";
-            return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
-        }
-
-        var now = DateTime.UtcNow;
-        if (submission.Commission != null && now > submission.Commission.DueDate)
-        {
-            submission.Status = CommissionSubmissionStatus.Late;
-        }
-        else
-        {
-            submission.Status = CommissionSubmissionStatus.Submitted;
-        }
-
-        submission.SubmittedDate = now;
-        submission.SubmittedBy = User.Identity?.Name ?? "unknown";
-        submission.UpdatedAt = now;
-        submission.Comments = !string.IsNullOrWhiteSpace(comments) ? comments.Trim() : null;
-
-        await _context.SaveChangesAsync();
-
-        TempData["SuccessMessage"] = "Commission submission completed successfully.";
-        return RedirectToAction("Commission", new { commissionId = submission.CommissionId });
     }
 
     // POST: ProductReporting/UnsubmitCommissionSubmission
