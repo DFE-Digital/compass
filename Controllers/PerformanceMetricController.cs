@@ -212,6 +212,7 @@ public class PerformanceMetricController : Controller
                     existingMetric.Title = metric.Title;
                     existingMetric.Description = metric.Description;
                     existingMetric.HintText = metric.HintText;
+                    existingMetric.Purpose = metric.Purpose;
                     existingMetric.ValueType = metric.ValueType;
                     existingMetric.ValidFromYear = metric.ValidFromYear;
                     existingMetric.ValidFromMonth = metric.ValidFromMonth;
